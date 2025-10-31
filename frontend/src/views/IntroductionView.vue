@@ -28,8 +28,8 @@
             <div class="status-metric">
               <Tag 
                 :value="systemStatus.database.status" 
-                :severity="systemStatus.database.status === 'Connected' ? 'success' : 'danger'"
-                :icon="systemStatus.database.status === 'Connected' ? 'pi pi-check' : 'pi pi-times'"
+                :severity="systemStatus.database.status === 'Connected' ? 'success' : (systemStatus.database.status === 'Warning' ? 'warning' : 'danger')"
+                :icon="systemStatus.database.status === 'Connected' ? 'pi pi-check' : (systemStatus.database.status === 'Warning' ? 'pi pi-exclamation-triangle' : 'pi pi-times')"
               />
               <span class="status-label">Database Connection</span>
             </div>

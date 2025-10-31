@@ -48,7 +48,7 @@ class SystemService:
             # Get database config
             db_config = config_service.get_database_config()
             
-            # Run blocking database query in thread pool with timeout
+            # Run blocking database query in thread pool with LONGER timeout
             loop = asyncio.get_event_loop()
             result = await asyncio.wait_for(
                 loop.run_in_executor(
@@ -60,14 +60,15 @@ class SystemService:
                         db_config['warehouse_name']
                     )
                 ),
-                timeout=3.0  # 3 second timeout
+                timeout=10.0  # Increased to 10 seconds for warehouse startup
             )
             return result
             
         except asyncio.TimeoutError:
+            db_config = config_service.get_database_config()
             return {
-                "status": "Timeout",
-                "message": "Database connection timed out"
+                "status": "Warning",
+                "message": f"Warehouse '{db_config['warehouse_name']}' timeout (may be starting)"
             }
         except Exception as e:
             return {
