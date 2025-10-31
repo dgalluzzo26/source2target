@@ -1,5 +1,4 @@
 # Source2Target Databricks App
-# Databricks will run: npm install, npm run build, then start the app
 
-command: ["npm", "run", "start"]
+command: ["uvicorn", "backend.app:app"]
 
