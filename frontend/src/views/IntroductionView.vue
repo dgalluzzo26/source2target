@@ -181,7 +181,7 @@ const navigateTo = (path: string) => {
 
 <style scoped>
 .introduction-view {
-  max-width: 1200px;
+  max-width: 98%;
   margin: 0 auto;
   display: flex;
   flex-direction: column;

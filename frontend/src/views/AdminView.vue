@@ -34,6 +34,8 @@
 <style scoped>
 .admin-view {
   padding: 0;
+  max-width: 98%;
+  margin: 0 auto;
 }
 
 .page-header {

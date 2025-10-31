@@ -226,7 +226,7 @@ onMounted(() => {
 }
 
 .layout-main {
-  padding: 2rem;
+  padding: 1.5rem;
   background: #f8f9fa;
   min-height: calc(100vh - 4rem);
   width: 100%;
