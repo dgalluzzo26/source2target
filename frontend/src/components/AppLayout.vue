@@ -51,8 +51,8 @@
     </div>
 
     <!-- Main Content -->
-    <div class="layout-main-container">
-      <div class="layout-main">
+    <div class="layout-main-container" style="width: calc(100% - 16rem) !important; max-width: none !important; margin-right: 0 !important;">
+      <div class="layout-main" style="width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0.5rem !important;">
         <router-view />
       </div>
     </div>
@@ -223,14 +223,17 @@ onMounted(() => {
   margin-top: 4rem;
   min-height: calc(100vh - 4rem);
   width: calc(100% - 16rem);
+  max-width: none;
 }
 
 .layout-main {
-  padding: 1rem;
+  padding: 0.5rem;
   background: #f8f9fa;
   min-height: calc(100vh - 4rem);
   width: 100%;
   max-width: none;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 /* Badge Styling with Gainwell Colors */
