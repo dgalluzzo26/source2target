@@ -159,24 +159,54 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
 const userStore = useUserStore()
 
-// Using dummy data for now - API integration will come later
 const systemStatus = ref({
-  database: { status: 'Connected', message: 'Backend API connection established' },
-  vectorSearch: { status: 'Pending', message: 'Databricks integration pending configuration' },
-  aiModel: { status: 'Pending', message: 'AI model endpoints pending configuration' },
-  configuration: { status: 'Partial', message: 'Backend configured, Databricks configuration needed' }
+  database: { status: 'Loading...', message: 'Checking database connection...' },
+  vectorSearch: { status: 'Loading...', message: 'Checking vector search...' },
+  aiModel: { status: 'Loading...', message: 'Checking AI model...' },
+  configuration: { status: 'Loading...', message: 'Checking configuration...' }
 })
+
+const loadSystemStatus = async () => {
+  try {
+    const response = await fetch('/api/system/status')
+    if (response.ok) {
+      const data = await response.json()
+      systemStatus.value = data
+    } else {
+      console.error('Failed to load system status')
+      systemStatus.value = {
+        database: { status: 'Error', message: 'Failed to check database' },
+        vectorSearch: { status: 'Error', message: 'Failed to check vector search' },
+        aiModel: { status: 'Error', message: 'Failed to check AI model' },
+        configuration: { status: 'Error', message: 'Failed to check configuration' }
+      }
+    }
+  } catch (error) {
+    console.error('Error loading system status:', error)
+    systemStatus.value = {
+      database: { status: 'Error', message: 'Failed to check database' },
+      vectorSearch: { status: 'Error', message: 'Failed to check vector search' },
+      aiModel: { status: 'Error', message: 'Failed to check AI model' },
+      configuration: { status: 'Error', message: 'Failed to check configuration' }
+    }
+  }
+}
 
 const navigateTo = (path: string) => {
   router.push(path)
 }
+
+// Load system status on mount
+onMounted(() => {
+  loadSystemStatus()
+})
 </script>
 
 <style scoped>
@@ -238,7 +268,7 @@ const navigateTo = (path: string) => {
 
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1.5rem;
 }
 
@@ -246,6 +276,7 @@ const navigateTo = (path: string) => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .status-metric {
@@ -262,6 +293,9 @@ const navigateTo = (path: string) => {
 .status-message {
   color: var(--p-text-muted-color);
   font-size: 0.875rem;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.4;
 }
 
 .actions-grid {

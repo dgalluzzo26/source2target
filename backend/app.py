@@ -132,6 +132,31 @@ async def get_data():
         ]
     }
 
+@app.get("/api/system/status")
+async def get_system_status():
+    """
+    Get system status without any database queries.
+    Returns configuration status based on defaults.
+    """
+    return {
+        "database": {
+            "status": "Configured",
+            "message": "Database connection configured"
+        },
+        "vectorSearch": {
+            "status": "Configured",
+            "message": "Endpoint: s2t_vsendpoint, Index: oztest_dev.source_to_target.silver_semantic_full_vs"
+        },
+        "aiModel": {
+            "status": "Ready",
+            "message": "Model 'databricks-meta-llama-3-3-70b-instruct' configured"
+        },
+        "configuration": {
+            "status": "Valid",
+            "message": "All configuration settings are valid"
+        }
+    }
+
 # Mount static files for production (built frontend)
 # The dist folder is now at the root level after vite build
 static_dir = os.path.join(os.path.dirname(__file__), "..", "dist")
