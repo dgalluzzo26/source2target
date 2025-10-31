@@ -71,6 +71,24 @@ export async function postData<T>(endpoint: string, data: unknown): Promise<ApiR
   })
 }
 
+// Placeholder exports for components that need them
+export class SystemAPI {
+  static async getStatus() {
+    // Placeholder - not implemented yet
+    return {}
+  }
+
+  static async getHealth() {
+    // Placeholder - not implemented yet
+    return {}
+  }
+}
+
+export const handleApiError = (error: any) => {
+  console.error('API Error:', error)
+  return { error: 'An error occurred' }
+}
+
 export default {
   checkHealth,
   getData,
