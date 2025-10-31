@@ -1,8 +1,8 @@
 <template>
-  <div class="introduction-view">
+  <div class="introduction-view" style="width: 100% !important; max-width: none !important;">
     <!-- Hero Section -->
-    <div class="hero-section">
-      <div class="hero-content">
+    <div class="hero-section" style="width: 100% !important; max-width: none !important;">
+      <div class="hero-content" style="width: 100% !important; max-width: none !important;">
         <h1 class="hero-title">
           <i class="pi pi-sitemap hero-icon"></i>
           Source-to-Target Mapping Platform
