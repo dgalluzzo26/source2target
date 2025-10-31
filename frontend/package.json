@@ -13,8 +13,7 @@
     "preview": "vite preview",
     "test:unit": "vitest",
     "type-check": "vue-tsc --build --force",
-    "lint": "eslint . --fix --cache",
-    "postinstall": "node -e \"console.log('Verifying esbuild installation...')\" && npm rebuild esbuild || echo 'esbuild rebuild attempted'"
+    "lint": "eslint . --fix --cache"
   },
   "dependencies": {
     "pinia": "^3.0.3",
@@ -32,7 +31,6 @@
     "@vue/eslint-config-typescript": "^14.6.0",
     "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.8.1",
-    "esbuild": "^0.21.5",
     "eslint": "^9.37.0",
     "eslint-plugin-vue": "~10.5.0",
     "jiti": "^2.6.1",
@@ -40,7 +38,6 @@
     "npm-run-all2": "^8.0.4",
     "typescript": "~5.9.0",
     "vite": "^7.1.11",
-    "vite-plugin-vue-devtools": "^8.0.3",
     "vitest": "^3.2.4",
     "vue-tsc": "^3.1.1"
   }
