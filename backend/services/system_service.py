@@ -127,10 +127,183 @@ class SystemService:
                     "message": f"Connection failed: {error_msg[:30]}"
                 }
     
+    async def check_vector_search(self) -> Dict[str, str]:
+        """
+        Check if vector search endpoint and index are available.
+        Tests actual endpoint existence using WorkspaceClient.
+        """
+        if not DATABRICKS_AVAILABLE or not self.workspace_client:
+            return {
+                "status": "Unavailable",
+                "message": "Databricks SDK not available"
+            }
+        
+        try:
+            vs_config = config_service.get_vector_search_config()
+            endpoint_name = vs_config['endpoint_name']
+            index_name = vs_config['index_name']
+            
+            # Try to check vector search with timeout
+            result = await asyncio.wait_for(
+                self._test_vector_search(endpoint_name, index_name),
+                timeout=3.0  # 3 second timeout
+            )
+            return result
+            
+        except asyncio.TimeoutError:
+            return {
+                "status": "Timeout",
+                "message": "Vector search check timed out"
+            }
+        except Exception as e:
+            return {
+                "status": "Error",
+                "message": f"Check failed: {str(e)[:50]}"
+            }
+    
+    async def _test_vector_search(self, endpoint_name: str, index_name: str) -> Dict[str, str]:
+        """Test vector search endpoint availability."""
+        try:
+            # Try to list vector search endpoints
+            from databricks.sdk.service import vectorsearch
+            
+            try:
+                # Check if endpoint exists
+                endpoints = list(self.workspace_client.vector_search_endpoints.list_endpoints())
+                endpoint_names = [ep.name for ep in endpoints]
+                
+                if endpoint_name in endpoint_names:
+                    # Endpoint exists, now check index
+                    try:
+                        indexes = list(self.workspace_client.vector_search_indexes.list_indexes(
+                            endpoint_name=endpoint_name
+                        ))
+                        index_names = [idx.name for idx in indexes]
+                        
+                        if index_name in index_names:
+                            return {
+                                "status": "Available",
+                                "message": f"Endpoint and index verified online"
+                            }
+                        else:
+                            return {
+                                "status": "Warning",
+                                "message": f"Endpoint found, index '{index_name}' not found"
+                            }
+                    except Exception:
+                        # Can't list indexes, but endpoint exists
+                        return {
+                            "status": "Available",
+                            "message": f"Endpoint '{endpoint_name}' verified"
+                        }
+                else:
+                    return {
+                        "status": "Error",
+                        "message": f"Endpoint '{endpoint_name}' not found"
+                    }
+                    
+            except Exception as e:
+                # If we can't check, assume it's configured
+                return {
+                    "status": "Configured",
+                    "message": f"Endpoint: {endpoint_name}, Index: {index_name}"
+                }
+                
+        except ImportError:
+            # Vector search module not available
+            return {
+                "status": "Configured",
+                "message": f"Endpoint: {endpoint_name}, Index: {index_name}"
+            }
+        except Exception as e:
+            return {
+                "status": "Error",
+                "message": f"Check failed: {str(e)[:30]}"
+            }
+    
+    async def check_ai_model(self) -> Dict[str, str]:
+        """
+        Check if AI model serving endpoint is available.
+        Tests actual endpoint using WorkspaceClient.
+        """
+        if not DATABRICKS_AVAILABLE or not self.workspace_client:
+            return {
+                "status": "Unavailable",
+                "message": "Databricks SDK not available"
+            }
+        
+        try:
+            ai_model = config_service.get_ai_model_endpoint()
+            
+            # Try to check AI model with timeout
+            result = await asyncio.wait_for(
+                self._test_ai_model(ai_model),
+                timeout=3.0  # 3 second timeout
+            )
+            return result
+            
+        except asyncio.TimeoutError:
+            return {
+                "status": "Timeout",
+                "message": "AI model check timed out"
+            }
+        except Exception as e:
+            return {
+                "status": "Error",
+                "message": f"Check failed: {str(e)[:50]}"
+            }
+    
+    async def _test_ai_model(self, model_endpoint: str) -> Dict[str, str]:
+        """Test AI model serving endpoint availability."""
+        try:
+            # Try to list serving endpoints
+            endpoints = list(self.workspace_client.serving_endpoints.list())
+            endpoint_names = [ep.name for ep in endpoints]
+            
+            if model_endpoint in endpoint_names:
+                # Check endpoint state
+                endpoint = self.workspace_client.serving_endpoints.get(model_endpoint)
+                
+                if hasattr(endpoint, 'state') and hasattr(endpoint.state, 'ready'):
+                    if endpoint.state.ready == 'READY':
+                        return {
+                            "status": "Ready",
+                            "message": f"Model '{model_endpoint}' is online and ready"
+                        }
+                    else:
+                        return {
+                            "status": "Warning",
+                            "message": f"Model '{model_endpoint}' exists but not ready"
+                        }
+                else:
+                    return {
+                        "status": "Ready",
+                        "message": f"Model '{model_endpoint}' endpoint found"
+                    }
+            else:
+                # Check if it's a foundation model (doesn't appear in serving endpoints)
+                if any(fm in model_endpoint.lower() for fm in ['dbrx', 'llama', 'mistral', 'mixtral']):
+                    return {
+                        "status": "Ready",
+                        "message": f"Foundation model '{model_endpoint}' configured"
+                    }
+                else:
+                    return {
+                        "status": "Error",
+                        "message": f"Model '{model_endpoint}' not found"
+                    }
+                    
+        except Exception as e:
+            # If we can't check, assume it's configured
+            return {
+                "status": "Configured",
+                "message": f"Model '{model_endpoint}' configured"
+            }
+    
     async def get_system_status(self) -> Dict[str, Any]:
         """
-        Get comprehensive system status.
-        Checks are independent so one failure doesn't break others.
+        Get comprehensive system status with LIVE checks.
+        All checks are independent so one failure doesn't break others.
         """
         status = {}
         
@@ -143,26 +316,18 @@ class SystemService:
                 "message": f"Check failed: {str(e)[:30]}"
             }
         
-        # Vector search check (from config)
+        # Vector search check (with live endpoint verification)
         try:
-            vs_config = config_service.get_vector_search_config()
-            status["vectorSearch"] = {
-                "status": "Available",
-                "message": f"Endpoint: {vs_config['endpoint_name']}, Index: {vs_config['index_name']}"
-            }
+            status["vectorSearch"] = await self.check_vector_search()
         except Exception as e:
             status["vectorSearch"] = {
                 "status": "Error",
                 "message": f"Check failed: {str(e)[:30]}"
             }
         
-        # AI Model check (from config)
+        # AI Model check (with live endpoint verification)
         try:
-            ai_model = config_service.get_ai_model_endpoint()
-            status["aiModel"] = {
-                "status": "Ready",
-                "message": f"Model '{ai_model}' configured"
-            }
+            status["aiModel"] = await self.check_ai_model()
         except Exception as e:
             status["aiModel"] = {
                 "status": "Error",
