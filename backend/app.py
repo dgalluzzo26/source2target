@@ -136,10 +136,17 @@ async def get_data():
 # The dist folder is now at the root level after vite build
 static_dir = os.path.join(os.path.dirname(__file__), "..", "dist")
 if os.path.exists(static_dir):
-    # Serve static assets
-    assets_dir = os.path.join(static_dir, "assets")
-    if os.path.exists(assets_dir):
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+    # Mount the entire dist directory as static files
+    # This ensures all assets (CSS, JS, fonts, icons, images) are served
+    app.mount("/assets", StaticFiles(directory=os.path.join(static_dir, "assets") if os.path.exists(os.path.join(static_dir, "assets")) else static_dir), name="assets")
+    
+    # Serve other static files from root (like favicon, etc.)
+    @app.get("/favicon.ico")
+    async def favicon():
+        favicon_path = os.path.join(static_dir, "favicon.ico")
+        if os.path.exists(favicon_path):
+            return FileResponse(favicon_path)
+        return {"error": "Not found"}, 404
     
     # Root route serves index.html
     @app.get("/")
@@ -147,15 +154,15 @@ if os.path.exists(static_dir):
         """Serve the Vue SPA root"""
         return FileResponse(os.path.join(static_dir, "index.html"))
     
-    # Catch-all route for Vue Router (SPA)
+    # Catch-all route for Vue Router (SPA) - must be last
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         """Serve the Vue SPA for all non-API routes"""
         # API routes are handled above, don't serve index.html for them
-        if full_path.startswith("api"):
+        if full_path.startswith("api/"):
             return {"error": "Not found"}, 404
         
-        # Check if it's a static file
+        # Check if it's a static file in dist root
         file_path = os.path.join(static_dir, full_path)
         if os.path.exists(file_path) and os.path.isfile(file_path):
             return FileResponse(file_path)
