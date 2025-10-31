@@ -1,0 +1,340 @@
+/* 
+ * Gainwell Technologies Brand Theme
+ * Official color palette and styling for Source-to-Target Mapping Platform
+ */
+
+/* Gainwell Brand Colors - Based on Actual Logo and Original App */
+:root {
+  --gainwell-primary: #4a5568;      /* Dark slate gray (from original app) */
+  --gainwell-secondary: #38a169;    /* Gainwell green (from logo) */
+  --gainwell-light: #f8f9fa;        /* Light gray background */
+  --gainwell-border: #dee2e6;       /* Light gray borders */
+  --gainwell-muted: #6c757d;        /* Muted text color */
+  
+  /* Text Colors */
+  --gainwell-text-primary: #4a5568;
+  --gainwell-text-secondary: #6c757d;
+  --gainwell-text-muted: #adb5bd;
+  
+  /* Background Colors */
+  --gainwell-bg-primary: #ffffff;
+  --gainwell-bg-secondary: #f8f9fa;
+  --gainwell-bg-light: #f1f3f4;
+  
+  /* Border Colors */
+  --gainwell-border-light: rgba(56, 161, 105, 0.1);
+  --gainwell-border-medium: rgba(56, 161, 105, 0.2);
+  --gainwell-border-strong: var(--gainwell-secondary);
+}
+
+/* Global Font Styling */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--gainwell-text-primary);
+  background-color: var(--gainwell-bg-secondary);
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Ensure full width for all containers */
+* {
+  box-sizing: border-box;
+}
+
+#app {
+  width: 100% !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  max-width: none !important;
+}
+
+/* Override any PrimeVue container constraints */
+.p-component {
+  max-width: none !important;
+}
+
+/* Ensure DataTables and other components use full width */
+.p-datatable {
+  width: 100% !important;
+}
+
+.p-datatable-wrapper {
+  width: 100% !important;
+}
+
+/* Global Button Styling with Gainwell Colors */
+.p-button {
+  background: var(--gainwell-primary) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 2px 8px rgba(74, 85, 104, 0.15) !important;
+}
+
+.p-button:hover {
+  background: linear-gradient(135deg, var(--gainwell-primary), var(--gainwell-secondary)) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(56, 161, 105, 0.25) !important;
+}
+
+.p-button.p-button-secondary {
+  background: var(--gainwell-light) !important;
+  color: var(--gainwell-dark) !important;
+}
+
+.p-button.p-button-info {
+  background: linear-gradient(135deg, var(--gainwell-secondary), #00d49a) !important;
+  color: var(--gainwell-dark) !important;
+}
+
+.p-button.p-button-help {
+  background: linear-gradient(135deg, var(--gainwell-dark), #2d3bc4) !important;
+  color: white !important;
+}
+
+.p-button.p-button-success {
+  background: linear-gradient(135deg, var(--gainwell-secondary), #28a745) !important;
+  color: white !important;
+}
+
+.p-button.p-button-danger {
+  background: linear-gradient(135deg, #dc3545, #c82333) !important;
+  color: white !important;
+}
+
+/* Card Styling with Gainwell Colors */
+.p-card {
+  background: var(--gainwell-bg-primary) !important;
+  border: 1px solid var(--gainwell-border-light) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 12px rgba(27, 36, 166, 0.08) !important;
+  transition: all 0.3s ease !important;
+}
+
+.p-card:hover {
+  border-color: var(--gainwell-secondary) !important;
+  box-shadow: 0 4px 20px rgba(0, 240, 176, 0.15) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* DataTable Styling */
+.p-datatable .p-datatable-header {
+  background: var(--gainwell-light) !important;
+  border-color: var(--gainwell-border-medium) !important;
+  color: var(--gainwell-dark) !important;
+}
+
+.p-datatable .p-datatable-thead > tr > th {
+  background: var(--gainwell-light) !important;
+  border-color: var(--gainwell-border-medium) !important;
+  color: var(--gainwell-dark) !important;
+  font-weight: 600 !important;
+}
+
+.p-datatable .p-datatable-tbody > tr:hover {
+  background: rgba(0, 240, 176, 0.05) !important;
+}
+
+.p-datatable .p-datatable-tbody > tr.p-highlight {
+  background: rgba(204, 27, 198, 0.1) !important;
+  color: var(--gainwell-dark) !important;
+}
+
+/* TabView Styling */
+.p-tabview .p-tabview-nav {
+  background: var(--gainwell-light) !important;
+  border-radius: 8px !important;
+}
+
+.p-tabview .p-tabview-nav li .p-tabview-nav-link {
+  background: transparent !important;
+  color: var(--gainwell-text-secondary) !important;
+  border-radius: 8px !important;
+  transition: all 0.3s ease !important;
+}
+
+.p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
+  background: linear-gradient(135deg, var(--gainwell-primary), var(--gainwell-accent)) !important;
+  color: white !important;
+}
+
+/* Input Field Styling */
+.p-inputtext {
+  border-color: var(--gainwell-border-medium) !important;
+  border-radius: 8px !important;
+  transition: all 0.3s ease !important;
+}
+
+.p-inputtext:focus {
+  border-color: var(--gainwell-secondary) !important;
+  box-shadow: 0 0 0 2px rgba(0, 240, 176, 0.15) !important;
+}
+
+/* Badge Styling */
+.p-badge {
+  background: var(--gainwell-secondary) !important;
+  color: var(--gainwell-dark) !important;
+  font-weight: 600 !important;
+  border-radius: 10px !important;
+}
+
+.p-badge.p-badge-info {
+  background: var(--gainwell-primary) !important;
+  color: white !important;
+}
+
+.p-badge.p-badge-success {
+  background: var(--gainwell-secondary) !important;
+  color: var(--gainwell-dark) !important;
+}
+
+.p-badge.p-badge-secondary {
+  background: var(--gainwell-light) !important;
+  color: var(--gainwell-dark) !important;
+}
+
+/* Tag Styling */
+.p-tag {
+  border-radius: 6px !important;
+  font-weight: 500 !important;
+}
+
+.p-tag.p-tag-info {
+  background: var(--gainwell-primary) !important;
+  color: white !important;
+}
+
+.p-tag.p-tag-success {
+  background: var(--gainwell-secondary) !important;
+  color: var(--gainwell-dark) !important;
+}
+
+/* Progress Bar Styling */
+.p-progressbar {
+  background: var(--gainwell-light) !important;
+  border-radius: 8px !important;
+}
+
+.p-progressbar .p-progressbar-value {
+  background: linear-gradient(135deg, var(--gainwell-secondary), #00d49a) !important;
+  border-radius: 8px !important;
+}
+
+/* Dialog Styling */
+.p-dialog {
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(27, 36, 166, 0.15) !important;
+}
+
+.p-dialog .p-dialog-header {
+  background: linear-gradient(135deg, var(--gainwell-dark), var(--gainwell-primary)) !important;
+  color: white !important;
+  border-radius: 12px 12px 0 0 !important;
+}
+
+.p-dialog .p-dialog-content {
+  background: var(--gainwell-bg-primary) !important;
+}
+
+/* Message Styling */
+.p-message {
+  border-radius: 8px !important;
+  border-width: 0 0 0 4px !important;
+}
+
+.p-message.p-message-info {
+  background: rgba(27, 36, 166, 0.08) !important;
+  border-color: var(--gainwell-dark) !important;
+  color: var(--gainwell-dark) !important;
+}
+
+.p-message.p-message-success {
+  background: rgba(0, 240, 176, 0.08) !important;
+  border-color: var(--gainwell-secondary) !important;
+  color: var(--gainwell-dark) !important;
+}
+
+.p-message.p-message-warn {
+  background: rgba(255, 193, 7, 0.08) !important;
+  border-color: #ffc107 !important;
+  color: #856404 !important;
+}
+
+.p-message.p-message-error {
+  background: rgba(220, 53, 69, 0.08) !important;
+  border-color: #dc3545 !important;
+  color: #721c24 !important;
+}
+
+/* Tooltip Styling */
+.p-tooltip .p-tooltip-text {
+  background: var(--gainwell-dark) !important;
+  color: white !important;
+  border-radius: 6px !important;
+  font-size: 0.875rem !important;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--gainwell-light);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, var(--gainwell-primary), var(--gainwell-accent));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, var(--gainwell-dark), var(--gainwell-primary));
+}
+
+/* Utility Classes */
+.gainwell-gradient-bg {
+  background: linear-gradient(135deg, var(--gainwell-dark), var(--gainwell-primary));
+}
+
+.gainwell-secondary-bg {
+  background: var(--gainwell-secondary);
+}
+
+.gainwell-light-bg {
+  background: var(--gainwell-light);
+}
+
+.gainwell-text-primary {
+  color: var(--gainwell-primary);
+}
+
+.gainwell-text-secondary {
+  color: var(--gainwell-secondary);
+}
+
+.gainwell-text-dark {
+  color: var(--gainwell-dark);
+}
+
+.gainwell-border {
+  border: 1px solid var(--gainwell-border-medium);
+}
+
+.gainwell-shadow {
+  box-shadow: 0 4px 12px rgba(27, 36, 166, 0.15);
+}
+
+.gainwell-shadow-hover:hover {
+  box-shadow: 0 8px 24px rgba(0, 240, 176, 0.2);
+  transform: translateY(-2px);
+  transition: all 0.3s ease;
+}
