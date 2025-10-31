@@ -348,6 +348,14 @@ class SystemService:
                 # Check endpoint state
                 endpoint = self.workspace_client.serving_endpoints.get(model_endpoint)
                 
+                print(f"[AI Model Check] Found endpoint, checking state...")
+                print(f"[AI Model Check] Has state attr: {hasattr(endpoint, 'state')}")
+                if hasattr(endpoint, 'state'):
+                    print(f"[AI Model Check] State: {endpoint.state}")
+                    print(f"[AI Model Check] Has ready attr: {hasattr(endpoint.state, 'ready')}")
+                    if hasattr(endpoint.state, 'ready'):
+                        print(f"[AI Model Check] Ready value: {endpoint.state.ready}")
+                
                 if hasattr(endpoint, 'state') and hasattr(endpoint.state, 'ready'):
                     if endpoint.state.ready == 'READY':
                         return {
@@ -357,7 +365,7 @@ class SystemService:
                     else:
                         return {
                             "status": "Warning",
-                            "message": f"Model '{model_endpoint}' exists but not ready"
+                            "message": f"Model '{model_endpoint}' exists but not ready (state: {endpoint.state.ready})"
                         }
                 else:
                     return {
