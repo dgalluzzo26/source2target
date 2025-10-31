@@ -1,0 +1,3 @@
+command: ["uvicorn", "backend.app:app"]
+
+

@@ -1,0 +1,14 @@
+{
+  "name": "source2target",
+  "version": "1.0.0",
+  "description": "Databricks app with Vue frontend and FastAPI backend",
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "preview": "cd frontend && npm run preview"
+  },
+  "keywords": ["databricks", "vue", "fastapi"],
+  "author": "",
+  "license": "ISC"
+}
+
