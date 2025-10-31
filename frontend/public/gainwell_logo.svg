@@ -1,0 +1,33 @@
+<svg width="200" height="80" viewBox="0 0 200 80" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="40" cy="40" r="35" fill="#1f77b4" opacity="0.1"/>
+  
+  <!-- Main icon - representing data/technology -->
+  <g transform="translate(15, 15)">
+    <!-- Connected nodes representing data mapping -->
+    <circle cx="15" cy="15" r="4" fill="#1f77b4"/>
+    <circle cx="35" cy="15" r="4" fill="#2ca02c"/>
+    <circle cx="25" cy="35" r="4" fill="#ff7f0e"/>
+    <circle cx="45" cy="35" r="4" fill="#d62728"/>
+    
+    <!-- Connection lines -->
+    <line x1="15" y1="15" x2="35" y2="15" stroke="#1f77b4" stroke-width="2" opacity="0.6"/>
+    <line x1="35" y1="15" x2="25" y2="35" stroke="#2ca02c" stroke-width="2" opacity="0.6"/>
+    <line x1="25" y1="35" x2="45" y2="35" stroke="#ff7f0e" stroke-width="2" opacity="0.6"/>
+    <line x1="15" y1="15" x2="25" y2="35" stroke="#1f77b4" stroke-width="2" opacity="0.4"/>
+    <line x1="35" y1="15" x2="45" y2="35" stroke="#2ca02c" stroke-width="2" opacity="0.4"/>
+  </g>
+  
+  <!-- Company name -->
+  <text x="85" y="30" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#1f77b4">
+    Gainwell
+  </text>
+  <text x="85" y="50" font-family="Arial, sans-serif" font-size="14" fill="#666666">
+    Technologies
+  </text>
+  
+  <!-- Tagline -->
+  <text x="85" y="65" font-family="Arial, sans-serif" font-size="10" fill="#888888">
+    Healthcare Data Solutions
+  </text>
+</svg>
