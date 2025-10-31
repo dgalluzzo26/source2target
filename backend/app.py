@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 import os
 from typing import Optional, Dict, Any
 from backend.services.config_service import config_service
+from backend.services.system_service import system_service
 
 # Import Databricks SDK for authentication
 try:
@@ -136,32 +137,10 @@ async def get_data():
 @app.get("/api/system/status")
 async def get_system_status():
     """
-    Get system status using configuration from config service.
-    Returns current configuration values without database queries.
+    Get system status with live database check.
+    Uses system service for comprehensive health checks.
     """
-    # Get configuration from config service
-    vs_config = config_service.get_vector_search_config()
-    ai_model = config_service.get_ai_model_endpoint()
-    db_config = config_service.get_database_config()
-    
-    return {
-        "database": {
-            "status": "Connected",
-            "message": f"Warehouse '{db_config['warehouse_name']}' configured"
-        },
-        "vectorSearch": {
-            "status": "Available",
-            "message": f"Endpoint: {vs_config['endpoint_name']}, Index: {vs_config['index_name']}"
-        },
-        "aiModel": {
-            "status": "Ready",
-            "message": f"Model '{ai_model}' configured"
-        },
-        "configuration": {
-            "status": "Valid",
-            "message": "All configuration settings are valid"
-        }
-    }
+    return await system_service.get_system_status()
 
 @app.get("/api/config")
 async def get_config():
