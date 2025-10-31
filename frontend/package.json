@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "test:unit": "vitest",
     "type-check": "vue-tsc --build --force",
-    "lint": "eslint . --fix --cache"
+    "lint": "eslint . --fix --cache",
+    "postinstall": "node -e \"try{require('esbuild')}catch(e){process.exit(1)}\" || npm rebuild esbuild"
   },
   "dependencies": {
     "pinia": "^3.0.3",
