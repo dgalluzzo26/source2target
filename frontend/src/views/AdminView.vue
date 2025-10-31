@@ -11,7 +11,7 @@
     <Card>
       <template #content>
         <div class="coming-soon">
-          <i class="pi pi-shield" style="font-size: 4rem; color: var(--p-primary-color); margin-bottom: 1rem;"></i>
+          <i class="pi pi-shield" style="font-size: 4rem; color: var(--gainwell-primary); margin-bottom: 1rem;"></i>
           <h2>Coming Soon</h2>
           <p>The administration interface will include:</p>
           <ul>
@@ -33,8 +33,7 @@
 
 <style scoped>
 .admin-view {
-  max-width: 1200px;
-  margin: 0 auto;
+  padding: 0;
 }
 
 .page-header {
@@ -46,13 +45,13 @@
   align-items: center;
   gap: 0.75rem;
   margin: 0 0 0.5rem 0;
-  color: var(--p-text-color);
+  color: var(--gainwell-primary);
   font-size: 2rem;
 }
 
 .page-header p {
   margin: 0;
-  color: var(--p-text-muted-color);
+  color: var(--gainwell-text-secondary);
   font-size: 1.125rem;
 }
 
@@ -63,12 +62,12 @@
 
 .coming-soon h2 {
   margin: 0 0 1rem 0;
-  color: var(--p-text-color);
+  color: var(--gainwell-text-primary);
 }
 
 .coming-soon p {
   margin: 0 0 1.5rem 0;
-  color: var(--p-text-muted-color);
+  color: var(--gainwell-text-secondary);
   font-size: 1.125rem;
 }
 
@@ -76,11 +75,10 @@
   text-align: left;
   max-width: 400px;
   margin: 0 auto;
-  color: var(--p-text-muted-color);
+  color: var(--gainwell-text-secondary);
 }
 
 .coming-soon li {
   margin-bottom: 0.5rem;
 }
 </style>
-

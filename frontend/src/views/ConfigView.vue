@@ -393,7 +393,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
-// import { ConfigurationAPI, handleApiError } from '@/services/api' // Disabled for frontend-only deployment
 
 const userStore = useUserStore()
 
@@ -456,35 +455,31 @@ const loading = ref({
   reset: false
 })
 
-// Methods (Frontend-only mode)
+// Methods (Frontend-only mode with dummy data)
 const loadConfiguration = async () => {
-  // Frontend-only mode: Configuration already loaded as dummy data
-  console.log('Frontend-only mode: Configuration loaded from dummy data')
+  console.log('Configuration loaded from dummy data')
 }
 
 const testDatabaseConnection = async () => {
   loading.value.testConnection = true
-  // Frontend-only mode: Simulate connection test
   setTimeout(() => {
-    console.log('Frontend-only mode: Database connection test simulated - SUCCESS')
+    console.log('Database connection test simulated - SUCCESS')
     loading.value.testConnection = false
   }, 2000)
 }
 
 const testVectorSearch = async () => {
   loading.value.testVectorSearch = true
-  // Frontend-only mode: Simulate vector search test
   setTimeout(() => {
-    console.log('Frontend-only mode: Vector search test simulated - SUCCESS')
+    console.log('Vector search test simulated - SUCCESS')
     loading.value.testVectorSearch = false
   }, 2000)
 }
 
 const saveConfiguration = async () => {
   loading.value.save = true
-  // Frontend-only mode: Simulate save
   setTimeout(() => {
-    console.log('Frontend-only mode: Configuration saved (simulated)')
+    console.log('Configuration saved (simulated)')
     loading.value.save = false
   }, 1000)
 }
@@ -492,7 +487,6 @@ const saveConfiguration = async () => {
 const exportConfiguration = async () => {
   loading.value.export = true
   try {
-    // Frontend-only mode: Export current config as JSON
     const configJson = JSON.stringify(config.value, null, 2)
     const blob = new Blob([configJson], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -503,7 +497,7 @@ const exportConfiguration = async () => {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    console.log('Frontend-only mode: Configuration exported')
+    console.log('Configuration exported')
   } catch (error) {
     console.error('Failed to export configuration:', error)
   } finally {
@@ -519,7 +513,7 @@ const importConfiguration = (event: any) => {
       try {
         const importedConfig = JSON.parse(e.target?.result as string)
         config.value = { ...config.value, ...importedConfig }
-        console.log('Frontend-only mode: Configuration imported')
+        console.log('Configuration imported')
       } catch (error) {
         console.error('Failed to import configuration:', error)
       }
@@ -530,8 +524,8 @@ const importConfiguration = (event: any) => {
 
 const resetConfiguration = async () => {
   loading.value.reset = true
-  // Frontend-only mode: Reset to default values
   setTimeout(() => {
+    // Reset to default values
     config.value = {
       database: {
         warehouse_name: 'gia-oztest-dev-data-warehouse',
@@ -543,7 +537,7 @@ const resetConfiguration = async () => {
       ai_model: {
         previous_mappings_table_name: 'oztest_dev.source_to_target.train_with_comments',
         foundation_model_endpoint: 'databricks-meta-llama-3-3-70b-instruct',
-        default_prompt: config.value.ai_model.default_prompt // Keep the long prompt
+        default_prompt: config.value.ai_model.default_prompt
       },
       ui: {
         app_title: 'Source-to-Target Mapping Platform',
@@ -563,7 +557,7 @@ const resetConfiguration = async () => {
         admin_password_hash: ''
       }
     }
-    console.log('Frontend-only mode: Configuration reset to defaults')
+    console.log('Configuration reset to defaults')
     loading.value.reset = false
   }, 1000)
 }
