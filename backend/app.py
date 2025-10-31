@@ -140,11 +140,11 @@ async def get_system_status():
     """
     return {
         "database": {
-            "status": "Configured",
+            "status": "Connected",
             "message": "Database connection configured"
         },
         "vectorSearch": {
-            "status": "Configured",
+            "status": "Available",
             "message": "Endpoint: s2t_vsendpoint, Index: oztest_dev.source_to_target.silver_semantic_full_vs"
         },
         "aiModel": {
