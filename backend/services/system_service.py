@@ -4,6 +4,8 @@ System status service for checking database connectivity, vector search, etc.
 import os
 import asyncio
 from typing import Dict, Any, Optional
+from concurrent.futures import ThreadPoolExecutor
+import functools
 
 try:
     from databricks import sql
@@ -14,6 +16,9 @@ except ImportError:
     print("Warning: Databricks SDK not available")
 
 from backend.services.config_service import config_service
+
+# Thread pool for running blocking database operations
+executor = ThreadPoolExecutor(max_workers=3)
 
 
 class SystemService:
@@ -31,7 +36,7 @@ class SystemService:
     async def check_database_connection(self) -> Dict[str, str]:
         """
         Check database connection by attempting a simple query.
-        Uses timeout to prevent hanging.
+        Runs in thread pool to avoid blocking the event loop.
         """
         if not DATABRICKS_AVAILABLE:
             return {
@@ -43,12 +48,17 @@ class SystemService:
             # Get database config
             db_config = config_service.get_database_config()
             
-            # Try to connect with timeout
+            # Run blocking database query in thread pool with timeout
+            loop = asyncio.get_event_loop()
             result = await asyncio.wait_for(
-                self._test_database_query(
-                    db_config['server_hostname'],
-                    db_config['http_path'],
-                    db_config['warehouse_name']
+                loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._test_database_query_sync,
+                        db_config['server_hostname'],
+                        db_config['http_path'],
+                        db_config['warehouse_name']
+                    )
                 ),
                 timeout=3.0  # 3 second timeout
             )
@@ -65,10 +75,10 @@ class SystemService:
                 "message": f"Check failed: {str(e)[:50]}"
             }
     
-    async def _test_database_query(self, hostname: str, http_path: str, warehouse_name: str) -> Dict[str, str]:
+    def _test_database_query_sync(self, hostname: str, http_path: str, warehouse_name: str) -> Dict[str, str]:
         """
-        Test database connection with a simple query.
-        This runs in a separate thread to allow timeout.
+        SYNCHRONOUS method to test database connection.
+        This runs in a thread pool to avoid blocking the async event loop.
         """
         try:
             # Check if we have valid hostname
