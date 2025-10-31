@@ -375,7 +375,9 @@ class SystemService:
                         print(f"[AI Model Check] Ready value: {endpoint.state.ready}")
                 
                 if hasattr(endpoint, 'state') and hasattr(endpoint.state, 'ready'):
-                    if endpoint.state.ready == 'READY':
+                    # Check if ready - handle both enum and string values
+                    ready_value = str(endpoint.state.ready)
+                    if 'READY' in ready_value.upper():
                         return {
                             "status": "Ready",
                             "message": f"Model '{model_endpoint}' is online and ready"
@@ -383,7 +385,7 @@ class SystemService:
                     else:
                         return {
                             "status": "Warning",
-                            "message": f"Model '{model_endpoint}' exists but not ready (state: {endpoint.state.ready})"
+                            "message": f"Model '{model_endpoint}' exists but not ready (state: {ready_value})"
                         }
                 else:
                     return {
