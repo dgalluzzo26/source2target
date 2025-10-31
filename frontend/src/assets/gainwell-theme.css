@@ -57,6 +57,18 @@ body {
   max-width: none !important;
 }
 
+/* Ensure Cards use full width */
+.p-card {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.p-card-body,
+.p-card-content {
+  width: 100% !important;
+  max-width: none !important;
+}
+
 /* Ensure DataTables and other components use full width */
 .p-datatable {
   width: 100% !important;
