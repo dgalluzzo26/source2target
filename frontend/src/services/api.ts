@@ -1,6 +1,7 @@
 // API Service for Backend Communication
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// In Databricks, the backend is on the same domain, so use relative URLs
+const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 
 interface ApiResponse<T> {
   data?: T

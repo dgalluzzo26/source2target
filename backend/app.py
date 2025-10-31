@@ -36,17 +36,26 @@ async def get_data():
     }
 
 # Mount static files for production (built frontend)
-static_dir = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+# The dist folder is now at the root level after vite build
+static_dir = os.path.join(os.path.dirname(__file__), "..", "dist")
 if os.path.exists(static_dir):
     # Serve static assets
-    app.mount("/assets", StaticFiles(directory=os.path.join(static_dir, "assets")), name="assets")
+    assets_dir = os.path.join(static_dir, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+    
+    # Root route serves index.html
+    @app.get("/")
+    async def serve_root():
+        """Serve the Vue SPA root"""
+        return FileResponse(os.path.join(static_dir, "index.html"))
     
     # Catch-all route for Vue Router (SPA)
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         """Serve the Vue SPA for all non-API routes"""
-        # API routes are handled above
-        if full_path.startswith("api/"):
+        # API routes are handled above, don't serve index.html for them
+        if full_path.startswith("api"):
             return {"error": "Not found"}, 404
         
         # Check if it's a static file
@@ -64,12 +73,8 @@ else:
             "message": "Welcome to Source2Target API",
             "status": "healthy",
             "version": "1.0.0",
-            "note": "Frontend not built. The frontend should be built automatically by Databricks."
+            "note": f"Frontend not built. Looking for dist at: {static_dir}"
         }
 
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("DATABRICKS_APP_PORT", os.environ.get("PORT", 8000)))
-    uvicorn.run(app, host="0.0.0.0", port=port)
 
 
