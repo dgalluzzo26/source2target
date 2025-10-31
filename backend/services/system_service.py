@@ -227,10 +227,18 @@ class SystemService:
             endpoint_name = vs_config['endpoint_name']
             index_name = vs_config['index_name']
             
-            # Try to check vector search with timeout
+            # Run in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
             result = await asyncio.wait_for(
-                self._test_vector_search(endpoint_name, index_name),
-                timeout=3.0  # 3 second timeout
+                loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._test_vector_search_sync,
+                        endpoint_name,
+                        index_name
+                    )
+                ),
+                timeout=5.0  # 5 second timeout
             )
             return result
             
@@ -245,8 +253,8 @@ class SystemService:
                 "message": f"Check failed: {str(e)[:50]}"
             }
     
-    async def _test_vector_search(self, endpoint_name: str, index_name: str) -> Dict[str, str]:
-        """Test vector search endpoint availability."""
+    def _test_vector_search_sync(self, endpoint_name: str, index_name: str) -> Dict[str, str]:
+        """SYNCHRONOUS method to test vector search endpoint availability."""
         try:
             # Try to list vector search endpoints
             from databricks.sdk.service import vectorsearch
@@ -319,10 +327,17 @@ class SystemService:
         try:
             ai_model = config_service.get_ai_model_endpoint()
             
-            # Try to check AI model with timeout
+            # Run in thread pool to avoid blocking (like database check)
+            loop = asyncio.get_event_loop()
             result = await asyncio.wait_for(
-                self._test_ai_model(ai_model),
-                timeout=3.0  # 3 second timeout
+                loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._test_ai_model_sync,
+                        ai_model
+                    )
+                ),
+                timeout=5.0  # 5 second timeout
             )
             return result
             
@@ -337,12 +352,15 @@ class SystemService:
                 "message": f"Check failed: {str(e)[:50]}"
             }
     
-    async def _test_ai_model(self, model_endpoint: str) -> Dict[str, str]:
-        """Test AI model serving endpoint availability."""
+    def _test_ai_model_sync(self, model_endpoint: str) -> Dict[str, str]:
+        """SYNCHRONOUS method to test AI model serving endpoint availability."""
+        print(f"[AI Model Check] Starting check for model: {model_endpoint}")
         try:
+            print(f"[AI Model Check] Listing serving endpoints...")
             # Try to list serving endpoints
             endpoints = list(self.workspace_client.serving_endpoints.list())
             endpoint_names = [ep.name for ep in endpoints]
+            print(f"[AI Model Check] Found {len(endpoint_names)} serving endpoints")
             
             if model_endpoint in endpoint_names:
                 # Check endpoint state
