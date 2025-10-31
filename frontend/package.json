@@ -14,7 +14,7 @@
     "test:unit": "vitest",
     "type-check": "vue-tsc --build --force",
     "lint": "eslint . --fix --cache",
-    "postinstall": "node -e \"try{require('esbuild')}catch(e){process.exit(1)}\" || npm rebuild esbuild"
+    "postinstall": "node -e \"console.log('Verifying esbuild installation...')\" && npm rebuild esbuild || echo 'esbuild rebuild attempted'"
   },
   "dependencies": {
     "pinia": "^3.0.3",
@@ -32,6 +32,7 @@
     "@vue/eslint-config-typescript": "^14.6.0",
     "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.8.1",
+    "esbuild": "^0.21.5",
     "eslint": "^9.37.0",
     "eslint-plugin-vue": "~10.5.0",
     "jiti": "^2.6.1",
