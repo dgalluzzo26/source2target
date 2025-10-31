@@ -27,8 +27,31 @@ export const useUserStore = defineStore('user', () => {
     loading.value = true
     error.value = null
     
-    // Frontend-only mode: Use dummy user data
     try {
+      // Call the backend API to get the real user from Databricks context
+      const response = await fetch('/api/auth/current-user')
+      if (!response.ok) {
+        throw new Error('Failed to get user information')
+      }
+      
+      const userInfo = await response.json()
+      
+      currentUser.value = {
+        id: 1, // Backend doesn't have user ID yet
+        email: userInfo.email || 'demo.user@gainwell.com',
+        display_name: userInfo.display_name || 'Demo User',
+        role: userInfo.is_admin ? 'admin' : 'platform_user',
+        is_admin: userInfo.is_admin || false,
+        is_platform_user: true,
+        is_active: true,
+        date_joined: new Date().toISOString()
+      }
+      
+      console.log(`User detected: ${userInfo.email} (${userInfo.detection_method})`)
+      return { success: true }
+    } catch (error) {
+      console.error('Error getting user from API:', error)
+      // Fallback to dummy user
       currentUser.value = {
         id: 1,
         email: 'demo.user@gainwell.com',
@@ -39,11 +62,7 @@ export const useUserStore = defineStore('user', () => {
         is_active: true,
         date_joined: new Date().toISOString()
       }
-      console.log('Frontend-only mode: User initialized with dummy data')
-      return { success: true }
-    } catch (error) {
-      console.error('Error initializing dummy user:', error)
-      return { success: false, error: 'Failed to initialize user' }
+      return { success: false, error: 'Failed to get user' }
     } finally {
       loading.value = false
     }

@@ -1,8 +1,18 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
+from typing import Optional, Dict, Any
+
+# Import Databricks SDK for authentication
+try:
+    from databricks.sdk import WorkspaceClient
+    from databricks.sdk.core import Config
+    DATABRICKS_AVAILABLE = True
+except ImportError:
+    DATABRICKS_AVAILABLE = False
+    print("Warning: Databricks SDK not available")
 
 app = FastAPI(
     title="Source2Target API",
@@ -23,6 +33,93 @@ app.add_middleware(
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+@app.get("/api/auth/current-user")
+async def get_current_user(request: Request):
+    """
+    Get current authenticated user from Databricks context.
+    Follows the same logic as the Streamlit app's auth.py
+    """
+    user_info = {
+        "email": None,
+        "display_name": None,
+        "is_admin": False,
+        "detection_method": None
+    }
+    
+    try:
+        # Method 1: Check Databricks App headers (primary method for service principal apps)
+        forwarded_email = request.headers.get('x-forwarded-email')
+        if forwarded_email and '@' in forwarded_email:
+            user_info["email"] = forwarded_email
+            user_info["display_name"] = forwarded_email.split('@')[0].replace('.', ' ').title()
+            user_info["detection_method"] = "X-Forwarded-Email header"
+            return user_info
+        
+        # Method 2: Check other common headers
+        user_headers = [
+            'x-databricks-user',
+            'x-user-email',
+            'x-forwarded-user'
+        ]
+        for header in user_headers:
+            value = request.headers.get(header)
+            if value and '@' in value:
+                user_info["email"] = value
+                user_info["display_name"] = value.split('@')[0].replace('.', ' ').title()
+                user_info["detection_method"] = f"{header} header"
+                return user_info
+        
+        # Method 3: Check environment variables
+        databricks_user = os.environ.get('DATABRICKS_USER')
+        if databricks_user and '@' in databricks_user:
+            user_info["email"] = databricks_user
+            user_info["display_name"] = databricks_user.split('@')[0].replace('.', ' ').title()
+            user_info["detection_method"] = "DATABRICKS_USER env"
+            return user_info
+        
+        # Method 4: Try Databricks WorkspaceClient (if available)
+        if DATABRICKS_AVAILABLE:
+            try:
+                w = WorkspaceClient()
+                current_user = w.current_user.me()
+                
+                if current_user:
+                    # Try to extract email
+                    email = None
+                    if hasattr(current_user, 'emails') and current_user.emails:
+                        for email_obj in current_user.emails:
+                            if hasattr(email_obj, 'value') and email_obj.value:
+                                if hasattr(email_obj, 'primary') and email_obj.primary:
+                                    email = email_obj.value
+                                    break
+                                elif not email:
+                                    email = email_obj.value
+                    
+                    # Try user_name if no email
+                    if not email and hasattr(current_user, 'user_name') and '@' in str(current_user.user_name):
+                        email = current_user.user_name
+                    
+                    if email:
+                        user_info["email"] = email
+                        user_info["display_name"] = email.split('@')[0].replace('.', ' ').title()
+                        user_info["detection_method"] = "WorkspaceClient API"
+                        return user_info
+            except Exception as e:
+                print(f"WorkspaceClient error: {str(e)}")
+        
+        # Method 5: Fallback to demo user for development
+        user_info["email"] = "demo.user@gainwell.com"
+        user_info["display_name"] = "Demo User"
+        user_info["detection_method"] = "fallback (no Databricks context)"
+        
+    except Exception as e:
+        print(f"Error getting current user: {str(e)}")
+        user_info["email"] = "demo.user@gainwell.com"
+        user_info["display_name"] = "Demo User"
+        user_info["detection_method"] = f"error fallback: {str(e)}"
+    
+    return user_info
 
 @app.get("/api/data")
 async def get_data():
