@@ -88,11 +88,16 @@ class SystemService:
                     "message": f"Warehouse '{warehouse_name}' configured (not connected)"
                 }
             
-            # Attempt connection
+            print(f"[DB Check] Attempting connection to {hostname} with path {http_path}")
+            
+            # Attempt connection - in Databricks Apps, authentication is automatic
             conn = sql.connect(
                 server_hostname=hostname,
-                http_path=http_path
+                http_path=http_path,
+                # In Databricks Apps, no access_token needed - uses app identity
             )
+            
+            print(f"[DB Check] Connection established, executing test query")
             
             # Test with simple query
             with conn.cursor() as cursor:
@@ -101,6 +106,7 @@ class SystemService:
                 
                 if result:
                     conn.close()
+                    print(f"[DB Check] Query successful!")
                     return {
                         "status": "Connected",
                         "message": f"Warehouse '{warehouse_name}' online"
@@ -114,6 +120,7 @@ class SystemService:
             
         except Exception as e:
             error_msg = str(e)
+            print(f"[DB Check] Error: {error_msg}")
             
             # Handle specific error types
             if "cannot import" in error_msg.lower():
@@ -121,20 +128,31 @@ class SystemService:
                     "status": "Configured",
                     "message": f"Warehouse '{warehouse_name}' configured (local dev)"
                 }
-            elif "authentication" in error_msg.lower():
+            elif "authentication" in error_msg.lower() or "unauthorized" in error_msg.lower():
                 return {
                     "status": "Error",
-                    "message": "Authentication failed"
+                    "message": "Authentication failed - check app permissions"
                 }
-            elif "not found" in error_msg.lower():
+            elif "not found" in error_msg.lower() or "does not exist" in error_msg.lower():
                 return {
                     "status": "Error",
                     "message": f"Warehouse '{warehouse_name}' not found"
                 }
-            else:
+            elif "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+                return {
+                    "status": "Timeout", 
+                    "message": f"Warehouse may be stopped or unreachable"
+                }
+            elif "stopped" in error_msg.lower():
                 return {
                     "status": "Error",
-                    "message": f"Connection failed: {error_msg[:30]}"
+                    "message": f"Warehouse '{warehouse_name}' is stopped"
+                }
+            else:
+                # Return more detailed error for debugging
+                return {
+                    "status": "Error",
+                    "message": f"Failed: {error_msg[:60]}"
                 }
     
     async def check_vector_search(self) -> Dict[str, str]:
