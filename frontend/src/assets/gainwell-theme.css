@@ -57,14 +57,28 @@ body {
   max-width: none !important;
 }
 
-/* Ensure Cards use full width */
-.p-card {
+/* Remove any flex or grid constraints that limit width */
+.p-card,
+.status-card,
+.action-card,
+.getting-started-card,
+.field-detail-card {
+  width: 100% !important;
+  max-width: none !important;
+  flex: 1 1 100% !important;
+}
+
+.p-card-body,
+.p-card-content,
+.p-card-title {
   width: 100% !important;
   max-width: none !important;
 }
 
-.p-card-body,
-.p-card-content {
+/* Override any grid or flex container width limits */
+.status-grid,
+.actions-grid,
+.metadata-grid {
   width: 100% !important;
   max-width: none !important;
 }
