@@ -11,6 +11,7 @@
     "dev:backend": "uvicorn backend.app:app --reload"
   },
   "dependencies": {
+    "@primevue/themes": "^4.4.1",
     "pinia": "^3.0.3",
     "primeicons": "^7.0.0",
     "primevue": "^4.4.1",
@@ -36,8 +37,11 @@
     "vitest": "^3.2.4",
     "vue-tsc": "^3.1.1"
   },
-  "keywords": ["databricks", "vue", "fastapi"],
+  "keywords": [
+    "databricks",
+    "vue",
+    "fastapi"
+  ],
   "author": "",
   "license": "ISC"
 }
-
