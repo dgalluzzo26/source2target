@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 from typing import Optional, Dict, Any
+from backend.services.config_service import config_service
 
 # Import Databricks SDK for authentication
 try:
@@ -135,27 +136,69 @@ async def get_data():
 @app.get("/api/system/status")
 async def get_system_status():
     """
-    Get system status without any database queries.
-    Returns configuration status based on defaults.
+    Get system status using configuration from config service.
+    Returns current configuration values without database queries.
     """
+    # Get configuration from config service
+    vs_config = config_service.get_vector_search_config()
+    ai_model = config_service.get_ai_model_endpoint()
+    db_config = config_service.get_database_config()
+    
     return {
         "database": {
             "status": "Connected",
-            "message": "Database connection configured"
+            "message": f"Warehouse '{db_config['warehouse_name']}' configured"
         },
         "vectorSearch": {
             "status": "Available",
-            "message": "Endpoint: s2t_vsendpoint, Index: oztest_dev.source_to_target.silver_semantic_full_vs"
+            "message": f"Endpoint: {vs_config['endpoint_name']}, Index: {vs_config['index_name']}"
         },
         "aiModel": {
             "status": "Ready",
-            "message": "Model 'databricks-meta-llama-3-3-70b-instruct' configured"
+            "message": f"Model '{ai_model}' configured"
         },
         "configuration": {
             "status": "Valid",
             "message": "All configuration settings are valid"
         }
     }
+
+@app.get("/api/config")
+async def get_config():
+    """
+    Get the current application configuration.
+    Returns the complete configuration from local file.
+    """
+    config = config_service.get_config()
+    return config.model_dump()
+
+@app.put("/api/config")
+async def update_config(config_data: dict):
+    """
+    Update the application configuration.
+    Saves the configuration to local file.
+    """
+    try:
+        from backend.models.config import AppConfig
+        config = AppConfig(**config_data)
+        success = config_service.save_config(config)
+        
+        if success:
+            return {
+                "status": "success",
+                "message": "Configuration updated successfully"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Failed to save configuration"
+            }, 500
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Invalid configuration: {str(e)}"
+        }, 400
 
 # Mount static files for production (built frontend)
 # The dist folder is now at the root level after vite build

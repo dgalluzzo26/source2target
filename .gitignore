@@ -52,6 +52,9 @@ dist-ssr/
 .env.local
 .env.*.local
 
+# Configuration files (local to each environment)
+app_config.json
+
 # Testing
 coverage/
 *.coverage
