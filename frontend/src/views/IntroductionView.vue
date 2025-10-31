@@ -181,12 +181,12 @@ const loadSystemStatus = async () => {
       systemStatus.value = data
     } else {
       console.error('Failed to load system status')
-      systemStatus.value = {
+        systemStatus.value = {
         database: { status: 'Error', message: 'Failed to check database' },
         vectorSearch: { status: 'Error', message: 'Failed to check vector search' },
         aiModel: { status: 'Error', message: 'Failed to check AI model' },
         configuration: { status: 'Error', message: 'Failed to check configuration' }
-      }
+        }
     }
   } catch (error) {
     console.error('Error loading system status:', error)
