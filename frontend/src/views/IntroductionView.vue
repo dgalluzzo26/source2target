@@ -197,8 +197,8 @@ const navigateTo = (path: string) => {
 }
 
 .hero-content {
-  max-width: 800px;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
   padding: 0 2rem;
 }
 

@@ -75,7 +75,7 @@
 
 .coming-soon ul {
   text-align: left;
-  max-width: 400px;
+  max-width: 100%;
   margin: 0 auto;
   color: var(--gainwell-text-secondary);
 }
