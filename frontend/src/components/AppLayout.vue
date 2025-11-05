@@ -8,6 +8,16 @@
       </div>
       
       <div class="layout-topbar-menu">
+        <Button 
+          icon="pi pi-question-circle" 
+          label="Help"
+          severity="secondary"
+          text
+          @click="toggleHelpMenu"
+          class="help-button"
+        />
+        <Menu ref="helpMenu" :model="helpMenuItems" :popup="true" class="help-menu" />
+        
         <div class="user-info">
           <i class="pi pi-user"></i>
           <span>{{ userStore.currentUser?.display_name || userStore.currentUser?.email || 'Loading...' }}</span>
@@ -53,11 +63,74 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import Badge from 'primevue/badge'
+import Button from 'primevue/button'
+import Menu from 'primevue/menu'
 
 const userStore = useUserStore()
+const helpMenu = ref()
+
+// Help menu items
+const helpMenuItems = computed(() => {
+  const baseItems = [
+    {
+      label: 'Quick Start Guide',
+      icon: 'pi pi-play',
+      command: () => {
+        window.open('https://github.com/dgalluzzo26/source2target/blob/main/docs/QUICK_START.md', '_blank')
+      }
+    },
+    {
+      label: 'User Guide',
+      icon: 'pi pi-book',
+      command: () => {
+        window.open('https://github.com/dgalluzzo26/source2target/blob/main/docs/USER_GUIDE.md', '_blank')
+      }
+    }
+  ]
+  
+  // Add admin-specific help
+  if (userStore.isAdmin) {
+    baseItems.push({
+      label: 'Administrator Guide',
+      icon: 'pi pi-shield',
+      command: () => {
+        window.open('https://github.com/dgalluzzo26/source2target/blob/main/docs/ADMIN_GUIDE.md', '_blank')
+      }
+    })
+  }
+  
+  baseItems.push(
+    {
+      separator: true
+    },
+    {
+      label: 'Developer Guide',
+      icon: 'pi pi-code',
+      command: () => {
+        window.open('https://github.com/dgalluzzo26/source2target/blob/main/docs/DEVELOPER_GUIDE.md', '_blank')
+      }
+    },
+    {
+      separator: true
+    },
+    {
+      label: 'About',
+      icon: 'pi pi-info-circle',
+      command: () => {
+        window.open('https://github.com/dgalluzzo26/source2target', '_blank')
+      }
+    }
+  )
+  
+  return baseItems
+})
+
+const toggleHelpMenu = (event: Event) => {
+  helpMenu.value.toggle(event)
+}
 
 // Automatically initialize user on app load (like original app)
 onMounted(() => {
@@ -151,6 +224,22 @@ onMounted(() => {
   font-weight: 600;
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
+}
+
+/* Help Button Styling */
+.help-button {
+  color: white !important;
+  font-size: 1rem;
+  padding: 0.5rem 1rem;
+  margin-right: 0.5rem;
+}
+
+.help-button:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+
+.help-button .pi {
+  color: var(--gainwell-secondary);
 }
 
 /* Sidebar with Gainwell Light Background */

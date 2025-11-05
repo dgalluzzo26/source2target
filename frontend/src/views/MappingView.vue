@@ -1,11 +1,32 @@
 <template>
   <div class="mapping-view">
     <div class="page-header">
-      <h1>
-        <i class="pi pi-sitemap"></i>
-        Source-to-Target Field Mapping
-      </h1>
-      <p>Map source database fields to target database fields using AI-powered semantic matching</p>
+      <div class="header-content">
+        <div>
+          <h1>
+            <i class="pi pi-sitemap"></i>
+            Source-to-Target Field Mapping
+          </h1>
+          <p>Map source database fields to target database fields using AI-powered semantic matching</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <HelpButton 
+            help-type="quick-start" 
+            label="Quick Start" 
+            severity="success"
+            :outlined="true"
+            tooltip="Step-by-step mapping guide"
+          />
+          <HelpButton 
+            help-type="user" 
+            section="field-mapping"
+            label="Help"
+            severity="help"
+            :outlined="true"
+            tooltip="Field mapping documentation"
+          />
+        </div>
+      </div>
     </div>
 
     <!-- Main Content Tabs matching original app structure -->
@@ -135,7 +156,16 @@
               <!-- AI Mapping Section -->
               <div class="ai-mapping-section">
                 <div class="section-header">
-                  <h4>🤖 AI Mapping Suggestions</h4>
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <h4>🤖 AI Mapping Suggestions</h4>
+                    <HelpButton 
+                      help-type="user" 
+                      section="ai-powered-mapping"
+                      icon="pi pi-question-circle"
+                      :text="true"
+                      tooltip="Learn about AI mapping suggestions"
+                    />
+                  </div>
                   <div class="ai-controls">
                     <Button 
                       icon="pi pi-magic-wand" 
@@ -206,7 +236,16 @@
               <!-- Manual Search Section -->
               <div class="manual-search-section">
                 <div class="section-header">
-                  <h4>🔍 Manual Search</h4>
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <h4>🔍 Manual Search</h4>
+                    <HelpButton 
+                      help-type="user" 
+                      section="manual-search"
+                      icon="pi pi-question-circle"
+                      :text="true"
+                      tooltip="Learn about manual search"
+                    />
+                  </div>
                 </div>
                 
                 <div class="search-controls">
@@ -677,6 +716,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { SemanticAPI, type SemanticRecord, MappingAPI, type MappedField, type UnmappedField, AIMappingAPI, type AISuggestion } from '@/services/api'
 import { useUserStore } from '@/stores/user'
+import HelpButton from '@/components/HelpButton.vue'
 
 const userStore = useUserStore()
 

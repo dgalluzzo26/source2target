@@ -1,11 +1,21 @@
 <template>
   <div class="config-view">
-    <div class="page-header">
-      <h1>
-        <i class="pi pi-cog"></i>
-        Configuration Settings
-      </h1>
-      <p>Manage enterprise application settings, database connections, and AI model configurations for healthcare data processing.</p>
+    <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+      <div>
+        <h1>
+          <i class="pi pi-cog"></i>
+          Configuration Settings
+        </h1>
+        <p>Manage enterprise application settings, database connections, and AI model configurations for healthcare data processing.</p>
+      </div>
+      <HelpButton 
+        help-type="admin" 
+        section="configuration-management"
+        label="Admin Guide"
+        severity="help"
+        :outlined="true"
+        tooltip="Configuration management documentation"
+      />
     </div>
 
     <!-- Admin Authentication Check -->
@@ -393,6 +403,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
+import HelpButton from '@/components/HelpButton.vue'
 
 const userStore = useUserStore()
 

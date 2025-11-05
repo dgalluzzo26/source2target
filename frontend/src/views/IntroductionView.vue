@@ -3,14 +3,40 @@
     <!-- Hero Section -->
     <div class="hero-section" style="width: 100% !important; max-width: none !important;">
       <div class="hero-content" style="width: 100% !important; max-width: none !important;">
-        <h1 class="hero-title">
-          <i class="pi pi-sitemap hero-icon"></i>
-          Source-to-Target Mapping Platform
-        </h1>
-        <p class="hero-description">
-          Streamline your data mapping process with AI-powered field suggestions, 
-          comprehensive data discovery, and intelligent automation tools.
-        </p>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+          <div style="flex: 1;">
+            <h1 class="hero-title">
+              <i class="pi pi-sitemap hero-icon"></i>
+              Source-to-Target Mapping Platform
+            </h1>
+            <p class="hero-description">
+              Streamline your data mapping process with AI-powered field suggestions, 
+              comprehensive data discovery, and intelligent automation tools.
+            </p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <HelpButton 
+              help-type="quick-start" 
+              label="Quick Start" 
+              severity="success"
+              :outlined="true"
+              tooltip="Step-by-step guide for your first mapping"
+            />
+            <HelpButton 
+              help-type="user" 
+              label="User Guide" 
+              :outlined="true"
+              tooltip="Complete guide for using the application"
+            />
+            <HelpButton 
+              v-if="userStore.isAdmin"
+              help-type="admin" 
+              label="Admin Guide" 
+              :outlined="true"
+              tooltip="Administrator documentation"
+            />
+          </div>
+        </div>
       </div>
     </div>
 
@@ -152,6 +178,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import HelpButton from '@/components/HelpButton.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
