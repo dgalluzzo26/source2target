@@ -93,18 +93,14 @@ async def download_template(request: Request):
         output = io.StringIO()
         writer = csv.writer(output)
         
-        # Write header with columns for source data and target columns
+        # Write header with SOURCE columns only (target columns will be NULL on insert)
         writer.writerow([
             'src_table_name',
             'src_column_name',
             'src_column_physical_name',
             'src_nullable',
             'src_physical_datatype',
-            'src_comments',
-            'tgt_table_name',          # To be filled by user
-            'tgt_column_name',         # To be filled by user
-            'tgt_column_physical_name', # To be filled by user
-            'tgt_table_physical_name'  # To be filled by user
+            'src_comments'
         ])
         
         # Write one example row
@@ -114,11 +110,7 @@ async def download_template(request: Request):
             'patient_id',                              # src_column_physical_name
             'NO',                                       # src_nullable
             'STRING',                                   # src_physical_datatype
-            'Unique identifier for patient records',   # src_comments
-            'unified_member',                          # tgt_table_name (example)
-            'member_id',                               # tgt_column_name (example)
-            'member_id',                               # tgt_column_physical_name (example)
-            'unified_member'                           # tgt_table_physical_name (example)
+            'Unique identifier for patient records'    # src_comments
         ])
         
         # Create streaming response
@@ -166,11 +158,11 @@ async def upload_template(request: Request, file: UploadFile = File(...)):
         decoded = contents.decode('utf-8')
         csv_reader = csv.DictReader(io.StringIO(decoded))
         
-        # Validate required columns
+        # Validate required columns (only source columns are required)
         required_columns = {
             'src_table_name', 'src_column_name',
-            'tgt_table_name', 'tgt_column_name',
-            'tgt_column_physical_name', 'tgt_table_physical_name'
+            'src_column_physical_name', 'src_nullable',
+            'src_physical_datatype', 'src_comments'
         }
         
         if not required_columns.issubset(set(csv_reader.fieldnames or [])):
@@ -180,21 +172,21 @@ async def upload_template(request: Request, file: UploadFile = File(...)):
                 detail=f"CSV missing required columns: {', '.join(missing)}"
             )
         
-        # Process rows
+        # Process rows - add all source fields as unmapped (tgt_columns = NULL)
         mappings = []
         for row_num, row in enumerate(csv_reader, start=2):  # start=2 because row 1 is header
-            # Skip rows where target columns are empty
-            if not row.get('tgt_table_name') or not row.get('tgt_column_name'):
-                print(f"[Mapping Router] Skipping row {row_num} - no target mapping")
+            # Skip empty rows
+            if not row.get('src_table_name') or not row.get('src_column_name'):
+                print(f"[Mapping Router] Skipping row {row_num} - missing source table/column")
                 continue
             
             mappings.append({
                 'src_table_name': row['src_table_name'],
                 'src_column_name': row['src_column_name'],
-                'tgt_table_name': row['tgt_table_name'],
-                'tgt_column_name': row['tgt_column_name'],
-                'tgt_column_physical_name': row['tgt_column_physical_name'],
-                'tgt_table_physical_name': row['tgt_table_physical_name']
+                'src_column_physical_name': row.get('src_column_physical_name', row['src_column_name']),
+                'src_nullable': row.get('src_nullable', 'YES'),
+                'src_physical_datatype': row.get('src_physical_datatype', 'STRING'),
+                'src_comments': row.get('src_comments', '')
             })
         
         print(f"[Mapping Router] Parsed {len(mappings)} valid mappings from CSV")

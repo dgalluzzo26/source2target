@@ -300,32 +300,43 @@ class MappingService:
                             continue
                         
                         # INSERT new record only (no updates)
-                        src_physical = mapping.get('src_column_physical_name', mapping['src_column_name'])
-                        src_nullable = mapping.get('src_nullable', 'YES')
-                        src_datatype = mapping.get('src_physical_datatype', 'STRING')
-                        src_comments = mapping.get('src_comments', '')
+                        # Match original app: inserts source fields with NULL target columns (unmapped)
+                        src_table = mapping.get('src_table_name', '').replace("'", "''")
+                        src_column = mapping.get('src_column_name', '').replace("'", "''")
+                        src_physical = mapping.get('src_column_physical_name', src_column).replace("'", "''")
+                        src_nullable = mapping.get('src_nullable', 'YES').replace("'", "''")
+                        src_datatype = mapping.get('src_physical_datatype', 'STRING').replace("'", "''")
+                        src_comments = mapping.get('src_comments', '').replace("'", "''")
+                        
+                        # Generate query_text for AI model (simple version)
+                        query_text = f"TABLE NAME: {src_table}; COLUMN NAME: {src_column}; COLUMN DESCRIPTION: {src_comments}; IS COLUMN NULLABLE: {src_nullable}; COLUMN DATATYPE: {src_datatype}"
+                        query_text_escaped = query_text.replace("'", "''")
                         
                         query = f"""
                         INSERT INTO {mapping_table} (
                             src_table_name,
                             src_column_name,
                             src_columns,
+                            query_text,
                             tgt_columns,
                             source_owners
                         ) VALUES (
-                            '{mapping['src_table_name']}',
-                            '{mapping['src_column_name']}',
+                            '{src_table}',
+                            '{src_column}',
                             named_struct(
+                                'src_table_name', '{src_table}',
+                                'src_column_name', '{src_column}',
                                 'src_column_physical_name', '{src_physical}',
                                 'src_nullable', '{src_nullable}',
                                 'src_physical_datatype', '{src_datatype}',
                                 'src_comments', '{src_comments}'
                             ),
+                            '{query_text_escaped}',
                             named_struct(
-                                'tgt_table_name', '{mapping['tgt_table_name']}',
-                                'tgt_column_name', '{mapping['tgt_column_name']}',
-                                'tgt_column_physical_name', '{mapping['tgt_column_physical_name']}',
-                                'tgt_table_physical_name', '{mapping['tgt_table_physical_name']}'
+                                'tgt_table_name', null,
+                                'tgt_table_physical_name', null,
+                                'tgt_column_name', null,
+                                'tgt_column_physical_name', null
                             ),
                             '{current_user_email}'
                         )
