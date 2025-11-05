@@ -174,12 +174,28 @@ export interface MappedField {
   tgt_table_physical?: string
 }
 
+export interface UnmappedField {
+  src_table_name: string
+  src_column_name: string
+  src_column_physical_name: string
+  src_nullable: string
+  src_physical_datatype: string
+  src_comments?: string
+}
+
 export class MappingAPI {
   /**
    * Get all mapped fields for the current user
    */
   static async getMappedFields(): Promise<ApiResponse<MappedField[]>> {
     return apiFetch<MappedField[]>('/api/mapping/mapped-fields')
+  }
+
+  /**
+   * Get all unmapped fields for the current user
+   */
+  static async getUnmappedFields(): Promise<ApiResponse<UnmappedField[]>> {
+    return apiFetch<UnmappedField[]>('/api/mapping/unmapped-fields')
   }
 }
 

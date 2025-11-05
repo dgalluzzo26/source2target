@@ -657,54 +657,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { SemanticAPI, type SemanticRecord, MappingAPI, type MappedField } from '@/services/api'
+import { SemanticAPI, type SemanticRecord, MappingAPI, type MappedField, type UnmappedField } from '@/services/api'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 
 // Reactive data matching original app structure
-const unmappedFields = ref([
-  {
-    src_table_name: 'patient_demographics',
-    src_column_name: 'patient_id',
-    src_column_physical_name: 'patient_id',
-    src_nullable: 'NO',
-    src_physical_datatype: 'STRING',
-    src_comments: 'Unique identifier for patient records'
-  },
-  {
-    src_table_name: 'patient_demographics',
-    src_column_name: 'first_name',
-    src_column_physical_name: 'first_name',
-    src_nullable: 'YES',
-    src_physical_datatype: 'STRING',
-    src_comments: 'Patient first name'
-  },
-  {
-    src_table_name: 'claims_summary',
-    src_column_name: 'claim_id',
-    src_column_physical_name: 'claim_id',
-    src_nullable: 'NO',
-    src_physical_datatype: 'BIGINT',
-    src_comments: 'Unique claim identifier'
-  },
-  {
-    src_table_name: 'claims_summary',
-    src_column_name: 'claim_amount',
-    src_column_physical_name: 'claim_amount',
-    src_nullable: 'YES',
-    src_physical_datatype: 'DECIMAL(10,2)',
-    src_comments: 'Total claim amount in dollars'
-  },
-  {
-    src_table_name: 'provider_network',
-    src_column_name: 'provider_npi',
-    src_column_physical_name: 'provider_npi',
-    src_nullable: 'NO',
-    src_physical_datatype: 'STRING',
-    src_comments: 'National Provider Identifier'
-  }
-])
+const unmappedFields = ref<UnmappedField[]>([])
 
 // Mapped fields - loaded from API
 const mappedFields = ref<MappedField[]>([])
@@ -767,11 +726,11 @@ const filteredUnmappedFields = computed(() => {
   if (!unmappedSearch.value) return unmappedFields.value
   const search = unmappedSearch.value.toLowerCase()
   return unmappedFields.value.filter(field => 
-    field.src_table_name.toLowerCase().includes(search) ||
-    field.src_column_name.toLowerCase().includes(search) ||
-    field.src_column_physical_name.toLowerCase().includes(search) ||
-    field.src_physical_datatype.toLowerCase().includes(search) ||
-    field.src_nullable.toLowerCase().includes(search) ||
+    field.src_table_name?.toLowerCase().includes(search) ||
+    field.src_column_name?.toLowerCase().includes(search) ||
+    field.src_column_physical_name?.toLowerCase().includes(search) ||
+    field.src_physical_datatype?.toLowerCase().includes(search) ||
+    field.src_nullable?.toLowerCase().includes(search) ||
     (field.src_comments && field.src_comments.toLowerCase().includes(search))
   )
 })
@@ -780,10 +739,10 @@ const filteredMappedFields = computed(() => {
   if (!mappedSearch.value) return mappedFields.value
   const search = mappedSearch.value.toLowerCase()
   return mappedFields.value.filter(field => 
-    field.src_table_name.toLowerCase().includes(search) ||
-    field.src_column_name.toLowerCase().includes(search) ||
-    field.tgt_table_name.toLowerCase().includes(search) ||
-    field.tgt_column_physical.toLowerCase().includes(search)
+    field.src_table_name?.toLowerCase().includes(search) ||
+    field.src_column_name?.toLowerCase().includes(search) ||
+    (field.tgt_table_name && field.tgt_table_name.toLowerCase().includes(search)) ||
+    (field.tgt_column_physical && field.tgt_column_physical.toLowerCase().includes(search))
   )
 })
 
@@ -911,6 +870,23 @@ const selectManualMapping = (mapping: any) => {
   }
   
   clearSelection()
+}
+
+const loadUnmappedFields = async () => {
+  loading.value.unmapped = true
+  try {
+    const result = await MappingAPI.getUnmappedFields()
+    if (result.data) {
+      unmappedFields.value = result.data
+      console.log(`Loaded ${result.data.length} unmapped fields`)
+    } else if (result.error) {
+      console.error('Error loading unmapped fields:', result.error)
+    }
+  } catch (error) {
+    console.error('Error loading unmapped fields:', error)
+  } finally {
+    loading.value.unmapped = false
+  }
 }
 
 const loadMappedFields = async () => {
@@ -1122,8 +1098,9 @@ const uploadTemplate = (event: any) => {
 onMounted(() => {
   console.log('Source-to-Target Mapping view loaded')
   // Load data from the database
-  loadSemanticTable()
+  loadUnmappedFields()
   loadMappedFields()
+  loadSemanticTable()
 })
 </script>
 

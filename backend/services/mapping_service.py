@@ -8,7 +8,7 @@ import functools
 from typing import List, Dict, Any
 from databricks import sql
 from databricks.sdk import WorkspaceClient
-from backend.models.mapping import MappedField
+from backend.models.mapping import MappedField, UnmappedField
 from backend.services.config_service import ConfigService
 
 
@@ -155,5 +155,97 @@ class MappingService:
             raise Exception("Database query timed out after 30 seconds. Check if warehouse is running.")
         except Exception as e:
             print(f"[Mapping Service] Error in get_all_mapped_fields: {str(e)}")
+            raise
+    
+    def _read_unmapped_fields_sync(
+        self, 
+        server_hostname: str, 
+        http_path: str, 
+        mapping_table: str,
+        current_user_email: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Read all unmapped fields from the mapping table (synchronous, for thread pool).
+        Filters by source_owners to show only user's data and where tgt_column_name IS NULL.
+        """
+        print(f"[Mapping Service] Reading unmapped fields from table: {mapping_table}")
+        print(f"[Mapping Service] User email: {current_user_email}")
+        
+        try:
+            print(f"[Mapping Service] Connecting to database...")
+            connection = self._get_sql_connection(server_hostname, http_path)
+            print(f"[Mapping Service] Connection established")
+        except Exception as e:
+            print(f"[Mapping Service] Connection failed: {str(e)}")
+            raise
+        
+        try:
+            with connection.cursor() as cursor:
+                query = f"""
+                SELECT DISTINCT 
+                    src_table_name,
+                    src_column_name,
+                    src_column_physical_name,
+                    src_nullable,
+                    src_physical_datatype,
+                    src_comments
+                FROM {mapping_table} 
+                WHERE (tgt_columns.tgt_column_name IS NULL OR tgt_columns.tgt_column_name = '')
+                  AND (source_owners IS NULL OR source_owners LIKE '%{current_user_email}%')
+                ORDER BY src_table_name, src_column_name
+                """
+                print(f"[Mapping Service] Executing unmapped fields query...")
+                cursor.execute(query)
+                
+                print(f"[Mapping Service] Fetching unmapped results...")
+                arrow_table = cursor.fetchall_arrow()
+                df = arrow_table.to_pandas()
+                records = df.to_dict('records')
+                
+                print(f"[Mapping Service] Successfully retrieved {len(records)} unmapped fields")
+                return records
+        except Exception as e:
+            print(f"[Mapping Service] Query execution failed: {str(e)}")
+            raise
+        finally:
+            connection.close()
+            print(f"[Mapping Service] Connection closed")
+    
+    async def get_all_unmapped_fields(self, current_user_email: str) -> List[UnmappedField]:
+        """Get all unmapped fields for the current user."""
+        print("[Mapping Service] get_all_unmapped_fields called")
+        
+        try:
+            db_config = self._get_db_config()
+            print(f"[Mapping Service] Config loaded: {db_config['mapping_table']}")
+        except Exception as e:
+            print(f"[Mapping Service] Failed to get config: {str(e)}")
+            raise
+        
+        try:
+            loop = asyncio.get_event_loop()
+            print("[Mapping Service] Running unmapped query in executor...")
+            records = await asyncio.wait_for(
+                loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._read_unmapped_fields_sync,
+                        db_config['server_hostname'],
+                        db_config['http_path'],
+                        db_config['mapping_table'],
+                        current_user_email
+                    )
+                ),
+                timeout=30.0
+            )
+            
+            # Convert to Pydantic models
+            print(f"[Mapping Service] Converting {len(records)} unmapped records to Pydantic models")
+            return [UnmappedField(**record) for record in records]
+        except asyncio.TimeoutError:
+            print("[Mapping Service] Unmapped query timed out after 30 seconds")
+            raise Exception("Database query timed out after 30 seconds. Check if warehouse is running.")
+        except Exception as e:
+            print(f"[Mapping Service] Error in get_all_unmapped_fields: {str(e)}")
             raise
 
