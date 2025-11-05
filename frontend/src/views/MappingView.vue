@@ -1014,8 +1014,12 @@ const cancelAddSemantic = () => {
 }
 
 const editSemanticRecord = (record: SemanticRecord) => {
-  // Clone the record for editing
-  editingSemanticRecord.value = { ...record }
+  // Clone the record for editing and normalize the nullable value
+  editingSemanticRecord.value = { 
+    ...record,
+    // Ensure tgt_nullable is uppercase YES or NO
+    tgt_nullable: record.tgt_nullable?.toUpperCase() === 'YES' ? 'YES' : 'NO'
+  }
   showEditSemantic.value = true
 }
 
