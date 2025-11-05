@@ -106,7 +106,7 @@ class AIMappingService:
                 # Escape single quotes
                 escaped_query = query_text.replace("'", "''")
                 
-                # Vector search query - includes score for confidence
+                # Vector search query - includes search_score for confidence
                 query = f"""
                 SELECT 
                     tgt_table_name,
@@ -114,13 +114,13 @@ class AIMappingService:
                     tgt_table_physical_name,
                     tgt_column_physical_name,
                     semantic_field,
-                    score
+                    search_score
                 FROM vector_search(
                     index => '{index_name}',
                     query => '{escaped_query}',
                     num_results => {num_results}
                 )
-                ORDER BY score DESC
+                ORDER BY search_score DESC
                 """
                 
                 print(f"[AI Mapping Service] Executing vector search...")
@@ -209,8 +209,8 @@ class AIMappingService:
                 "target_table_physical": result.get('tgt_table_physical_name', ''),
                 "target_column_physical": result.get('tgt_column_physical_name', ''),
                 "semantic_field": result.get('semantic_field', ''),
-                "confidence_score": float(result.get('score', 0.0)) if result.get('score') is not None else 0.0,
-                "reasoning": f"Vector similarity match (score: {result.get('score', 0.0):.4f})"
+                "confidence_score": float(result.get('search_score', 0.0)) if result.get('search_score') is not None else 0.0,
+                "reasoning": f"Vector similarity match (score: {result.get('search_score', 0.0):.4f})"
             })
         
         print(f"[AI Mapping Service] Generated {len(suggestions)} AI suggestions")
