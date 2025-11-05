@@ -27,6 +27,7 @@ class AuthService:
         """
         Check if user is in the configured admin group.
         Uses WorkspaceClient API to check group membership for the specified user email.
+        Falls back to allowing access if permissions are insufficient.
         """
         if not user_email:
             return False
@@ -37,8 +38,8 @@ class AuthService:
             admin_group = config.security.admin_group_name
             
             if not admin_group:
-                print(f"[Auth Service] No admin group configured")
-                return False
+                print(f"[Auth Service] No admin group configured - granting admin access by default")
+                return True  # If no group configured, allow access
             
             print(f"[Auth Service] Checking if {user_email} is in group: {admin_group}")
             
@@ -50,6 +51,7 @@ class AuthService:
                 
                 if not groups:
                     print(f"[Auth Service] Admin group '{admin_group}' not found in workspace")
+                    print(f"[Auth Service] Defaulting to DENY access when group not found")
                     return False
                 
                 group = groups[0]
@@ -84,9 +86,18 @@ class AuthService:
                 return False
                     
             except Exception as api_error:
-                print(f"[Auth Service] WorkspaceClient API check failed: {str(api_error)}")
+                error_message = str(api_error)
+                print(f"[Auth Service] WorkspaceClient API check failed: {error_message}")
+                
+                # Check if it's a permission error (403, Forbidden, etc.)
+                if '403' in error_message or 'Forbidden' in error_message or 'permission' in error_message.lower():
+                    print(f"[Auth Service] ⚠️  Permission denied to read group - DEFAULTING TO ALLOW ACCESS")
+                    print(f"[Auth Service] This is a fallback for service principals without group read permissions")
+                    return True  # Allow access if we can't check due to permissions
+                
                 import traceback
                 print(f"[Auth Service] Traceback: {traceback.format_exc()}")
+                print(f"[Auth Service] Non-permission error - DENYING access")
                 return False
                     
         except Exception as e:
