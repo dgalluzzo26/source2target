@@ -247,6 +247,53 @@ export class MappingAPI {
   }
 }
 
+/**
+ * AI Mapping API
+ */
+export interface AISuggestion {
+  rank: number
+  target_table: string
+  target_column: string
+  target_table_physical: string
+  target_column_physical: string
+  semantic_field: string
+  confidence_score: number
+  reasoning: string
+}
+
+export class AIMappingAPI {
+  /**
+   * Generate AI mapping suggestions for a source field
+   */
+  static async generateSuggestions(
+    srcTableName: string,
+    srcColumnName: string,
+    srcDatatype: string,
+    srcNullable: string,
+    srcComments: string,
+    numVectorResults: number = 25,
+    numAiResults: number = 10,
+    userFeedback: string = ''
+  ): Promise<ApiResponse<AISuggestion[]>> {
+    return apiFetch<AISuggestion[]>('/api/ai-mapping/generate-suggestions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        src_table_name: srcTableName,
+        src_column_name: srcColumnName,
+        src_datatype: srcDatatype,
+        src_nullable: srcNullable,
+        src_comments: srcComments,
+        num_vector_results: numVectorResults,
+        num_ai_results: numAiResults,
+        user_feedback: userFeedback
+      })
+    })
+  }
+}
+
 export default {
   checkHealth,
   getData,

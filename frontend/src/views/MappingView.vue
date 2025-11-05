@@ -675,7 +675,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { SemanticAPI, type SemanticRecord, MappingAPI, type MappedField, type UnmappedField } from '@/services/api'
+import { SemanticAPI, type SemanticRecord, MappingAPI, type MappedField, type UnmappedField, AIMappingAPI, type AISuggestion } from '@/services/api'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
@@ -808,22 +808,35 @@ const generateAISuggestions = async () => {
   
   loading.value.aiSuggestions = true
   
-  // Simulate AI API call
-  setTimeout(() => {
-    aiSuggestions.value = [
-      {
-        target_table: 'unified_member',
-        target_column: 'member_id',
-        reasoning: 'Strong semantic match between patient_id and member_id. Both represent unique identifiers for individuals in healthcare systems.'
-      },
-      {
-        target_table: 'unified_member',
-        target_column: 'member_external_id',
-        reasoning: 'Alternative mapping for external system identifier. Could be used for cross-system patient identification.'
-      }
-    ]
+  try {
+    console.log('Generating AI suggestions for:', selectedUnmappedField.value)
+    
+    const result = await AIMappingAPI.generateSuggestions(
+      selectedUnmappedField.value.src_table_name,
+      selectedUnmappedField.value.src_column_name,
+      selectedUnmappedField.value.src_physical_datatype,
+      selectedUnmappedField.value.src_nullable,
+      selectedUnmappedField.value.src_comments || '',
+      aiConfig.value.numVectorResults,
+      aiConfig.value.numAiResults,
+      aiConfig.value.userFeedback
+    )
+    
+    if (result.error) {
+      console.error('Error generating AI suggestions:', result.error)
+      alert(`Failed to generate AI suggestions: ${result.error}`)
+      aiSuggestions.value = []
+    } else if (result.data) {
+      console.log(`Generated ${result.data.length} AI suggestions with confidence scores`)
+      aiSuggestions.value = result.data
+    }
+  } catch (error) {
+    console.error('Error generating AI suggestions:', error)
+    alert('Failed to generate AI suggestions. Please try again.')
+    aiSuggestions.value = []
+  } finally {
     loading.value.aiSuggestions = false
-  }, 2000)
+  }
 }
 
 const selectAIMapping = (mapping: any) => {
