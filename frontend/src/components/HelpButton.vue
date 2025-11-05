@@ -257,15 +257,30 @@ const onIframeLoad = () => {
   font-size: 1.1rem;
 }
 
-/* Fix tooltip readability */
+/* Fix tooltip readability - solid grey background */
 :deep(.p-tooltip .p-tooltip-text) {
-  background-color: #333 !important;
+  background-color: #495057 !important;
   color: white !important;
   padding: 0.5rem 0.75rem !important;
   font-size: 0.9rem !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  border-radius: 6px !important;
+  font-weight: 500 !important;
 }
 
 :deep(.p-tooltip .p-tooltip-arrow) {
-  border-right-color: #333 !important;
+  border-right-color: #495057 !important;
+}
+
+:deep(.p-tooltip.p-tooltip-top .p-tooltip-arrow) {
+  border-top-color: #495057 !important;
+}
+
+:deep(.p-tooltip.p-tooltip-bottom .p-tooltip-arrow) {
+  border-bottom-color: #495057 !important;
+}
+
+:deep(.p-tooltip.p-tooltip-left .p-tooltip-arrow) {
+  border-left-color: #495057 !important;
 }
 </style>
