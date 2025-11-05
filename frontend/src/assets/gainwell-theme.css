@@ -298,12 +298,31 @@ body {
   color: #721c24 !important;
 }
 
-/* Tooltip Styling */
+/* Tooltip Styling - Solid Grey Background for Readability */
 .p-tooltip .p-tooltip-text {
-  background: var(--gainwell-dark) !important;
+  background-color: #495057 !important;
   color: white !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.9rem !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
   border-radius: 6px !important;
-  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+
+.p-tooltip .p-tooltip-arrow {
+  border-right-color: #495057 !important;
+}
+
+.p-tooltip.p-tooltip-top .p-tooltip-arrow {
+  border-top-color: #495057 !important;
+}
+
+.p-tooltip.p-tooltip-bottom .p-tooltip-arrow {
+  border-bottom-color: #495057 !important;
+}
+
+.p-tooltip.p-tooltip-left .p-tooltip-arrow {
+  border-left-color: #495057 !important;
 }
 
 /* Scrollbar Styling */

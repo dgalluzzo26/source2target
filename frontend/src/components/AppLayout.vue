@@ -2,12 +2,13 @@
   <div class="layout-wrapper">
     <!-- Top Header -->
     <div class="layout-topbar">
-      <div class="sidebar-toggle-header" @click="toggleSidebar">
-        <i :class="sidebarCollapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'"></i>
-      </div>
-      
-      <div class="layout-topbar-logo">
+      <div class="layout-topbar-left">
         <img src="/gainwell-logo-suite-061720-logosuite-png-gainwell-logo-150-r.png" alt="Gainwell Technologies" class="logo" />
+        
+        <div class="sidebar-toggle-header" @click="toggleSidebar">
+          <i class="pi pi-bars"></i>
+        </div>
+        
         <span class="logo-text">Source-to-Target Mapping Platform</span>
       </div>
       
@@ -109,7 +110,14 @@ onMounted(() => {
   color: white;
 }
 
-/* Sidebar Toggle in Header */
+/* Left side of header - Logo + Hamburger + Title */
+.layout-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Sidebar Toggle - Hamburger Menu Icon */
 .sidebar-toggle-header {
   display: flex;
   align-items: center;
@@ -120,7 +128,6 @@ onMounted(() => {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
-  margin-right: 1rem;
   flex-shrink: 0;
 }
 
@@ -132,12 +139,6 @@ onMounted(() => {
 .sidebar-toggle-header i {
   font-size: 1.25rem;
   color: white;
-}
-
-.layout-topbar-logo {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
 }
 
 .logo {
