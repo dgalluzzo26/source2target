@@ -55,6 +55,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
+import Badge from 'primevue/badge'
 
 const userStore = useUserStore()
 
