@@ -33,7 +33,7 @@
         :src="helpUrl"
         class="help-iframe"
         frameborder="0"
-        style="width: 100%; height: 100%; border: none; display: block;"
+        style="width: 100%; height: 80vh; min-height: 80vh; border: none; display: block;"
         @load="onIframeLoad"
       ></iframe>
       <div v-else class="help-loading">
