@@ -40,7 +40,8 @@
               icon="pi pi-download" 
               label="Download Template"
               @click="downloadTemplate"
-              severity="help"
+              severity="success"
+              outlined
             />
           </div>
         </div>
@@ -441,13 +442,20 @@
         
         <div style="margin-top: 1.5rem;">
           <FileUpload 
+            ref="fileUploadRef"
             mode="basic" 
             accept=".csv"
             :maxFileSize="10000000"
-            @select="uploadTemplate"
-            :auto="false"
-            chooseLabel="Select CSV File"
+            :customUpload="true"
+            @uploader="handleFileUpload"
+            :auto="true"
+            chooseLabel="Select CSV File to Upload"
+            :disabled="loading.uploadingTemplate"
           />
+          <div v-if="loading.uploadingTemplate" style="margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem; color: var(--gainwell-primary);">
+            <i class="pi pi-spin pi-spinner"></i>
+            <span>Uploading and processing mappings...</span>
+          </div>
         </div>
       </div>
 
@@ -455,8 +463,9 @@
         <Button 
           label="Cancel" 
           icon="pi pi-times" 
-          @click="showTemplateUpload = false" 
+          @click="closeUploadDialog" 
           severity="secondary"
+          :disabled="loading.uploadingTemplate"
         />
       </template>
     </Dialog>
@@ -722,7 +731,8 @@ const loading = ref({
   semantic: false,
   aiSuggestions: false,
   manualSearch: false,
-  savingSemantic: false
+  savingSemantic: false,
+  uploadingTemplate: false
 })
 
 // Computed filtered data
@@ -1102,7 +1112,7 @@ const downloadTemplate = async () => {
   }
 }
 
-const uploadTemplate = async (event: any) => {
+const handleFileUpload = async (event: any) => {
   console.log('Upload template:', event)
   
   // Get the file from the event
@@ -1112,9 +1122,10 @@ const uploadTemplate = async (event: any) => {
     return
   }
   
-  loading.value.unmapped = true
+  loading.value.uploadingTemplate = true
   
   try {
+    console.log('Uploading file:', file.name)
     const result = await MappingAPI.uploadTemplate(file)
     
     if (result.error) {
@@ -1124,9 +1135,13 @@ const uploadTemplate = async (event: any) => {
       console.log('Upload successful:', result.data)
       alert(`Successfully uploaded ${result.data.mappings_applied} mappings!`)
       
-      // Refresh the data
-      await loadUnmappedFields()
-      await loadMappedFields()
+      // Refresh the data - very important!
+      console.log('Refreshing unmapped and mapped fields...')
+      await Promise.all([
+        loadUnmappedFields(),
+        loadMappedFields()
+      ])
+      console.log('Data refreshed successfully')
       
       showTemplateUpload.value = false
     }
@@ -1134,8 +1149,12 @@ const uploadTemplate = async (event: any) => {
     console.error('Error uploading template:', error)
     alert('Failed to upload template. Please check the file format and try again.')
   } finally {
-    loading.value.unmapped = false
+    loading.value.uploadingTemplate = false
   }
+}
+
+const closeUploadDialog = () => {
+  showTemplateUpload.value = false
 }
 
 onMounted(() => {
