@@ -515,9 +515,7 @@
           <Dropdown 
             id="edit_tgt_nullable"
             v-model="editingSemanticRecord.tgt_nullable"
-            :options="[{label: 'YES', value: 'YES'}, {label: 'NO', value: 'NO'}]"
-            optionLabel="label"
-            optionValue="value"
+            :options="['YES', 'NO']"
             class="w-full"
           />
         </div>
@@ -543,12 +541,14 @@
           icon="pi pi-times" 
           @click="cancelEditSemantic" 
           severity="secondary"
+          :disabled="loading.savingSemantic"
         />
         <Button 
           label="Save Changes" 
           icon="pi pi-check" 
           @click="saveSemanticRecord" 
           severity="primary"
+          :loading="loading.savingSemantic"
         />
       </template>
     </Dialog>
@@ -616,9 +616,7 @@
           <Dropdown 
             id="tgt_nullable"
             v-model="newSemanticRecord.tgt_nullable"
-            :options="[{label: 'YES', value: 'YES'}, {label: 'NO', value: 'NO'}]"
-            optionLabel="label"
-            optionValue="value"
+            :options="['YES', 'NO']"
             class="w-full"
           />
         </div>
@@ -769,7 +767,8 @@ const loading = ref({
   mapped: false,
   semantic: false,
   aiSuggestions: false,
-  manualSearch: false
+  manualSearch: false,
+  savingSemantic: false
 })
 
 // Computed filtered data
@@ -1039,6 +1038,8 @@ const saveSemanticRecord = async () => {
     return
   }
   
+  loading.value.savingSemantic = true
+  
   try {
     const updateData = {
       tgt_table_name: editingSemanticRecord.value.tgt_table_name,
@@ -1064,6 +1065,8 @@ const saveSemanticRecord = async () => {
     }
   } catch (error) {
     console.error('Error updating semantic record:', error)
+  } finally {
+    loading.value.savingSemantic = false
   }
 }
 
