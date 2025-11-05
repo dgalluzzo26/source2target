@@ -99,16 +99,6 @@
         </template>
       </Card>
 
-      <Card class="action-card" v-if="userStore.isAdmin" @click="navigateTo('/admin')">
-        <template #content>
-          <div class="action-content">
-            <i class="pi pi-shield action-icon"></i>
-            <h3>Administration</h3>
-            <p>User management and system administration</p>
-            <Button label="Manage" icon="pi pi-arrow-right" />
-          </div>
-        </template>
-      </Card>
     </div>
 
     <!-- Getting Started -->
