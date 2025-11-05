@@ -245,6 +245,40 @@ export class MappingAPI {
       { method: 'DELETE' }
     )
   }
+
+  /**
+   * Search the semantic table for manual mapping
+   */
+  static async searchSemanticTable(searchTerm: string): Promise<ApiResponse<any[]>> {
+    return apiFetch<any[]>(
+      `/api/mapping/search-semantic-table?search_term=${encodeURIComponent(searchTerm)}`
+    )
+  }
+
+  /**
+   * Save a manual mapping selected by the user
+   */
+  static async saveManualMapping(
+    srcTableName: string,
+    srcColumnName: string,
+    tgtTableName: string,
+    tgtColumnName: string,
+    tgtTablePhysical: string,
+    tgtColumnPhysical: string
+  ): Promise<ApiResponse<any>> {
+    return apiFetch<any>('/api/mapping/save-manual-mapping', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        src_table_name: srcTableName,
+        src_column_name: srcColumnName,
+        tgt_table_name: tgtTableName,
+        tgt_column_name: tgtColumnName,
+        tgt_table_physical: tgtTablePhysical,
+        tgt_column_physical: tgtColumnPhysical
+      })
+    })
+  }
 }
 
 /**

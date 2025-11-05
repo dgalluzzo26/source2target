@@ -869,39 +869,56 @@ const searchSemanticTable = async () => {
   
   loading.value.manualSearch = true
   
-  // Simulate semantic table search
-  setTimeout(() => {
-    const search = manualSearchTerm.value.toLowerCase()
-    manualSearchResults.value = semanticRecords.value.filter(record => 
-      record.tgt_table_name.toLowerCase().includes(search) ||
-      record.tgt_column_name.toLowerCase().includes(search) ||
-      (record.tgt_comments && record.tgt_comments.toLowerCase().includes(search))
-    )
+  try {
+    const result = await MappingAPI.searchSemanticTable(manualSearchTerm.value.trim())
+    if (result.data) {
+      manualSearchResults.value = result.data
+      console.log(`Found ${result.data.length} manual search results`)
+    } else if (result.error) {
+      console.error('Error searching semantic table:', result.error)
+    }
+  } catch (error) {
+    console.error('Error searching semantic table:', error)
+  } finally {
     loading.value.manualSearch = false
-  }, 1000)
+  }
 }
 
-const selectManualMapping = (mapping: any) => {
-  console.log('Selected manual mapping:', mapping)
-  // Move from unmapped to mapped
-  const newMapping = {
-    src_table_name: selectedUnmappedField.value.src_table_name,
-    src_column_name: selectedUnmappedField.value.src_column_name,
-    tgt_table_name: mapping.tgt_table_name,
-    tgt_column_physical: mapping.tgt_column_name
-  }
-  mappedFields.value.push(newMapping)
-  
-  // Remove from unmapped
-  const index = unmappedFields.value.findIndex(f => 
-    f.src_table_name === selectedUnmappedField.value.src_table_name &&
-    f.src_column_name === selectedUnmappedField.value.src_column_name
-  )
-  if (index > -1) {
-    unmappedFields.value.splice(index, 1)
+const selectManualMapping = async (mapping: any) => {
+  if (!selectedUnmappedField.value) {
+    console.error('No unmapped field selected')
+    return
   }
   
-  clearSelection()
+  console.log('Saving manual mapping:', mapping)
+  loading.value.manualSearch = true
+  
+  try {
+    const result = await MappingAPI.saveManualMapping(
+      selectedUnmappedField.value.src_table_name,
+      selectedUnmappedField.value.src_column_name,
+      mapping.tgt_table_name,
+      mapping.tgt_column_name,
+      mapping.tgt_table_physical_name || mapping.tgt_table_name,
+      mapping.tgt_column_physical_name || mapping.tgt_column_name
+    )
+    
+    if (result.error) {
+      console.error('Error saving manual mapping:', result.error)
+    } else {
+      console.log('Manual mapping saved successfully')
+      // Refresh both tables
+      await Promise.all([loadUnmappedFields(), loadMappedFields()])
+      // Clear search results and selection
+      manualSearchResults.value = []
+      manualSearchTerm.value = ''
+      clearSelection()
+    }
+  } catch (error) {
+    console.error('Error saving manual mapping:', error)
+  } finally {
+    loading.value.manualSearch = false
+  }
 }
 
 const loadUnmappedFields = async () => {

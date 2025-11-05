@@ -3,7 +3,8 @@ Mapping API endpoints.
 """
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
-from typing import List
+from typing import List, Dict, Any
+from pydantic import BaseModel
 import io
 import csv
 from backend.models.mapping import MappedField, UnmappedField
@@ -246,6 +247,84 @@ async def unmap_field(request: Request, src_table_name: str, src_column_name: st
         
     except Exception as e:
         print(f"[Mapping Router] ERROR unmapping field: {str(e)}")
+        import traceback
+        print(f"[Mapping Router] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/search-semantic-table")
+async def search_semantic_table(request: Request, search_term: str):
+    """
+    Search the semantic table by table name, column name, or description.
+    Returns up to 50 matching records for manual mapping selection.
+    """
+    try:
+        print(f"[Mapping Router] GET /search-semantic-table called with term: {search_term}")
+        
+        if not search_term or not search_term.strip():
+            raise HTTPException(status_code=400, detail="Search term is required")
+        
+        # Search semantic table
+        results = await mapping_service.search_semantic_table(search_term.strip())
+        
+        print(f"[Mapping Router] Returning {len(results)} search results")
+        return results
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Mapping Router] ERROR searching semantic table: {str(e)}")
+        import traceback
+        print(f"[Mapping Router] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SaveManualMappingRequest(BaseModel):
+    """Request model for saving a manual mapping."""
+    src_table_name: str
+    src_column_name: str
+    tgt_table_name: str
+    tgt_column_name: str
+    tgt_table_physical: str
+    tgt_column_physical: str
+
+
+@router.post("/save-manual-mapping")
+async def save_manual_mapping(request: Request, body: SaveManualMappingRequest):
+    """
+    Save a manual mapping selected by the user.
+    Updates the mapping table with the target columns.
+    """
+    try:
+        print(f"[Mapping Router] POST /save-manual-mapping called")
+        print(f"[Mapping Router] Source: {body.src_table_name}.{body.src_column_name}")
+        print(f"[Mapping Router] Target: {body.tgt_table_name}.{body.tgt_column_name}")
+        
+        # Get current user email
+        current_user_email = None
+        forwarded_email = request.headers.get('x-forwarded-email')
+        if forwarded_email and '@' in forwarded_email:
+            current_user_email = forwarded_email
+        if not current_user_email:
+            current_user_email = "demo.user@gainwell.com"
+        
+        print(f"[Mapping Router] User email: {current_user_email}")
+        
+        # Save the mapping
+        result = await mapping_service.save_manual_mapping(
+            current_user_email,
+            body.src_table_name,
+            body.src_column_name,
+            body.tgt_table_name,
+            body.tgt_column_name,
+            body.tgt_table_physical,
+            body.tgt_column_physical
+        )
+        
+        return result
+        
+    except Exception as e:
+        print(f"[Mapping Router] ERROR saving manual mapping: {str(e)}")
         import traceback
         print(f"[Mapping Router] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -501,4 +501,224 @@ class MappingService:
         except Exception as e:
             print(f"[Mapping Service] Error in unmap_field: {str(e)}")
             raise
+    
+    def _search_semantic_table_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        semantic_table: str,
+        search_term: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Search the semantic table (synchronous, for thread pool).
+        Searches by table name, column name, or comments.
+        """
+        print(f"[Mapping Service] Searching semantic table: {semantic_table}")
+        print(f"[Mapping Service] Search term: {search_term}")
+        
+        try:
+            print(f"[Mapping Service] Connecting to database...")
+            connection = self._get_sql_connection(server_hostname, http_path)
+            print(f"[Mapping Service] Connection established")
+        except Exception as e:
+            print(f"[Mapping Service] Connection failed: {str(e)}")
+            raise
+        
+        try:
+            with connection.cursor() as cursor:
+                # Escape search term for SQL LIKE
+                search_escaped = search_term.replace("'", "''")
+                
+                query = f"""
+                SELECT 
+                    tgt_table_name,
+                    tgt_column_name,
+                    tgt_table_physical_name,
+                    tgt_column_physical_name,
+                    tgt_comments,
+                    tgt_physical_datatype,
+                    tgt_nullable,
+                    semantic_field
+                FROM {semantic_table}
+                WHERE 
+                    LOWER(tgt_table_name) LIKE LOWER('%{search_escaped}%') OR
+                    LOWER(tgt_column_name) LIKE LOWER('%{search_escaped}%') OR
+                    LOWER(tgt_comments) LIKE LOWER('%{search_escaped}%')
+                ORDER BY tgt_table_name, tgt_column_name
+                LIMIT 50
+                """
+                print(f"[Mapping Service] Executing semantic search query...")
+                cursor.execute(query)
+                
+                print(f"[Mapping Service] Fetching semantic search results...")
+                arrow_table = cursor.fetchall_arrow()
+                df = arrow_table.to_pandas()
+                records = df.to_dict('records')
+                
+                print(f"[Mapping Service] Successfully retrieved {len(records)} semantic search results")
+                return records
+        except Exception as e:
+            print(f"[Mapping Service] Semantic search failed: {str(e)}")
+            raise
+        finally:
+            connection.close()
+            print(f"[Mapping Service] Connection closed")
+    
+    async def search_semantic_table(self, search_term: str) -> List[Dict[str, Any]]:
+        """Search the semantic table for manual mapping."""
+        print(f"[Mapping Service] search_semantic_table called with term: {search_term}")
+        
+        try:
+            config = self.config_service.get_config()
+            semantic_table = config.database.semantic_table
+            server_hostname = config.database.server_hostname
+            http_path = config.database.http_path
+            print(f"[Mapping Service] Config loaded: {semantic_table}")
+        except Exception as e:
+            print(f"[Mapping Service] Failed to get config: {str(e)}")
+            raise
+        
+        try:
+            loop = asyncio.get_event_loop()
+            print("[Mapping Service] Running semantic search in executor...")
+            records = await asyncio.wait_for(
+                loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._search_semantic_table_sync,
+                        server_hostname,
+                        http_path,
+                        semantic_table,
+                        search_term
+                    )
+                ),
+                timeout=30.0
+            )
+            
+            return records
+        except asyncio.TimeoutError:
+            print("[Mapping Service] Semantic search timed out after 30 seconds")
+            raise Exception("Semantic search timed out after 30 seconds.")
+        except Exception as e:
+            print(f"[Mapping Service] Error in search_semantic_table: {str(e)}")
+            raise
+    
+    def _save_manual_mapping_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        mapping_table: str,
+        current_user_email: str,
+        src_table_name: str,
+        src_column_name: str,
+        tgt_table_name: str,
+        tgt_column_name: str,
+        tgt_table_physical: str,
+        tgt_column_physical: str
+    ) -> Dict[str, Any]:
+        """
+        Save a manual mapping (synchronous, for thread pool).
+        Updates tgt_columns for the specified source field.
+        """
+        print(f"[Mapping Service] Saving manual mapping: {src_table_name}.{src_column_name} -> {tgt_table_name}.{tgt_column_name}")
+        print(f"[Mapping Service] User email: {current_user_email}")
+        
+        try:
+            print(f"[Mapping Service] Connecting to database...")
+            connection = self._get_sql_connection(server_hostname, http_path)
+            print(f"[Mapping Service] Connection established")
+        except Exception as e:
+            print(f"[Mapping Service] Connection failed: {str(e)}")
+            raise
+        
+        try:
+            with connection.cursor() as cursor:
+                # Escape values for SQL
+                src_table_escaped = src_table_name.replace("'", "''")
+                src_column_escaped = src_column_name.replace("'", "''")
+                tgt_table_escaped = tgt_table_name.replace("'", "''")
+                tgt_column_escaped = tgt_column_name.replace("'", "''")
+                tgt_table_phys_escaped = tgt_table_physical.replace("'", "''")
+                tgt_column_phys_escaped = tgt_column_physical.replace("'", "''")
+                
+                # Update the mapping table with target columns
+                query = f"""
+                UPDATE {mapping_table}
+                SET tgt_columns = named_struct(
+                    'tgt_table_name', '{tgt_table_escaped}',
+                    'tgt_table_physical_name', '{tgt_table_phys_escaped}',
+                    'tgt_column_name', '{tgt_column_escaped}',
+                    'tgt_column_physical_name', '{tgt_column_phys_escaped}'
+                )
+                WHERE src_table_name = '{src_table_escaped}'
+                  AND src_column_name = '{src_column_escaped}'
+                  AND (source_owners IS NULL OR source_owners LIKE '%{current_user_email}%')
+                """
+                print(f"[Mapping Service] Executing save manual mapping query...")
+                cursor.execute(query)
+                
+                print(f"[Mapping Service] Successfully saved manual mapping for {src_table_name}.{src_column_name}")
+                
+        except Exception as e:
+            print(f"[Mapping Service] Save manual mapping failed: {str(e)}")
+            raise
+        finally:
+            connection.close()
+            print(f"[Mapping Service] Connection closed")
+        
+        return {
+            "status": "success",
+            "message": f"Saved mapping {src_table_name}.{src_column_name} -> {tgt_table_name}.{tgt_column_name}"
+        }
+    
+    async def save_manual_mapping(
+        self,
+        current_user_email: str,
+        src_table_name: str,
+        src_column_name: str,
+        tgt_table_name: str,
+        tgt_column_name: str,
+        tgt_table_physical: str,
+        tgt_column_physical: str
+    ) -> Dict[str, Any]:
+        """Save a manual mapping from user selection."""
+        print(f"[Mapping Service] save_manual_mapping called for {src_table_name}.{src_column_name}")
+        
+        try:
+            db_config = self._get_db_config()
+            print(f"[Mapping Service] Config loaded: {db_config['mapping_table']}")
+        except Exception as e:
+            print(f"[Mapping Service] Failed to get config: {str(e)}")
+            raise
+        
+        try:
+            loop = asyncio.get_event_loop()
+            print("[Mapping Service] Running save manual mapping in executor...")
+            result = await asyncio.wait_for(
+                loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._save_manual_mapping_sync,
+                        db_config['server_hostname'],
+                        db_config['http_path'],
+                        db_config['mapping_table'],
+                        current_user_email,
+                        src_table_name,
+                        src_column_name,
+                        tgt_table_name,
+                        tgt_column_name,
+                        tgt_table_physical,
+                        tgt_column_physical
+                    )
+                ),
+                timeout=30.0
+            )
+            
+            return result
+        except asyncio.TimeoutError:
+            print("[Mapping Service] Save manual mapping timed out after 30 seconds")
+            raise Exception("Save manual mapping timed out after 30 seconds.")
+        except Exception as e:
+            print(f"[Mapping Service] Error in save_manual_mapping: {str(e)}")
+            raise
 
