@@ -185,10 +185,10 @@ class MappingService:
                 SELECT DISTINCT 
                     src_table_name,
                     src_column_name,
-                    src_column_physical_name,
-                    src_nullable,
-                    src_physical_datatype,
-                    src_comments
+                    src_columns.src_column_physical_name as src_column_physical_name,
+                    src_columns.src_nullable as src_nullable,
+                    src_columns.src_physical_datatype as src_physical_datatype,
+                    src_columns.src_comments as src_comments
                 FROM {mapping_table} 
                 WHERE (tgt_columns.tgt_column_name IS NULL OR tgt_columns.tgt_column_name = '')
                   AND (source_owners IS NULL OR source_owners LIKE '%{current_user_email}%')
