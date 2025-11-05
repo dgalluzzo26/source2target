@@ -8,21 +8,42 @@
       </div>
       
       <div class="layout-topbar-menu">
-        <Button 
-          icon="pi pi-question-circle" 
-          label="Help"
-          severity="secondary"
-          text
-          @click="toggleHelpMenu"
-          class="help-button"
-        />
-        <Menu ref="helpMenu" :model="helpMenuItems" :popup="true" class="help-menu" />
-        
         <div class="user-info">
           <i class="pi pi-user"></i>
           <span>{{ userStore.currentUser?.display_name || userStore.currentUser?.email || 'Loading...' }}</span>
           <Badge v-if="userStore.isAdmin" value="Admin" severity="success" class="user-badge" />
           <Badge v-else value="User" severity="secondary" class="user-badge" />
+        </div>
+        
+        <div class="help-buttons-container">
+          <HelpButton 
+            help-type="quick-start" 
+            icon="pi pi-bolt"
+            severity="info"
+            :text="false"
+            :rounded="true"
+            tooltip="Quick Start Guide"
+            custom-class="header-help-btn"
+          />
+          <HelpButton 
+            help-type="user-guide" 
+            icon="pi pi-book"
+            severity="info"
+            :text="false"
+            :rounded="true"
+            tooltip="User Guide"
+            custom-class="header-help-btn"
+          />
+          <HelpButton 
+            v-if="userStore.isAdmin"
+            help-type="admin-config" 
+            icon="pi pi-cog"
+            severity="info"
+            :text="false"
+            :rounded="true"
+            tooltip="Admin Guide"
+            custom-class="header-help-btn"
+          />
         </div>
       </div>
     </div>
@@ -66,71 +87,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import Badge from 'primevue/badge'
-import Button from 'primevue/button'
-import Menu from 'primevue/menu'
+import HelpButton from '@/components/HelpButton.vue'
 
 const userStore = useUserStore()
-const helpMenu = ref()
-
-// Help menu items
-const helpMenuItems = computed(() => {
-  const baseItems = [
-    {
-      label: 'Quick Start Guide',
-      icon: 'pi pi-play',
-      command: () => {
-        window.open('https://github.com/dgalluzzo26/source2target/blob/main/docs/QUICK_START.md', '_blank')
-      }
-    },
-    {
-      label: 'User Guide',
-      icon: 'pi pi-book',
-      command: () => {
-        window.open('https://github.com/dgalluzzo26/source2target/blob/main/docs/USER_GUIDE.md', '_blank')
-      }
-    }
-  ]
-  
-  // Add admin-specific help
-  if (userStore.isAdmin) {
-    baseItems.push({
-      label: 'Administrator Guide',
-      icon: 'pi pi-shield',
-      command: () => {
-        window.open('https://github.com/dgalluzzo26/source2target/blob/main/docs/ADMIN_GUIDE.md', '_blank')
-      }
-    })
-  }
-  
-  baseItems.push(
-    {
-      separator: true
-    },
-    {
-      label: 'Developer Guide',
-      icon: 'pi pi-code',
-      command: () => {
-        window.open('https://github.com/dgalluzzo26/source2target/blob/main/docs/DEVELOPER_GUIDE.md', '_blank')
-      }
-    },
-    {
-      separator: true
-    },
-    {
-      label: 'About',
-      icon: 'pi pi-info-circle',
-      command: () => {
-        window.open('https://github.com/dgalluzzo26/source2target', '_blank')
-      }
-    }
-  )
-  
-  return baseItems
-})
-
-const toggleHelpMenu = (event: Event) => {
-  helpMenu.value.toggle(event)
-}
 
 // Automatically initialize user on app load (like original app)
 onMounted(() => {
@@ -226,20 +185,22 @@ onMounted(() => {
   padding: 0.25rem 0.5rem;
 }
 
-/* Help Button Styling */
-.help-button {
-  color: white !important;
-  font-size: 1rem;
-  padding: 0.5rem 1rem;
-  margin-right: 0.5rem;
+/* Help Buttons Container */
+.help-buttons-container {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-left: 1.5rem;
 }
 
-.help-button:hover {
-  background: rgba(255, 255, 255, 0.15) !important;
+.help-buttons-container :deep(.header-help-btn) {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
 }
 
-.help-button .pi {
-  color: var(--gainwell-secondary);
+.help-buttons-container :deep(.p-button-icon) {
+  font-size: 1.1rem;
 }
 
 /* Sidebar with Gainwell Light Background */

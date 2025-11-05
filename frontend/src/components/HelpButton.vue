@@ -6,6 +6,7 @@
       :severity="severity"
       :outlined="outlined"
       :text="text"
+      :rounded="rounded"
       @click="showDialog = true"
       :class="['help-button', customClass]"
       v-tooltip.left="tooltip"
@@ -56,6 +57,7 @@ interface Props {
   severity?: string
   outlined?: boolean
   text?: boolean
+  rounded?: boolean
   customClass?: string
   tooltip?: string
 }
@@ -66,6 +68,7 @@ const props = withDefaults(defineProps<Props>(), {
   severity: 'info',
   outlined: false,
   text: false,
+  rounded: false,
   customClass: '',
   tooltip: 'View help documentation'
 })
