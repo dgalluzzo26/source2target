@@ -235,6 +235,16 @@ export class MappingAPI {
     
     return { data, error: null }
   }
+
+  /**
+   * Remove mapping for a specific field
+   */
+  static async unmapField(srcTableName: string, srcColumnName: string): Promise<ApiResponse<any>> {
+    return apiFetch<any>(
+      `/api/mapping/unmap-field?src_table_name=${encodeURIComponent(srcTableName)}&src_column_name=${encodeURIComponent(srcColumnName)}`,
+      { method: 'DELETE' }
+    )
+  }
 }
 
 export default {

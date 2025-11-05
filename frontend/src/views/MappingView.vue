@@ -920,26 +920,42 @@ const loadMappedFields = async () => {
   }
 }
 
-const unmapField = (field: any) => {
-  console.log('Unmap field:', field)
-  // Move back to unmapped
-  const unmappedField = {
-    src_table_name: field.src_table_name,
-    src_column_name: field.src_column_name,
-    src_column_physical_name: field.src_column_name,
-    src_nullable: 'YES',
-    src_physical_datatype: 'STRING',
-    src_comments: 'Restored from mapping'
-  }
-  unmappedFields.value.push(unmappedField)
-  
-  // Remove from mapped
-  const index = mappedFields.value.findIndex(f => 
-    f.src_table_name === field.src_table_name &&
-    f.src_column_name === field.src_column_name
+const unmapField = async (field: any) => {
+  // Confirm before deleting
+  const confirmed = confirm(
+    `Are you sure you want to remove the mapping for ${field.src_table_name}.${field.src_column_name}?\n\n` +
+    `This will remove the target mapping: ${field.tgt_table_name}.${field.tgt_column_physical}`
   )
-  if (index > -1) {
-    mappedFields.value.splice(index, 1)
+  
+  if (!confirmed) {
+    return
+  }
+  
+  console.log('Unmapping field:', field)
+  loading.value.mapped = true
+  
+  try {
+    const result = await MappingAPI.unmapField(field.src_table_name, field.src_column_name)
+    
+    if (result.error) {
+      console.error('Error unmapping field:', result.error)
+      alert(`Failed to remove mapping: ${result.error}`)
+    } else {
+      console.log('Unmap successful:', result.data)
+      
+      // Refresh both tables to reflect the change
+      console.log('Refreshing unmapped and mapped fields...')
+      await Promise.all([
+        loadUnmappedFields(),
+        loadMappedFields()
+      ])
+      console.log('Data refreshed successfully')
+    }
+  } catch (error) {
+    console.error('Error unmapping field:', error)
+    alert('Failed to remove mapping. Please try again.')
+  } finally {
+    loading.value.mapped = false
   }
 }
 

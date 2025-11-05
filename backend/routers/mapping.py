@@ -223,3 +223,38 @@ async def upload_template(request: Request, file: UploadFile = File(...)):
         print(f"[Mapping Router] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.delete("/unmap-field")
+async def unmap_field(request: Request, src_table_name: str, src_column_name: str):
+    """
+    Remove mapping for a specific field.
+    Sets tgt_columns to NULL for the specified source field.
+    """
+    try:
+        print(f"[Mapping Router] DELETE /unmap-field called for {src_table_name}.{src_column_name}")
+        
+        # Get current user email
+        current_user_email = None
+        forwarded_email = request.headers.get('x-forwarded-email')
+        if forwarded_email and '@' in forwarded_email:
+            current_user_email = forwarded_email
+        if not current_user_email:
+            current_user_email = "demo.user@gainwell.com"
+        
+        print(f"[Mapping Router] User email: {current_user_email}")
+        
+        # Unmap the field
+        result = await mapping_service.unmap_field(
+            current_user_email,
+            src_table_name,
+            src_column_name
+        )
+        
+        return result
+        
+    except Exception as e:
+        print(f"[Mapping Router] ERROR unmapping field: {str(e)}")
+        import traceback
+        print(f"[Mapping Router] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+

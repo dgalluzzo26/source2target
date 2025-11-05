@@ -357,4 +357,98 @@ class MappingService:
         except Exception as e:
             print(f"[Mapping Service] Error in apply_bulk_mappings: {str(e)}")
             raise
+    
+    def _unmap_field_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        mapping_table: str,
+        current_user_email: str,
+        src_table_name: str,
+        src_column_name: str
+    ) -> Dict[str, Any]:
+        """
+        Remove mapping for a field (synchronous, for thread pool).
+        Sets tgt_columns to NULL for the specified source field.
+        """
+        print(f"[Mapping Service] Unmapping field: {src_table_name}.{src_column_name}")
+        print(f"[Mapping Service] User email: {current_user_email}")
+        
+        try:
+            print(f"[Mapping Service] Connecting to database...")
+            connection = self._get_sql_connection(server_hostname, http_path)
+            print(f"[Mapping Service] Connection established")
+        except Exception as e:
+            print(f"[Mapping Service] Connection failed: {str(e)}")
+            raise
+        
+        try:
+            with connection.cursor() as cursor:
+                # Set tgt_columns to NULL to unmap the field
+                query = f"""
+                UPDATE {mapping_table}
+                SET tgt_columns = NULL
+                WHERE src_table_name = '{src_table_name}'
+                  AND src_column_name = '{src_column_name}'
+                  AND (source_owners IS NULL OR source_owners LIKE '%{current_user_email}%')
+                """
+                print(f"[Mapping Service] Executing unmap query...")
+                cursor.execute(query)
+                
+                print(f"[Mapping Service] Successfully unmapped {src_table_name}.{src_column_name}")
+                
+        except Exception as e:
+            print(f"[Mapping Service] Unmap failed: {str(e)}")
+            raise
+        finally:
+            connection.close()
+            print(f"[Mapping Service] Connection closed")
+        
+        return {
+            "status": "success",
+            "message": f"Unmapped {src_table_name}.{src_column_name}"
+        }
+    
+    async def unmap_field(
+        self,
+        current_user_email: str,
+        src_table_name: str,
+        src_column_name: str
+    ) -> Dict[str, Any]:
+        """Remove mapping for a specific field."""
+        print(f"[Mapping Service] unmap_field called for {src_table_name}.{src_column_name}")
+        
+        try:
+            db_config = self._get_db_config()
+            print(f"[Mapping Service] Config loaded: {db_config['mapping_table']}")
+        except Exception as e:
+            print(f"[Mapping Service] Failed to get config: {str(e)}")
+            raise
+        
+        try:
+            loop = asyncio.get_event_loop()
+            print("[Mapping Service] Running unmap in executor...")
+            result = await asyncio.wait_for(
+                loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._unmap_field_sync,
+                        db_config['server_hostname'],
+                        db_config['http_path'],
+                        db_config['mapping_table'],
+                        current_user_email,
+                        src_table_name,
+                        src_column_name
+                    )
+                ),
+                timeout=30.0
+            )
+            
+            return result
+        except asyncio.TimeoutError:
+            print("[Mapping Service] Unmap timed out after 30 seconds")
+            raise Exception("Unmap operation timed out after 30 seconds.")
+        except Exception as e:
+            print(f"[Mapping Service] Error in unmap_field: {str(e)}")
+            raise
 
