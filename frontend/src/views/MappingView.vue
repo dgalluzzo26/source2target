@@ -349,10 +349,11 @@
             </div>
             <div class="action-controls">
               <Button 
-                icon="pi pi-plus" 
-                label="Add Semantic Record"
-                @click="showAddSemantic = true"
+                icon="pi pi-upload" 
+                label="Bulk Add from CSV"
+                disabled
                 severity="primary"
+                v-tooltip="'Coming soon: Upload CSV to bulk add semantic records'"
               />
             </div>
           </div>
