@@ -23,7 +23,14 @@ class SemanticService:
     def __init__(self):
         """Initialize the semantic service."""
         self.config_service = ConfigService()
-        self.workspace_client = WorkspaceClient()
+        self._workspace_client = None
+    
+    @property
+    def workspace_client(self):
+        """Lazy initialization of WorkspaceClient."""
+        if self._workspace_client is None:
+            self._workspace_client = WorkspaceClient()
+        return self._workspace_client
         
     def _get_db_config(self) -> Dict[str, str]:
         """Get database configuration."""
@@ -62,13 +69,21 @@ class SemanticService:
         """
         Read all records from the semantic table (synchronous, for thread pool).
         """
-        print(f"[Semantic Service] Reading from table: {semantic_table}")
+        print(f"[Semantic Service] Starting read from table: {semantic_table}")
+        print(f"[Semantic Service] Server: {server_hostname}")
+        print(f"[Semantic Service] HTTP Path: {http_path}")
         
-        connection = sql.connect(
-            server_hostname=server_hostname,
-            http_path=http_path,
-            auth_type="databricks-oauth"
-        )
+        try:
+            print(f"[Semantic Service] Connecting to database...")
+            connection = sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path,
+                auth_type="databricks-oauth"
+            )
+            print(f"[Semantic Service] Connection established")
+        except Exception as e:
+            print(f"[Semantic Service] Connection failed: {str(e)}")
+            raise
         
         try:
             with connection.cursor() as cursor:
@@ -86,18 +101,23 @@ class SemanticService:
                 FROM {semantic_table}
                 ORDER BY tgt_table_name, tgt_column_name
                 """
-                print(f"[Semantic Service] Executing query: {query}")
+                print(f"[Semantic Service] Executing query...")
                 cursor.execute(query)
                 
+                print(f"[Semantic Service] Fetching results...")
                 # Fetch results as arrow table and convert to list of dicts
                 arrow_table = cursor.fetchall_arrow()
                 df = arrow_table.to_pandas()
                 records = df.to_dict('records')
                 
-                print(f"[Semantic Service] Retrieved {len(records)} records")
+                print(f"[Semantic Service] Successfully retrieved {len(records)} records")
                 return records
+        except Exception as e:
+            print(f"[Semantic Service] Query execution failed: {str(e)}")
+            raise
         finally:
             connection.close()
+            print(f"[Semantic Service] Connection closed")
     
     def _insert_semantic_record_sync(
         self,
@@ -283,24 +303,40 @@ class SemanticService:
     
     async def get_all_records(self) -> List[SemanticRecord]:
         """Get all semantic table records."""
-        db_config = self._get_db_config()
+        print("[Semantic Service] get_all_records called")
         
-        loop = asyncio.get_event_loop()
-        records = await asyncio.wait_for(
-            loop.run_in_executor(
-                executor,
-                functools.partial(
-                    self._read_semantic_table_sync,
-                    db_config['server_hostname'],
-                    db_config['http_path'],
-                    db_config['semantic_table']
-                )
-            ),
-            timeout=15.0
-        )
+        try:
+            db_config = self._get_db_config()
+            print(f"[Semantic Service] Config loaded: {db_config['semantic_table']}")
+        except Exception as e:
+            print(f"[Semantic Service] Failed to get config: {str(e)}")
+            raise
         
-        # Convert to Pydantic models
-        return [SemanticRecord(**record) for record in records]
+        try:
+            loop = asyncio.get_event_loop()
+            print("[Semantic Service] Running query in executor...")
+            records = await asyncio.wait_for(
+                loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._read_semantic_table_sync,
+                        db_config['server_hostname'],
+                        db_config['http_path'],
+                        db_config['semantic_table']
+                    )
+                ),
+                timeout=15.0
+            )
+            
+            # Convert to Pydantic models
+            print(f"[Semantic Service] Converting {len(records)} records to Pydantic models")
+            return [SemanticRecord(**record) for record in records]
+        except asyncio.TimeoutError:
+            print("[Semantic Service] Query timed out after 15 seconds")
+            raise Exception("Database query timed out")
+        except Exception as e:
+            print(f"[Semantic Service] Error in get_all_records: {str(e)}")
+            raise
     
     async def create_record(self, record_data: SemanticRecordCreate) -> SemanticRecord:
         """Create a new semantic table record."""
