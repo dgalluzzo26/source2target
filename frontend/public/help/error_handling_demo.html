@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error Handling Demo - Gainwell Source-to-Target App</title>
+    <style>
+        body {
+            font-family: "Source Sans Pro", sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            padding: 2rem;
+        }
+        
+        .banner {
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        
+        .banner h1 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 600;
+        }
+        
+        .error-demo {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #721c24;
+            box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+        }
+        
+        .warning-demo {
+            background: linear-gradient(135deg, #ffc107, #e0a800);
+            color: #212529;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #b8860b;
+            box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
+        }
+        
+        .info-demo {
+            background: linear-gradient(135deg, #17a2b8, #138496);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #0c5460;
+            box-shadow: 0 2px 8px rgba(23, 162, 184, 0.3);
+        }
+        
+        .demo-header {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .demo-message {
+            margin: 0.5rem 0 0 0;
+            font-size: 1rem;
+        }
+        
+        .demo-details {
+            margin: 0.25rem 0 0 0;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .demo-timestamp {
+            margin: 0.5rem 0 0 0;
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+        
+        .button-demo {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0.5rem 0.5rem 0 0;
+            font-size: 0.9rem;
+        }
+        
+        .button-demo.dismiss {
+            background: #6c757d;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .feature-card {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .feature-card h3 {
+            color: #495057;
+            margin-top: 0;
+        }
+        
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="banner">
+            <h1>🛡️ Error Handling System Demo</h1>
+            <p>Gainwell Source-to-Target Healthcare Data Platform</p>
+        </div>
+        
+        <h2>Centralized Error Display System</h2>
+        <p>The application now includes a comprehensive error handling system that provides consistent, user-friendly error messages across all pages. Here's how different types of messages appear:</p>
+        
+        <h3>🚨 Error Messages</h3>
+        <div class="error-demo">
+            <h4 class="demo-header">❌ Database Connection Error</h4>
+            <p class="demo-message">Unable to connect to the configured Databricks warehouse.</p>
+            <p class="demo-details">Warehouse 'gia-oztest-dev-data-warehouse' not found. Please check your configuration or contact your administrator.</p>
+            <p class="demo-timestamp">2024-01-15 14:32:18</p>
+            <button class="button-demo dismiss" style="margin-top: 0.5rem;">✖️ Dismiss</button>
+            <button class="button-demo" style="margin-top: 0.5rem;">🔄 Retry</button>
+        </div>
+        
+        <h3>⚠️ Warning Messages</h3>
+        <div class="warning-demo">
+            <h4 class="demo-header">⚠️ Configuration Required</h4>
+            <p class="demo-message">Some settings need to be configured before this feature can be used.</p>
+            <p class="demo-details">Please configure the following setting: AI model settings (semantic_table_name, foundation_model_endpoint). Go to Configuration to set up your system.</p>
+            <p class="demo-timestamp">2024-01-15 14:30:45</p>
+            <button class="button-demo dismiss" style="margin-top: 0.5rem;">✖️ Dismiss Warning</button>
+        </div>
+        
+        <h3>ℹ️ Info Messages</h3>
+        <div class="info-demo">
+            <h4 class="demo-header">ℹ️ AI Mapping Suggestions Generated</h4>
+            <p class="demo-message">Successfully generated mapping suggestions for your source field.</p>
+            <p class="demo-details">Found 3 potential target field mappings for patient_id column. Review the suggestions and select the most appropriate mapping.</p>
+            <p class="demo-timestamp">2024-01-15 14:28:12</p>
+            <button class="button-demo dismiss" style="margin-top: 0.5rem;">✖️ Dismiss Info</button>
+        </div>
+        
+        <div class="features">
+            <div class="feature-card">
+                <h3>🎯 Intelligent Error Detection</h3>
+                <p><strong>Database Errors:</strong> Automatically detects permission issues, timeouts, missing resources, and connection problems.</p>
+                <p><strong>AI Model Errors:</strong> Identifies endpoint issues, quota limits, and model availability problems.</p>
+                <p><strong>Configuration Errors:</strong> Validates required settings and provides specific guidance.</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>🚀 Enhanced User Experience</h3>
+                <p><strong>Top Banner Display:</strong> All errors appear at the top of the page in a consistent, visible location.</p>
+                <p><strong>Actionable Messages:</strong> Clear descriptions with specific next steps for resolution.</p>
+                <p><strong>Dismiss & Retry:</strong> Users can easily dismiss messages or retry failed operations.</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>🔧 Developer Features</h3>
+                <p><strong>Technical Details:</strong> Expandable sections with stack traces and exception details for debugging.</p>
+                <p><strong>Error Logging:</strong> Automatic logging to <code>app_errors.log</code> for monitoring and troubleshooting.</p>
+                <p><strong>Decorator Support:</strong> Easy-to-use <code>@handle_errors</code> decorator for function wrapping.</p>
+            </div>
+        </div>
+        
+        <h3>📋 Implementation Examples</h3>
+        
+        <h4>Error Handler Usage:</h4>
+        <div class="code-block">
+# Simple error setting
+ErrorHandler.set_error(
+    message="Database Connection Failed",
+    details="Unable to connect to warehouse. Check configuration.",
+    exception=e
+)
+
+# Warning for missing configuration
+handle_configuration_error("database settings")
+
+# Specific database error handling
+handle_database_error(e, "loading field mapping data")
+
+# Safe function execution
+result = safe_execute(risky_function, "Operation failed")
+        </div>
+        
+        <h4>Page Integration:</h4>
+        <div class="code-block">
+def render_main_content():
+    # Always render error banner first
+    ErrorHandler.render_error_banner()
+    
+    try:
+        # Page content here
+        render_page_content()
+    except Exception as e:
+        ErrorHandler.set_error(
+            message="Page Rendering Error",
+            details="An unexpected error occurred while loading the page.",
+            exception=e
+        )
+        </div>
+        
+        <div style="margin-top: 2rem; padding: 1rem; background: #e8f5e8; border-radius: 8px; border-left: 4px solid #28a745;">
+            <h4 style="color: #155724; margin-top: 0;">✅ Benefits</h4>
+            <ul style="color: #155724;">
+                <li><strong>Consistent User Experience:</strong> All errors display in the same professional format</li>
+                <li><strong>Proactive Problem Solving:</strong> Specific error messages guide users to solutions</li>
+                <li><strong>Reduced Support Burden:</strong> Clear, actionable error messages reduce help desk tickets</li>
+                <li><strong>Enterprise Ready:</strong> Professional error handling suitable for healthcare environments</li>
+                <li><strong>Developer Friendly:</strong> Easy integration with existing code using decorators and utilities</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

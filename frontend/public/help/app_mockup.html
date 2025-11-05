@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gainwell Source-to-Target App - Mockup</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Source Sans Pro', sans-serif;
+            background-color: #f8f9fa;
+            color: #262730;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background-color: #ffffff;
+            border-right: 1px solid #e6e6e6;
+            padding: 1rem;
+            overflow-y: auto;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .logo img {
+            width: 200px;
+            height: 80px;
+            background: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+        }
+
+        .nav-section {
+            margin: 1.5rem 0;
+        }
+
+        .nav-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #262730;
+        }
+
+        .nav-button {
+            width: 100%;
+            margin: 0.25rem 0;
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: 8px;
+            background: #ffffff;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #4a5568;
+            border-left: 4px solid transparent;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .nav-button:hover {
+            background: #ffffff;
+            border-left: 4px solid #38a169;
+            transform: translateX(3px);
+            box-shadow: 0 2px 8px rgba(56,161,105,0.15);
+        }
+
+        .nav-button.active {
+            background: #4a5568;
+            color: white;
+            border-left: 4px solid #38a169;
+            box-shadow: 0 4px 12px rgba(56,161,105,0.25);
+        }
+
+        .quick-stats {
+            display: flex;
+            gap: 0.5rem;
+            margin: 1rem 0;
+        }
+
+        .stat-card {
+            flex: 1;
+            background: #f8f9fa;
+            padding: 0.75rem;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid #e6e6e6;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #38a169;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .help-section {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border: 1px solid #e6e6e6;
+        }
+
+        .footer-info {
+            margin-top: 2rem;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* Message styling to match real app */
+        .success-message {
+            background-color: rgba(40,167,69,0.08) !important;
+            border-left: 4px solid #28a745 !important;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .info-message {
+            background-color: rgba(56,161,105,0.08) !important;
+            border-left: 4px solid #38a169 !important;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .warning-message {
+            background-color: rgba(255,193,7,0.08) !important;
+            border-left: 4px solid #ffc107 !important;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .error-message {
+            background-color: rgba(220,53,69,0.08) !important;
+            border-left: 4px solid #dc3545 !important;
+            color: white !important;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        /* Button styling to match real app */
+        .btn-primary {
+            background: #4a5568 !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 8px !important;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500 !important;
+            transition: all 0.3s ease !important;
+            box-shadow: 0 2px 8px rgba(74,85,104,0.15) !important;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #4a5568, #38a169) !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 12px rgba(56,161,105,0.25) !important;
+        }
+
+        /* Main content area */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #ffffff;
+        }
+
+        /* Top bar - Updated to match real app */
+        .top-bar {
+            padding: 0.75rem 1.5rem;
+            background: #4a5568;
+            color: white;
+            border-bottom: 2px solid #38a169;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.15);
+        }
+
+        .app-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: white;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(255,255,255,0.15);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+            color: white;
+        }
+
+        .user-info:hover {
+            background: rgba(255,255,255,0.25);
+            transform: translateY(-1px);
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #4a5568;
+            font-size: 0.9rem;
+            border: 2px solid #38a169;
+        }
+
+        .user-details {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .user-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            line-height: 1.2;
+            margin: 0;
+            color: white;
+        }
+
+        .user-status {
+            font-size: 0.75rem;
+            opacity: 0.9;
+            line-height: 1;
+            margin: 0;
+            color: rgba(255,255,255,0.8);
+        }
+
+        .admin-badge {
+            background: #38a169;
+            color: white;
+            padding: 0.2rem 0.5rem;
+            border-radius: 10px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .toolbar-divider {
+            width: 1px;
+            height: 24px;
+            background: rgba(255,255,255,0.3);
+            margin: 0 0.5rem;
+        }
+
+        .menu-toggle {
+            background: #f0f2f6;
+            border: none;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        .main-header {
+            background: linear-gradient(135deg, #4a5568, #38a169);
+            padding: 1.5rem;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            flex: 1;
+            margin: 0 1rem;
+        }
+
+        .main-header h2 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .main-header p {
+            margin: 0.5rem 0 0 0;
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .status-badge {
+            background: #d4edda;
+            color: #155724;
+            padding: 0.5rem 1rem;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* Content area */
+        .content-area {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .section-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+            border: 1px solid #f0f0f0;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border: 1px solid #f0f0f0;
+        }
+
+        .feature-card h4 {
+            color: #4a5568;
+            margin-bottom: 1rem;
+            font-size: 16px;
+        }
+
+        .feature-card ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .feature-card li {
+            padding: 0.25rem 0;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .feature-card li:before {
+            content: "✓ ";
+            color: #38a169;
+            font-weight: bold;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .metric-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e6e6e6;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #38a169;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .expandable {
+            background: #f8f9fa;
+            border: 1px solid #e6e6e6;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .expandable-header {
+            padding: 1rem;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .expandable-content {
+            padding: 0 1rem 1rem 1rem;
+            border-top: 1px solid #e6e6e6;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #4a5568;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #38a169;
+        }
+
+        .btn-secondary {
+            background: #f0f2f6;
+            color: #262730;
+        }
+
+        .btn-secondary:hover {
+            background: #e1e5e9;
+        }
+
+        .divider {
+            height: 1px;
+            background: #e6e6e6;
+            margin: 2rem 0;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 600;
+            color: #262730;
+        }
+
+        .refresh-btn {
+            background: #38a169;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo">
+                <div style="width: 150px; height: 60px; background: linear-gradient(45deg, #4a5568, #38a169); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">
+                    📖 Logo
+                </div>
+            </div>
+            
+            <hr style="margin: 1rem 0; border: none; height: 1px; background: #e6e6e6;">
+            
+            <div class="nav-section">
+                <div class="nav-title">🧭 Navigation</div>
+                <button class="nav-button active">
+                    <i class="fas fa-home" style="margin-right: 0.5rem; color: #4a5568;"></i>Introduction
+                </button>
+                <button class="nav-button">
+                    <i class="fas fa-table" style="margin-right: 0.5rem; color: #4a5568;"></i>Field Mapping
+                </button>
+                <button class="nav-button">
+                    <i class="fas fa-cogs" style="margin-right: 0.5rem; color: #4a5568;"></i>Configuration
+                </button>
+            </div>
+            
+            <hr style="margin: 1rem 0; border: none; height: 1px; background: #e6e6e6;">
+            
+            <div class="nav-section">
+                <div class="nav-title">📈 Quick Stats</div>
+                <div class="quick-stats">
+                    <div class="stat-card">
+                        <div class="stat-value">12</div>
+                        <div class="stat-label">Tables</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">234</div>
+                        <div class="stat-label">Mappings</div>
+                    </div>
+                </div>
+            </div>
+            
+            <hr style="margin: 1rem 0; border: none; height: 1px; background: #e6e6e6;">
+            
+            <div class="nav-section">
+                <div class="nav-title"><i class="fas fa-lightbulb" style="margin-right: 0.5rem; color: #4a5568;"></i>Help</div>
+                <div class="help-section">
+                    <strong>About This App</strong>
+                    <p style="margin: 0.5rem 0; font-size: 12px; color: #666;">
+                        This application helps ETL engineers map source database fields to target database fields using AI-powered semantic matching.
+                    </p>
+                    <div style="margin-top: 1rem;">
+                        <strong style="font-size: 12px;">Features:</strong>
+                        <ul style="font-size: 11px; color: #666; margin: 0.5rem 0; padding-left: 1rem;">
+                            <li>AI-powered field mapping suggestions</li>
+                            <li>Vector search for semantic similarity</li>
+                            <li>Interactive data grids</li>
+                            <li>Configuration management</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="footer-info">
+                <hr style="margin: 1rem 0; border: none; height: 1px; background: #e6e6e6;">
+                <strong>Gainwell Source-to-Target App</strong><br>
+                <em>Version 2.0</em>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar - Updated to match real app -->
+            <div class="top-bar">
+                <div class="app-title">
+                    📖 Gainwell Source-to-Target Mapper
+                </div>
+                <div class="user-info">
+                    <div class="user-avatar">DG</div>
+                    <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.3); margin: 0 0.5rem;"></div>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                        <div style="font-weight: 600; font-size: 0.9rem; line-height: 1.2; margin: 0; color: white;">David Galluzzo</div>
+                        <div style="font-size: 0.75rem; opacity: 0.9; line-height: 1; margin: 0; color: rgba(255,255,255,0.8);">
+                            Active User
+                            <span style="background: #38a169; color: white; padding: 0.2rem 0.5rem; border-radius: 10px; font-size: 0.65rem; font-weight: 600; margin-left: 0.5rem;">ADMIN</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Gainwell Banner -->
+                <div style="background: linear-gradient(135deg, #4a5568, #38a169); color: white; padding: 1.5rem 2rem; margin-bottom: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(74,85,104, 0.2);">
+                    <h2 style="margin: 0; font-size: 1.8rem; font-weight: 700;">Modernizing Healthcare Data Mapping</h2>
+                    <p style="margin: 0.5rem 0 0 0; font-size: 1.1rem; opacity: 0.95;">Accelerating Medicaid and healthcare system transformations through intelligent data integration</p>
+                    <div style="font-size: 0.9rem; margin-top: 0.75rem; font-weight: 500; letter-spacing: 0.5px;">Reliability. Innovation. Delivered.</div>
+                </div>
+
+                <!-- Welcome Section -->
+                <div class="section-card">
+                    <h3 style="color: #4a5568; margin-bottom: 1rem;"><i class="fas fa-bullseye" style="margin-right: 0.5rem; color: #4a5568;"></i>Gainwell Source-to-Target Mapping Platform</h3>
+                    <p style="color: #666; line-height: 1.6;">This enterprise-grade platform empowers healthcare data engineers to efficiently map source database fields to target systems using AI-powered semantic matching, supporting Medicaid modernization and healthcare transformation initiatives.</p>
+                    <p style="color: #666;"><strong>Built for:</strong> Healthcare organizations, Medicaid agencies, and enterprise data teams modernizing their information systems.</p>
+                </div>
+
+                <!-- Quick Start Guide -->
+                <div class="page-header">
+                    <h2 style="font-size: 24px; margin: 0;">🚀 Quick Start Guide</h2>
+                </div>
+                <div class="divider"></div>
+
+                <div class="expandable">
+                    <div class="expandable-header">
+                        📋 Step-by-step instructions
+                        <span>▼</span>
+                    </div>
+                    <div class="expandable-content">
+                        <h4>Getting Started</h4>
+                        <ol style="margin: 1rem 0; padding-left: 1.5rem; color: #666;">
+                            <li style="margin: 0.5rem 0;"><strong>Configure Settings</strong> <i class="fas fa-cogs" style="color: #38a169;"></i><br>
+                                <span style="font-size: 14px;">Click on "Configuration" in the sidebar and set up your database connections and AI model endpoints</span>
+                            </li>
+                            <li style="margin: 0.5rem 0;"><strong>Access Field Mapping</strong> <i class="fas fa-table" style="color: #38a169;"></i><br>
+                                <span style="font-size: 14px;">Navigate to "Field Mapping" from the sidebar and view unmapped source fields</span>
+                            </li>
+                            <li style="margin: 0.5rem 0;"><strong>Review and Save Mappings</strong> <i class="fas fa-check-circle" style="color: #28a745;"></i><br>
+                                <span style="font-size: 14px;">Review AI suggestions and save your preferred target field mappings</span>
+                            </li>
+                        </ol>
+                    </div>
+                </div>
+
+                <!-- System Status -->
+                <div class="page-header">
+                    <h2 style="font-size: 24px; margin: 0;">🔧 System Status</h2>
+                </div>
+                <div class="divider"></div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value"><i class="fas fa-check-circle" style="color: #28a745; margin-right: 0.5rem;"></i>Connected</div>
+                        <div class="metric-label">Database Connection</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value"><i class="fas fa-check-circle" style="color: #28a745; margin-right: 0.5rem;"></i>Active</div>
+                        <div class="metric-label">AI Model Endpoint</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value"><i class="fas fa-check-circle" style="color: #28a745; margin-right: 0.5rem;"></i>Ready</div>
+                        <div class="metric-label">Vector Search</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value"><i class="fas fa-check-circle" style="color: #28a745; margin-right: 0.5rem;"></i>Loaded</div>
+                        <div class="metric-label">Configuration</div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="page-header">
+                    <h2 style="font-size: 24px; margin: 0;">📚 Help & Documentation</h2>
+                </div>
+                <div class="divider"></div>
+
+                <div class="button-group">
+                    <button class="btn btn-primary">📖 User Guide</button>
+                    <button class="btn btn-secondary">🤝 Support</button>
+                    <button class="btn btn-secondary"><i class="fas fa-link" style="margin-right: 0.5rem;"></i>API Documentation</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
