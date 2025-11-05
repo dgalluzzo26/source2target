@@ -98,7 +98,9 @@ class MappingService:
                     tgt_columns.tgt_column_physical_name as tgt_column_physical,
                     tgt_columns.tgt_table_physical_name as tgt_table_physical
                 FROM {mapping_table} 
-                WHERE tgt_columns.tgt_column_name IS NOT NULL
+                WHERE tgt_columns IS NOT NULL
+                  AND tgt_columns.tgt_column_name IS NOT NULL
+                  AND tgt_columns.tgt_column_name != ''
                   AND (source_owners IS NULL OR source_owners LIKE '%{current_user_email}%')
                 ORDER BY src_table_name, src_column_name
                 """
@@ -190,7 +192,7 @@ class MappingService:
                     src_columns.src_physical_datatype as src_physical_datatype,
                     src_columns.src_comments as src_comments
                 FROM {mapping_table} 
-                WHERE (tgt_columns.tgt_column_name IS NULL OR tgt_columns.tgt_column_name = '')
+                WHERE (tgt_columns IS NULL OR tgt_columns.tgt_column_name IS NULL OR tgt_columns.tgt_column_name = '')
                   AND (source_owners IS NULL OR source_owners LIKE '%{current_user_email}%')
                 ORDER BY src_table_name, src_column_name
                 """
@@ -280,20 +282,64 @@ class MappingService:
             with connection.cursor() as cursor:
                 for mapping in mappings:
                     try:
-                        # Update the tgt_columns for this source field
-                        query = f"""
-                        UPDATE {mapping_table}
-                        SET tgt_columns = named_struct(
-                            'tgt_table_name', '{mapping['tgt_table_name']}',
-                            'tgt_column_name', '{mapping['tgt_column_name']}',
-                            'tgt_column_physical_name', '{mapping['tgt_column_physical_name']}',
-                            'tgt_table_physical_name', '{mapping['tgt_table_physical_name']}'
-                        )
+                        # First check if the record exists
+                        check_query = f"""
+                        SELECT COUNT(*) as cnt FROM {mapping_table}
                         WHERE src_table_name = '{mapping['src_table_name']}'
                           AND src_column_name = '{mapping['src_column_name']}'
-                          AND (source_owners IS NULL OR source_owners LIKE '%{current_user_email}%')
                         """
-                        print(f"[Mapping Service] Updating mapping for {mapping['src_table_name']}.{mapping['src_column_name']}")
+                        cursor.execute(check_query)
+                        result = cursor.fetchone()
+                        record_exists = result[0] > 0 if result else False
+                        
+                        if record_exists:
+                            # Update existing record
+                            query = f"""
+                            UPDATE {mapping_table}
+                            SET tgt_columns = named_struct(
+                                'tgt_table_name', '{mapping['tgt_table_name']}',
+                                'tgt_column_name', '{mapping['tgt_column_name']}',
+                                'tgt_column_physical_name', '{mapping['tgt_column_physical_name']}',
+                                'tgt_table_physical_name', '{mapping['tgt_table_physical_name']}'
+                            )
+                            WHERE src_table_name = '{mapping['src_table_name']}'
+                              AND src_column_name = '{mapping['src_column_name']}'
+                            """
+                            print(f"[Mapping Service] Updating mapping for {mapping['src_table_name']}.{mapping['src_column_name']}")
+                        else:
+                            # Insert new record
+                            src_physical = mapping.get('src_column_physical_name', mapping['src_column_name'])
+                            src_nullable = mapping.get('src_nullable', 'YES')
+                            src_datatype = mapping.get('src_physical_datatype', 'STRING')
+                            src_comments = mapping.get('src_comments', '')
+                            
+                            query = f"""
+                            INSERT INTO {mapping_table} (
+                                src_table_name,
+                                src_column_name,
+                                src_columns,
+                                tgt_columns,
+                                source_owners
+                            ) VALUES (
+                                '{mapping['src_table_name']}',
+                                '{mapping['src_column_name']}',
+                                named_struct(
+                                    'src_column_physical_name', '{src_physical}',
+                                    'src_nullable', '{src_nullable}',
+                                    'src_physical_datatype', '{src_datatype}',
+                                    'src_comments', '{src_comments}'
+                                ),
+                                named_struct(
+                                    'tgt_table_name', '{mapping['tgt_table_name']}',
+                                    'tgt_column_name', '{mapping['tgt_column_name']}',
+                                    'tgt_column_physical_name', '{mapping['tgt_column_physical_name']}',
+                                    'tgt_table_physical_name', '{mapping['tgt_table_physical_name']}'
+                                ),
+                                '{current_user_email}'
+                            )
+                            """
+                            print(f"[Mapping Service] Inserting new mapping for {mapping['src_table_name']}.{mapping['src_column_name']}")
+                        
                         cursor.execute(query)
                         successful += 1
                     except Exception as e:
