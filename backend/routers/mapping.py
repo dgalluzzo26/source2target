@@ -1,8 +1,11 @@
 """
 Mapping API endpoints.
 """
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File
+from fastapi.responses import StreamingResponse
 from typing import List
+import io
+import csv
 from backend.models.mapping import MappedField, UnmappedField
 from backend.services.mapping_service import MappingService
 
@@ -72,6 +75,165 @@ async def get_unmapped_fields(request: Request):
         return result
     except Exception as e:
         print(f"[Mapping Router] ERROR fetching unmapped fields: {str(e)}")
+        import traceback
+        print(f"[Mapping Router] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/download-template")
+async def download_template(request: Request):
+    """
+    Download a CSV template with all unmapped fields.
+    This allows users to fill in target mappings offline and upload later.
+    """
+    try:
+        print("[Mapping Router] GET /download-template called")
+        
+        # Get current user email
+        current_user_email = None
+        forwarded_email = request.headers.get('x-forwarded-email')
+        if forwarded_email and '@' in forwarded_email:
+            current_user_email = forwarded_email
+        if not current_user_email:
+            current_user_email = "demo.user@gainwell.com"
+        
+        print(f"[Mapping Router] User email: {current_user_email}")
+        
+        # Get unmapped fields
+        unmapped_fields = await mapping_service.get_all_unmapped_fields(current_user_email)
+        print(f"[Mapping Router] Generating CSV with {len(unmapped_fields)} unmapped fields")
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header with columns for source data and empty target columns
+        writer.writerow([
+            'src_table_name',
+            'src_column_name',
+            'src_column_physical_name',
+            'src_nullable',
+            'src_physical_datatype',
+            'src_comments',
+            'tgt_table_name',          # Empty - to be filled by user
+            'tgt_column_name',         # Empty - to be filled by user
+            'tgt_column_physical_name', # Empty - to be filled by user
+            'tgt_table_physical_name'  # Empty - to be filled by user
+        ])
+        
+        # Write data rows
+        for field in unmapped_fields:
+            writer.writerow([
+                field.src_table_name,
+                field.src_column_name,
+                field.src_column_physical_name,
+                field.src_nullable,
+                field.src_physical_datatype,
+                field.src_comments or '',
+                '',  # tgt_table_name - empty for user to fill
+                '',  # tgt_column_name - empty for user to fill
+                '',  # tgt_column_physical_name - empty for user to fill
+                ''   # tgt_table_physical_name - empty for user to fill
+            ])
+        
+        # Create streaming response
+        output.seek(0)
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=unmapped_fields_template.csv"
+            }
+        )
+    except Exception as e:
+        print(f"[Mapping Router] ERROR generating template: {str(e)}")
+        import traceback
+        print(f"[Mapping Router] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/upload-template")
+async def upload_template(request: Request, file: UploadFile = File(...)):
+    """
+    Upload a CSV template with target mappings filled in.
+    Updates the mapping table with the provided target mappings.
+    """
+    try:
+        print("[Mapping Router] POST /upload-template called")
+        print(f"[Mapping Router] File: {file.filename}, Content-Type: {file.content_type}")
+        
+        # Get current user email
+        current_user_email = None
+        forwarded_email = request.headers.get('x-forwarded-email')
+        if forwarded_email and '@' in forwarded_email:
+            current_user_email = forwarded_email
+        if not current_user_email:
+            current_user_email = "demo.user@gainwell.com"
+        
+        print(f"[Mapping Router] User email: {current_user_email}")
+        
+        # Validate file type
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(status_code=400, detail="File must be a CSV")
+        
+        # Read and parse CSV
+        contents = await file.read()
+        decoded = contents.decode('utf-8')
+        csv_reader = csv.DictReader(io.StringIO(decoded))
+        
+        # Validate required columns
+        required_columns = {
+            'src_table_name', 'src_column_name',
+            'tgt_table_name', 'tgt_column_name',
+            'tgt_column_physical_name', 'tgt_table_physical_name'
+        }
+        
+        if not required_columns.issubset(set(csv_reader.fieldnames or [])):
+            missing = required_columns - set(csv_reader.fieldnames or [])
+            raise HTTPException(
+                status_code=400,
+                detail=f"CSV missing required columns: {', '.join(missing)}"
+            )
+        
+        # Process rows
+        mappings = []
+        for row_num, row in enumerate(csv_reader, start=2):  # start=2 because row 1 is header
+            # Skip rows where target columns are empty
+            if not row.get('tgt_table_name') or not row.get('tgt_column_name'):
+                print(f"[Mapping Router] Skipping row {row_num} - no target mapping")
+                continue
+            
+            mappings.append({
+                'src_table_name': row['src_table_name'],
+                'src_column_name': row['src_column_name'],
+                'tgt_table_name': row['tgt_table_name'],
+                'tgt_column_name': row['tgt_column_name'],
+                'tgt_column_physical_name': row['tgt_column_physical_name'],
+                'tgt_table_physical_name': row['tgt_table_physical_name']
+            })
+        
+        print(f"[Mapping Router] Parsed {len(mappings)} valid mappings from CSV")
+        
+        if len(mappings) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="No valid mappings found in CSV. Please fill in target columns."
+            )
+        
+        # Apply mappings via service
+        result = await mapping_service.apply_bulk_mappings(current_user_email, mappings)
+        
+        return {
+            "status": "success",
+            "message": f"Successfully uploaded {len(mappings)} mappings",
+            "mappings_applied": len(mappings),
+            "details": result
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Mapping Router] ERROR uploading template: {str(e)}")
         import traceback
         print(f"[Mapping Router] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -424,27 +424,33 @@
       v-model:visible="showTemplateUpload" 
       modal 
       header="Upload Mapping Template"
-      :style="{ width: '50rem' }"
+      :style="{ width: '55rem' }"
     >
       <div class="upload-section">
-        <p>Upload a CSV file with the following columns:</p>
-        <ul>
-          <li><strong>src_table_name</strong> - Source table name</li>
-          <li><strong>src_column_name</strong> - Source column name</li>
-          <li><strong>src_column_physical_name</strong> - Physical column name</li>
-          <li><strong>src_nullable</strong> - YES/NO</li>
-          <li><strong>src_physical_datatype</strong> - Data type</li>
-          <li><strong>src_comments</strong> - Column description</li>
-        </ul>
+        <p><strong>Instructions:</strong></p>
+        <ol>
+          <li>Click "Download Template" to get a CSV with all unmapped source fields</li>
+          <li>Fill in the target columns in the CSV:
+            <ul style="margin-top: 0.5rem;">
+              <li><strong>tgt_table_name</strong> - Target table name</li>
+              <li><strong>tgt_column_name</strong> - Target column name</li>
+              <li><strong>tgt_column_physical_name</strong> - Target physical column name</li>
+              <li><strong>tgt_table_physical_name</strong> - Target physical table name</li>
+            </ul>
+          </li>
+          <li>Save the CSV and upload it here</li>
+        </ol>
         
-        <FileUpload 
-          mode="basic" 
-          accept=".csv"
-          :maxFileSize="10000000"
-          @upload="uploadTemplate"
-          :auto="true"
-          chooseLabel="Select CSV File"
-        />
+        <div style="margin-top: 1.5rem;">
+          <FileUpload 
+            mode="basic" 
+            accept=".csv"
+            :maxFileSize="10000000"
+            @select="uploadTemplate"
+            :auto="false"
+            chooseLabel="Select CSV File"
+          />
+        </div>
       </div>
 
       <template #footer>
@@ -1075,24 +1081,63 @@ const deleteSemanticRecord = async (record: any) => {
   }
 }
 
-const downloadTemplate = () => {
+const downloadTemplate = async () => {
   console.log('Download template')
-  // Create CSV template
-  const csvContent = 'src_table_name,src_column_name,src_column_physical_name,src_nullable,src_physical_datatype,src_comments\n'
-  const blob = new Blob([csvContent], { type: 'text/csv' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'mapping_template.csv'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  loading.value.unmapped = true
+  
+  try {
+    const blob = await MappingAPI.downloadTemplate()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'unmapped_fields_template.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    console.log('Template downloaded successfully')
+  } catch (error) {
+    console.error('Error downloading template:', error)
+    alert('Failed to download template. Please try again.')
+  } finally {
+    loading.value.unmapped = false
+  }
 }
 
-const uploadTemplate = (event: any) => {
+const uploadTemplate = async (event: any) => {
   console.log('Upload template:', event)
-  showTemplateUpload.value = false
+  
+  // Get the file from the event
+  const file = event.files[0]
+  if (!file) {
+    console.error('No file selected')
+    return
+  }
+  
+  loading.value.unmapped = true
+  
+  try {
+    const result = await MappingAPI.uploadTemplate(file)
+    
+    if (result.error) {
+      console.error('Upload error:', result.error)
+      alert(`Upload failed: ${result.error}`)
+    } else {
+      console.log('Upload successful:', result.data)
+      alert(`Successfully uploaded ${result.data.mappings_applied} mappings!`)
+      
+      // Refresh the data
+      await loadUnmappedFields()
+      await loadMappedFields()
+      
+      showTemplateUpload.value = false
+    }
+  } catch (error) {
+    console.error('Error uploading template:', error)
+    alert('Failed to upload template. Please check the file format and try again.')
+  } finally {
+    loading.value.unmapped = false
+  }
 }
 
 onMounted(() => {

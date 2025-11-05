@@ -248,4 +248,113 @@ class MappingService:
         except Exception as e:
             print(f"[Mapping Service] Error in get_all_unmapped_fields: {str(e)}")
             raise
+    
+    def _apply_bulk_mappings_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        mapping_table: str,
+        current_user_email: str,
+        mappings: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Apply bulk mappings from CSV upload (synchronous, for thread pool).
+        Updates tgt_columns for the specified source fields.
+        """
+        print(f"[Mapping Service] Applying {len(mappings)} bulk mappings to table: {mapping_table}")
+        print(f"[Mapping Service] User email: {current_user_email}")
+        
+        try:
+            print(f"[Mapping Service] Connecting to database...")
+            connection = self._get_sql_connection(server_hostname, http_path)
+            print(f"[Mapping Service] Connection established")
+        except Exception as e:
+            print(f"[Mapping Service] Connection failed: {str(e)}")
+            raise
+        
+        successful = 0
+        failed = 0
+        errors = []
+        
+        try:
+            with connection.cursor() as cursor:
+                for mapping in mappings:
+                    try:
+                        # Update the tgt_columns for this source field
+                        query = f"""
+                        UPDATE {mapping_table}
+                        SET tgt_columns = named_struct(
+                            'tgt_table_name', '{mapping['tgt_table_name']}',
+                            'tgt_column_name', '{mapping['tgt_column_name']}',
+                            'tgt_column_physical_name', '{mapping['tgt_column_physical_name']}',
+                            'tgt_table_physical_name', '{mapping['tgt_table_physical_name']}'
+                        )
+                        WHERE src_table_name = '{mapping['src_table_name']}'
+                          AND src_column_name = '{mapping['src_column_name']}'
+                          AND (source_owners IS NULL OR source_owners LIKE '%{current_user_email}%')
+                        """
+                        print(f"[Mapping Service] Updating mapping for {mapping['src_table_name']}.{mapping['src_column_name']}")
+                        cursor.execute(query)
+                        successful += 1
+                    except Exception as e:
+                        failed += 1
+                        error_msg = f"Failed to map {mapping['src_table_name']}.{mapping['src_column_name']}: {str(e)}"
+                        print(f"[Mapping Service] {error_msg}")
+                        errors.append(error_msg)
+                
+                print(f"[Mapping Service] Bulk mapping complete: {successful} successful, {failed} failed")
+                
+        except Exception as e:
+            print(f"[Mapping Service] Bulk mapping failed: {str(e)}")
+            raise
+        finally:
+            connection.close()
+            print(f"[Mapping Service] Connection closed")
+        
+        return {
+            "successful": successful,
+            "failed": failed,
+            "errors": errors
+        }
+    
+    async def apply_bulk_mappings(
+        self,
+        current_user_email: str,
+        mappings: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Apply bulk mappings from CSV upload."""
+        print(f"[Mapping Service] apply_bulk_mappings called with {len(mappings)} mappings")
+        
+        try:
+            db_config = self._get_db_config()
+            print(f"[Mapping Service] Config loaded: {db_config['mapping_table']}")
+        except Exception as e:
+            print(f"[Mapping Service] Failed to get config: {str(e)}")
+            raise
+        
+        try:
+            loop = asyncio.get_event_loop()
+            print("[Mapping Service] Running bulk mapping in executor...")
+            result = await asyncio.wait_for(
+                loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._apply_bulk_mappings_sync,
+                        db_config['server_hostname'],
+                        db_config['http_path'],
+                        db_config['mapping_table'],
+                        current_user_email,
+                        mappings
+                    )
+                ),
+                timeout=60.0  # Longer timeout for bulk operations
+            )
+            
+            return result
+        except asyncio.TimeoutError:
+            print("[Mapping Service] Bulk mapping timed out after 60 seconds")
+            raise Exception("Bulk mapping timed out after 60 seconds.")
+        except Exception as e:
+            print(f"[Mapping Service] Error in apply_bulk_mappings: {str(e)}")
+            raise
 

@@ -197,6 +197,44 @@ export class MappingAPI {
   static async getUnmappedFields(): Promise<ApiResponse<UnmappedField[]>> {
     return apiFetch<UnmappedField[]>('/api/mapping/unmapped-fields')
   }
+
+  /**
+   * Download CSV template with unmapped fields
+   */
+  static async downloadTemplate(): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/api/mapping/download-template`, {
+      method: 'GET',
+      credentials: 'include'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to download template: ${response.statusText}`)
+    }
+    
+    return await response.blob()
+  }
+
+  /**
+   * Upload CSV template with mappings
+   */
+  static async uploadTemplate(file: File): Promise<ApiResponse<any>> {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const response = await fetch(`${API_BASE_URL}/api/mapping/upload-template`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    })
+    
+    const data = await response.json()
+    
+    if (!response.ok) {
+      return { data: null, error: data.detail || 'Upload failed' }
+    }
+    
+    return { data, error: null }
+  }
 }
 
 export default {
