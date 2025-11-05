@@ -26,7 +26,7 @@ class AuthService:
     def check_admin_group_membership(self, user_email: str) -> bool:
         """
         Check if user is in the configured admin group.
-        Uses SQL is_member() function for group checking.
+        Uses WorkspaceClient API to check group membership for the specified user email.
         """
         if not user_email:
             return False
@@ -42,77 +42,54 @@ class AuthService:
             
             print(f"[Auth Service] Checking if {user_email} is in group: {admin_group}")
             
-            # Try using SQL is_member() function (most reliable in Databricks)
+            # Use WorkspaceClient API to check group membership
             try:
-                # Get OAuth token from WorkspaceClient
-                access_token = None
-                if self.workspace_client and hasattr(self.workspace_client.config, 'authenticate'):
-                    try:
-                        headers = self.workspace_client.config.authenticate()
-                        if headers and 'Authorization' in headers:
-                            access_token = headers['Authorization'].replace('Bearer ', '')
-                    except Exception as e:
-                        print(f"[Auth Service] Could not get OAuth token: {e}")
+                # First, find the group by name
+                print(f"[Auth Service] Looking up group: {admin_group}")
+                groups = list(self.workspace_client.groups.list(filter=f'displayName eq "{admin_group}"'))
                 
-                # Connect to SQL warehouse
-                if access_token:
-                    connection = sql.connect(
-                        server_hostname=config.database.server_hostname,
-                        http_path=config.database.http_path,
-                        access_token=access_token
-                    )
-                else:
-                    connection = sql.connect(
-                        server_hostname=config.database.server_hostname,
-                        http_path=config.database.http_path,
-                        auth_type="databricks-oauth"
-                    )
+                if not groups:
+                    print(f"[Auth Service] Admin group '{admin_group}' not found in workspace")
+                    return False
                 
-                with connection.cursor() as cursor:
-                    # Use is_member() function to check group membership
-                    query = f"SELECT is_member('{admin_group}') as is_member"
-                    cursor.execute(query)
-                    result = cursor.fetchone()
+                group = groups[0]
+                print(f"[Auth Service] Found group with ID: {group.id}")
+                
+                # Get all members of the group
+                print(f"[Auth Service] Fetching group members...")
+                members = list(self.workspace_client.groups.list_members(id=group.id))
+                print(f"[Auth Service] Group has {len(members)} members")
+                
+                # Check if user email is in members
+                for member in members:
+                    # Check various member attributes
+                    member_email = None
                     
-                    if result and result[0]:
-                        print(f"[Auth Service] User IS in admin group")
-                        connection.close()
+                    # Try different attribute names
+                    if hasattr(member, 'display'):
+                        member_email = member.display
+                    elif hasattr(member, 'value'):
+                        member_email = member.value
+                    elif hasattr(member, 'email'):
+                        member_email = member.email
+                    
+                    if member_email and user_email.lower() in member_email.lower():
+                        print(f"[Auth Service] ✓ User {user_email} IS in admin group (matched: {member_email})")
                         return True
-                    else:
-                        print(f"[Auth Service] User is NOT in admin group")
-                        connection.close()
-                        return False
-                        
-            except Exception as sql_error:
-                print(f"[Auth Service] SQL group check failed: {str(sql_error)}")
                 
-                # Fallback: Try using WorkspaceClient API
-                try:
-                    print(f"[Auth Service] Trying WorkspaceClient API fallback...")
-                    groups = list(self.workspace_client.groups.list(filter=f'displayName eq "{admin_group}"'))
+                print(f"[Auth Service] ✗ User {user_email} is NOT in admin group")
+                return False
                     
-                    if not groups:
-                        print(f"[Auth Service] Admin group not found in workspace")
-                        return False
-                    
-                    group = groups[0]
-                    members = list(self.workspace_client.groups.list_members(id=group.id))
-                    
-                    # Check if user email is in members
-                    for member in members:
-                        if hasattr(member, 'display') and user_email.lower() in member.display.lower():
-                            print(f"[Auth Service] User found in group via API")
-                            return True
-                    
-                    print(f"[Auth Service] User not found in group members")
-                    return False
-                    
-                except Exception as api_error:
-                    print(f"[Auth Service] WorkspaceClient API check failed: {str(api_error)}")
-                    return False
+            except Exception as api_error:
+                print(f"[Auth Service] WorkspaceClient API check failed: {str(api_error)}")
+                import traceback
+                print(f"[Auth Service] Traceback: {traceback.format_exc()}")
+                return False
                     
         except Exception as e:
             print(f"[Auth Service] Error checking admin group: {str(e)}")
+            import traceback
+            print(f"[Auth Service] Traceback: {traceback.format_exc()}")
             return False
 
 
