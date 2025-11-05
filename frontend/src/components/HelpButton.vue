@@ -154,37 +154,59 @@ const onIframeLoad = () => {
   white-space: nowrap;
 }
 
-:deep(.help-dialog .p-dialog) {
-  height: 90vh !important;
+/* Force dialog to proper height */
+:deep(.help-dialog) {
   display: flex !important;
   flex-direction: column !important;
 }
 
-:deep(.help-dialog .p-dialog-content) {
-  padding: 0 !important;
-  flex: 1 !important;
-  overflow: hidden !important;
-  height: 100% !important;
+:deep(.help-dialog .p-dialog) {
+  height: 90vh !important;
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
-/* Fix close button visibility - make it dark and prominent */
+:deep(.help-dialog .p-dialog-header) {
+  flex-shrink: 0 !important;
+  padding: 1.25rem !important;
+  border-bottom: 1px solid #dee2e6;
+}
+
+:deep(.help-dialog .p-dialog-content) {
+  padding: 0 !important;
+  flex: 1 1 auto !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+}
+
+/* Make close button highly visible */
 :deep(.help-dialog .p-dialog-header-icon) {
-  color: #333 !important;
-  background: #e0e0e0 !important;
-  border-radius: 4px !important;
-  width: 2rem !important;
-  height: 2rem !important;
-  padding: 0.5rem !important;
+  color: #fff !important;
+  background: #dc3545 !important;
+  border-radius: 6px !important;
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 2px solid #dc3545 !important;
 }
 
 :deep(.help-dialog .p-dialog-header-icon:hover) {
-  color: #000 !important;
-  background: #d0d0d0 !important;
+  color: #fff !important;
+  background: #c82333 !important;
+  border-color: #c82333 !important;
+  transform: scale(1.1) !important;
 }
 
 :deep(.help-dialog .p-dialog-header-icon .p-icon) {
-  width: 1rem !important;
-  height: 1rem !important;
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+  font-weight: bold !important;
 }
 
 .help-dialog-header {
@@ -207,17 +229,20 @@ const onIframeLoad = () => {
 .help-content-wrapper {
   width: 100%;
   height: 100%;
+  flex: 1 1 auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  min-height: 0;
   background: #f8f9fa;
 }
 
 .help-iframe {
   width: 100%;
   height: 100%;
+  flex: 1 1 auto;
   border: none;
   background: white;
+  min-height: 0;
 }
 
 .help-loading {
