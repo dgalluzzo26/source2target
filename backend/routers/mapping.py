@@ -83,31 +83,17 @@ async def get_unmapped_fields(request: Request):
 @router.get("/download-template")
 async def download_template(request: Request):
     """
-    Download a CSV template with all unmapped fields.
-    This allows users to fill in target mappings offline and upload later.
+    Download a CSV template with headers and one example row.
+    This serves as a format guide for users to fill in their mappings.
     """
     try:
         print("[Mapping Router] GET /download-template called")
-        
-        # Get current user email
-        current_user_email = None
-        forwarded_email = request.headers.get('x-forwarded-email')
-        if forwarded_email and '@' in forwarded_email:
-            current_user_email = forwarded_email
-        if not current_user_email:
-            current_user_email = "demo.user@gainwell.com"
-        
-        print(f"[Mapping Router] User email: {current_user_email}")
-        
-        # Get unmapped fields
-        unmapped_fields = await mapping_service.get_all_unmapped_fields(current_user_email)
-        print(f"[Mapping Router] Generating CSV with {len(unmapped_fields)} unmapped fields")
         
         # Create CSV in memory
         output = io.StringIO()
         writer = csv.writer(output)
         
-        # Write header with columns for source data and empty target columns
+        # Write header with columns for source data and target columns
         writer.writerow([
             'src_table_name',
             'src_column_name',
@@ -115,26 +101,25 @@ async def download_template(request: Request):
             'src_nullable',
             'src_physical_datatype',
             'src_comments',
-            'tgt_table_name',          # Empty - to be filled by user
-            'tgt_column_name',         # Empty - to be filled by user
-            'tgt_column_physical_name', # Empty - to be filled by user
-            'tgt_table_physical_name'  # Empty - to be filled by user
+            'tgt_table_name',          # To be filled by user
+            'tgt_column_name',         # To be filled by user
+            'tgt_column_physical_name', # To be filled by user
+            'tgt_table_physical_name'  # To be filled by user
         ])
         
-        # Write data rows
-        for field in unmapped_fields:
-            writer.writerow([
-                field.src_table_name,
-                field.src_column_name,
-                field.src_column_physical_name,
-                field.src_nullable,
-                field.src_physical_datatype,
-                field.src_comments or '',
-                '',  # tgt_table_name - empty for user to fill
-                '',  # tgt_column_name - empty for user to fill
-                '',  # tgt_column_physical_name - empty for user to fill
-                ''   # tgt_table_physical_name - empty for user to fill
-            ])
+        # Write one example row
+        writer.writerow([
+            'patient_demographics',                    # src_table_name
+            'patient_id',                              # src_column_name
+            'patient_id',                              # src_column_physical_name
+            'NO',                                       # src_nullable
+            'STRING',                                   # src_physical_datatype
+            'Unique identifier for patient records',   # src_comments
+            'unified_member',                          # tgt_table_name (example)
+            'member_id',                               # tgt_column_name (example)
+            'member_id',                               # tgt_column_physical_name (example)
+            'unified_member'                           # tgt_table_physical_name (example)
+        ])
         
         # Create streaming response
         output.seek(0)
@@ -142,7 +127,7 @@ async def download_template(request: Request):
             io.BytesIO(output.getvalue().encode('utf-8')),
             media_type="text/csv",
             headers={
-                "Content-Disposition": "attachment; filename=unmapped_fields_template.csv"
+                "Content-Disposition": "attachment; filename=mapping_template.csv"
             }
         )
     except Exception as e:

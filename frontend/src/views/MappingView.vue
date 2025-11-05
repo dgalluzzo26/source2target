@@ -429,13 +429,11 @@
       <div class="upload-section">
         <p><strong>Instructions:</strong></p>
         <ol>
-          <li>Click "Download Template" to get a CSV with all unmapped source fields</li>
-          <li>Fill in the target columns in the CSV:
+          <li>Click "Download Template" button below to get a CSV template with the correct format</li>
+          <li>Add your source and target mapping rows to the CSV:
             <ul style="margin-top: 0.5rem;">
-              <li><strong>tgt_table_name</strong> - Target table name</li>
-              <li><strong>tgt_column_name</strong> - Target column name</li>
-              <li><strong>tgt_column_physical_name</strong> - Target physical column name</li>
-              <li><strong>tgt_table_physical_name</strong> - Target physical table name</li>
+              <li><strong>Source columns:</strong> src_table_name, src_column_name, src_column_physical_name, src_nullable, src_physical_datatype, src_comments</li>
+              <li><strong>Target columns:</strong> tgt_table_name, tgt_column_name, tgt_column_physical_name, tgt_table_physical_name</li>
             </ul>
           </li>
           <li>Save the CSV and upload it here</li>
