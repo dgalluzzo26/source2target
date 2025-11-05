@@ -3,11 +3,11 @@
     <!-- Top Header -->
     <div class="layout-topbar">
       <div class="layout-topbar-left">
-        <img src="/gainwell-logo-suite-061720-logosuite-png-gainwell-logo-150-r.png" alt="Gainwell Technologies" class="logo" />
-        
         <div class="sidebar-toggle-header" @click="toggleSidebar">
           <i class="pi pi-bars"></i>
         </div>
+        
+        <img src="/gainwell-logo-suite-061720-logosuite-png-gainwell-logo-150-r.png" alt="Gainwell Technologies" class="logo" />
         
         <span class="logo-text">Source-to-Target Mapping Platform</span>
       </div>
