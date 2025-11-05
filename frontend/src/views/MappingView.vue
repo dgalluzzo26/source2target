@@ -657,7 +657,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { SemanticAPI, type SemanticRecord } from '@/services/api'
+import { SemanticAPI, type SemanticRecord, MappingAPI, type MappedField } from '@/services/api'
 
 // Reactive data matching original app structure
 const unmappedFields = ref([
@@ -703,20 +703,8 @@ const unmappedFields = ref([
   }
 ])
 
-const mappedFields = ref([
-  {
-    src_table_name: 'patient_demographics',
-    src_column_name: 'date_of_birth',
-    tgt_table_name: 'unified_member',
-    tgt_column_physical: 'member_birth_date'
-  },
-  {
-    src_table_name: 'enrollment_periods',
-    src_column_name: 'member_ssn',
-    tgt_table_name: 'unified_member',
-    tgt_column_physical: 'member_social_security'
-  }
-])
+// Mapped fields - loaded from API
+const mappedFields = ref<MappedField[]>([])
 
 // Semantic records - loaded from API
 const semanticRecords = ref<SemanticRecord[]>([])
@@ -922,11 +910,21 @@ const selectManualMapping = (mapping: any) => {
   clearSelection()
 }
 
-const loadMappedFields = () => {
+const loadMappedFields = async () => {
   loading.value.mapped = true
-  setTimeout(() => {
+  try {
+    const result = await MappingAPI.getMappedFields()
+    if (result.data) {
+      mappedFields.value = result.data
+      console.log(`Loaded ${result.data.length} mapped fields`)
+    } else if (result.error) {
+      console.error('Error loading mapped fields:', result.error)
+    }
+  } catch (error) {
+    console.error('Error loading mapped fields:', error)
+  } finally {
     loading.value.mapped = false
-  }, 1000)
+  }
 }
 
 const unmapField = (field: any) => {
@@ -1120,8 +1118,9 @@ const uploadTemplate = (event: any) => {
 
 onMounted(() => {
   console.log('Source-to-Target Mapping view loaded')
-  // Load semantic table data from the database
+  // Load data from the database
   loadSemanticTable()
+  loadMappedFields()
 })
 </script>
 

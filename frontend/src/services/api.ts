@@ -162,6 +162,27 @@ export class SemanticAPI {
   }
 }
 
+/**
+ * Mapping API
+ */
+export interface MappedField {
+  src_table_name: string
+  src_column_name: string
+  tgt_mapping?: string
+  tgt_table_name?: string
+  tgt_column_physical?: string
+  tgt_table_physical?: string
+}
+
+export class MappingAPI {
+  /**
+   * Get all mapped fields for the current user
+   */
+  static async getMappedFields(): Promise<ApiResponse<MappedField[]>> {
+    return apiFetch<MappedField[]>('/api/mapping/mapped-fields')
+  }
+}
+
 export default {
   checkHealth,
   getData,

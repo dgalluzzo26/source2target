@@ -1,0 +1,159 @@
+"""
+Mapping service for managing source-to-target field mappings.
+Based on the original Streamlit app's mapping operations.
+"""
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import functools
+from typing import List, Dict, Any
+from databricks import sql
+from databricks.sdk import WorkspaceClient
+from backend.models.mapping import MappedField
+from backend.services.config_service import ConfigService
+
+
+# Thread pool for blocking database operations
+executor = ThreadPoolExecutor(max_workers=3)
+
+
+class MappingService:
+    """Service for managing field mappings."""
+    
+    def __init__(self):
+        """Initialize the mapping service."""
+        self.config_service = ConfigService()
+        self._workspace_client = None
+    
+    @property
+    def workspace_client(self):
+        """Lazy initialization of WorkspaceClient."""
+        if self._workspace_client is None:
+            self._workspace_client = WorkspaceClient()
+        return self._workspace_client
+        
+    def _get_db_config(self) -> Dict[str, str]:
+        """Get database configuration."""
+        config = self.config_service.get_config()
+        return {
+            "server_hostname": config.database.server_hostname,
+            "http_path": config.database.http_path,
+            "mapping_table": config.database.mapping_table
+        }
+    
+    def _get_sql_connection(self, server_hostname: str, http_path: str):
+        """Get SQL connection with proper OAuth token handling."""
+        # Try to get OAuth token from WorkspaceClient config
+        access_token = None
+        if self.workspace_client and hasattr(self.workspace_client.config, 'authenticate'):
+            try:
+                headers = self.workspace_client.config.authenticate()
+                if headers and 'Authorization' in headers:
+                    access_token = headers['Authorization'].replace('Bearer ', '')
+            except Exception as e:
+                print(f"[Mapping Service] Could not get OAuth token: {e}")
+        
+        if access_token:
+            return sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path,
+                access_token=access_token
+            )
+        else:
+            return sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path,
+                auth_type="databricks-oauth"
+            )
+    
+    def _read_mapped_fields_sync(
+        self, 
+        server_hostname: str, 
+        http_path: str, 
+        mapping_table: str,
+        current_user_email: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Read all mapped fields from the mapping table (synchronous, for thread pool).
+        Filters by source_owners to show only user's mappings.
+        """
+        print(f"[Mapping Service] Reading mapped fields from table: {mapping_table}")
+        print(f"[Mapping Service] User email: {current_user_email}")
+        
+        try:
+            print(f"[Mapping Service] Connecting to database...")
+            connection = self._get_sql_connection(server_hostname, http_path)
+            print(f"[Mapping Service] Connection established")
+        except Exception as e:
+            print(f"[Mapping Service] Connection failed: {str(e)}")
+            raise
+        
+        try:
+            with connection.cursor() as cursor:
+                query = f"""
+                SELECT DISTINCT 
+                    src_table_name,
+                    src_column_name, 
+                    tgt_columns.tgt_column_name as tgt_mapping,
+                    tgt_columns.tgt_table_name as tgt_table_name,
+                    tgt_columns.tgt_column_physical_name as tgt_column_physical,
+                    tgt_columns.tgt_table_physical_name as tgt_table_physical
+                FROM {mapping_table} 
+                WHERE tgt_columns.tgt_column_name IS NOT NULL
+                  AND (source_owners IS NULL OR source_owners LIKE '%{current_user_email}%')
+                ORDER BY src_table_name, src_column_name
+                """
+                print(f"[Mapping Service] Executing query...")
+                cursor.execute(query)
+                
+                print(f"[Mapping Service] Fetching results...")
+                arrow_table = cursor.fetchall_arrow()
+                df = arrow_table.to_pandas()
+                records = df.to_dict('records')
+                
+                print(f"[Mapping Service] Successfully retrieved {len(records)} mapped fields")
+                return records
+        except Exception as e:
+            print(f"[Mapping Service] Query execution failed: {str(e)}")
+            raise
+        finally:
+            connection.close()
+            print(f"[Mapping Service] Connection closed")
+    
+    async def get_all_mapped_fields(self, current_user_email: str) -> List[MappedField]:
+        """Get all mapped fields for the current user."""
+        print("[Mapping Service] get_all_mapped_fields called")
+        
+        try:
+            db_config = self._get_db_config()
+            print(f"[Mapping Service] Config loaded: {db_config['mapping_table']}")
+        except Exception as e:
+            print(f"[Mapping Service] Failed to get config: {str(e)}")
+            raise
+        
+        try:
+            loop = asyncio.get_event_loop()
+            print("[Mapping Service] Running query in executor...")
+            records = await asyncio.wait_for(
+                loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._read_mapped_fields_sync,
+                        db_config['server_hostname'],
+                        db_config['http_path'],
+                        db_config['mapping_table'],
+                        current_user_email
+                    )
+                ),
+                timeout=30.0
+            )
+            
+            # Convert to Pydantic models
+            print(f"[Mapping Service] Converting {len(records)} records to Pydantic models")
+            return [MappedField(**record) for record in records]
+        except asyncio.TimeoutError:
+            print("[Mapping Service] Query timed out after 30 seconds")
+            raise Exception("Database query timed out after 30 seconds. Check if warehouse is running.")
+        except Exception as e:
+            print(f"[Mapping Service] Error in get_all_mapped_fields: {str(e)}")
+            raise
+
