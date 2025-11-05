@@ -41,6 +41,31 @@ class SemanticService:
             "semantic_table": config.database.semantic_table
         }
     
+    def _get_sql_connection(self, server_hostname: str, http_path: str):
+        """Get SQL connection with proper OAuth token handling."""
+        # Try to get OAuth token from WorkspaceClient config
+        access_token = None
+        if self.workspace_client and hasattr(self.workspace_client.config, 'authenticate'):
+            try:
+                headers = self.workspace_client.config.authenticate()
+                if headers and 'Authorization' in headers:
+                    access_token = headers['Authorization'].replace('Bearer ', '')
+            except Exception as e:
+                print(f"[Semantic Service] Could not get OAuth token: {e}")
+        
+        if access_token:
+            return sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path,
+                access_token=access_token
+            )
+        else:
+            return sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path,
+                auth_type="databricks-oauth"
+            )
+    
     def _generate_semantic_field(
         self,
         tgt_table_name: str,
@@ -91,11 +116,7 @@ class SemanticService:
         
         try:
             print(f"[Semantic Service] Connecting to database...")
-            connection = sql.connect(
-                server_hostname=server_hostname,
-                http_path=http_path,
-                auth_type="databricks-oauth"
-            )
+            connection = self._get_sql_connection(server_hostname, http_path)
             print(f"[Semantic Service] Connection established")
         except Exception as e:
             print(f"[Semantic Service] Connection failed: {str(e)}")
@@ -156,11 +177,7 @@ class SemanticService:
             record_data.tgt_physical_datatype
         )
         
-        connection = sql.connect(
-            server_hostname=server_hostname,
-            http_path=http_path,
-            auth_type="databricks-oauth"
-        )
+        connection = self._get_sql_connection(server_hostname, http_path)
         
         try:
             with connection.cursor() as cursor:
@@ -225,11 +242,7 @@ class SemanticService:
         """
         print(f"[Semantic Service] Updating record ID: {record_id}")
         
-        connection = sql.connect(
-            server_hostname=server_hostname,
-            http_path=http_path,
-            auth_type="databricks-oauth"
-        )
+        connection = self._get_sql_connection(server_hostname, http_path)
         
         try:
             with connection.cursor() as cursor:
@@ -300,11 +313,7 @@ class SemanticService:
         """
         print(f"[Semantic Service] Deleting record ID: {record_id}")
         
-        connection = sql.connect(
-            server_hostname=server_hostname,
-            http_path=http_path,
-            auth_type="databricks-oauth"
-        )
+        connection = self._get_sql_connection(server_hostname, http_path)
         
         try:
             with connection.cursor() as cursor:
