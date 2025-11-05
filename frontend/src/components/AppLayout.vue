@@ -2,6 +2,10 @@
   <div class="layout-wrapper">
     <!-- Top Header -->
     <div class="layout-topbar">
+      <div class="sidebar-toggle-header" @click="toggleSidebar">
+        <i :class="sidebarCollapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'"></i>
+      </div>
+      
       <div class="layout-topbar-logo">
         <img src="/gainwell-logo-suite-061720-logosuite-png-gainwell-logo-150-r.png" alt="Gainwell Technologies" class="logo" />
         <span class="logo-text">Source-to-Target Mapping Platform</span>
@@ -19,9 +23,6 @@
 
     <!-- Sidebar Navigation -->
     <div class="layout-sidebar" :class="{ 'collapsed': sidebarCollapsed }">
-      <div class="sidebar-toggle" @click="toggleSidebar">
-        <i :class="sidebarCollapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'"></i>
-      </div>
       <div class="layout-menu">
         <ul class="layout-menu-root">
           <li>
@@ -108,6 +109,31 @@ onMounted(() => {
   color: white;
 }
 
+/* Sidebar Toggle in Header */
+.sidebar-toggle-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-right: 1rem;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle-header:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+.sidebar-toggle-header i {
+  font-size: 1.25rem;
+  color: white;
+}
+
 .layout-topbar-logo {
   display: flex;
   align-items: center;
@@ -177,34 +203,6 @@ onMounted(() => {
 
 .layout-sidebar.collapsed {
   width: 4rem;
-}
-
-/* Sidebar Toggle Button */
-.sidebar-toggle {
-  position: absolute;
-  top: 1rem;
-  right: -1rem;
-  width: 2rem;
-  height: 2rem;
-  background: var(--gainwell-primary);
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 51, 102, 0.3);
-  transition: all 0.3s ease;
-  z-index: 997;
-}
-
-.sidebar-toggle:hover {
-  background: var(--gainwell-dark);
-  transform: scale(1.1);
-}
-
-.sidebar-toggle i {
-  font-size: 1rem;
 }
 
 .layout-menu {
