@@ -1149,7 +1149,16 @@ const handleFileUpload = async (event: any) => {
       alert(`Upload failed: ${result.error}`)
     } else {
       console.log('Upload successful:', result.data)
-      alert(`Successfully uploaded ${result.data.mappings_applied} mappings!`)
+      const details = result.data.details
+      let message = `Upload complete!\n\n`
+      message += `✓ ${details.successful} new mappings inserted\n`
+      if (details.skipped > 0) {
+        message += `⊘ ${details.skipped} duplicates skipped\n`
+      }
+      if (details.failed > 0) {
+        message += `✗ ${details.failed} failed\n`
+      }
+      alert(message)
       
       // Refresh the data - very important!
       console.log('Refreshing unmapped and mapped fields...')

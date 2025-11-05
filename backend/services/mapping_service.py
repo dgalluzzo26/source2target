@@ -276,13 +276,14 @@ class MappingService:
         
         successful = 0
         failed = 0
+        skipped = 0
         errors = []
         
         try:
             with connection.cursor() as cursor:
                 for mapping in mappings:
                     try:
-                        # First check if the record exists
+                        # Check if record already exists (duplicate check)
                         check_query = f"""
                         SELECT COUNT(*) as cnt FROM {mapping_table}
                         WHERE src_table_name = '{mapping['src_table_name']}'
@@ -293,62 +294,53 @@ class MappingService:
                         record_exists = result[0] > 0 if result else False
                         
                         if record_exists:
-                            # Update existing record
-                            query = f"""
-                            UPDATE {mapping_table}
-                            SET tgt_columns = named_struct(
+                            # Skip duplicate - already exists in database
+                            print(f"[Mapping Service] Skipping duplicate: {mapping['src_table_name']}.{mapping['src_column_name']}")
+                            skipped += 1
+                            continue
+                        
+                        # INSERT new record only (no updates)
+                        src_physical = mapping.get('src_column_physical_name', mapping['src_column_name'])
+                        src_nullable = mapping.get('src_nullable', 'YES')
+                        src_datatype = mapping.get('src_physical_datatype', 'STRING')
+                        src_comments = mapping.get('src_comments', '')
+                        
+                        query = f"""
+                        INSERT INTO {mapping_table} (
+                            src_table_name,
+                            src_column_name,
+                            src_columns,
+                            tgt_columns,
+                            source_owners
+                        ) VALUES (
+                            '{mapping['src_table_name']}',
+                            '{mapping['src_column_name']}',
+                            named_struct(
+                                'src_column_physical_name', '{src_physical}',
+                                'src_nullable', '{src_nullable}',
+                                'src_physical_datatype', '{src_datatype}',
+                                'src_comments', '{src_comments}'
+                            ),
+                            named_struct(
                                 'tgt_table_name', '{mapping['tgt_table_name']}',
                                 'tgt_column_name', '{mapping['tgt_column_name']}',
                                 'tgt_column_physical_name', '{mapping['tgt_column_physical_name']}',
                                 'tgt_table_physical_name', '{mapping['tgt_table_physical_name']}'
-                            )
-                            WHERE src_table_name = '{mapping['src_table_name']}'
-                              AND src_column_name = '{mapping['src_column_name']}'
-                            """
-                            print(f"[Mapping Service] Updating mapping for {mapping['src_table_name']}.{mapping['src_column_name']}")
-                        else:
-                            # Insert new record
-                            src_physical = mapping.get('src_column_physical_name', mapping['src_column_name'])
-                            src_nullable = mapping.get('src_nullable', 'YES')
-                            src_datatype = mapping.get('src_physical_datatype', 'STRING')
-                            src_comments = mapping.get('src_comments', '')
-                            
-                            query = f"""
-                            INSERT INTO {mapping_table} (
-                                src_table_name,
-                                src_column_name,
-                                src_columns,
-                                tgt_columns,
-                                source_owners
-                            ) VALUES (
-                                '{mapping['src_table_name']}',
-                                '{mapping['src_column_name']}',
-                                named_struct(
-                                    'src_column_physical_name', '{src_physical}',
-                                    'src_nullable', '{src_nullable}',
-                                    'src_physical_datatype', '{src_datatype}',
-                                    'src_comments', '{src_comments}'
-                                ),
-                                named_struct(
-                                    'tgt_table_name', '{mapping['tgt_table_name']}',
-                                    'tgt_column_name', '{mapping['tgt_column_name']}',
-                                    'tgt_column_physical_name', '{mapping['tgt_column_physical_name']}',
-                                    'tgt_table_physical_name', '{mapping['tgt_table_physical_name']}'
-                                ),
-                                '{current_user_email}'
-                            )
-                            """
-                            print(f"[Mapping Service] Inserting new mapping for {mapping['src_table_name']}.{mapping['src_column_name']}")
+                            ),
+                            '{current_user_email}'
+                        )
+                        """
+                        print(f"[Mapping Service] Inserting new mapping for {mapping['src_table_name']}.{mapping['src_column_name']}")
                         
                         cursor.execute(query)
                         successful += 1
                     except Exception as e:
                         failed += 1
-                        error_msg = f"Failed to map {mapping['src_table_name']}.{mapping['src_column_name']}: {str(e)}"
+                        error_msg = f"Failed to insert {mapping['src_table_name']}.{mapping['src_column_name']}: {str(e)}"
                         print(f"[Mapping Service] {error_msg}")
                         errors.append(error_msg)
                 
-                print(f"[Mapping Service] Bulk mapping complete: {successful} successful, {failed} failed")
+                print(f"[Mapping Service] Bulk INSERT complete: {successful} inserted, {skipped} skipped (duplicates), {failed} failed")
                 
         except Exception as e:
             print(f"[Mapping Service] Bulk mapping failed: {str(e)}")
@@ -359,6 +351,7 @@ class MappingService:
         
         return {
             "successful": successful,
+            "skipped": skipped,
             "failed": failed,
             "errors": errors
         }
