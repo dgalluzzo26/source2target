@@ -55,9 +55,12 @@ class AuthService:
                 group = groups[0]
                 print(f"[Auth Service] Found group with ID: {group.id}")
                 
-                # Get all members of the group
-                print(f"[Auth Service] Fetching group members...")
-                members = list(self.workspace_client.groups.list_members(id=group.id))
+                # Get the group details which includes members
+                print(f"[Auth Service] Fetching group details...")
+                group_details = self.workspace_client.groups.get(id=group.id)
+                
+                # Members are in the 'members' attribute
+                members = group_details.members if hasattr(group_details, 'members') and group_details.members else []
                 print(f"[Auth Service] Group has {len(members)} members")
                 
                 # Check if user email is in members
