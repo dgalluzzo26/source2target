@@ -34,7 +34,7 @@
               <span class="layout-menuitem-text">Field Mapping</span>
             </router-link>
           </li>
-          <li>
+          <li v-if="userStore.isAdmin">
             <router-link to="/config" class="layout-menuitem-link">
               <i class="layout-menuitem-icon pi pi-cog"></i>
               <span class="layout-menuitem-text">Configuration</span>

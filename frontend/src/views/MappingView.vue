@@ -327,8 +327,8 @@
         </DataTable>
       </TabPanel>
 
-      <!-- Semantic Table Management Tab -->
-      <TabPanel header="🗂️ Semantic Table">
+      <!-- Semantic Table Management Tab (Admin Only) -->
+      <TabPanel header="🗂️ Semantic Table" v-if="userStore.isAdmin">
         <div class="semantic-management">
           <div class="table-controls">
             <div class="search-controls">
@@ -658,6 +658,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { SemanticAPI, type SemanticRecord, MappingAPI, type MappedField } from '@/services/api'
+import { useUserStore } from '@/stores/user'
+
+const userStore = useUserStore()
 
 // Reactive data matching original app structure
 const unmappedFields = ref([
