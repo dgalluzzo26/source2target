@@ -11,8 +11,8 @@
         <div class="user-info">
           <i class="pi pi-user"></i>
           <span>{{ userStore.currentUser?.display_name || userStore.currentUser?.email || 'Loading...' }}</span>
-          <Badge v-if="userStore.isAdmin" value="ADMIN" severity="success" class="user-badge" />
-          <Badge v-else value="USER" severity="secondary" class="user-badge" />
+          <Badge v-if="userStore.isAdmin" value="Admin" severity="success" class="user-badge" />
+          <Badge v-else value="User" severity="secondary" class="user-badge" />
         </div>
       </div>
     </div>
