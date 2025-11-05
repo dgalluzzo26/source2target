@@ -18,25 +18,28 @@
     </div>
 
     <!-- Sidebar Navigation -->
-    <div class="layout-sidebar">
+    <div class="layout-sidebar" :class="{ 'collapsed': sidebarCollapsed }">
+      <div class="sidebar-toggle" @click="toggleSidebar">
+        <i :class="sidebarCollapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'"></i>
+      </div>
       <div class="layout-menu">
         <ul class="layout-menu-root">
           <li>
-            <router-link to="/" class="layout-menuitem-link">
+            <router-link to="/" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Introduction' : ''">
               <i class="layout-menuitem-icon pi pi-home"></i>
-              <span class="layout-menuitem-text">Introduction</span>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Introduction</span>
             </router-link>
           </li>
           <li>
-            <router-link to="/mapping" class="layout-menuitem-link">
+            <router-link to="/mapping" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Field Mapping' : ''">
               <i class="layout-menuitem-icon pi pi-sitemap"></i>
-              <span class="layout-menuitem-text">Field Mapping</span>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Field Mapping</span>
             </router-link>
           </li>
           <li v-if="userStore.isAdmin">
-            <router-link to="/config" class="layout-menuitem-link">
+            <router-link to="/config" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Configuration' : ''">
               <i class="layout-menuitem-icon pi pi-cog"></i>
-              <span class="layout-menuitem-text">Configuration</span>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Configuration</span>
             </router-link>
           </li>
         </ul>
@@ -44,7 +47,7 @@
     </div>
 
     <!-- Main Content -->
-    <div class="layout-main-container" style="width: calc(100% - 16rem) !important; max-width: none !important; margin-right: 0 !important;">
+    <div class="layout-main-container" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
       <div class="layout-main" style="width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0.5rem !important;">
         <router-view />
       </div>
@@ -58,6 +61,11 @@ import { useUserStore } from '@/stores/user'
 import Badge from 'primevue/badge'
 
 const userStore = useUserStore()
+const sidebarCollapsed = ref(false)
+
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
 
 // Automatically initialize user on app load (like original app)
 onMounted(() => {
@@ -164,10 +172,47 @@ onMounted(() => {
   background: var(--gainwell-light);
   border-right: 1px solid var(--gainwell-border);
   overflow-y: auto;
+  transition: width 0.3s ease;
+}
+
+.layout-sidebar.collapsed {
+  width: 4rem;
+}
+
+/* Sidebar Toggle Button */
+.sidebar-toggle {
+  position: absolute;
+  top: 1rem;
+  right: -1rem;
+  width: 2rem;
+  height: 2rem;
+  background: var(--gainwell-primary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 51, 102, 0.3);
+  transition: all 0.3s ease;
+  z-index: 997;
+}
+
+.sidebar-toggle:hover {
+  background: var(--gainwell-dark);
+  transform: scale(1.1);
+}
+
+.sidebar-toggle i {
+  font-size: 1rem;
 }
 
 .layout-menu {
   padding: 1rem;
+}
+
+.layout-sidebar.collapsed .layout-menu {
+  padding: 1rem 0.5rem;
 }
 
 .layout-menu-root {
@@ -192,6 +237,13 @@ onMounted(() => {
   transition: all 0.3s ease;
   background: white;
   border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.layout-sidebar.collapsed .layout-menuitem-link {
+  justify-content: center;
+  padding: 0.75rem 0.5rem;
+  gap: 0;
 }
 
 .layout-menuitem-link:hover {
@@ -223,6 +275,12 @@ onMounted(() => {
   min-height: calc(100vh - 4rem);
   width: calc(100% - 16rem);
   max-width: none;
+  transition: margin-left 0.3s ease, width 0.3s ease;
+}
+
+.layout-main-container.sidebar-collapsed {
+  margin-left: 4rem;
+  width: calc(100% - 4rem);
 }
 
 .layout-main {
