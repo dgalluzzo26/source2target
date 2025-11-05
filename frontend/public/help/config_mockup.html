@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configuration View - Gainwell App Mockup</title>
+    <title>Configuration - Demo</title>
     <style>
         * {
             margin: 0;
@@ -12,556 +12,360 @@
         }
 
         body {
-            font-family: 'Source Sans Pro', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: #f8f9fa;
-            color: #262730;
+            color: #4a5568;
         }
 
-        .app-container {
-            display: flex;
-            height: 100vh;
+        .demo-container {
+            padding: 1.5rem;
         }
 
-        /* Sidebar (same as before but smaller) */
-        .sidebar {
-            width: 250px;
-            background-color: #ffffff;
-            border-right: 1px solid #e6e6e6;
-            padding: 1rem;
-            overflow-y: auto;
-            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
-        }
-
-        .nav-button {
-            width: 100%;
-            margin: 0.25rem 0;
-            padding: 0.75rem 1rem;
-            border: none;
-            border-radius: 8px;
-            background: #f0f2f6;
-            text-align: left;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 14px;
-        }
-
-        .nav-button.active {
-            background: #4a5568;
+        .page-header {
+            background: linear-gradient(135deg, #4a5568, #38a169);
             color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 20px rgba(0, 51, 102, 0.2);
         }
 
-        /* Main content area */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background-color: #ffffff;
-        }
-
-        /* Top bar - Updated to match real app */
-        .top-bar {
-            padding: 0.75rem 1.5rem;
-            background: #4a5568;
-            color: white;
-            border-bottom: 2px solid #38a169;
+        .page-header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            box-shadow: 0 3px 12px rgba(0,0,0,0.15);
+            gap: 0.5rem;
         }
 
-        .main-header {
-            background: linear-gradient(90deg, #4a5568, #38a169);
-            padding: 1rem;
-            border-radius: 10px;
-            color: white;
-            text-align: center;
-            flex: 1;
-            margin: 0 1rem;
-        }
-
-        .main-header h2 {
-            margin: 0;
-            font-size: 20px;
-        }
-
-        .main-header p {
-            margin: 0.5rem 0 0 0;
-            opacity: 0.9;
-            font-size: 12px;
-        }
-
-        /* Content area */
-        .content-area {
-            flex: 1;
-            padding: 2rem;
-            overflow-y: auto;
-        }
-
-        .page-title {
-            font-size: 28px;
-            font-weight: 600;
-            color: #262730;
-            margin-bottom: 0.5rem;
-        }
-
-        .page-subtitle {
-            color: #666;
-            margin-bottom: 2rem;
-            font-size: 16px;
-        }
-
-        .tabs-container {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            border: 1px solid #e6e6e6;
-            overflow: hidden;
-        }
-
-        .tabs-header {
-            display: flex;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e6e6e6;
-        }
-
-        .tab {
-            flex: 1;
-            padding: 1rem;
-            text-align: center;
-            cursor: pointer;
-            border-right: 1px solid #e6e6e6;
-            transition: background-color 0.2s ease;
-            font-weight: 500;
-        }
-
-        .tab:last-child {
-            border-right: none;
-        }
-
-        .tab.active {
-            background: #4a5568;
-            color: white;
-        }
-
-        .tab:not(.active):hover {
-            background: #e9ecef;
-        }
-
-        .tab-content {
-            padding: 2rem;
+        .page-header p {
+            font-size: 1.1rem;
+            opacity: 0.95;
         }
 
         .config-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
             margin-bottom: 2rem;
+            border-left: 5px solid #38a169;
         }
 
-        .section-title {
-            font-size: 18px;
+        .config-section h2 {
+            color: #4a5568;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            border-bottom: 2px solid #38a169;
+            padding-bottom: 0.5rem;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .config-field {
+            background: #f8f9fa;
+            padding: 1.25rem;
+            border-radius: 8px;
+            border: 2px solid #dee2e6;
+        }
+
+        .config-label {
+            font-size: 0.95rem;
             font-weight: 600;
-            color: #262730;
-            margin-bottom: 0.5rem;
-        }
-
-        .section-description {
-            color: #666;
-            margin-bottom: 1.5rem;
-            font-size: 14px;
-        }
-
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        .form-label {
+            color: #4a5568;
+            margin-bottom: 0.75rem;
             display: block;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-            color: #262730;
         }
 
-        .form-input {
+        .config-input {
             width: 100%;
             padding: 0.75rem;
-            border: 1px solid #ddd;
+            border: 2px solid #dee2e6;
             border-radius: 6px;
-            font-size: 14px;
-            transition: border-color 0.2s ease;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
         }
 
-        .form-input:focus {
+        .config-input:focus {
             outline: none;
-            border-color: #4a5568;
-            box-shadow: 0 0 0 2px rgba(31, 119, 180, 0.2);
+            border-color: #38a169;
         }
 
-        .form-help {
-            font-size: 12px;
-            color: #666;
-            margin-top: 0.25rem;
+        .config-input:disabled {
+            background: #e9ecef;
+            cursor: not-allowed;
         }
 
-        .btn {
-            padding: 0.75rem 1.5rem;
+        .config-description {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-top: 0.5rem;
+            line-height: 1.4;
+        }
+
+        .button {
+            padding: 0.75rem 2rem;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
+            font-weight: 600;
             cursor: pointer;
-            font-weight: 500;
             transition: all 0.3s ease;
-            font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        .btn-primary {
-            background: #4a5568;
+        .button-primary {
+            background: linear-gradient(135deg, #4a5568, #38a169);
             color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         }
 
-        .btn-primary:hover {
-            background: #38a169;
+        .button-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(56, 161, 105, 0.3);
         }
 
-        .btn-success {
-            background: #28a745;
-            color: white;
-        }
-
-        .btn-warning {
-            background: #ffc107;
-            color: #212529;
-        }
-
-        .btn-secondary {
+        .button-secondary {
             background: #6c757d;
             color: white;
         }
 
-        .alert {
-            padding: 1rem;
-            border-radius: 6px;
-            margin-bottom: 1rem;
+        .button-secondary:hover {
+            background: #5a6268;
         }
 
-        .alert-success {
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .status-success {
             background: #d4edda;
             color: #155724;
-            border: 1px solid #c3e6cb;
         }
 
-        .two-column {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
         }
 
-        .config-card {
-            background: #f8f9fa;
-            padding: 1.5rem;
-            border-radius: 8px;
-            border: 1px solid #e6e6e6;
-        }
-
-        .config-preview {
-            background: #f8f9fa;
+        .demo-note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
             padding: 1rem;
-            border-radius: 6px;
-            border: 1px solid #e6e6e6;
-            font-family: monospace;
-            font-size: 12px;
-            overflow-x: auto;
-        }
-
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .color-input {
-            width: 60px;
-            height: 40px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-
-        .divider {
-            height: 1px;
-            background: #e6e6e6;
             margin: 2rem 0;
+            border-radius: 4px;
+        }
+
+        .demo-note strong {
+            color: #856404;
+        }
+
+        .info-box {
+            background: #e8f4fd;
+            border-left: 4px solid #0d6efd;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+
+        .info-box strong {
+            color: #004085;
         }
     </style>
 </head>
 <body>
-    <div class="app-container">
-        <!-- Simplified Sidebar -->
-        <div class="sidebar">
-            <div style="text-align: center; margin-bottom: 1rem;">
-                <div style="width: 120px; height: 50px; background: linear-gradient(45deg, #4a5568, #38a169); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin: 0 auto;">
-                    📖 Logo
-                </div>
+    <div class="demo-container">
+        <div class="demo-note">
+            <strong>📸 Interactive Demo:</strong> This mockup shows the Configuration page where admins manage database connections, vector search, and AI model settings.
+        </div>
+
+        <div class="page-header">
+            <h1>⚙️ Configuration Settings</h1>
+            <p>Manage enterprise application settings, database connections, and AI model configurations</p>
+        </div>
+
+        <div class="config-section">
+            <h2>🗄️ Database Configuration</h2>
+            <div class="info-box">
+                <strong>ℹ️ Note:</strong> Database settings connect the application to your Databricks SQL Warehouse for accessing source and target field metadata.
             </div>
             
-            <hr style="margin: 1rem 0; border: none; height: 1px; background: #e6e6e6;">
-            
-            <button class="nav-button">🏠 Introduction</button>
-            <button class="nav-button">📊 Field Mapping</button>
-            <button class="nav-button active">⚙️ Configuration</button>
-            
-            <hr style="margin: 1rem 0; border: none; height: 1px; background: #e6e6e6;">
-            
-            <div style="text-align: center; margin-top: 2rem; font-size: 12px; color: #666;">
-                <strong>Quick Stats</strong><br>
-                Tables: 12 | Mappings: 234
+            <div class="config-grid">
+                <div class="config-field">
+                    <label class="config-label">Server Hostname</label>
+                    <input type="text" class="config-input" value="dbc-1234abcd-5678.cloud.databricks.com" disabled>
+                    <div class="config-description">Your Databricks workspace URL</div>
+                </div>
+
+                <div class="config-field">
+                    <label class="config-label">HTTP Path</label>
+                    <input type="text" class="config-input" value="/sql/1.0/warehouses/abc123def456" disabled>
+                    <div class="config-description">SQL Warehouse HTTP path for query execution</div>
+                </div>
+
+                <div class="config-field">
+                    <label class="config-label">Catalog Name</label>
+                    <input type="text" class="config-input" value="healthcare_data">
+                    <div class="config-description">Unity Catalog name containing your data</div>
+                </div>
+
+                <div class="config-field">
+                    <label class="config-label">Schema Name</label>
+                    <input type="text" class="config-input" value="mapping_metadata">
+                    <div class="config-description">Schema containing mapping tables</div>
+                </div>
+
+                <div class="config-field">
+                    <label class="config-label">Mapping Table</label>
+                    <input type="text" class="config-input" value="source_target_mappings">
+                    <div class="config-description">Table storing source-to-target field mappings</div>
+                </div>
+
+                <div class="config-field">
+                    <label class="config-label">Semantic Table</label>
+                    <input type="text" class="config-input" value="target_semantic_layer">
+                    <div class="config-description">Table containing target field definitions</div>
+                </div>
+            </div>
+
+            <div style="margin-top: 1rem;">
+                <span class="status-badge status-success">✅ Database Connection: Active</span>
             </div>
         </div>
 
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- Top Bar -->
-            <div class="top-bar">
-                <button style="background: #f0f2f6; border: none; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 18px;">☰</button>
-                <div class="main-header">
-                    <h2>📖 Gainwell Src-Tgt App 🍳</h2>
-                    <p>Intelligent Source-to-Target Field Mapping Platform</p>
-                </div>
-                <div style="background: #d4edda; color: #155724; padding: 0.5rem 1rem; border-radius: 12px; font-size: 12px; font-weight: bold;">● Connected</div>
+        <div class="config-section">
+            <h2>🔍 Vector Search Configuration</h2>
+            <div class="info-box">
+                <strong>ℹ️ Note:</strong> Vector Search enables AI-powered semantic matching by finding similar fields based on meaning, not just keywords.
             </div>
 
-            <!-- Content Area -->
-            <div class="content-area">
-                <!-- Page Header -->
-                <h1 class="page-title">⚙️ Configuration Settings</h1>
-                <p class="page-subtitle">Manage application settings and configuration parameters.</p>
-
-                <!-- Tabs Container -->
-                <div class="tabs-container">
-                    <!-- Tabs Header -->
-                    <div class="tabs-header">
-                        <div class="tab active">🗄️ Database</div>
-                        <div class="tab">🤖 AI/ML Models</div>
-                        <div class="tab">🔍 Vector Search</div>
-                        <div class="tab">🎨 UI Settings</div>
-                        <div class="tab">🤝 Support</div>
-                        <div class="tab">🔐 Security</div>
-                        <div class="tab">🛠️ Actions</div>
-                    </div>
-
-                    <!-- Tab Content - Database -->
-                    <div class="tab-content">
-                        <div class="config-section">
-                            <h3 class="section-title">Database Configuration</h3>
-                            <p class="section-description">Configure database connections and table references.</p>
-
-                            <div class="form-group">
-                                <label class="form-label">Warehouse Name</label>
-                                <input type="text" class="form-input" value="dbdemos-shared-endpoint" placeholder="Enter warehouse name">
-                                <div class="form-help">Name of the Databricks SQL warehouse to use</div>
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label">Source Table</label>
-                                <input type="text" class="form-input" value="oztest_dev.source_to_target.mappings" placeholder="catalog.schema.table">
-                                <div class="form-help">Full path to the source mappings table</div>
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label">Update Table</label>
-                                <input type="text" class="form-input" value="oztest_dev.source_to_target.mappings" placeholder="catalog.schema.table">
-                                <div class="form-help">Full path to the table for storing mapping updates</div>
-                            </div>
-
-                            <div class="alert alert-success">
-                                ✅ Database settings saved successfully!
-                            </div>
-
-                            <button class="btn btn-primary">💾 Save Database Settings</button>
-                        </div>
-
-                        <div class="divider"></div>
-
-                        <!-- Connection Test -->
-                        <div class="config-section">
-                            <h3 class="section-title">Connection Test</h3>
-                            <p class="section-description">Test your database connection with current settings.</p>
-                            
-                            <div class="two-column">
-                                <div>
-                                    <button class="btn btn-secondary">🔗 Test Connection</button>
-                                    <div style="margin-top: 1rem; color: #28a745; font-weight: 500;">
-                                        ✅ Connection successful<br>
-                                        <span style="font-size: 12px; color: #666;">Last tested: 2 minutes ago</span>
-                                    </div>
-                                </div>
-                                <div>
-                                    <div class="config-card">
-                                        <strong>Available Warehouses:</strong>
-                                        <ul style="margin: 0.5rem 0; padding-left: 1.5rem; font-size: 14px; color: #666;">
-                                            <li>dbdemos-shared-endpoint ✅</li>
-                                            <li>warehouse-prod</li>
-                                            <li>warehouse-dev</li>
-                                            <li>analytics-warehouse</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+            <div class="config-grid">
+                <div class="config-field">
+                    <label class="config-label">Vector Search Endpoint</label>
+                    <input type="text" class="config-input" value="healthcare-vector-search-endpoint">
+                    <div class="config-description">Name of your Vector Search endpoint</div>
                 </div>
 
-                <!-- AI/ML Tab Preview -->
-                <div style="margin-top: 2rem; padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border: 1px solid #e6e6e6;">
-                    <h4 style="color: #4a5568; margin-bottom: 1rem;">🤖 AI/ML Models Tab Preview</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 14px;">
-                        <div>
-                            <strong>Previous Mappings Table:</strong><br>
-                            <span style="color: #666;">oztest_dev.source_to_target.train_with_comments</span>
-                        </div>
-                        <div>
-                            <strong>Foundation Model:</strong><br>
-                            <span style="color: #666;">databricks-meta-llama-3-3-70b-instruct</span>
-                        </div>
-                        <div style="grid-column: 1 / -1;">
-                            <strong>Description:</strong><br>
-                            <span style="color: #666;">Configure AI model endpoints and training data settings for healthcare data mapping.</span>
-                        </div>
-                    </div>
+                <div class="config-field">
+                    <label class="config-label">Vector Index Name</label>
+                    <input type="text" class="config-input" value="semantic_field_embeddings_index">
+                    <div class="config-description">Index containing embedded target field definitions</div>
                 </div>
 
-                <!-- Vector Search Tab Preview -->
-                <div style="margin-top: 1rem; padding: 1.5rem; background: #e8f4fd; border-radius: 8px; border: 1px solid #b3d9ff;">
-                    <h4 style="color: #4a5568; margin-bottom: 1rem;">🔍 Vector Search Tab Preview</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 14px;">
-                        <div>
-                            <strong>Vector Search Index Name:</strong><br>
-                            <span style="color: #666;">oztest_dev.source_to_target.silver_semantic_full_vs</span>
-                        </div>
-                        <div>
-                            <strong>Vector Search Endpoint:</strong><br>
-                            <span style="color: #666;">one-env-shared-endpoint-13</span>
-                        </div>
-                        <div style="grid-column: 1 / -1;">
-                            <strong>Description:</strong><br>
-                            <span style="color: #666;">Configure vector search index settings for semantic mapping suggestions.</span>
-                        </div>
-                    </div>
+                <div class="config-field">
+                    <label class="config-label">Embedding Column</label>
+                    <input type="text" class="config-input" value="semantic_field">
+                    <div class="config-description">Column used for semantic search queries</div>
                 </div>
 
-                <!-- Hidden UI Settings Tab Preview -->
-                <div style="margin-top: 1rem; padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border: 1px solid #e6e6e6;">
-                    <h4 style="color: #4a5568; margin-bottom: 1rem;">🎨 UI Settings Tab Preview</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; font-size: 14px;">
-                        <div>
-                            <strong>App Title:</strong><br>
-                            <span style="color: #666;">📖 Gainwell Src-Tgt App 🍳</span>
-                        </div>
-                        <div>
-                            <strong>Theme Color:</strong><br>
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <div style="width: 20px; height: 20px; background: #4a5568; border-radius: 4px;"></div>
-                                <span style="color: #666;">#4a5568</span>
-                            </div>
-                        </div>
-                        <div>
-                            <strong>Sidebar:</strong><br>
-                            <span style="color: #666;">✅ Expanded by default</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Security Tab Preview -->
-                <div style="margin-top: 1rem; padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border: 1px solid #e6e6e6;">
-                    <h4 style="color: #4a5568; margin-bottom: 1rem;">🔐 Security Tab Preview</h4>
-                    
-                    <!-- User Detection Status -->
-                    <div style="background: #d1ecf1; color: #0c5460; padding: 1rem; border-radius: 6px; margin-bottom: 1rem; border-left: 4px solid #17a2b8;">
-                        <strong>👤 Current User Detection</strong><br>
-                        <span style="font-size: 14px;">Detected: david.galluzzo@gainwelltechnologies.com (via X-Forwarded-Email header)</span><br>
-                        <span style="font-size: 12px; opacity: 0.8;">Authentication Method: Databricks App Headers</span>
-                    </div>
-
-                    <!-- Access Control Settings -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 1rem;">
-                        <div>
-                            <strong>Admin Group Configuration:</strong><br>
-                            <input type="text" value="gia-oztest-dev-ue1-data-engineers" style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; margin-top: 0.25rem; font-size: 14px;">
-                            <div style="font-size: 12px; color: #666; margin-top: 0.25rem;">Databricks group name for admin access</div>
-                        </div>
-                        <div>
-                            <strong>Password Authentication:</strong><br>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
-                                <input type="checkbox" checked>
-                                <span style="font-size: 14px;">Enable password fallback</span>
-                            </div>
-                            <div style="font-size: 12px; color: #666; margin-top: 0.25rem;">Allows password auth when group auth fails</div>
-                        </div>
-                    </div>
-
-                    <!-- User Access Control Info -->
-                    <div style="background: #fff3cd; color: #856404; padding: 1rem; border-radius: 6px; border-left: 4px solid #ffc107;">
-                        <strong>🔒 Row-Level Security Active</strong><br>
-                        <span style="font-size: 14px;">Users can only view/edit records they own or that are globally accessible</span><br>
-                        <span style="font-size: 12px;">Source ownership filtering: source_owners column contains user email or is NULL</span>
-                    </div>
-                </div>
-
-                <!-- Support Tab Preview -->
-                <div style="margin-top: 1rem; padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border: 1px solid #e6e6e6;">
-                    <h4 style="color: #4a5568; margin-bottom: 1rem;">🤝 Support Tab Preview</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 14px;">
-                        <div>
-                            <strong>Support Portal URL:</strong><br>
-                            <span style="color: #666;">https://mygainwell.sharepoint.com</span>
-                        </div>
-                        <div>
-                            <strong>Preview Link:</strong><br>
-                            <a href="https://mygainwell.sharepoint.com" target="_blank" style="color: #38a169; text-decoration: none;">🔗 Open Support Portal</a>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Actions Tab Preview -->
-                <div style="margin-top: 1rem; padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border: 1px solid #e6e6e6;">
-                    <h4 style="color: #4a5568; margin-bottom: 1rem;">💾 Actions Tab Preview</h4>
-                    <div style="display: flex; gap: 1rem; align-items: center;">
-                        <button class="btn btn-success">📥 Download Config</button>
-                        <button class="btn btn-warning">🔄 Reset to Defaults</button>
-                        <div style="color: #666; font-size: 14px;">
-                            Export current configuration or reset to factory defaults
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Current Config Preview -->
-                <div style="margin-top: 2rem;">
-                    <h4 style="color: #262730; margin-bottom: 1rem;">📋 Current Configuration Preview</h4>
-                    <div class="config-preview">
-{
-  "database": {
-    "warehouse_name": "gia-oztest-dev-data-warehouse",
-    "mapping_table": "oztest_dev.source_to_target.mappings",
-    "semantic_table": "oztest_dev.source_to_target.silver_semantic_full"
-  },
-  "ai_model": {
-    "previous_mappings_table_name": "oztest_dev.source_to_target.train_with_comments",
-    "foundation_model_endpoint": "databricks-meta-llama-3-3-70b-instruct"
-  },
-  "vector_search": {
-    "index_name": "oztest_dev.source_to_target.silver_semantic_full_vs",
-    "endpoint_name": "one-env-shared-endpoint-13"
-  },
-  "ui": {
-    "app_title": "📖 Gainwell Src-Tgt App 🍳",
-    "theme_color": "#4a5568",
-    "sidebar_expanded": true
-  },
-  "support": {
-    "support_url": "https://mygainwell.sharepoint.com"
-  }
-}
-                    </div>
+                <div class="config-field">
+                    <label class="config-label">Max Vector Results</label>
+                    <input type="number" class="config-input" value="25">
+                    <div class="config-description">Maximum number of candidate matches to return</div>
                 </div>
             </div>
+
+            <div style="margin-top: 1rem;">
+                <span class="status-badge status-success">✅ Vector Search: Available</span>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h2>🤖 AI Model Configuration</h2>
+            <div class="info-box">
+                <strong>ℹ️ Note:</strong> The AI Model analyzes vector search results and generates intelligent mapping suggestions with reasoning.
+            </div>
+
+            <div class="config-grid">
+                <div class="config-field">
+                    <label class="config-label">Model Endpoint Name</label>
+                    <input type="text" class="config-input" value="databricks-dbrx-instruct-serving">
+                    <div class="config-description">Databricks Model Serving endpoint for LLM</div>
+                </div>
+
+                <div class="config-field">
+                    <label class="config-label">Max AI Results</label>
+                    <input type="number" class="config-input" value="10">
+                    <div class="config-description">Number of AI suggestions to generate per field</div>
+                </div>
+
+                <div class="config-field">
+                    <label class="config-label">Temperature</label>
+                    <input type="number" class="config-input" value="0.1" step="0.1" min="0" max="1">
+                    <div class="config-description">Model creativity (0.0 = focused, 1.0 = creative)</div>
+                </div>
+
+                <div class="config-field">
+                    <label class="config-label">Max Tokens</label>
+                    <input type="number" class="config-input" value="2000">
+                    <div class="config-description">Maximum response length from AI model</div>
+                </div>
+            </div>
+
+            <div style="margin-top: 1rem;">
+                <span class="status-badge status-success">✅ AI Model: Ready</span>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h2>👥 Access Control</h2>
+            <div class="info-box">
+                <strong>ℹ️ Note:</strong> Define which Databricks workspace groups have admin access to configuration and semantic table management.
+            </div>
+
+            <div class="config-grid">
+                <div class="config-field" style="grid-column: 1 / -1;">
+                    <label class="config-label">Admin Group Names</label>
+                    <input type="text" class="config-input" value="healthcare_data_admins, s2t_mapping_admins">
+                    <div class="config-description">Comma-separated list of Databricks groups with admin privileges</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h2>💾 Save Configuration</h2>
+            <div class="info-box">
+                <strong>⚠️ Important:</strong> Configuration changes require careful validation. Incorrect settings may cause system failures.
+            </div>
+
+            <div class="button-group">
+                <button class="button button-primary">
+                    💾 Save Configuration
+                </button>
+                <button class="button button-secondary">
+                    🔄 Reset to Defaults
+                </button>
+                <button class="button button-secondary">
+                    ✅ Validate Configuration
+                </button>
+            </div>
+        </div>
+
+        <div class="demo-note" style="margin-top: 3rem;">
+            <strong>💡 Configuration Tips:</strong>
+            <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                <li><strong>Database:</strong> Ensure SQL Warehouse is running before saving changes</li>
+                <li><strong>Vector Search:</strong> Index must be online and synced with semantic table</li>
+                <li><strong>AI Model:</strong> Endpoint must be in "Ready" state to process suggestions</li>
+                <li><strong>Access Control:</strong> Only members of specified groups can access this page</li>
+                <li><strong>Validation:</strong> Always validate configuration before saving to prevent errors</li>
+            </ul>
         </div>
     </div>
 </body>

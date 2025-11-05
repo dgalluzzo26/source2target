@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Field Mapping View - Gainwell App Mockup</title>
+    <title>Field Mapping - Demo</title>
     <style>
         * {
             margin: 0;
@@ -12,1013 +12,502 @@
         }
 
         body {
-            font-family: 'Source Sans Pro', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: #f8f9fa;
-            color: #262730;
-        }
-
-        .app-container {
-            display: flex;
-            height: 100vh;
-        }
-
-        /* Sidebar (same as before but smaller) */
-        .sidebar {
-            width: 250px;
-            background-color: #ffffff;
-            border-right: 1px solid #e6e6e6;
-            padding: 1rem;
-            overflow-y: auto;
-            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
-        }
-
-        .nav-button {
-            width: 100%;
-            margin: 0.25rem 0;
-            padding: 0.75rem 1rem;
-            border: none;
-            border-radius: 8px;
-            background: #ffffff;
-            text-align: left;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 14px;
             color: #4a5568;
-            border-left: 4px solid transparent;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
-        .nav-button:hover {
-            background: #ffffff;
-            border-left: 4px solid #38a169;
-            transform: translateX(3px);
-            box-shadow: 0 2px 8px rgba(56,161,105,0.15);
+        .demo-container {
+            padding: 1.5rem;
         }
 
-        .nav-button.active {
-            background: #4a5568;
+        .page-header {
+            background: linear-gradient(135deg, #4a5568, #38a169);
             color: white;
-            border-left: 4px solid #38a169;
-            box-shadow: 0 4px 12px rgba(56,161,105,0.25);
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 20px rgba(0, 51, 102, 0.2);
         }
 
-        /* Main content area */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background-color: #ffffff;
-        }
-
-        /* Top bar - Updated to match real app */
-        .top-bar {
-            padding: 0.75rem 1.5rem;
-            background: #4a5568;
-            color: white;
-            border-bottom: 2px solid #38a169;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            box-shadow: 0 3px 12px rgba(0,0,0,0.15);
-        }
-
-        .app-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: white;
-            margin: 0;
+        .page-header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
             display: flex;
             align-items: center;
             gap: 0.5rem;
         }
 
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            background: rgba(255,255,255,0.15);
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            color: white;
+        .page-header p {
+            font-size: 1.1rem;
+            opacity: 0.95;
         }
 
-        .user-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: #ffffff;
+        .tabs {
             display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .tab {
+            padding: 1rem 2rem;
+            background: white;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-weight: 600;
+            color: #6c757d;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
             color: #4a5568;
-            font-size: 0.9rem;
-            border: 2px solid #38a169;
+            border-bottom-color: #38a169;
+            background: white;
         }
 
-        .main-header {
-            background: linear-gradient(90deg, #4a5568, #38a169);
-            padding: 1rem;
-            border-radius: 10px;
-            color: white;
-            text-align: center;
-            flex: 1;
-            margin: 0 1rem;
+        .tab:hover {
+            color: #4a5568;
+            background: #f8f9fa;
         }
 
-        .main-header h2 {
-            margin: 0;
-            font-size: 20px;
-        }
-
-        .main-header p {
-            margin: 0.5rem 0 0 0;
-            opacity: 0.9;
-            font-size: 12px;
-        }
-
-        /* Content area */
-        .content-area {
-            flex: 1;
+        .tab-content {
+            background: white;
             padding: 2rem;
-            overflow-y: auto;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
         }
 
-        .page-header {
+        .toolbar {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
         }
 
-        .page-title {
-            font-size: 28px;
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+            padding: 0.75rem 1rem;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #38a169;
+        }
+
+        .button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
             font-weight: 600;
-            color: #262730;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        .refresh-btn {
+        .button-primary {
+            background: linear-gradient(135deg, #4a5568, #38a169);
+            color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .button-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(56, 161, 105, 0.3);
+        }
+
+        .button-success {
             background: #38a169;
             color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
+            border: 2px solid #38a169;
         }
 
-        .subtitle {
-            color: #666;
-            margin-bottom: 2rem;
-            font-size: 16px;
+        .button-success:hover {
+            background: #2f855a;
         }
 
-        .data-table-container {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            border: 1px solid #e6e6e6;
-            overflow: hidden;
-            margin-bottom: 2rem;
+        .button-danger {
+            background: #dc3545;
+            color: white;
         }
 
-        .table-header {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-bottom: 1px solid #e6e6e6;
-            font-weight: 600;
-            color: #262730;
+        .button-danger:hover {
+            background: #c82333;
         }
 
         .data-table {
             width: 100%;
             border-collapse: collapse;
+            margin: 1rem 0;
         }
 
         .data-table th {
-            background: #f8f9fa;
+            background: #4a5568;
+            color: white;
             padding: 1rem;
             text-align: left;
             font-weight: 600;
-            color: #262730;
-            border-bottom: 2px solid #e6e6e6;
         }
 
         .data-table td {
             padding: 1rem;
-            border-bottom: 1px solid #f0f0f0;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
+            border-bottom: 1px solid #dee2e6;
         }
 
         .data-table tr:hover {
-            background-color: #f8f9fa;
+            background: #f8f9fa;
         }
 
         .data-table tr.selected {
-            background-color: #e3f2fd;
+            background: #e8f4fd;
             border-left: 4px solid #38a169;
         }
 
-        .detail-panel {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            border: 1px solid #e6e6e6;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .detail-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-        }
-
-        .detail-title {
-            font-size: 20px;
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
             font-weight: 600;
-            color: #262730;
         }
 
-        .back-btn {
-            background: #6c757d;
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .ai-results-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 1rem 0;
-        }
-
-        .ai-results-table th {
+        .badge-info {
             background: #e8f4fd;
-            padding: 0.75rem;
-            text-align: left;
-            font-weight: 600;
             color: #4a5568;
-            border-bottom: 2px solid #38a169;
         }
 
-        .ai-results-table td {
-            padding: 0.75rem;
-            border-bottom: 1px solid #e6e6e6;
-            vertical-align: top;
-        }
-
-        .ai-results-table tr:hover {
-            background-color: #f8f9fa;
-        }
-
-        .ai-results-table tr.selected {
-            background-color: #fff3cd;
-            border-left: 4px solid #ffc107;
-        }
-
-        .reasoning-cell {
-            max-width: 300px;
-            font-size: 14px;
-            color: #666;
-            line-height: 1.4;
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
-        }
-
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-
-        .btn-primary {
-            background: #4a5568;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #38a169;
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-
-        .btn-success {
-            background: #28a745;
-            color: white;
-        }
-
-        .download-section {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 8px;
-            border: 1px solid #e6e6e6;
-            margin-bottom: 1rem;
-        }
-
-        .divider {
-            height: 1px;
-            background: #e6e6e6;
-            margin: 1.5rem 0;
-        }
-
-        .info-banner {
-            background: #d1ecf1;
-            color: #0c5460;
-            padding: 1rem;
-            border-radius: 6px;
-            border-left: 4px solid #17a2b8;
-            margin-bottom: 1rem;
-        }
-
-        /* Tab Styles */
-        .tab-container {
-            margin: 2rem 0;
-        }
-
-        .tab-buttons {
-            display: flex;
-            border-bottom: 2px solid #e6e6e6;
-            margin-bottom: 2rem;
-        }
-
-        .tab-button {
-            background: none;
-            border: none;
-            padding: 1rem 2rem;
-            font-size: 16px;
-            font-weight: 500;
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s ease;
-            color: #666;
-        }
-
-        .tab-button.active {
-            color: #4a5568;
-            border-bottom-color: #38a169;
-            background: #f8f9fb;
-        }
-
-        .tab-button:hover {
-            background: #f0f2f6;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        /* Search Styles */
-        .search-container {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 2rem;
-            align-items: center;
-        }
-
-        .search-input {
-            flex: 1;
-            padding: 0.75rem;
-            border: 1px solid #e6e6e6;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-
-        .search-clear-btn {
-            background: #6c757d;
-            color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        /* Mapped Fields Specific */
-        .mapped-table {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            border: 1px solid #e6e6e6;
-            overflow: hidden;
-            margin-bottom: 2rem;
-        }
-
-        .mapped-table-header {
-            background: #e8f5e8;
-            padding: 1rem;
-            border-bottom: 1px solid #c3e6cb;
-            font-weight: 600;
+        .badge-success {
+            background: #d4edda;
             color: #155724;
         }
 
-        .mapping-details {
+        .selected-field-panel {
             background: #f8f9fa;
             padding: 1.5rem;
             border-radius: 8px;
-            border: 1px solid #e6e6e6;
-            margin-top: 1rem;
+            margin-top: 2rem;
+            border-left: 4px solid #38a169;
         }
 
-        .mapping-details h4 {
-            color: #495057;
+        .selected-field-panel h3 {
+            color: #4a5568;
             margin-bottom: 1rem;
         }
 
-        .info-grid {
+        .field-details {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
         }
 
-        .info-block {
+        .field-detail {
             background: white;
             padding: 1rem;
             border-radius: 6px;
-            border-left: 4px solid #28a745;
         }
 
-        .info-block h5 {
-            margin: 0 0 0.5rem 0;
-            color: #495057;
+        .field-detail-label {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-bottom: 0.25rem;
+        }
+
+        .field-detail-value {
             font-weight: 600;
+            color: #4a5568;
         }
 
-        .info-block code {
-            background: #f8f9fa;
+        .ai-section {
+            background: linear-gradient(135deg, #e8f4fd, #f0f8ff);
+            padding: 2rem;
+            border-radius: 10px;
+            margin-top: 2rem;
+            border: 2px solid #38a169;
+        }
+
+        .ai-section h4 {
+            color: #4a5568;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .config-field {
+            background: white;
+            padding: 1rem;
+            border-radius: 6px;
+        }
+
+        .config-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 0.5rem;
+        }
+
+        .config-input {
+            width: 100%;
             padding: 0.5rem;
+            border: 2px solid #dee2e6;
             border-radius: 4px;
-            display: block;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 13px;
-            white-space: pre-line;
         }
 
-        /* Delete Button Styles */
-        .btn-danger {
-            background: #dc3545 !important;
-            color: white !important;
-            border: none;
-            transition: all 0.3s ease;
+        .suggestions-table {
+            margin-top: 1.5rem;
         }
 
-        .btn-danger:hover {
-            background: #c82333 !important;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+        .confidence-bar {
+            height: 8px;
+            background: #dee2e6;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #38a169, #2f855a);
+            transition: width 0.3s ease;
+        }
+
+        .demo-note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 1rem;
+            margin: 2rem 0;
+            border-radius: 4px;
+        }
+
+        .demo-note strong {
+            color: #856404;
         }
     </style>
 </head>
 <body>
-    <div class="app-container">
-        <!-- Simplified Sidebar -->
-        <div class="sidebar">
-            <div style="text-align: center; margin-bottom: 1rem;">
-                <div style="width: 150px; height: 60px; background: linear-gradient(135deg, #0056b3, #007bff); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; font-weight: bold; margin: 0 auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                    <div style="font-size: 16px; line-height: 1.2;">Gainwell</div>
-                    <div style="font-size: 11px; opacity: 0.9;">Technologies</div>
+    <div class="demo-container">
+        <div class="demo-note">
+            <strong>📸 Interactive Demo:</strong> This mockup shows the Field Mapping page with three tabs: Unmapped Fields, Mapped Fields, and Semantic Table (Admin only).
+        </div>
+
+        <div class="page-header">
+            <h1>🗺️ Source-to-Target Field Mapping</h1>
+            <p>Map source database fields to target database fields using AI-powered semantic matching</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active">📋 Unmapped Fields</button>
+            <button class="tab">✅ Mapped Fields</button>
+            <button class="tab">📊 Semantic Table (Admin)</button>
+        </div>
+
+        <div class="tab-content">
+            <div class="toolbar">
+                <input type="text" class="search-box" placeholder="🔍 Search by table name, column name, or description...">
+                <div style="display: flex; gap: 1rem;">
+                    <button class="button button-success">📥 Download Template</button>
+                    <button class="button button-primary">📤 Upload Template</button>
                 </div>
             </div>
-            
-            <hr style="margin: 1rem 0; border: none; height: 1px; background: #e6e6e6;">
-            
-            <button class="nav-button">🏠 Introduction</button>
-            <button class="nav-button active">📊 Field Mapping</button>
-            <button class="nav-button">⚙️ Configuration</button>
-            
-            <hr style="margin: 1rem 0; border: none; height: 1px; background: #e6e6e6;">
-            
-            <div style="text-align: center; margin-top: 2rem; font-size: 12px; color: #666;">
-                <strong>System Status</strong><br>
-                Database: ✅ | AI Model: ✅ | Search: ✅
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Source Table</th>
+                        <th>Source Column</th>
+                        <th>Datatype</th>
+                        <th>Nullable</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="selected">
+                        <td><span class="badge badge-info">patient_raw</span></td>
+                        <td><strong>patient_id</strong></td>
+                        <td>STRING</td>
+                        <td>Not Null</td>
+                        <td>Unique patient identifier from source system</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-info">patient_raw</span></td>
+                        <td><strong>date_of_birth</strong></td>
+                        <td>DATE</td>
+                        <td>Null</td>
+                        <td>Patient's date of birth</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-info">claims_raw</span></td>
+                        <td><strong>claim_number</strong></td>
+                        <td>STRING</td>
+                        <td>Not Null</td>
+                        <td>Unique claim identifier</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-info">claims_raw</span></td>
+                        <td><strong>service_date</strong></td>
+                        <td>TIMESTAMP</td>
+                        <td>Not Null</td>
+                        <td>Date when service was provided</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-info">provider_raw</span></td>
+                        <td><strong>npi_number</strong></td>
+                        <td>STRING</td>
+                        <td>Not Null</td>
+                        <td>National Provider Identifier</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="selected-field-panel">
+                <h3>📌 Selected Field Details</h3>
+                <div class="field-details">
+                    <div class="field-detail">
+                        <div class="field-detail-label">Source Table</div>
+                        <div class="field-detail-value">patient_raw</div>
+                    </div>
+                    <div class="field-detail">
+                        <div class="field-detail-label">Source Column</div>
+                        <div class="field-detail-value">patient_id</div>
+                    </div>
+                    <div class="field-detail">
+                        <div class="field-detail-label">Physical Name</div>
+                        <div class="field-detail-value">patient_raw.patient_id</div>
+                    </div>
+                    <div class="field-detail">
+                        <div class="field-detail-label">Datatype</div>
+                        <div class="field-detail-value">STRING</div>
+                    </div>
+                    <div class="field-detail">
+                        <div class="field-detail-label">Nullable</div>
+                        <div class="field-detail-value">Not Null</div>
+                    </div>
+                    <div class="field-detail">
+                        <div class="field-detail-label">Comments</div>
+                        <div class="field-detail-value">Unique patient identifier from source system</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ai-section">
+                <h4>🤖 AI Mapping Suggestions</h4>
+                
+                <div class="config-grid">
+                    <div class="config-field">
+                        <div class="config-label">Number of Vector Results</div>
+                        <input type="number" class="config-input" value="25" disabled>
+                    </div>
+                    <div class="config-field">
+                        <div class="config-label">Number of AI Results</div>
+                        <input type="number" class="config-input" value="10" disabled>
+                    </div>
+                    <div class="config-field" style="grid-column: 1 / -1;">
+                        <div class="config-label">User Feedback (Optional)</div>
+                        <input type="text" class="config-input" placeholder="e.g., Focus on patient demographics">
+                    </div>
+                </div>
+
+                <button class="button button-primary" style="width: 100%;">
+                    🤖 Generate AI Mapping Suggestions
+                </button>
+
+                <div class="suggestions-table">
+                    <h4 style="margin-bottom: 1rem;">AI Suggested Mappings (Top 3):</h4>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Target Table</th>
+                                <th>Target Column</th>
+                                <th>Confidence</th>
+                                <th>Reasoning</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>1</strong></td>
+                                <td><span class="badge badge-success">patient_dim</span></td>
+                                <td><strong>patient_key</strong></td>
+                                <td>
+                                    <div style="margin-bottom: 0.25rem;"><strong>0.92</strong></div>
+                                    <div class="confidence-bar">
+                                        <div class="confidence-fill" style="width: 92%;"></div>
+                                    </div>
+                                </td>
+                                <td style="max-width: 300px;">Strong semantic match: Both represent unique patient identifiers. Field names and descriptions align closely.</td>
+                                <td><button class="button button-success">Select Target</button></td>
+                            </tr>
+                            <tr>
+                                <td><strong>2</strong></td>
+                                <td><span class="badge badge-success">member_dim</span></td>
+                                <td><strong>member_id</strong></td>
+                                <td>
+                                    <div style="margin-bottom: 0.25rem;"><strong>0.78</strong></div>
+                                    <div class="confidence-bar">
+                                        <div class="confidence-fill" style="width: 78%;"></div>
+                                    </div>
+                                </td>
+                                <td style="max-width: 300px;">Good match: Member ID can represent patient identifier in healthcare systems.</td>
+                                <td><button class="button button-success">Select Target</button></td>
+                            </tr>
+                            <tr>
+                                <td><strong>3</strong></td>
+                                <td><span class="badge badge-success">person_dim</span></td>
+                                <td><strong>person_id</strong></td>
+                                <td>
+                                    <div style="margin-bottom: 0.25rem;"><strong>0.65</strong></div>
+                                    <div class="confidence-bar">
+                                        <div class="confidence-fill" style="width: 65%;"></div>
+                                    </div>
+                                </td>
+                                <td style="max-width: 300px;">Possible match: Person ID is a general identifier that could map to patient.</td>
+                                <td><button class="button button-success">Select Target</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="ai-section" style="background: linear-gradient(135deg, #fff3cd, #ffe8a1); border-color: #ffc107; margin-top: 2rem;">
+                <h4>🔍 Manual Search</h4>
+                <p style="margin-bottom: 1rem; color: #856404;">If AI suggestions aren't a good fit, search the semantic table manually:</p>
+                
+                <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                    <input type="text" class="search-box" placeholder="Search by table name, column name, or keyword..." style="flex: 1;">
+                    <button class="button button-primary">🔍 Search Semantic Table</button>
+                </div>
+
+                <div style="color: #856404; font-size: 0.9rem;">
+                    <strong>💡 Search Tips:</strong> Try keywords like "patient", "claim", "provider", "identifier", "date", etc.
+                </div>
             </div>
         </div>
 
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- Top Bar - Updated to match real app -->
-            <div class="top-bar">
-                <div class="app-title">
-                    📖 Gainwell Source-to-Target Mapper
-                </div>
-                <div class="user-info">
-                    <div class="user-avatar">DG</div>
-                    <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.3); margin: 0 0.5rem;"></div>
-                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                        <div style="font-weight: 600; font-size: 0.9rem; line-height: 1.2; margin: 0; color: white;">David Galluzzo</div>
-                        <div style="font-size: 0.75rem; opacity: 0.9; line-height: 1; margin: 0; color: rgba(255,255,255,0.8);">
-                            Active User
-                            <span style="background: #38a169; color: white; padding: 0.2rem 0.5rem; border-radius: 10px; font-size: 0.65rem; font-weight: 600; margin-left: 0.5rem;">ADMIN</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Content Area -->
-            <div class="content-area">
-                <!-- Page Header -->
-                <div class="page-header">
-                    <div>
-                        <h1 class="page-title">📊 Source-to-Target Field Mapping</h1>
-                        <p class="subtitle">Explore source fields and their target mappings. Use AI-powered suggestions to map unmapped fields.</p>
-                    </div>
-                    <button class="refresh-btn">🔄 Refresh Data</button>
-                </div>
-
-                <!-- Tab Container -->
-                <div class="tab-container">
-                    <div class="tab-buttons">
-                        <button class="tab-button active" onclick="showTab('unmapped')">🔍 Unmapped Fields</button>
-                        <button class="tab-button" onclick="showTab('mapped')">✅ Mapped Fields</button>
-                        <button class="tab-button" onclick="showTab('semantic')">🧠 Semantic Management</button>
-                    </div>
-
-                    <!-- Unmapped Fields Tab -->
-                    <div id="unmapped-tab" class="tab-content active">
-                        <h3 style="color: #495057; margin-bottom: 1rem;">📋 Source Columns Missing Target Mappings</h3>
-                        <p style="color: #666; margin-bottom: 2rem;">Select unmapped source fields to explore AI-generated target mapping suggestions.</p>
-
-                        <!-- User Access Filter Info -->
-                        <div class="info-banner" style="background: #e7f3ff; color: #003d7a; border-left: 4px solid #0066cc;">
-                            <strong>👤 User Access Filter</strong> - You are viewing records owned by you (david.galluzzo@gainwelltechnologies.com) or globally accessible records. Records with empty source_owners are visible to all users.
-                        </div>
-
-                        <!-- Template Upload/Download Section -->
-                        <div style="background: #f8f9fa; border: 1px solid #e6e6e6; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem;">
-                            <h4 style="color: #495057; margin-bottom: 1rem;">📤 Template Upload/Download</h4>
-                            <p style="color: #666; margin-bottom: 1rem; font-size: 14px;">
-                                Bulk upload new mapping requests using CSV templates. Download the template, fill in your source field information, and upload to create multiple mapping requests at once.
-                            </p>
-                            
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 1rem;">
-                                <div>
-                                    <h5 style="color: #495057; margin-bottom: 0.5rem;">📥 Download Template</h5>
-                                    <p style="color: #666; font-size: 13px; margin-bottom: 1rem;">Get a CSV template with the correct format for bulk uploads</p>
-                                    <button class="btn btn-secondary" style="background: #6c757d; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 14px;">📁 Download CSV Template</button>
-                                </div>
-                                
-                                <div>
-                                    <h5 style="color: #495057; margin-bottom: 0.5rem;">📤 Upload New Rows</h5>
-                                    <p style="color: #666; font-size: 13px; margin-bottom: 1rem;">Upload completed CSV template to create new mapping requests</p>
-                                    <input type="file" accept=".csv" style="margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; width: 100%;">
-                                    <button class="btn btn-primary" style="background: #4a5568; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 14px;">🔄 Process Upload</button>
-                                </div>
-                            </div>
-                            
-                            <!-- Upload Status -->
-                            <div style="background: #d4edda; color: #155724; padding: 0.75rem; border-radius: 4px; border-left: 4px solid #28a745; font-size: 13px;">
-                                ✅ <strong>Upload Status:</strong> Ready to upload. Select a CSV file and click "Process Upload" to validate and create new mapping requests.
-                            </div>
-                        </div>
-
-                        <!-- Download Section -->
-                        <div class="download-section">
-                            <strong>📥 Download Current Data</strong>
-                            <p style="margin: 0.5rem 0; font-size: 14px; color: #666;">Download the currently displayed data as CSV (156 rows)</p>
-                            <button class="btn btn-primary" style="font-size: 14px; padding: 0.5rem 1rem;">Download CSV</button>
-                        </div>
-
-                        <div class="divider"></div>
-
-                        <!-- Main Data Table -->
-                        <div class="data-table-container">
-                            <div class="table-header">
-                                📋 Source Columns Missing Target Mappings (Click rows to explore AI suggestions)
-                            </div>
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Source Table Name</th>
-                                        <th>Source Column Name</th>
-                                        <th>Target Mapping</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr class="selected">
-                                        <td>customer_demographics</td>
-                                        <td>customer_id</td>
-                                        <td>null</td>
-                                    </tr>
-                                    <tr>
-                                        <td>member_demographics</td>
-                                        <td>first_name</td>
-                                        <td>null</td>
-                                    </tr>
-                                    <tr>
-                                        <td>member_demographics</td>
-                                        <td>medicaid_id</td>
-                                        <td>null</td>
-                                    </tr>
-                                    <tr>
-                                        <td>provider_directory</td>
-                                        <td>npi_number</td>
-                                        <td>null</td>
-                                    </tr>
-                                    <tr>
-                                        <td>claims_data</td>
-                                        <td>service_date</td>
-                                        <td>null</td>
-                                    </tr>
-                                    <tr>
-                                        <td>eligibility_info</td>
-                                        <td>coverage_start_date</td>
-                                        <td>null</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- AI Results Detail Panel -->
-                        <div class="detail-panel">
-                            <div class="detail-header">
-                                <h3 class="detail-title">🤖 AI Mapping Suggestions for: member_demographics.medicaid_id</h3>
-                                <button class="back-btn">← Back to Table</button>
-                            </div>
-
-                            <div class="info-banner" style="background: #d1ecf1; color: #0c5460;">
-                                <strong>⚡ Automatic AI Search Complete</strong> - AI suggestions were generated automatically when you selected this field. Found 3 potential target mappings with similarity analysis and reasoning.
-                            </div>
-
-                            <!-- AI Search Controls -->
-                            <div style="background: #f8f9fa; border: 1px solid #e6e6e6; border-radius: 6px; padding: 1rem; margin: 1rem 0;">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <strong>🔄 AI Mapping Controls</strong>
-                                        <p style="margin: 0.25rem 0 0 0; font-size: 13px; color: #666;">Modify settings and re-run AI analysis if needed</p>
-                                    </div>
-                                    <button class="btn btn-primary" style="background: #4a5568; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 14px;">🔄 Re-run AI Mapping with Current Settings</button>
-                                </div>
-                            </div>
-
-                            <!-- Manual Search Section -->
-                            <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; padding: 1rem; margin: 1rem 0;">
-                                <strong>🔍 Manual Field Mapping Search</strong>
-                                <p style="margin: 0.5rem 0; font-size: 13px; color: #856404;">Search enabled after AI mapping. Search covers table names, column names, and comments.</p>
-                                <div style="display: flex; gap: 1rem; align-items: center;">
-                                    <input type="text" placeholder="Search target fields manually..." style="flex: 1; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                                    <button class="btn btn-secondary" style="background: #6c757d; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 14px;">🔍 Search</button>
-                                </div>
-                            </div>
-
-                            <table class="ai-results-table">
-                                <thead>
-                                    <tr>
-                                        <th>Source Table</th>
-                                        <th>Source Column</th>
-                                        <th>Target Table</th>
-                                        <th>Target Column</th>
-                                        <th>AI Reasoning</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr class="selected">
-                                        <td>member_demographics</td>
-                                        <td>medicaid_id</td>
-                                        <td>dim_member</td>
-                                        <td>beneficiary_id</td>
-                                        <td class="reasoning-cell">High semantic similarity (0.96). Both fields represent unique Medicaid member identifiers. Target field 'beneficiary_id' is standard terminology for Medicaid recipients in healthcare data warehouses.</td>
-                                    </tr>
-                                    <tr>
-                                        <td>member_demographics</td>
-                                        <td>medicaid_id</td>
-                                        <td>fact_eligibility</td>
-                                        <td>member_id</td>
-                                        <td class="reasoning-cell">Good similarity (0.89). Both represent member identification in Medicaid systems. 'member_id' is commonly used in eligibility and enrollment fact tables.</td>
-                                    </tr>
-                                    <tr>
-                                        <td>member_demographics</td>
-                                        <td>medicaid_id</td>
-                                        <td>dim_recipient</td>
-                                        <td>medicaid_number</td>
-                                        <td class="reasoning-cell">Moderate similarity (0.83). Direct correlation with similar naming convention. Located in recipient dimension table for claims processing.</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-
-                            <div class="action-buttons">
-                                <button class="btn btn-secondary">← Back to full table</button>
-                                <button class="btn btn-success">💾 Save Selected Mapping</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Mapped Fields Tab -->
-                    <div id="mapped-tab" class="tab-content">
-                        <h3 style="color: #495057; margin-bottom: 1rem;">✅ Source Columns with Target Mappings</h3>
-                        <p style="color: #666; margin-bottom: 2rem;">View fields that have already been mapped to target systems.</p>
-
-                        <!-- Search Container -->
-                        <div class="search-container">
-                            <input type="text" class="search-input" placeholder="🔍 Search mapped fields by source table, column, or target..." value="">
-                            <button class="search-clear-btn">🗑️ Clear Search</button>
-                        </div>
-
-                        <!-- Mapped Fields Table -->
-                        <div class="mapped-table">
-                            <div class="mapped-table-header">
-                                📊 Mapped Field Relationships
-                            </div>
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Source Table</th>
-                                        <th>Source Column</th>
-                                        <th>Target Column</th>
-                                        <th>Target Table</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr class="selected">
-                                        <td>patient_enrollment</td>
-                                        <td>member_id</td>
-                                        <td>beneficiary_id</td>
-                                        <td>dim_member</td>
-                                    </tr>
-                                    <tr>
-                                        <td>patient_enrollment</td>
-                                        <td>first_name</td>
-                                        <td>given_name</td>
-                                        <td>dim_member</td>
-                                    </tr>
-                                    <tr>
-                                        <td>patient_enrollment</td>
-                                        <td>last_name</td>
-                                        <td>family_name</td>
-                                        <td>dim_member</td>
-                                    </tr>
-                                    <tr>
-                                        <td>claims_history</td>
-                                        <td>claim_number</td>
-                                        <td>claim_id</td>
-                                        <td>fact_claims</td>
-                                    </tr>
-                                    <tr>
-                                        <td>claims_history</td>
-                                        <td>service_date</td>
-                                        <td>date_of_service</td>
-                                        <td>fact_claims</td>
-                                    </tr>
-                                    <tr>
-                                        <td>provider_network</td>
-                                        <td>provider_id</td>
-                                        <td>npi_number</td>
-                                        <td>dim_provider</td>
-                                    </tr>
-                                    <tr>
-                                        <td>provider_network</td>
-                                        <td>provider_name</td>
-                                        <td>practice_name</td>
-                                        <td>dim_provider</td>
-                                    </tr>
-                                    <tr>
-                                        <td>eligibility_history</td>
-                                        <td>enrollment_date</td>
-                                        <td>coverage_start_date</td>
-                                        <td>fact_eligibility</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Mapping Details Panel -->
-                        <div class="mapping-details">
-                            <h4>🔍 Mapping Details</h4>
-                            <div class="info-grid">
-                                <div class="info-block">
-                                    <h5>Source Information</h5>
-                                    <code>Table: patient_enrollment
-Column: member_id
-Type: VARCHAR(50)
-Description: Unique identifier for Medicaid members</code>
-                                </div>
-                                <div class="info-block">
-                                    <h5>Target Information</h5>
-                                    <code>Table: dim_member
-Column: beneficiary_id
-Type: VARCHAR(50)
-Description: Primary key for member dimension table</code>
-                                </div>
-                            </div>
-                            
-                            <!-- Mapping Actions -->
-                            <div style="margin-top: 1.5rem;">
-                                <h5 style="color: #495057; margin-bottom: 1rem;">🗑️ Mapping Actions</h5>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 1rem; align-items: center;">
-                                    <button class="btn btn-danger" style="background: #dc3545; color: white; border: none; padding: 0.75rem 1rem; border-radius: 6px; cursor: pointer; font-size: 14px;">🗑️ Delete Mapping</button>
-                                    <div></div>
-                                    <div style="background: #d1ecf1; color: #0c5460; padding: 0.75rem; border-radius: 6px; font-size: 13px;">
-                                        💡 <strong>Tip:</strong> Deleting a mapping moves the field back to 'Unmapped Fields' for re-mapping.
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Export Section -->
-                        <div class="download-section" style="margin-top: 2rem;">
-                            <strong>📥 Export Mapped Fields</strong>
-                            <p style="margin: 0.5rem 0; font-size: 14px; color: #666;">💡 Use the search function to filter specific mappings before downloading.</p>
-                            <button class="btn btn-primary" style="font-size: 14px; padding: 0.5rem 1rem;">📁 Download CSV</button>
-                        </div>
-                    </div>
-
-                    <!-- Semantic Management Tab -->
-                    <div id="semantic-tab" class="tab-content">
-                        <h3 style="color: #495057; margin-bottom: 1rem;">🧠 Semantic Table Management</h3>
-                        <p style="color: #666; margin-bottom: 2rem;">Manage the semantic table that powers vector search for AI mapping suggestions.</p>
-
-                        <!-- Add New Record Form -->
-                        <div style="background: #f8f9fa; border: 1px solid #e6e6e6; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem;">
-                            <h4 style="color: #495057; margin-bottom: 1rem;">➕ Add New Semantic Record</h4>
-                            
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 1rem;">
-                                <div>
-                                    <label style="font-weight: 500; color: #495057;">Target Table Name*</label>
-                                    <input type="text" placeholder="e.g., dim_member" style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; margin-top: 0.25rem;">
-                                </div>
-                                <div>
-                                    <label style="font-weight: 500; color: #495057;">Physical Table Name*</label>
-                                    <input type="text" placeholder="e.g., warehouse.schema.dim_member" style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; margin-top: 0.25rem;">
-                                </div>
-                                <div>
-                                    <label style="font-weight: 500; color: #495057;">Target Column Name*</label>
-                                    <input type="text" placeholder="e.g., beneficiary_id" style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; margin-top: 0.25rem;">
-                                </div>
-                                <div>
-                                    <label style="font-weight: 500; color: #495057;">Physical Data Type*</label>
-                                    <input type="text" placeholder="e.g., BIGINT" style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; margin-top: 0.25rem;">
-                                </div>
-                            </div>
-                            
-                            <div style="margin-bottom: 1rem;">
-                                <label style="font-weight: 500; color: #495057;">Column Description</label>
-                                <textarea placeholder="e.g., Unique identifier for Medicaid beneficiaries" style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; margin-top: 0.25rem; height: 80px; resize: vertical;"></textarea>
-                            </div>
-                            
-                            <button class="btn btn-primary" style="background: #28a745; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; cursor: pointer;">💾 Add Record</button>
-                        </div>
-
-                        <!-- Semantic Records Table -->
-                        <div class="search-container">
-                            <input type="text" class="search-input" placeholder="🔍 Search semantic records by table, column, or description..." value="">
-                            <button class="search-clear-btn">🗑️ Clear Search</button>
-                        </div>
-
-                        <div class="mapped-table">
-                            <div class="mapped-table-header">
-                                📊 Current Semantic Records
-                            </div>
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Table Name</th>
-                                        <th>Column Name</th>
-                                        <th>Data Type</th>
-                                        <th>Nullable</th>
-                                        <th>Description</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr class="selected">
-                                        <td>1</td>
-                                        <td>dim_member</td>
-                                        <td>beneficiary_id</td>
-                                        <td>BIGINT</td>
-                                        <td>NO</td>
-                                        <td>Unique identifier for Medicaid beneficiaries</td>
-                                    </tr>
-                                    <tr>
-                                        <td>2</td>
-                                        <td>fact_claims</td>
-                                        <td>claim_id</td>
-                                        <td>VARCHAR(50)</td>
-                                        <td>NO</td>
-                                        <td>Primary key for healthcare claims</td>
-                                    </tr>
-                                    <tr>
-                                        <td>3</td>
-                                        <td>dim_provider</td>
-                                        <td>npi_number</td>
-                                        <td>VARCHAR(10)</td>
-                                        <td>NO</td>
-                                        <td>National Provider Identifier</td>
-                                    </tr>
-                                    <tr>
-                                        <td>4</td>
-                                        <td>fact_eligibility</td>
-                                        <td>coverage_start_date</td>
-                                        <td>DATE</td>
-                                        <td>YES</td>
-                                        <td>Date when coverage begins for member</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Record Details Panel -->
-                        <div class="mapping-details">
-                            <h4>🔍 Record Details</h4>
-                            
-                            <div style="margin-bottom: 1.5rem;">
-                                <h5 style="color: #495057; margin-bottom: 0.5rem;">Generated Semantic Field:</h5>
-                                <code style="background: #f8f9fa; padding: 1rem; border-radius: 4px; display: block; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 13px; white-space: pre-wrap;">TABLE NAME: DIM_MEMBER; COLUMN NAME: beneficiary_id; COLUMN DESCRIPTION: Unique identifier for Medicaid beneficiaries; IS COLUMN NULLABLE: Not Null; COLUMN DATATYPE: BIGINT</code>
-                            </div>
-                            
-                            <!-- Edit/Delete Actions -->
-                            <div style="margin-top: 1.5rem;">
-                                <h5 style="color: #495057; margin-bottom: 1rem;">🛠️ Record Actions</h5>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 1rem; align-items: center;">
-                                    <button class="btn btn-primary" style="background: #007bff; color: white; border: none; padding: 0.75rem 1rem; border-radius: 6px; cursor: pointer; font-size: 14px;">✏️ Edit Record</button>
-                                    <button class="btn btn-danger" style="background: #dc3545; color: white; border: none; padding: 0.75rem 1rem; border-radius: 6px; cursor: pointer; font-size: 14px;">🗑️ Delete Record</button>
-                                    <div style="background: #d1ecf1; color: #0c5460; padding: 0.75rem; border-radius: 6px; font-size: 13px;">
-                                        💡 <strong>Tip:</strong> Changes automatically refresh the vector search index for improved AI suggestions.
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Export Section -->
-                        <div class="download-section" style="margin-top: 2rem;">
-                            <strong>📥 Export Semantic Data</strong>
-                            <p style="margin: 0.5rem 0; font-size: 14px; color: #666;">💡 Exported data includes all semantic fields and generated descriptions for documentation.</p>
-                            <button class="btn btn-primary" style="font-size: 14px; padding: 0.5rem 1rem;">📁 Download CSV</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Status Summary -->
-                <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; border: 1px solid #e6e6e6; margin-top: 2rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong>📊 Field Mapping Overview</strong>
-                            <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 14px;">
-                                Triple-tab interface: Unmapped fields for AI suggestions, Mapped fields for relationships, Semantic management for vector search
-                            </p>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="color: #28a745; font-weight: bold;">✅ Enhanced Interface</div>
-                            <div style="font-size: 12px; color: #666;">Full CRUD & Vector Search</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="demo-note" style="margin-top: 3rem;">
+            <strong>💡 Interactive Features:</strong>
+            <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                <li>Click any row to select an unmapped field</li>
+                <li>Generate AI suggestions to see ranked matches with confidence scores</li>
+                <li>Click "Select Target" to save a mapping</li>
+                <li>Use Manual Search if AI suggestions aren't suitable</li>
+                <li>Switch tabs to view Mapped Fields or manage Semantic Table (Admin)</li>
+            </ul>
         </div>
     </div>
-
-    <script>
-        function showTab(tabName) {
-            // Hide all tab contents
-            const tabContents = document.querySelectorAll('.tab-content');
-            tabContents.forEach(tab => tab.classList.remove('active'));
-            
-            // Remove active class from all tab buttons
-            const tabButtons = document.querySelectorAll('.tab-button');
-            tabButtons.forEach(button => button.classList.remove('active'));
-            
-            // Show selected tab content
-            document.getElementById(tabName + '-tab').classList.add('active');
-            
-            // Add active class to clicked button
-            event.target.classList.add('active');
-        }
-
-        // Simple search functionality for demo
-        document.addEventListener('DOMContentLoaded', function() {
-            const searchInput = document.querySelector('.search-input');
-            const clearButton = document.querySelector('.search-clear-btn');
-            
-            if (searchInput && clearButton) {
-                clearButton.addEventListener('click', function() {
-                    searchInput.value = '';
-                    // In real app, this would trigger a search reset
-                });
-                
-                searchInput.addEventListener('input', function() {
-                    // In real app, this would filter the table rows
-                    console.log('Searching for:', this.value);
-                });
-            }
-        });
-    </script>
 </body>
 </html>
