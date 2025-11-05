@@ -11,9 +11,8 @@
         <div class="user-info">
           <i class="pi pi-user"></i>
           <span>{{ userStore.currentUser?.display_name || userStore.currentUser?.email || 'Loading...' }}</span>
-          <Badge v-if="userStore.isAdmin" value="Admin" severity="info" />
-          <Badge v-else-if="userStore.isPlatformUser" value="Platform User" severity="success" />
-          <Badge v-else value="User" severity="secondary" />
+          <Badge v-if="userStore.isAdmin" value="ADMIN" severity="success" class="user-badge" />
+          <Badge v-else value="USER" severity="secondary" class="user-badge" />
         </div>
       </div>
     </div>
@@ -151,6 +150,12 @@ onMounted(() => {
 .user-info i {
   font-size: 1rem;
   color: var(--gainwell-secondary);
+}
+
+.user-badge {
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
 }
 
 /* Sidebar with Gainwell Light Background */
