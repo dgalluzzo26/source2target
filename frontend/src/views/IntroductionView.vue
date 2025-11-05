@@ -88,7 +88,7 @@
         </template>
       </Card>
 
-      <Card class="action-card" @click="navigateTo('/config')">
+      <Card v-if="userStore.isAdmin" class="action-card" @click="navigateTo('/config')">
         <template #content>
           <div class="action-content">
             <i class="pi pi-cog action-icon"></i>
