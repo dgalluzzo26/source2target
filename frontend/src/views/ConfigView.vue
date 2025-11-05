@@ -9,11 +9,10 @@
         <p>Manage enterprise application settings, database connections, and AI model configurations for healthcare data processing.</p>
       </div>
       <HelpButton 
-        help-type="admin" 
-        section="configuration-management"
+        help-type="admin-config"
         label="Admin Guide"
-        severity="help"
-        :outlined="true"
+        severity="info"
+        icon="pi pi-book"
         tooltip="Configuration management documentation"
       />
     </div>

@@ -14,15 +14,14 @@
             help-type="quick-start" 
             label="Quick Start" 
             severity="success"
-            :outlined="true"
+            icon="pi pi-bolt"
             tooltip="Step-by-step mapping guide"
           />
           <HelpButton 
-            help-type="user" 
-            section="field-mapping"
+            help-type="user-guide"
             label="Help"
-            severity="help"
-            :outlined="true"
+            severity="info"
+            icon="pi pi-question-circle"
             tooltip="Field mapping documentation"
           />
         </div>
@@ -159,8 +158,7 @@
                   <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <h4>🤖 AI Mapping Suggestions</h4>
                     <HelpButton 
-                      help-type="user" 
-                      section="ai-powered-mapping"
+                      help-type="ai-mapping"
                       icon="pi pi-question-circle"
                       :text="true"
                       tooltip="Learn about AI mapping suggestions"
@@ -239,8 +237,7 @@
                   <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <h4>🔍 Manual Search</h4>
                     <HelpButton 
-                      help-type="user" 
-                      section="manual-search"
+                      help-type="manual-search"
                       icon="pi pi-question-circle"
                       :text="true"
                       tooltip="Learn about manual search"

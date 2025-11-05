@@ -19,24 +19,25 @@
               help-type="quick-start" 
               label="Quick Start" 
               severity="success"
-              :outlined="true"
+              icon="pi pi-bolt"
               tooltip="Step-by-step guide for your first mapping"
             />
             <HelpButton 
-              help-type="user" 
+              help-type="user-guide" 
               label="User Guide" 
-              :outlined="true"
+              severity="info"
+              icon="pi pi-book"
               tooltip="Complete guide for using the application"
             />
             <HelpButton 
               v-if="userStore.isAdmin"
-              help-type="admin" 
+              help-type="admin-config" 
               label="Admin Guide" 
-              :outlined="true"
+              severity="help"
+              icon="pi pi-cog"
               tooltip="Administrator documentation"
             />
-          </div>
-        </div>
+          </div>        </div>
       </div>
     </div>
 

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Start Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4a5568, #38a169);
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .step {
+            background: white;
+            margin: 1.5rem 0;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 15px rgba(0, 51, 102, 0.08);
+            border-left: 5px solid #38a169;
+        }
+
+        .step-number {
+            display: inline-block;
+            background: #38a169;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 40px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+        }
+
+        .step h2 {
+            color: #4a5568;
+            margin-bottom: 1rem;
+        }
+
+        .step p {
+            margin-bottom: 0.75rem;
+        }
+
+        .step ul {
+            margin-left: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .step ul li {
+            margin: 0.5rem 0;
+        }
+
+        .tip {
+            background: #e8f4fd;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #38a169;
+        }
+
+        .tip strong {
+            color: #38a169;
+        }
+
+        .success-box {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        .success-box h3 {
+            color: #155724;
+            margin-bottom: 0.5rem;
+        }
+
+        code {
+            background: #f1f1f1;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ Quick Start Guide</h1>
+            <p>Get started mapping fields in just a few minutes!</p>
+        </div>
+
+        <div class="step">
+            <div class="step-number">1</div>
+            <h2>Check System Status</h2>
+            <p>Before you begin, make sure everything is working:</p>
+            <ul>
+                <li>Click <strong>📊 Introduction</strong> in the left sidebar</li>
+                <li>Verify all status indicators are green:
+                    <ul>
+                        <li>✅ Database Connection</li>
+                        <li>✅ Vector Search Available</li>
+                        <li>✅ AI Model Ready</li>
+                        <li>✅ Configuration Valid</li>
+                    </ul>
+                </li>
+            </ul>
+            <div class="tip">
+                <strong>💡 Tip:</strong> If any status shows a warning or error, contact your administrator before proceeding.
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">2</div>
+            <h2>Navigate to Field Mapping</h2>
+            <p>Access the main mapping interface:</p>
+            <ul>
+                <li>Click <strong>🗺️ Field Mapping</strong> in the left sidebar</li>
+                <li>You'll see three main sections:
+                    <ul>
+                        <li><strong>Unmapped Fields</strong> - Fields waiting to be mapped</li>
+                        <li><strong>Mapped Fields</strong> - Fields already mapped</li>
+                        <li><strong>Selected Field Details</strong> - Information about your selection</li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <div class="step-number">3</div>
+            <h2>Select a Source Field</h2>
+            <p>Choose a field to map:</p>
+            <ul>
+                <li>Browse the <strong>Unmapped Fields</strong> table</li>
+                <li>Use the search box to find specific fields by name or description</li>
+                <li>Click on any row to select it</li>
+                <li>The field details will appear in the section below the tables</li>
+            </ul>
+            <div class="tip">
+                <strong>💡 Tip:</strong> Look for fields with good descriptions - they get better AI suggestions!
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">4</div>
+            <h2>Generate AI Suggestions</h2>
+            <p>Let AI find the best matches:</p>
+            <ul>
+                <li>Review the <strong>AI Configuration</strong> settings:
+                    <ul>
+                        <li>Number of Vector Results: 25 (default is fine)</li>
+                        <li>Number of AI Results: 10 (default is fine)</li>
+                        <li>User Feedback: Optional - add context if needed</li>
+                    </ul>
+                </li>
+                <li>Click <strong>🤖 Generate AI Mapping Suggestions</strong></li>
+                <li>Wait 15-20 seconds for the AI to analyze and return suggestions</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <div class="step-number">5</div>
+            <h2>Review and Select</h2>
+            <p>Evaluate the AI suggestions:</p>
+            <ul>
+                <li>Review the suggestions table showing:
+                    <ul>
+                        <li><strong>Rank</strong> - Ordered by confidence</li>
+                        <li><strong>Target Table</strong> and <strong>Target Column</strong></li>
+                        <li><strong>Confidence Score</strong> - Higher is better (0.8+ is excellent!)</li>
+                        <li><strong>Reasoning</strong> - Why this match was suggested</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Select Target</strong> on the best match</li>
+                <li>The mapping is saved automatically!</li>
+            </ul>
+            <div class="tip">
+                <strong>💡 Confidence Scores:</strong>
+                <ul>
+                    <li>0.8-1.0 = Excellent match ✨</li>
+                    <li>0.6-0.8 = Good match, review carefully 👍</li>
+                    <li>0.4-0.6 = Possible match, use judgment 🤔</li>
+                    <li>&lt;0.4 = Consider manual search 🔍</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">6</div>
+            <h2>Alternative: Manual Search</h2>
+            <p>If AI suggestions don't provide a good match:</p>
+            <ul>
+                <li>Scroll to the <strong>🔍 Manual Search</strong> section</li>
+                <li>Enter a search term (table name, column name, or description)</li>
+                <li>Click <strong>Search Semantic Table</strong></li>
+                <li>Browse the results (up to 50 matches)</li>
+                <li>Click <strong>Select Target</strong> on the desired field</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <div class="step-number">7</div>
+            <h2>View Your Mappings</h2>
+            <p>Check your completed work:</p>
+            <ul>
+                <li>Switch to the <strong>Mapped Fields</strong> tab</li>
+                <li>See all your completed mappings</li>
+                <li>Use search to find specific mappings</li>
+                <li>Click the 🗑️ icon to delete/unmap if needed</li>
+            </ul>
+        </div>
+
+        <div class="success-box">
+            <h3>🎉 Congratulations!</h3>
+            <p>You've completed your first field mapping!</p>
+            <p>Continue mapping more fields using the same process. The more you practice, the faster you'll become.</p>
+        </div>
+
+        <div class="step">
+            <h2>📚 Tips for Success</h2>
+            <ul>
+                <li>✅ <strong>Start with AI suggestions</strong> for most fields - they're usually very accurate</li>
+                <li>✅ <strong>Add descriptions</strong> to your source fields when possible</li>
+                <li>✅ <strong>Use User Feedback</strong> to guide AI (e.g., "Focus on patient fields")</li>
+                <li>✅ <strong>Review confidence scores</strong> before accepting - higher is better</li>
+                <li>✅ <strong>Work in batches</strong> of related fields to maintain context</li>
+                <li>✅ <strong>Use manual search</strong> for special cases or low-confidence suggestions</li>
+                <li>✅ <strong>Check data types and nullable</strong> status match your requirements</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h2>❓ Common Questions</h2>
+            <p><strong>Q: How long does AI take?</strong><br>
+            A: Usually 15-25 seconds for vector search and suggestions generation.</p>
+
+            <p><strong>Q: Can I change a mapping later?</strong><br>
+            A: Yes! Delete the old mapping from Mapped Fields and create a new one.</p>
+
+            <p><strong>Q: What if no AI suggestions appear?</strong><br>
+            A: Check system status to ensure Vector Search and AI Model are ready. If they are, try manual search instead.</p>
+
+            <p><strong>Q: How many fields should I map at once?</strong><br>
+            A: Work at your own pace. Some users map 10-20 fields per session, others prefer to complete an entire table.</p>
+        </div>
+
+        <div class="step" style="background: #e8f4fd;">
+            <h2>🚀 Next Steps</h2>
+            <p>Now that you know the basics, explore these features:</p>
+            <ul>
+                <li><strong>Templates</strong> - Bulk upload unmapped fields via CSV</li>
+                <li><strong>Semantic Table</strong> (Admin only) - View all available target fields</li>
+                <li><strong>Configuration</strong> (Admin only) - Adjust system settings</li>
+            </ul>
+            <p style="margin-top: 1rem;">For detailed information on all features, check the <strong>User Guide</strong> from the main help menu.</p>
+        </div>
+    </div>
+</body>
+</html>
+

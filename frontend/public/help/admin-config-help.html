@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technical Documentation - Gainwell Source-to-Target Mapping Application</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4a5568, #38a169);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 2rem;
+        }
+
+        .section {
+            margin-bottom: 3rem;
+        }
+
+        h2 {
+            color: #4a5568;
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #e6e6e6;
+        }
+
+        h3 {
+            color: #38a169;
+            font-size: 1.4rem;
+            margin: 1.5rem 0 0.8rem 0;
+        }
+
+        h4 {
+            color: #4a5568;
+            font-size: 1.2rem;
+            margin: 1rem 0 0.5rem 0;
+        }
+
+        p {
+            margin-bottom: 1rem;
+            line-height: 1.7;
+            color: #555;
+        }
+
+        ul, ol {
+            margin: 1rem 0 1rem 2rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+            color: #555;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+
+        .feature-card {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 10px;
+            border-left: 4px solid #38a169;
+        }
+
+        .feature-card h3 {
+            margin-top: 0;
+            color: #4a5568;
+        }
+
+        .tech-stack {
+            background: linear-gradient(135deg, #e8f4fd, #f0f8ff);
+            padding: 2rem;
+            border-radius: 10px;
+            margin: 2rem 0;
+        }
+
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 1.5rem;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            white-space: pre-wrap;
+        }
+
+        .architecture-diagram {
+            background: #f8f9fa;
+            padding: 2rem;
+            border-radius: 10px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9rem;
+            border: 1px solid #e6e6e6;
+            margin: 1rem 0;
+        }
+
+        .highlight {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+
+        .alert {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            border-radius: 5px;
+            padding: 1rem;
+            margin: 1rem 0;
+            color: #0c5460;
+        }
+
+        .back-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: #38a169;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: 600;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .back-button:hover {
+            background: #4a5568;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .content {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="javascript:history.back()" class="back-button">← Back to App</a>
+    
+    <div class="container">
+        <div class="header">
+            <h1>📚 Technical Documentation</h1>
+            <p>Gainwell Source-to-Target Mapping Application</p>
+        </div>
+
+        <div class="content">
+            <div class="section">
+                <h2>🎯 Overview</h2>
+                <p>This Databricks Streamlit application provides an intelligent interface for mapping source database fields to target database fields using AI-powered semantic matching and vector search capabilities.</p>
+                
+                <p>The application helps ETL engineers and data professionals efficiently map source table columns to target table columns by leveraging:</p>
+                
+                <ul>
+                    <li><strong>AI-Powered Mapping</strong>: Uses Databricks Foundation Models (Meta Llama 3.3 70B) to suggest intelligent field mappings</li>
+                    <li><strong>Vector Search</strong>: Employs Databricks Vector Search to find semantically similar target fields</li>
+                    <li><strong>Interactive UI</strong>: Streamlit-based interface for reviewing and selecting field mappings</li>
+                    <li><strong>Historical Context</strong>: Learns from previous mapping decisions to improve suggestions</li>
+                </ul>
+            </div>
+
+            <div class="section">
+                <h2>✨ Key Features</h2>
+                
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h3>🎯 Intelligent Field Mapping</h3>
+                        <ul>
+                            <li>Automatically suggests target field mappings based on semantic similarity</li>
+                            <li>Provides reasoning for each mapping suggestion</li>
+                            <li>Learns from historical mapping decisions</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>🔍 Vector Search Integration</h3>
+                        <ul>
+                            <li>Uses Databricks Vector Search to find semantically similar target fields</li>
+                            <li>Retrieves context from previous mappings for better accuracy</li>
+                            <li>Supports configurable similarity search parameters</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>📊 Interactive Data Grid</h3>
+                        <ul>
+                            <li>Clickable rows for detailed field mapping exploration</li>
+                            <li>Real-time AI suggestions with reasoning</li>
+                            <li>Easy selection and saving of mapping decisions</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>🧠 Semantic Management</h3>
+                        <ul>
+                            <li>Manage semantic table records for vector search</li>
+                            <li>Auto-generated semantic field descriptions</li>
+                            <li>Real-time vector search index refresh</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>🏗️ Application Structure</h2>
+                
+                <div class="architecture-diagram">app/
+├── app.py                    # Main Streamlit application entry point
+├── config.py                 # Configuration management system
+├── error_handler.py          # Centralized error handling
+├── health_checks.py          # System health monitoring
+├── view_groups.py            # Navigation structure (deprecated)
+├── views/
+│   ├── book_intro.py         # Welcome page and navigation
+│   ├── tables_read.py        # Main field mapping interface with tabs
+│   ├── s2t_Mapper.py         # AI-powered mapping model
+│   └── config_manager_view.py # Configuration management UI
+├── assets/
+│   ├── logo.svg              # Databricks logo
+│   └── gainwell-logo-*.png   # Gainwell Technologies logo
+└── static/
+    ├── user_guide.html       # Comprehensive user guide
+    ├── field_mapping_mockup.html # Interactive demos
+    ├── config_mockup.html    # Configuration demos
+    └── readme.html           # This technical documentation</div>
+            </div>
+
+            <div class="section">
+                <h2>🔧 Key Components</h2>
+                
+                <h3>🤖 S2T Mapper Model (s2t_Mapper.py)</h3>
+                <ul>
+                    <li><strong>Purpose</strong>: Core AI model for field mapping suggestions</li>
+                    <li><strong>Technology</strong>: MLflow Python model with vector search integration</li>
+                    <li><strong>Features</strong>:
+                        <ul>
+                            <li>Semantic similarity search using vector embeddings</li>
+                            <li>Context retrieval from previous mappings</li>
+                            <li>AI-powered mapping suggestions with reasoning</li>
+                            <li>Configurable foundation model endpoints</li>
+                        </ul>
+                    </li>
+                </ul>
+
+                <h3>📊 Tables Interface (tables_read.py)</h3>
+                <ul>
+                    <li><strong>Purpose</strong>: Main user interface for field mapping</li>
+                    <li><strong>Features</strong>:
+                        <ul>
+                            <li>Triple-tab interface: Unmapped Fields, Mapped Fields, Semantic Management</li>
+                            <li>Interactive data grids with search and filtering</li>
+                            <li>AI-generated mapping recommendations with detailed reasoning</li>
+                            <li>CRUD operations for field mappings and semantic records</li>
+                            <li>CSV export functionality with filtering options</li>
+                            <li><strong>Template Upload/Download System</strong>: Bulk upload new mapping requests via CSV templates</li>
+                            <li><strong>User Access Control</strong>: Row-level filtering based on source ownership</li>
+                            <li><strong>Automatic AI Search</strong>: AI suggestions triggered automatically upon field selection</li>
+                        </ul>
+                    </li>
+                </ul>
+
+                <h3>⚙️ Configuration Management (config.py)</h3>
+                <ul>
+                    <li><strong>Purpose</strong>: Centralized configuration system</li>
+                    <li><strong>Features</strong>:
+                        <ul>
+                            <li>Database connection settings</li>
+                            <li>AI model and vector search configuration</li>
+                            <li>UI customization options</li>
+                            <li>Enterprise support portal integration</li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="tech-stack">
+                <h2>💻 Technology Stack</h2>
+                
+                <div class="feature-grid">
+                    <div>
+                        <h4>Frontend</h4>
+                        <ul>
+                            <li>Streamlit with custom CSS styling</li>
+                            <li>Interactive data tables</li>
+                            <li>Real-time health monitoring</li>
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h4>Backend</h4>
+                        <ul>
+                            <li>Databricks SQL Connector for database access</li>
+                            <li>Databricks SDK for workspace integration</li>
+                            <li>REST API integration for vector search</li>
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h4>AI/ML</h4>
+                        <ul>
+                            <li>Databricks Foundation Models (Meta Llama 3.3 70B)</li>
+                            <li>Databricks Vector Search for semantic similarity</li>
+                            <li>MLflow for model management</li>
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h4>Infrastructure</h4>
+                        <ul>
+                            <li>Databricks SQL Warehouse</li>
+                            <li>Databricks Apps framework</li>
+                            <li>Unity Catalog integration</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>🚀 Getting Started</h2>
+                
+                <h3>📋 Prerequisites</h3>
+                
+                <div class="alert">
+                    <strong>Required:</strong> Access to a Databricks workspace with SQL Warehouse, Vector Search endpoint, Foundation Model endpoint, and Unity Catalog access.
+                </div>
+                
+                <ol>
+                    <li><strong>Databricks Workspace</strong>: Access to a Databricks workspace with:
+                        <ul>
+                            <li>SQL Warehouse configured</li>
+                            <li>Vector Search endpoint set up</li>
+                            <li>Foundation Model endpoint available</li>
+                            <li>Unity Catalog access</li>
+                        </ul>
+                    </li>
+                    <li><strong>Environment Variables</strong>:
+                        <div class="code-block">SERVICE_PRINCIPAL_CLIENT_ID=your_client_id
+SERVICE_PRINCIPAL_CLIENT_SECRET=your_client_secret
+DATABRICKS_HOST=your_workspace_url</div>
+                    </li>
+                </ol>
+
+                <h3>⚙️ Installation</h3>
+                
+                <ol>
+                    <li><strong>Install Databricks CLI</strong>:
+                        <div class="code-block">pip install databricks-cli</div>
+                    </li>
+                    <li><strong>Authenticate to Databricks</strong>:
+                        <div class="code-block">databricks configure</div>
+                    </li>
+                    <li><strong>Deploy the Application</strong>:
+                        <div class="code-block"># Deploy to development environment
+databricks bundle deploy --target dev
+
+# Deploy to production environment
+databricks bundle deploy --target prod</div>
+                    </li>
+                    <li><strong>Run the Application</strong>:
+                        <div class="code-block">databricks bundle run</div>
+                    </li>
+                </ol>
+
+                <h3>🔧 Configuration</h3>
+                
+                <p>The application requires several configuration parameters that can be set through the Configuration tab:</p>
+                
+                <ul>
+                    <li><strong>Database Settings</strong>: Warehouse name, mapping table, semantic table</li>
+                    <li><strong>AI Model Settings</strong>: Foundation model endpoint, previous mappings table</li>
+                    <li><strong>Vector Search Settings</strong>: Index name, endpoint name</li>
+                    <li><strong>UI Settings</strong>: App title, theme colors, sidebar preferences</li>
+                    <li><strong>Support Settings</strong>: Enterprise support portal URL</li>
+                </ul>
+
+                <h3>🔐 Service Principal Permissions</h3>
+                
+                <p>The application service principal requires specific permissions to access Databricks resources. Ensure the following permissions are granted:</p>
+
+                <h4>📊 Database Table Permissions</h4>
+                <p>The service principal needs <strong>READ</strong> and <strong>WRITE</strong> permissions on these three core tables:</p>
+                
+                <div class="alert">
+                    <strong>Required Table Access:</strong>
+                    <ul>
+                        <li><strong>Mapping Table</strong> - Stores source-to-target field mappings
+                            <div class="code-block">GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE &lt;catalog&gt;.&lt;schema&gt;.&lt;mapping_table&gt; TO '&lt;service_principal_id&gt;';</div>
+                        </li>
+                        <li><strong>Semantic Table</strong> - Contains target field metadata for vector search
+                            <div class="code-block">GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE &lt;catalog&gt;.&lt;schema&gt;.&lt;semantic_table&gt; TO '&lt;service_principal_id&gt;';</div>
+                        </li>
+                        <li><strong>Previous Mappings Table</strong> - Tracks historical mapping decisions
+                            <div class="code-block">GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE &lt;catalog&gt;.&lt;schema&gt;.&lt;previous_mappings_table&gt; TO '&lt;service_principal_id&gt;';</div>
+                        </li>
+                    </ul>
+                </div>
+
+                <h4>🔍 Vector Search Permissions</h4>
+                <p>The service principal requires permissions to query and refresh the vector search index:</p>
+                
+                <div class="highlight">
+                    <strong>Vector Search Access:</strong>
+                    <ul>
+                        <li><strong>Query Access</strong> - Execute semantic similarity searches
+                            <div class="code-block">GRANT EXECUTE ON FUNCTION vector_search TO '&lt;service_principal_id&gt;';</div>
+                        </li>
+                        <li><strong>Index Refresh</strong> - Sync index when semantic data changes
+                            <div class="code-block">GRANT MODIFY ON VECTOR_SEARCH_INDEX &lt;index_name&gt; TO '&lt;service_principal_id&gt;';</div>
+                        </li>
+                        <li><strong>Index Access</strong> - Read from vector search index
+                            <div class="code-block">GRANT USAGE ON VECTOR_SEARCH_INDEX &lt;index_name&gt; TO '&lt;service_principal_id&gt;';</div>
+                        </li>
+                    </ul>
+                </div>
+
+                <h4>🏭 SQL Warehouse Permissions</h4>
+                <p>The service principal needs access to execute queries on the SQL warehouse:</p>
+                
+                <div class="code-block">GRANT CAN_USE ON WAREHOUSE &lt;warehouse_id&gt; TO '&lt;service_principal_id&gt;';</div>
+
+                <h4>🔧 Setup Commands</h4>
+                <p>Use these SQL commands in your Databricks workspace to grant the necessary permissions:</p>
+                
+                <div class="code-block">-- Replace placeholders with your actual values
+-- &lt;service_principal_id&gt;: Your service principal application ID  
+-- &lt;catalog&gt;.&lt;schema&gt;: Your database catalog and schema
+-- &lt;table_names&gt;: Your actual table names
+-- &lt;index_name&gt;: Your vector search index name
+-- &lt;warehouse_id&gt;: Your SQL warehouse ID
+
+-- Database table permissions
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE &lt;catalog&gt;.&lt;schema&gt;.&lt;mapping_table&gt; TO '&lt;service_principal_id&gt;';
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE &lt;catalog&gt;.&lt;schema&gt;.&lt;semantic_table&gt; TO '&lt;service_principal_id&gt;';
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE &lt;catalog&gt;.&lt;schema&gt;.&lt;previous_mappings_table&gt; TO '&lt;service_principal_id&gt;';
+
+-- Vector search permissions  
+GRANT EXECUTE ON FUNCTION vector_search TO '&lt;service_principal_id&gt;';
+GRANT USAGE ON VECTOR_SEARCH_INDEX &lt;index_name&gt; TO '&lt;service_principal_id&gt;';
+GRANT MODIFY ON VECTOR_SEARCH_INDEX &lt;index_name&gt; TO '&lt;service_principal_id&gt;';
+
+-- SQL warehouse permissions
+GRANT CAN_USE ON WAREHOUSE &lt;warehouse_id&gt; TO '&lt;service_principal_id&gt;';</div>
+
+                <div class="alert">
+                    <strong>⚠️ Security Note:</strong> Follow the principle of least privilege. Only grant the minimum permissions required for the application to function. Review and audit permissions regularly.
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>📖 Usage Guide</h2>
+                
+                <h3>🚀 Getting Started</h3>
+                <ol>
+                    <li><strong>Access the Application</strong>: Navigate to the deployed Databricks App URL</li>
+                    <li><strong>Configure Settings</strong>: Use the Configuration tab to set up database connections and AI endpoints</li>
+                    <li><strong>Verify User Access</strong>: Check the user access filter to understand your data permissions</li>
+                    <li><strong>View Unmapped Fields</strong>: The Field Mapping tab shows source fields that need target mappings</li>
+                    <li><strong>Explore AI Suggestions</strong>: Click on any row to see AI-generated mapping suggestions with detailed reasoning</li>
+                    <li><strong>Manage Mapped Fields</strong>: Use the Mapped Fields tab to view, search, and manage existing mappings</li>
+                    <li><strong>Manage Semantic Data</strong>: Use the Semantic Management tab to maintain the vector search semantic table</li>
+                    <li><strong>Save Decisions</strong>: Select and save your preferred mapping choices</li>
+                </ol>
+
+                <h3>📤 Template Upload/Download System</h3>
+                <p>The application includes a powerful template system for bulk uploading new mapping requests:</p>
+                
+                <h4>📥 Download CSV Template</h4>
+                <ul>
+                    <li><strong>Purpose</strong>: Get a properly formatted CSV template for bulk uploads</li>
+                    <li><strong>Template Structure</strong>: Contains all required source field columns:
+                        <div class="code-block">src_table_name, src_column_name, src_column_physical_name, 
+src_nullable, src_physical_datatype, src_comments</div>
+                    </li>
+                    <li><strong>Example Row</strong>: Template includes sample data showing the expected format</li>
+                    <li><strong>Location</strong>: Available in the Unmapped Fields tab under "Template Upload/Download"</li>
+                </ul>
+
+                <h4>📤 Upload New Mapping Rows</h4>
+                <ul>
+                    <li><strong>File Format</strong>: CSV files with all required columns populated</li>
+                    <li><strong>Validation</strong>: Automatic validation ensures:
+                        <ul>
+                            <li>All required fields are present and non-empty</li>
+                            <li>No duplicate rows for the current user</li>
+                            <li>Proper data types and formats</li>
+                        </ul>
+                    </li>
+                    <li><strong>Automatic Processing</strong>:
+                        <ul>
+                            <li>Generates <code>query_text</code> for AI model consumption</li>
+                            <li>Sets <code>source_owners</code> to current user's email</li>
+                            <li>Creates empty <code>tgt_columns</code> struct for future mapping</li>
+                            <li>Prevents duplicate uploads for the same user</li>
+                        </ul>
+                    </li>
+                    <li><strong>Feedback</strong>: Real-time validation with duplicate detection and error reporting</li>
+                </ul>
+
+                <div class="highlight">
+                    <strong>💡 Template Upload Workflow:</strong>
+                    <ol>
+                        <li>Download the CSV template from the Unmapped Fields tab</li>
+                        <li>Fill in your source field information (all fields required)</li>
+                        <li>Upload the completed CSV file</li>
+                        <li>Review validation results and duplicate warnings</li>
+                        <li>Confirm upload to create new mapping requests</li>
+                        <li>New rows appear in Unmapped Fields for AI mapping suggestions</li>
+                    </ol>
+                </div>
+
+                <h3>🔐 User Access Control</h3>
+                <p>The application implements row-level security based on source ownership:</p>
+                
+                <h4>👤 Source Owners Filtering</h4>
+                <ul>
+                    <li><strong>Purpose</strong>: Ensures users only see and manage their assigned data</li>
+                    <li><strong>Implementation</strong>: Uses <code>source_owners</code> column containing comma-separated email lists</li>
+                    <li><strong>Access Rules</strong>:
+                        <ul>
+                            <li>Records with empty/null <code>source_owners</code> are visible to all users (global access)</li>
+                            <li>Records containing the user's email in <code>source_owners</code> are visible to that user</li>
+                            <li>Users can only update/delete records they have access to</li>
+                        </ul>
+                    </li>
+                    <li><strong>Visual Feedback</strong>: User Access Filter info box shows current filtering status</li>
+                </ul>
+
+                <h4>🔍 User Detection Methods</h4>
+                <p>The application uses multiple methods to identify the current user:</p>
+                <ul>
+                    <li>Databricks runtime environment variables</li>
+                    <li>Streamlit user context (experimental_user, context.user_info)</li>
+                    <li>Databricks App headers (X-Forwarded-Email)</li>
+                    <li>Manual user override for service principal deployments</li>
+                    <li>Environment variables (DATABRICKS_USER_EMAIL)</li>
+                </ul>
+
+                <div class="alert">
+                    <strong>🔒 Security Note:</strong> All database operations include user filtering to prevent unauthorized access to data not owned by the current user.
+                </div>
+
+                <h3>🤖 Enhanced AI Features</h3>
+                <h4>⚡ Automatic AI Search</h4>
+                <ul>
+                    <li><strong>Trigger</strong>: AI suggestions are generated automatically when selecting unmapped fields</li>
+                    <li><strong>Visual Feedback</strong>: Status messages and spinners indicate AI processing</li>
+                    <li><strong>Button Function</strong>: "Re-run AI Mapping" button allows changing settings and re-execution</li>
+                    <li><strong>User Constraints</strong>: Support for user feedback and exclusion patterns</li>
+                </ul>
+
+                <h4>🎯 Manual Search Gating</h4>
+                <ul>
+                    <li><strong>Requirement</strong>: Manual field mapping search is only enabled after performing an AI search</li>
+                    <li><strong>Purpose</strong>: Encourages users to leverage AI capabilities before manual searching</li>
+                    <li><strong>Search Scope</strong>: Manual search covers table names, column names, and comments (semantic field excluded)</li>
+                </ul>
+            </div>
+
+            <div class="section">
+                <h2>🛠️ Development</h2>
+                
+                <h3>💻 Local Development</h3>
+                
+                <ol>
+                    <li><strong>Install Dependencies</strong>:
+                        <div class="code-block">pip install -r requirements.txt</div>
+                    </li>
+                    <li><strong>Run Locally</strong>:
+                        <div class="code-block">streamlit run app/app.py</div>
+                    </li>
+                </ol>
+
+                <h3>📦 Key Dependencies</h3>
+                
+                <ul>
+                    <li><code>streamlit</code> - Web application framework</li>
+                    <li><code>databricks-sql-connector</code> - Database connectivity</li>
+                    <li><code>databricks-sdk</code> - Databricks workspace integration</li>
+                    <li><code>pandas</code> - Data manipulation</li>
+                    <li><code>requests</code> - HTTP client for API calls</li>
+                </ul>
+            </div>
+
+            <div class="section">
+                <h2>🏛️ Architecture</h2>
+                
+                <p>The application follows a clean architecture pattern:</p>
+                
+                <ol>
+                    <li><strong>Presentation Layer</strong>: Streamlit UI components with custom styling</li>
+                    <li><strong>Business Logic Layer</strong>: S2T Mapper model and mapping logic</li>
+                    <li><strong>Data Access Layer</strong>: Databricks SQL Connector and SDK</li>
+                    <li><strong>AI/ML Layer</strong>: Vector Search and Foundation Models</li>
+                    <li><strong>Configuration Layer</strong>: Centralized configuration management</li>
+                </ol>
+
+                <div class="highlight">
+                    <strong>Note:</strong> The application is designed to run on the Databricks Apps platform, which provides secure hosting, authentication, and integration with Databricks services.
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>🤝 Support</h2>
+                
+                <p>For issues and questions:</p>
+                <ul>
+                    <li>Check the Databricks documentation for platform-specific issues</li>
+                    <li>Review the application logs in the Databricks workspace</li>
+                    <li>Use the comprehensive vector search test in the Configuration tab</li>
+                    <li>Contact the Gainwell development team for application-specific questions</li>
+                </ul>
+
+                <div class="alert">
+                    <strong>Enterprise Support:</strong> Access the Gainwell enterprise support portal through the application's support link for technical assistance and help desk services.
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>📄 License</h2>
+                <p>This project is part of the Gainwell Technologies data platform initiative, supporting healthcare data modernization and Medicaid system transformation.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
