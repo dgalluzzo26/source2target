@@ -6,6 +6,7 @@ import os
 from typing import Optional, Dict, Any
 from backend.services.config_service import config_service
 from backend.services.system_service import system_service
+from backend.routers import semantic
 
 # Import Databricks SDK for authentication
 try:
@@ -30,6 +31,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(semantic.router)
 
 @app.get("/api/health")
 async def health_check():

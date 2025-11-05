@@ -470,6 +470,17 @@
             id="tgt_table_name"
             v-model="newSemanticRecord.tgt_table_name"
             class="w-full"
+            placeholder="e.g., unified_member"
+          />
+        </div>
+        
+        <div class="field">
+          <label for="tgt_table_physical_name">Target Table Physical Name</label>
+          <InputText 
+            id="tgt_table_physical_name"
+            v-model="newSemanticRecord.tgt_table_physical_name"
+            class="w-full"
+            placeholder="Optional - defaults to table name"
           />
         </div>
         
@@ -479,6 +490,17 @@
             id="tgt_column_name"
             v-model="newSemanticRecord.tgt_column_name"
             class="w-full"
+            placeholder="e.g., member_id"
+          />
+        </div>
+        
+        <div class="field">
+          <label for="tgt_column_physical_name">Target Column Physical Name</label>
+          <InputText 
+            id="tgt_column_physical_name"
+            v-model="newSemanticRecord.tgt_column_physical_name"
+            class="w-full"
+            placeholder="Optional - defaults to column name"
           />
         </div>
         
@@ -488,6 +510,7 @@
             id="tgt_physical_datatype"
             v-model="newSemanticRecord.tgt_physical_datatype"
             class="w-full"
+            placeholder="e.g., VARCHAR(50), INT, DECIMAL(10,2)"
           />
         </div>
         
@@ -510,18 +533,12 @@
             v-model="newSemanticRecord.tgt_comments"
             rows="3"
             class="w-full"
+            placeholder="Description of this field (used in semantic search)"
           />
         </div>
         
-        <div class="field">
-          <label for="semantic_field">Semantic Field *</label>
-          <Textarea 
-            id="semantic_field"
-            v-model="newSemanticRecord.semantic_field"
-            rows="3"
-            class="w-full"
-            placeholder="Semantic description for vector search..."
-          />
+        <div class="help-text">
+          <small>* Required fields. The semantic field for vector search will be automatically generated.</small>
         </div>
       </div>
 
@@ -545,6 +562,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { SemanticAPI, type SemanticRecord } from '@/services/api'
 
 // Reactive data matching original app structure
 const unmappedFields = ref([
@@ -605,32 +623,8 @@ const mappedFields = ref([
   }
 ])
 
-const semanticRecords = ref([
-  {
-    tgt_table_name: 'unified_member',
-    tgt_column_name: 'member_id',
-    tgt_physical_datatype: 'VARCHAR(50)',
-    tgt_nullable: 'NO',
-    tgt_comments: 'Unique member identifier',
-    semantic_field: 'member identifier unique id patient customer'
-  },
-  {
-    tgt_table_name: 'unified_member',
-    tgt_column_name: 'member_first_name',
-    tgt_physical_datatype: 'VARCHAR(100)',
-    tgt_nullable: 'YES',
-    tgt_comments: 'Member first name',
-    semantic_field: 'first name given name personal name'
-  },
-  {
-    tgt_table_name: 'unified_claims',
-    tgt_column_name: 'total_claim_amount',
-    tgt_physical_datatype: 'DECIMAL(12,2)',
-    tgt_nullable: 'YES',
-    tgt_comments: 'Total amount of the claim',
-    semantic_field: 'claim amount total cost price money dollar'
-  }
-])
+// Semantic records - loaded from API
+const semanticRecords = ref<SemanticRecord[]>([])
 
 // Search terms
 const unmappedSearch = ref('')
@@ -660,11 +654,12 @@ const showAddSemantic = ref(false)
 // New semantic record form
 const newSemanticRecord = ref({
   tgt_table_name: '',
+  tgt_table_physical_name: '',
   tgt_column_name: '',
+  tgt_column_physical_name: '',
   tgt_physical_datatype: '',
   tgt_nullable: 'NO',
-  tgt_comments: '',
-  semantic_field: ''
+  tgt_comments: ''
 })
 
 // Loading states
@@ -856,49 +851,92 @@ const unmapField = (field: any) => {
   }
 }
 
-const loadSemanticTable = () => {
+const loadSemanticTable = async () => {
   loading.value.semantic = true
-  setTimeout(() => {
+  try {
+    const result = await SemanticAPI.getAllRecords()
+    if (result.data) {
+      semanticRecords.value = result.data
+      console.log(`Loaded ${result.data.length} semantic records`)
+    } else if (result.error) {
+      console.error('Error loading semantic records:', result.error)
+    }
+  } catch (error) {
+    console.error('Error loading semantic records:', error)
+  } finally {
     loading.value.semantic = false
-  }, 1000)
+  }
 }
 
-const addSemanticRecord = () => {
+const addSemanticRecord = async () => {
+  // Validate required fields
   if (!newSemanticRecord.value.tgt_table_name || 
       !newSemanticRecord.value.tgt_column_name || 
-      !newSemanticRecord.value.tgt_physical_datatype ||
-      !newSemanticRecord.value.semantic_field) {
+      !newSemanticRecord.value.tgt_physical_datatype) {
+    console.error('Missing required fields')
     return
   }
   
-  semanticRecords.value.push({ ...newSemanticRecord.value })
-  cancelAddSemantic()
+  // If physical names are empty, default to logical names
+  if (!newSemanticRecord.value.tgt_table_physical_name) {
+    newSemanticRecord.value.tgt_table_physical_name = newSemanticRecord.value.tgt_table_name
+  }
+  if (!newSemanticRecord.value.tgt_column_physical_name) {
+    newSemanticRecord.value.tgt_column_physical_name = newSemanticRecord.value.tgt_column_name
+  }
+  
+  try {
+    const result = await SemanticAPI.createRecord(newSemanticRecord.value)
+    if (result.data) {
+      semanticRecords.value.push(result.data)
+      console.log('Successfully added semantic record')
+      cancelAddSemantic()
+    } else if (result.error) {
+      console.error('Error adding semantic record:', result.error)
+    }
+  } catch (error) {
+    console.error('Error adding semantic record:', error)
+  }
 }
 
 const cancelAddSemantic = () => {
   showAddSemantic.value = false
   newSemanticRecord.value = {
     tgt_table_name: '',
+    tgt_table_physical_name: '',
     tgt_column_name: '',
+    tgt_column_physical_name: '',
     tgt_physical_datatype: '',
     tgt_nullable: 'NO',
-    tgt_comments: '',
-    semantic_field: ''
+    tgt_comments: ''
   }
 }
 
 const editSemanticRecord = (record: any) => {
+  // TODO: Implement edit functionality
   console.log('Edit semantic record:', record)
 }
 
-const deleteSemanticRecord = (record: any) => {
-  console.log('Delete semantic record:', record)
-  const index = semanticRecords.value.findIndex(r => 
-    r.tgt_table_name === record.tgt_table_name &&
-    r.tgt_column_name === record.tgt_column_name
-  )
-  if (index > -1) {
-    semanticRecords.value.splice(index, 1)
+const deleteSemanticRecord = async (record: any) => {
+  if (!record.id) {
+    console.error('Record has no ID')
+    return
+  }
+  
+  try {
+    const result = await SemanticAPI.deleteRecord(record.id)
+    if (result.data) {
+      // Remove from local array
+      const index = semanticRecords.value.findIndex(r => r.id === record.id)
+      if (index > -1) {
+        semanticRecords.value.splice(index, 1)
+      }
+      console.log('Successfully deleted semantic record')
+    } else if (result.error) {
+      console.error('Error deleting semantic record:', result.error)
+    }
+  } catch (error) {
+    console.error('Error deleting semantic record:', error)
   }
 }
 
@@ -923,7 +961,9 @@ const uploadTemplate = (event: any) => {
 }
 
 onMounted(() => {
-  console.log('Source-to-Target Mapping view loaded (matching original app structure)')
+  console.log('Source-to-Target Mapping view loaded')
+  // Load semantic table data from the database
+  loadSemanticTable()
 })
 </script>
 

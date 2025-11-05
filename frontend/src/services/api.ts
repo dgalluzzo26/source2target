@@ -89,6 +89,79 @@ export const handleApiError = (error: any) => {
   return { error: 'An error occurred' }
 }
 
+/**
+ * Semantic Table API
+ */
+export interface SemanticRecord {
+  id?: number
+  tgt_table_name: string
+  tgt_table_physical_name: string
+  tgt_column_name: string
+  tgt_column_physical_name: string
+  tgt_nullable: string
+  tgt_physical_datatype: string
+  tgt_comments?: string
+  semantic_field?: string
+}
+
+export interface SemanticRecordCreate {
+  tgt_table_name: string
+  tgt_table_physical_name: string
+  tgt_column_name: string
+  tgt_column_physical_name: string
+  tgt_nullable: string
+  tgt_physical_datatype: string
+  tgt_comments?: string
+}
+
+export interface SemanticRecordUpdate {
+  tgt_table_name?: string
+  tgt_table_physical_name?: string
+  tgt_column_name?: string
+  tgt_column_physical_name?: string
+  tgt_nullable?: string
+  tgt_physical_datatype?: string
+  tgt_comments?: string
+}
+
+export class SemanticAPI {
+  /**
+   * Get all semantic table records
+   */
+  static async getAllRecords(): Promise<ApiResponse<SemanticRecord[]>> {
+    return apiFetch<SemanticRecord[]>('/api/semantic/records')
+  }
+
+  /**
+   * Create a new semantic table record
+   */
+  static async createRecord(record: SemanticRecordCreate): Promise<ApiResponse<SemanticRecord>> {
+    return apiFetch<SemanticRecord>('/api/semantic/records', {
+      method: 'POST',
+      body: JSON.stringify(record),
+    })
+  }
+
+  /**
+   * Update an existing semantic table record
+   */
+  static async updateRecord(recordId: number, record: SemanticRecordUpdate): Promise<ApiResponse<SemanticRecord>> {
+    return apiFetch<SemanticRecord>(`/api/semantic/records/${recordId}`, {
+      method: 'PUT',
+      body: JSON.stringify(record),
+    })
+  }
+
+  /**
+   * Delete a semantic table record
+   */
+  static async deleteRecord(recordId: number): Promise<ApiResponse<{ status: string; message: string }>> {
+    return apiFetch<{ status: string; message: string }>(`/api/semantic/records/${recordId}`, {
+      method: 'DELETE',
+    })
+  }
+}
+
 export default {
   checkHealth,
   getData,
