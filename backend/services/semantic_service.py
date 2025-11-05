@@ -73,6 +73,22 @@ class SemanticService:
         print(f"[Semantic Service] Server: {server_hostname}")
         print(f"[Semantic Service] HTTP Path: {http_path}")
         
+        # Check warehouse state first (extract warehouse ID from http_path)
+        try:
+            # Extract warehouse ID from http_path like "/sql/1.0/warehouses/173ea239ed13be7d"
+            warehouse_id = http_path.split('/warehouses/')[-1] if '/warehouses/' in http_path else None
+            if warehouse_id:
+                print(f"[Semantic Service] Checking warehouse state: {warehouse_id}")
+                warehouse = self.workspace_client.warehouses.get(warehouse_id)
+                print(f"[Semantic Service] Warehouse state: {warehouse.state}")
+                if warehouse.state and hasattr(warehouse.state, 'value'):
+                    state_value = str(warehouse.state.value).upper()
+                    if 'STOPPED' in state_value or 'DELETED' in state_value:
+                        raise Exception(f"Warehouse is {state_value}. Please start the warehouse first.")
+        except Exception as wh_error:
+            print(f"[Semantic Service] Warning: Could not check warehouse state: {str(wh_error)}")
+            # Continue anyway - the connection will fail if warehouse is actually stopped
+        
         try:
             print(f"[Semantic Service] Connecting to database...")
             connection = sql.connect(
@@ -325,15 +341,15 @@ class SemanticService:
                         db_config['semantic_table']
                     )
                 ),
-                timeout=15.0
+                timeout=30.0  # Increased to 30 seconds
             )
             
             # Convert to Pydantic models
             print(f"[Semantic Service] Converting {len(records)} records to Pydantic models")
             return [SemanticRecord(**record) for record in records]
         except asyncio.TimeoutError:
-            print("[Semantic Service] Query timed out after 15 seconds")
-            raise Exception("Database query timed out")
+            print("[Semantic Service] Query timed out after 30 seconds - warehouse may be stopped")
+            raise Exception("Database query timed out after 30 seconds. Check if warehouse is running.")
         except Exception as e:
             print(f"[Semantic Service] Error in get_all_records: {str(e)}")
             raise

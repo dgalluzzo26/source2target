@@ -7,6 +7,8 @@ from typing import Optional
 
 class SemanticRecord(BaseModel):
     """A single semantic table record representing a target field definition."""
+    model_config = {"from_attributes": True, "arbitrary_types_allowed": True}
+    
     id: Optional[int] = None
     tgt_table_name: str
     tgt_table_physical_name: str
