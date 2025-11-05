@@ -133,7 +133,6 @@ onMounted(() => {
 
 .sidebar-toggle-header:hover {
   background: rgba(255, 255, 255, 0.25);
-  transform: scale(1.05);
 }
 
 .sidebar-toggle-header i {
