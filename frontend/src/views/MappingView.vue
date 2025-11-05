@@ -457,6 +457,102 @@
       </template>
     </Dialog>
 
+    <!-- Edit Semantic Record Dialog -->
+    <Dialog 
+      v-model:visible="showEditSemantic" 
+      modal 
+      header="Edit Semantic Record"
+      :style="{ width: '50rem' }"
+    >
+      <div class="semantic-form" v-if="editingSemanticRecord">
+        <div class="field">
+          <label for="edit_tgt_table_name">Target Table Name *</label>
+          <InputText 
+            id="edit_tgt_table_name"
+            v-model="editingSemanticRecord.tgt_table_name"
+            class="w-full"
+          />
+        </div>
+        
+        <div class="field">
+          <label for="edit_tgt_table_physical_name">Target Table Physical Name</label>
+          <InputText 
+            id="edit_tgt_table_physical_name"
+            v-model="editingSemanticRecord.tgt_table_physical_name"
+            class="w-full"
+          />
+        </div>
+        
+        <div class="field">
+          <label for="edit_tgt_column_name">Target Column Name *</label>
+          <InputText 
+            id="edit_tgt_column_name"
+            v-model="editingSemanticRecord.tgt_column_name"
+            class="w-full"
+          />
+        </div>
+        
+        <div class="field">
+          <label for="edit_tgt_column_physical_name">Target Column Physical Name</label>
+          <InputText 
+            id="edit_tgt_column_physical_name"
+            v-model="editingSemanticRecord.tgt_column_physical_name"
+            class="w-full"
+          />
+        </div>
+        
+        <div class="field">
+          <label for="edit_tgt_physical_datatype">Data Type *</label>
+          <InputText 
+            id="edit_tgt_physical_datatype"
+            v-model="editingSemanticRecord.tgt_physical_datatype"
+            class="w-full"
+          />
+        </div>
+        
+        <div class="field">
+          <label for="edit_tgt_nullable">Nullable *</label>
+          <Dropdown 
+            id="edit_tgt_nullable"
+            v-model="editingSemanticRecord.tgt_nullable"
+            :options="[{label: 'YES', value: 'YES'}, {label: 'NO', value: 'NO'}]"
+            optionLabel="label"
+            optionValue="value"
+            class="w-full"
+          />
+        </div>
+        
+        <div class="field">
+          <label for="edit_tgt_comments">Description</label>
+          <Textarea 
+            id="edit_tgt_comments"
+            v-model="editingSemanticRecord.tgt_comments"
+            rows="3"
+            class="w-full"
+          />
+        </div>
+        
+        <div class="help-text">
+          <small>* Required fields. The semantic field will be automatically regenerated.</small>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button 
+          label="Cancel" 
+          icon="pi pi-times" 
+          @click="cancelEditSemantic" 
+          severity="secondary"
+        />
+        <Button 
+          label="Save Changes" 
+          icon="pi pi-check" 
+          @click="saveSemanticRecord" 
+          severity="primary"
+        />
+      </template>
+    </Dialog>
+
     <!-- Add Semantic Record Dialog -->
     <Dialog 
       v-model:visible="showAddSemantic" 
@@ -651,6 +747,10 @@ const manualSearchResults = ref([])
 // Dialog states
 const showTemplateUpload = ref(false)
 const showAddSemantic = ref(false)
+const showEditSemantic = ref(false)
+
+// Editing semantic record
+const editingSemanticRecord = ref<SemanticRecord | null>(null)
 
 // New semantic record form
 const newSemanticRecord = ref({
@@ -701,10 +801,11 @@ const filteredSemanticRecords = computed(() => {
   if (!semanticSearch.value) return semanticRecords.value
   const search = semanticSearch.value.toLowerCase()
   return semanticRecords.value.filter(record => 
-    record.tgt_table_name.toLowerCase().includes(search) ||
-    record.tgt_column_name.toLowerCase().includes(search) ||
+    record.tgt_table_name?.toLowerCase().includes(search) ||
+    record.tgt_column_name?.toLowerCase().includes(search) ||
+    record.tgt_physical_datatype?.toLowerCase().includes(search) ||
     (record.tgt_comments && record.tgt_comments.toLowerCase().includes(search)) ||
-    record.semantic_field.toLowerCase().includes(search)
+    (record.semantic_field && record.semantic_field.toLowerCase().includes(search))
   )
 })
 
@@ -913,14 +1014,67 @@ const cancelAddSemantic = () => {
   }
 }
 
-const editSemanticRecord = (record: any) => {
-  // TODO: Implement edit functionality
-  console.log('Edit semantic record:', record)
+const editSemanticRecord = (record: SemanticRecord) => {
+  // Clone the record for editing
+  editingSemanticRecord.value = { ...record }
+  showEditSemantic.value = true
+}
+
+const cancelEditSemantic = () => {
+  showEditSemantic.value = false
+  editingSemanticRecord.value = null
+}
+
+const saveSemanticRecord = async () => {
+  if (!editingSemanticRecord.value || !editingSemanticRecord.value.id) {
+    console.error('No record to save')
+    return
+  }
+  
+  // Validate required fields
+  if (!editingSemanticRecord.value.tgt_table_name || 
+      !editingSemanticRecord.value.tgt_column_name || 
+      !editingSemanticRecord.value.tgt_physical_datatype) {
+    console.error('Missing required fields')
+    return
+  }
+  
+  try {
+    const updateData = {
+      tgt_table_name: editingSemanticRecord.value.tgt_table_name,
+      tgt_table_physical_name: editingSemanticRecord.value.tgt_table_physical_name,
+      tgt_column_name: editingSemanticRecord.value.tgt_column_name,
+      tgt_column_physical_name: editingSemanticRecord.value.tgt_column_physical_name,
+      tgt_nullable: editingSemanticRecord.value.tgt_nullable,
+      tgt_physical_datatype: editingSemanticRecord.value.tgt_physical_datatype,
+      tgt_comments: editingSemanticRecord.value.tgt_comments
+    }
+    
+    const result = await SemanticAPI.updateRecord(editingSemanticRecord.value.id, updateData)
+    if (result.data) {
+      // Update the record in the local array
+      const index = semanticRecords.value.findIndex(r => r.id === editingSemanticRecord.value!.id)
+      if (index > -1) {
+        semanticRecords.value[index] = result.data
+      }
+      console.log('Successfully updated semantic record')
+      cancelEditSemantic()
+    } else if (result.error) {
+      console.error('Error updating semantic record:', result.error)
+    }
+  } catch (error) {
+    console.error('Error updating semantic record:', error)
+  }
 }
 
 const deleteSemanticRecord = async (record: any) => {
   if (!record.id) {
     console.error('Record has no ID')
+    return
+  }
+  
+  // Confirm deletion
+  if (!confirm(`Are you sure you want to delete ${record.tgt_table_name}.${record.tgt_column_name}?`)) {
     return
   }
   
