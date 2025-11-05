@@ -197,7 +197,6 @@ onMounted(() => {
 .layout-menuitem-link:hover {
   background: white;
   border-color: var(--gainwell-secondary);
-  transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(56, 161, 105, 0.15);
 }
 
