@@ -14,37 +14,6 @@
           <Badge v-if="userStore.isAdmin" value="Admin" severity="success" class="user-badge" />
           <Badge v-else value="User" severity="secondary" class="user-badge" />
         </div>
-        
-        <div class="help-buttons-container">
-          <HelpButton 
-            help-type="quick-start" 
-            icon="pi pi-bolt"
-            severity="info"
-            :text="false"
-            :rounded="true"
-            tooltip="Quick Start Guide"
-            custom-class="header-help-btn"
-          />
-          <HelpButton 
-            help-type="user-guide" 
-            icon="pi pi-book"
-            severity="info"
-            :text="false"
-            :rounded="true"
-            tooltip="User Guide"
-            custom-class="header-help-btn"
-          />
-          <HelpButton 
-            v-if="userStore.isAdmin"
-            help-type="admin-config" 
-            icon="pi pi-cog"
-            severity="info"
-            :text="false"
-            :rounded="true"
-            tooltip="Admin Guide"
-            custom-class="header-help-btn"
-          />
-        </div>
       </div>
     </div>
 
@@ -87,7 +56,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import Badge from 'primevue/badge'
-import HelpButton from '@/components/HelpButton.vue'
 
 const userStore = useUserStore()
 
@@ -183,24 +151,6 @@ onMounted(() => {
   font-weight: 600;
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
-}
-
-/* Help Buttons Container */
-.help-buttons-container {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  margin-left: 1.5rem;
-}
-
-.help-buttons-container :deep(.header-help-btn) {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 50%;
-}
-
-.help-buttons-container :deep(.p-button-icon) {
-  font-size: 1.1rem;
 }
 
 /* Sidebar with Gainwell Light Background */

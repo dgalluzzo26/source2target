@@ -154,26 +154,37 @@ const onIframeLoad = () => {
   white-space: nowrap;
 }
 
-:deep(.help-dialog) {
-  height: 90vh;
+:deep(.help-dialog .p-dialog) {
+  height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 :deep(.help-dialog .p-dialog-content) {
-  padding: 0;
-  height: calc(90vh - 80px);
-  overflow: hidden;
+  padding: 0 !important;
+  flex: 1 !important;
+  overflow: hidden !important;
+  height: 100% !important;
 }
 
-/* Fix close button visibility */
+/* Fix close button visibility - make it dark and prominent */
 :deep(.help-dialog .p-dialog-header-icon) {
-  color: #666 !important;
-  background: white !important;
-  border-radius: 4px;
+  color: #333 !important;
+  background: #e0e0e0 !important;
+  border-radius: 4px !important;
+  width: 2rem !important;
+  height: 2rem !important;
+  padding: 0.5rem !important;
 }
 
 :deep(.help-dialog .p-dialog-header-icon:hover) {
-  color: #333 !important;
-  background: #f0f0f0 !important;
+  color: #000 !important;
+  background: #d0d0d0 !important;
+}
+
+:deep(.help-dialog .p-dialog-header-icon .p-icon) {
+  width: 1rem !important;
+  height: 1rem !important;
 }
 
 .help-dialog-header {
