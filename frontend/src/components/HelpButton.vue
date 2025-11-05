@@ -18,7 +18,7 @@
       :closable="true"
       :draggable="false"
       class="help-dialog"
-      :style="{ width: '90vw', maxWidth: '1200px' }"
+      :style="{ width: '95vw', maxWidth: '1400px', height: '90vh' }"
     >
       <template #header>
         <div class="help-dialog-header">
@@ -152,13 +152,25 @@ const onIframeLoad = () => {
 }
 
 :deep(.help-dialog) {
-  height: 85vh;
+  height: 90vh;
 }
 
 :deep(.help-dialog .p-dialog-content) {
   padding: 0;
-  height: calc(85vh - 80px);
+  height: calc(90vh - 80px);
   overflow: hidden;
+}
+
+/* Fix close button visibility */
+:deep(.help-dialog .p-dialog-header-icon) {
+  color: #666 !important;
+  background: white !important;
+  border-radius: 4px;
+}
+
+:deep(.help-dialog .p-dialog-header-icon:hover) {
+  color: #333 !important;
+  background: #f0f0f0 !important;
 }
 
 .help-dialog-header {
@@ -204,5 +216,17 @@ const onIframeLoad = () => {
 
 .help-loading p {
   font-size: 1.1rem;
+}
+
+/* Fix tooltip readability */
+:deep(.p-tooltip .p-tooltip-text) {
+  background-color: #333 !important;
+  color: white !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.9rem !important;
+}
+
+:deep(.p-tooltip .p-tooltip-arrow) {
+  border-right-color: #333 !important;
 }
 </style>

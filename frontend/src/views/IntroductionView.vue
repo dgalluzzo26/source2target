@@ -18,7 +18,7 @@
             <HelpButton 
               help-type="quick-start" 
               label="Quick Start" 
-              severity="success"
+              severity="info"
               icon="pi pi-bolt"
               tooltip="Step-by-step guide for your first mapping"
             />
@@ -33,7 +33,7 @@
               v-if="userStore.isAdmin"
               help-type="admin-config" 
               label="Admin Guide" 
-              severity="help"
+              severity="info"
               icon="pi pi-cog"
               tooltip="Administrator documentation"
             />

@@ -13,7 +13,7 @@
           <HelpButton 
             help-type="quick-start" 
             label="Quick Start" 
-            severity="success"
+            severity="info"
             icon="pi pi-bolt"
             tooltip="Step-by-step mapping guide"
           />
