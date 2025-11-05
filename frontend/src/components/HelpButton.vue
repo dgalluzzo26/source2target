@@ -154,54 +154,73 @@ const onIframeLoad = () => {
   white-space: nowrap;
 }
 
-/* Force dialog to proper height - CRITICAL FIX */
-:deep(.p-dialog.help-dialog) {
+/* AGGRESSIVE FIX - Force dialog to proper height */
+:deep(.help-dialog.p-dialog) {
+  height: 90vh !important;
+  max-height: 90vh !important;
+}
+
+:deep(.help-dialog .p-dialog) {
   height: 90vh !important;
   max-height: 90vh !important;
   display: flex !important;
   flex-direction: column !important;
 }
 
-:deep(.p-dialog.help-dialog .p-dialog-header) {
+:deep(.help-dialog .p-dialog-header) {
   flex-shrink: 0 !important;
   padding: 1.25rem !important;
   border-bottom: 1px solid #dee2e6 !important;
 }
 
-:deep(.p-dialog.help-dialog .p-dialog-content) {
+:deep(.help-dialog .p-dialog-content) {
   padding: 0 !important;
   flex: 1 !important;
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
-  height: 100% !important;
+  height: calc(90vh - 80px) !important;
+  min-height: calc(90vh - 80px) !important;
+  max-height: calc(90vh - 80px) !important;
 }
 
-/* Make close button highly visible */
+/* SUPER VISIBLE RED CLOSE BUTTON */
+:deep(.help-dialog .p-dialog-header .p-dialog-header-icon),
+:deep(.help-dialog .p-dialog-header-icons .p-dialog-header-icon),
 :deep(.help-dialog .p-dialog-header-icon) {
   color: #fff !important;
   background: #dc3545 !important;
   border-radius: 6px !important;
   width: 2.5rem !important;
   height: 2.5rem !important;
+  min-width: 2.5rem !important;
+  min-height: 2.5rem !important;
   padding: 0 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   border: 2px solid #dc3545 !important;
+  opacity: 1 !important;
 }
 
+:deep(.help-dialog .p-dialog-header .p-dialog-header-icon:hover),
+:deep(.help-dialog .p-dialog-header-icons .p-dialog-header-icon:hover),
 :deep(.help-dialog .p-dialog-header-icon:hover) {
   color: #fff !important;
   background: #c82333 !important;
   border-color: #c82333 !important;
   transform: scale(1.1) !important;
+  opacity: 1 !important;
 }
 
-:deep(.help-dialog .p-dialog-header-icon .p-icon) {
+:deep(.help-dialog .p-dialog-header-icon svg),
+:deep(.help-dialog .p-dialog-header-icon .p-icon),
+:deep(.help-dialog .p-dialog-header-icon i) {
   width: 1.25rem !important;
   height: 1.25rem !important;
+  font-size: 1.25rem !important;
   font-weight: bold !important;
+  color: #fff !important;
 }
 
 .help-dialog-header {
@@ -224,20 +243,24 @@ const onIframeLoad = () => {
 .help-content-wrapper {
   width: 100%;
   height: 100%;
-  flex: 1 1 auto;
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
   background: #f8f9fa;
+  position: relative;
 }
 
 .help-iframe {
   width: 100%;
   height: 100%;
-  flex: 1 1 auto;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   border: none;
   background: white;
-  min-height: 0;
 }
 
 .help-loading {
