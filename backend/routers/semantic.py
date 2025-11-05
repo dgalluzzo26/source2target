@@ -18,9 +18,14 @@ async def get_semantic_records():
     These represent the target field definitions used for mapping.
     """
     try:
-        return await semantic_service.get_all_records()
+        print("[Semantic Router] GET /records called")
+        result = await semantic_service.get_all_records()
+        print(f"[Semantic Router] Returning {len(result)} records")
+        return result
     except Exception as e:
-        print(f"Error fetching semantic records: {str(e)}")
+        print(f"[Semantic Router] ERROR fetching semantic records: {str(e)}")
+        import traceback
+        print(f"[Semantic Router] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
