@@ -28,18 +28,17 @@
         </div>
       </template>
       
-      <div class="help-content-wrapper">
-        <iframe 
-          v-if="helpUrl"
-          :src="helpUrl"
-          class="help-iframe"
-          frameborder="0"
-          @load="onIframeLoad"
-        ></iframe>
-        <div v-else class="help-loading">
-          <i class="pi pi-spin pi-spinner" style="font-size: 2rem;"></i>
-          <p>Loading help content...</p>
-        </div>
+      <iframe 
+        v-if="helpUrl"
+        :src="helpUrl"
+        class="help-iframe"
+        frameborder="0"
+        style="width: 100%; height: 100%; border: none; display: block;"
+        @load="onIframeLoad"
+      ></iframe>
+      <div v-else class="help-loading">
+        <i class="pi pi-spin pi-spinner" style="font-size: 2rem;"></i>
+        <p>Loading help content...</p>
       </div>
     </Dialog>
   </div>
@@ -154,10 +153,13 @@ const onIframeLoad = () => {
   white-space: nowrap;
 }
 
-/* FORCE FULL HEIGHT - Multiple selector approaches */
-:deep(.p-dialog-mask .p-dialog.help-dialog),
-:deep(.help-dialog.p-dialog),
-:deep(div.help-dialog.p-dialog) {
+/* Simple approach - just set explicit heights */
+:deep(.help-dialog) {
+  height: 90vh !important;
+  max-height: 90vh !important;
+}
+
+:deep(.help-dialog .p-dialog) {
   height: 90vh !important;
   max-height: 90vh !important;
   display: flex !important;
@@ -165,25 +167,16 @@ const onIframeLoad = () => {
 }
 
 :deep(.help-dialog .p-dialog-header) {
-  flex-shrink: 0 !important;
+  flex: 0 0 auto !important;
   padding: 1.25rem !important;
   border-bottom: 1px solid #dee2e6 !important;
-  height: auto !important;
 }
 
 :deep(.help-dialog .p-dialog-content) {
   padding: 0 !important;
-  flex: 1 1 0 !important;
+  flex: 1 !important;
   overflow: hidden !important;
-  display: flex !important;
-  flex-direction: column !important;
-  min-height: 0 !important;
   height: 100% !important;
-}
-
-:deep(.help-dialog .p-dialog-content > *) {
-  flex: 1 1 0 !important;
-  min-height: 0 !important;
 }
 
 /* SUPER VISIBLE RED CLOSE BUTTON */
@@ -242,22 +235,12 @@ const onIframeLoad = () => {
   font-weight: 600;
 }
 
-.help-content-wrapper {
-  width: 100%;
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
-  background: #f8f9fa;
-  overflow: hidden;
-  min-height: 0;
-}
-
 .help-iframe {
   width: 100%;
-  flex: 1 1 0;
+  height: 100%;
   border: none;
   background: white;
-  min-height: 0;
+  display: block;
 }
 
 .help-loading {
