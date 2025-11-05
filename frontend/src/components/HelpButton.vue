@@ -154,13 +154,10 @@ const onIframeLoad = () => {
   white-space: nowrap;
 }
 
-/* AGGRESSIVE FIX - Force dialog to proper height */
-:deep(.help-dialog.p-dialog) {
-  height: 90vh !important;
-  max-height: 90vh !important;
-}
-
-:deep(.help-dialog .p-dialog) {
+/* FORCE FULL HEIGHT - Multiple selector approaches */
+:deep(.p-dialog-mask .p-dialog.help-dialog),
+:deep(.help-dialog.p-dialog),
+:deep(div.help-dialog.p-dialog) {
   height: 90vh !important;
   max-height: 90vh !important;
   display: flex !important;
@@ -171,17 +168,22 @@ const onIframeLoad = () => {
   flex-shrink: 0 !important;
   padding: 1.25rem !important;
   border-bottom: 1px solid #dee2e6 !important;
+  height: auto !important;
 }
 
 :deep(.help-dialog .p-dialog-content) {
   padding: 0 !important;
-  flex: 1 !important;
+  flex: 1 1 0 !important;
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
-  height: calc(90vh - 80px) !important;
-  min-height: calc(90vh - 80px) !important;
-  max-height: calc(90vh - 80px) !important;
+  min-height: 0 !important;
+  height: 100% !important;
+}
+
+:deep(.help-dialog .p-dialog-content > *) {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
 }
 
 /* SUPER VISIBLE RED CLOSE BUTTON */
@@ -242,18 +244,20 @@ const onIframeLoad = () => {
 
 .help-content-wrapper {
   width: 100%;
-  flex: 1;
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   background: #f8f9fa;
   overflow: hidden;
+  min-height: 0;
 }
 
 .help-iframe {
   width: 100%;
-  flex: 1;
+  flex: 1 1 0;
   border: none;
   background: white;
+  min-height: 0;
 }
 
 .help-loading {
