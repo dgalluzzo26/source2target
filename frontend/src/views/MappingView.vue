@@ -1498,6 +1498,19 @@ onMounted(() => {
   gap: 0.5rem;
 }
 
+/* Force dialog close button styling */
+:deep(.p-dialog .p-dialog-header-icon) {
+  background-color: #212529 !important;
+  color: #ffffff !important;
+  border: 1px solid #000000 !important;
+}
+
+:deep(.p-dialog .p-dialog-header-icon svg),
+:deep(.p-dialog .p-dialog-header-icon svg path) {
+  fill: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
 /* Dialog styling */
 .upload-section ul {
   margin: 1rem 0;

@@ -386,7 +386,12 @@ body {
 
 /* Dialog close button styling - highly visible */
 .p-dialog .p-dialog-header .p-dialog-header-icon,
-.p-dialog .p-dialog-header-icons .p-dialog-header-icon {
+.p-dialog .p-dialog-header-icons .p-dialog-header-icon,
+.p-dialog .p-dialog-header .p-dialog-header-icon.p-button,
+.p-dialog .p-dialog-header-icons .p-dialog-header-icon.p-button,
+.p-dialog .p-dialog-header .p-button.p-button-secondary,
+.p-dialog .p-dialog-header-icons .p-button.p-button-secondary {
+  background: #212529 !important;
   background-color: #212529 !important;
   color: #ffffff !important;
   border-radius: 4px !important;
@@ -401,7 +406,10 @@ body {
 }
 
 .p-dialog .p-dialog-header .p-dialog-header-icon:hover,
-.p-dialog .p-dialog-header-icons .p-dialog-header-icon:hover {
+.p-dialog .p-dialog-header-icons .p-dialog-header-icon:hover,
+.p-dialog .p-dialog-header .p-button.p-button-secondary:hover,
+.p-dialog .p-dialog-header-icons .p-button.p-button-secondary:hover {
+  background: #dc3545 !important;
   background-color: #dc3545 !important;
   color: #ffffff !important;
   transform: scale(1.05) !important;
