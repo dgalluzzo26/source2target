@@ -261,6 +261,14 @@
                       tooltip="Learn about manual search"
                     />
                   </div>
+                  <Message 
+                    v-if="!aiSuggestionsAttempted" 
+                    severity="info" 
+                    :closable="false"
+                    style="margin-top: 0.5rem;"
+                  >
+                    Please try AI suggestions first before using manual search.
+                  </Message>
                 </div>
                 
                 <div class="search-controls">
@@ -269,6 +277,7 @@
                     <InputText
                       v-model="manualSearchTerm"
                       placeholder="Search by table name, column name, or description..."
+                      :disabled="!aiSuggestionsAttempted"
                     />
                   </IconField>
                   <Button 
@@ -276,6 +285,7 @@
                     label="Search Semantic Table"
                     @click="searchSemanticTable"
                     :loading="loading.manualSearch"
+                    :disabled="!aiSuggestionsAttempted"
                     severity="info"
                   />
                 </div>
@@ -733,6 +743,7 @@ import { SemanticAPI, type SemanticRecord, MappingAPI, type MappedField, type Un
 import { useUserStore } from '@/stores/user'
 import HelpButton from '@/components/HelpButton.vue'
 import Tag from 'primevue/tag'
+import Message from 'primevue/message'
 
 const userStore = useUserStore()
 
@@ -765,6 +776,7 @@ const aiConfig = ref({
 // AI and manual search results
 const aiSuggestions = ref([])
 const manualSearchResults = ref([])
+const aiSuggestionsAttempted = ref(false) // Track if user has tried AI suggestions first
 
 // Dialog states
 const showTemplateUpload = ref(false)
@@ -851,12 +863,14 @@ const onUnmappedFieldSelect = (event: any) => {
   // Clear previous results when selecting new field
   aiSuggestions.value = []
   manualSearchResults.value = []
+  aiSuggestionsAttempted.value = false // Reset flag for new field
 }
 
 const clearSelection = () => {
   selectedUnmappedField.value = null
   aiSuggestions.value = []
   manualSearchResults.value = []
+  aiSuggestionsAttempted.value = false // Reset flag
 }
 
 const generateAISuggestions = async () => {
@@ -885,6 +899,7 @@ const generateAISuggestions = async () => {
     } else if (result.data) {
       console.log(`Generated ${result.data.length} AI suggestions with confidence scores`)
       aiSuggestions.value = result.data
+      aiSuggestionsAttempted.value = true // Mark that AI has been attempted
     }
   } catch (error) {
     console.error('Error generating AI suggestions:', error)
