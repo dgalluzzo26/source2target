@@ -308,6 +308,15 @@ const onIframeLoad = () => {
   font-size: 1.25rem !important;
   font-weight: bold !important;
   color: #fff !important;
+  fill: #fff !important;
+  stroke: #fff !important;
+}
+
+/* Force all SVG paths to be white */
+:deep(.help-dialog .p-dialog-header-icon svg path),
+:deep(.help-dialog .p-dialog-header-icon .p-icon path) {
+  fill: #fff !important;
+  stroke: #fff !important;
 }
 
 .help-dialog-header {

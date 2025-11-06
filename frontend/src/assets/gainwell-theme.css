@@ -387,7 +387,7 @@ body {
 /* Dialog close button styling - highly visible */
 .p-dialog .p-dialog-header .p-dialog-header-icon,
 .p-dialog .p-dialog-header-icons .p-dialog-header-icon {
-  background-color: #495057 !important;
+  background-color: #212529 !important;
   color: #ffffff !important;
   border-radius: 4px !important;
   padding: 0.5rem !important;
@@ -397,6 +397,7 @@ body {
   align-items: center !important;
   justify-content: center !important;
   transition: all 0.2s ease !important;
+  border: 1px solid #000000 !important;
 }
 
 .p-dialog .p-dialog-header .p-dialog-header-icon:hover,
