@@ -44,6 +44,7 @@
   </div>
 </template>
 
+<script setup lang="ts">
 /**
  * HelpButton Component
  * 
@@ -78,7 +79,6 @@
  * 
  * @component
  */
-<script setup lang="ts">
 import { ref, computed } from 'vue'
 import Dialog from 'primevue/dialog'
 
