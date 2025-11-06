@@ -386,11 +386,19 @@ body {
 
 /* Dialog close button styling */
 .p-dialog .p-dialog-header-icon {
-  color: var(--gainwell-muted) !important;
-  opacity: 0.7;
+  background-color: var(--gainwell-muted) !important;
+  color: white !important;
+  border-radius: 4px !important;
+  padding: 0.5rem !important;
+  width: 2rem !important;
+  height: 2rem !important;
+  opacity: 0.9;
+  transition: all 0.2s ease;
 }
 
 .p-dialog .p-dialog-header-icon:hover {
-  color: var(--gainwell-primary) !important;
+  background-color: var(--gainwell-primary) !important;
+  color: white !important;
   opacity: 1;
+  transform: scale(1.05);
 }
