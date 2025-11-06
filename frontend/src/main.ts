@@ -1,18 +1,38 @@
+/**
+ * Vue Application Entry Point
+ * 
+ * Initializes and configures the Vue 3 application with:
+ * - Pinia state management
+ * - Vue Router for navigation
+ * - PrimeVue UI component library with Aura theme
+ * - Global component registration for commonly used PrimeVue components
+ * - Custom Gainwell theme styles
+ * 
+ * This file is the first JavaScript file loaded by the application.
+ * It sets up all global plugins, components, and directives before
+ * mounting the root App component to the DOM.
+ * 
+ * @module main
+ */
+
+// Global styles (order matters - theme overrides base styles)
 import './assets/main.css'
 import './assets/gainwell-theme.css'
 
+// Vue core and plugins
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import Aura from '@primevue/themes/aura'
 
+// Root component and router
 import App from './App.vue'
 import router from './router'
 
-// PrimeIcons CSS
+// PrimeIcons CSS (icon font)
 import 'primeicons/primeicons.css'
 
-// PrimeVue Components
+// PrimeVue Components (imported for global registration)
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
@@ -35,22 +55,27 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Tooltip from 'primevue/tooltip'
 
+// Create Vue application instance
 const app = createApp(App)
 
-app.use(createPinia())
-app.use(router)
+// Install plugins
+app.use(createPinia())  // State management
+app.use(router)         // Routing
+
+// Configure PrimeVue with Aura theme
 app.use(PrimeVue, {
   theme: {
     preset: Aura,
     options: {
-      prefix: 'p',
-      darkModeSelector: '.p-dark',
-      cssLayer: false
+      prefix: 'p',                  // Component prefix (e.g., p-button)
+      darkModeSelector: '.p-dark',  // Dark mode CSS class
+      cssLayer: false               // Don't use CSS layers (for compatibility)
     }
   }
 })
 
-// Register PrimeVue components globally
+// Register PrimeVue components globally for use in all templates
+// This avoids needing to import them in every component that uses them
 app.component('Button', Button)
 app.component('Card', Card)
 app.component('DataTable', DataTable)
@@ -72,7 +97,8 @@ app.component('Message', Message)
 app.component('IconField', IconField)
 app.component('InputIcon', InputIcon)
 
-// Register directives
+// Register PrimeVue directives globally
 app.directive('tooltip', Tooltip)
 
+// Mount the application to the DOM
 app.mount('#app')
