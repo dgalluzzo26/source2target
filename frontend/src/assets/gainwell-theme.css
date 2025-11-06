@@ -406,10 +406,21 @@ body {
   transform: scale(1.05) !important;
 }
 
-/* Ensure the icon itself is white */
-.p-dialog .p-dialog-header-icon svg,
-.p-dialog .p-dialog-header-icon .p-icon,
-.p-dialog .p-dialog-header-icon i {
+/* Ensure the icon itself is white with maximum specificity */
+.p-dialog .p-dialog-header .p-dialog-header-icon svg,
+.p-dialog .p-dialog-header-icons .p-dialog-header-icon svg,
+.p-dialog .p-dialog-header .p-dialog-header-icon .p-icon,
+.p-dialog .p-dialog-header-icons .p-dialog-header-icon .p-icon,
+.p-dialog .p-dialog-header .p-dialog-header-icon i,
+.p-dialog .p-dialog-header-icons .p-dialog-header-icon i {
   color: #ffffff !important;
   fill: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+/* Force all path elements inside the icon to be white */
+.p-dialog .p-dialog-header-icon svg path,
+.p-dialog .p-dialog-header-icon .p-icon path {
+  fill: #ffffff !important;
+  stroke: #ffffff !important;
 }
