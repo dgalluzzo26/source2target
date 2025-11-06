@@ -16,22 +16,50 @@ executor = ThreadPoolExecutor(max_workers=3)
 
 
 class AIMappingService:
-    """Service for AI-powered mapping suggestions."""
+    """
+    Service for AI-powered mapping suggestions using Databricks Vector Search.
+    
+    This service generates intelligent mapping suggestions by:
+    1. Performing vector similarity search against semantic target fields
+    2. Ranking results by confidence score (search_score from vector search)
+    3. TODO: Adding LLM-generated reasoning for each suggestion
+    
+    All database operations are executed asynchronously using ThreadPoolExecutor
+    to prevent blocking the FastAPI event loop.
+    
+    Attributes:
+        config_service: ConfigService instance for accessing application configuration
+        _workspace_client: Lazy-loaded Databricks WorkspaceClient for OAuth authentication
+    """
     
     def __init__(self):
-        """Initialize the AI mapping service."""
+        """
+        Initialize the AI mapping service.
+        
+        Sets up the configuration service and prepares workspace client for lazy loading.
+        """
         self.config_service = ConfigService()
         self._workspace_client = None
     
     @property
     def workspace_client(self):
-        """Lazy initialization of WorkspaceClient."""
+        """
+        Get the Databricks WorkspaceClient with lazy initialization.
+        
+        Returns:
+            WorkspaceClient: Databricks workspace client for API calls and authentication
+        """
         if self._workspace_client is None:
             self._workspace_client = WorkspaceClient()
         return self._workspace_client
     
     def _get_db_config(self) -> Dict[str, str]:
-        """Get database configuration."""
+        """
+        Get database configuration from the config service.
+        
+        Returns:
+            Dict[str, str]: Dictionary containing server_hostname, http_path, and semantic_table
+        """
         config = self.config_service.get_config()
         return {
             "server_hostname": config.database.server_hostname,
@@ -40,7 +68,12 @@ class AIMappingService:
         }
     
     def _get_vector_search_config(self) -> Dict[str, str]:
-        """Get vector search configuration."""
+        """
+        Get vector search configuration from the config service.
+        
+        Returns:
+            Dict[str, str]: Dictionary containing index_name and endpoint_name
+        """
         config = self.config_service.get_config()
         return {
             "index_name": config.vector_search.index_name,
@@ -48,7 +81,12 @@ class AIMappingService:
         }
     
     def _get_ai_model_config(self) -> Dict[str, str]:
-        """Get AI model configuration."""
+        """
+        Get AI model configuration from the config service.
+        
+        Returns:
+            Dict[str, str]: Dictionary containing foundation_model_endpoint and previous_mappings_table
+        """
         config = self.config_service.get_config()
         return {
             "foundation_model_endpoint": config.ai_model.foundation_model_endpoint,
@@ -144,7 +182,24 @@ class AIMappingService:
         query_text: str,
         num_results: int = 25
     ) -> List[Dict[str, Any]]:
-        """Get vector search results with confidence scores."""
+        """
+        Get vector search results with confidence scores (async).
+        
+        Performs semantic similarity search against the vector search index
+        to find target fields that are most similar to the query text.
+        
+        Args:
+            query_text: Formatted query string with source field information
+            num_results: Maximum number of results to return (default: 25)
+            
+        Returns:
+            List[Dict[str, Any]]: List of search results with confidence scores,
+                                  ordered by search_score descending
+            
+        Raises:
+            Exception: If configuration loading or vector search fails
+            asyncio.TimeoutError: If search takes longer than 30 seconds
+        """
         print(f"[AI Mapping Service] get_vector_search_results called")
         
         try:
@@ -187,8 +242,37 @@ class AIMappingService:
         user_feedback: str = ""
     ) -> List[Dict[str, Any]]:
         """
-        Generate AI-powered mapping suggestions.
-        Returns top N suggestions with reasoning and confidence scores.
+        Generate AI-powered mapping suggestions (async).
+        
+        Creates mapping suggestions by:
+        1. Building a query string from source field metadata
+        2. Performing vector similarity search
+        3. Ranking results by confidence score
+        4. TODO: Adding LLM-generated reasoning for each suggestion
+        
+        Args:
+            src_table_name: Source table name
+            src_column_name: Source column name
+            src_datatype: Source column data type
+            src_nullable: Whether source column is nullable (YES/NO)
+            src_comments: Source column description/comments
+            num_vector_results: Number of vector search results to retrieve (default: 25)
+            num_ai_results: Number of top suggestions to return (default: 10)
+            user_feedback: Optional user feedback to refine suggestions (not yet implemented)
+            
+        Returns:
+            List[Dict[str, Any]]: List of suggestion dictionaries, each containing:
+                - rank: Suggestion rank (1-N)
+                - target_table: Target table logical name
+                - target_column: Target column logical name
+                - target_table_physical: Target table physical name
+                - target_column_physical: Target column physical name
+                - semantic_field: Combined semantic field text
+                - confidence_score: Similarity score from vector search
+                - reasoning: Explanation for the suggestion
+        
+        Raises:
+            Exception: If vector search or configuration loading fails
         """
         print(f"[AI Mapping Service] Generating AI suggestions for {src_table_name}.{src_column_name}")
         

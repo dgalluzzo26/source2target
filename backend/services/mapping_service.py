@@ -17,22 +17,52 @@ executor = ThreadPoolExecutor(max_workers=3)
 
 
 class MappingService:
-    """Service for managing field mappings."""
+    """
+    Service for managing source-to-target field mappings.
+    
+    This service handles all database operations related to field mappings, including:
+    - Reading mapped and unmapped fields
+    - Applying bulk mappings from CSV uploads
+    - Unmapping individual fields
+    - Searching the semantic table for manual mapping
+    - Saving user-selected manual mappings
+    
+    All database operations are executed asynchronously using ThreadPoolExecutor
+    to prevent blocking the FastAPI event loop.
+    
+    Attributes:
+        config_service: ConfigService instance for accessing application configuration
+        _workspace_client: Lazy-loaded Databricks WorkspaceClient for OAuth authentication
+    """
     
     def __init__(self):
-        """Initialize the mapping service."""
+        """
+        Initialize the mapping service.
+        
+        Sets up the configuration service and prepares workspace client for lazy loading.
+        """
         self.config_service = ConfigService()
         self._workspace_client = None
     
     @property
     def workspace_client(self):
-        """Lazy initialization of WorkspaceClient."""
+        """
+        Get the Databricks WorkspaceClient with lazy initialization.
+        
+        Returns:
+            WorkspaceClient: Databricks workspace client for API calls and authentication
+        """
         if self._workspace_client is None:
             self._workspace_client = WorkspaceClient()
         return self._workspace_client
         
     def _get_db_config(self) -> Dict[str, str]:
-        """Get database configuration."""
+        """
+        Get database configuration from the config service.
+        
+        Returns:
+            Dict[str, str]: Dictionary containing server_hostname, http_path, and mapping_table
+        """
         config = self.config_service.get_config()
         return {
             "server_hostname": config.database.server_hostname,
@@ -41,7 +71,19 @@ class MappingService:
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):
-        """Get SQL connection with proper OAuth token handling."""
+        """
+        Create a Databricks SQL connection with proper OAuth authentication.
+        
+        Attempts to use OAuth token from WorkspaceClient if available, otherwise
+        falls back to databricks-oauth auth type.
+        
+        Args:
+            server_hostname: Databricks workspace hostname
+            http_path: SQL warehouse HTTP path
+            
+        Returns:
+            Connection: Databricks SQL connection object
+        """
         # Try to get OAuth token from WorkspaceClient config
         access_token = None
         if self.workspace_client and hasattr(self.workspace_client.config, 'authenticate'):
@@ -74,7 +116,25 @@ class MappingService:
     ) -> List[Dict[str, Any]]:
         """
         Read all mapped fields from the mapping table (synchronous, for thread pool).
-        Filters by source_owners to show only user's mappings.
+        
+        Queries the mapping table for all records where tgt_columns is NOT NULL,
+        meaning they have been mapped to a target field. Results are filtered
+        by source_owners to show only the current user's mappings.
+        
+        This is a synchronous method designed to run in a thread pool executor
+        to avoid blocking the async event loop.
+        
+        Args:
+            server_hostname: Databricks workspace hostname
+            http_path: SQL warehouse HTTP path
+            mapping_table: Fully qualified name of the mapping table
+            current_user_email: Email of the current user for filtering
+            
+        Returns:
+            List[Dict[str, Any]]: List of mapped field records with source and target info
+            
+        Raises:
+            Exception: If database connection or query execution fails
         """
         print(f"[Mapping Service] Reading mapped fields from table: {mapping_table}")
         print(f"[Mapping Service] User email: {current_user_email}")
@@ -122,7 +182,23 @@ class MappingService:
             print(f"[Mapping Service] Connection closed")
     
     async def get_all_mapped_fields(self, current_user_email: str) -> List[MappedField]:
-        """Get all mapped fields for the current user."""
+        """
+        Get all mapped fields for the current user (async).
+        
+        Retrieves all source fields that have been mapped to target fields,
+        filtered by the current user's email. Executes the database query
+        in a thread pool to avoid blocking the event loop.
+        
+        Args:
+            current_user_email: Email of the current user for filtering results
+            
+        Returns:
+            List[MappedField]: List of Pydantic models representing mapped fields
+            
+        Raises:
+            Exception: If configuration loading, database connection, or query fails
+            asyncio.TimeoutError: If query takes longer than 30 seconds
+        """
         print("[Mapping Service] get_all_mapped_fields called")
         
         try:
@@ -214,7 +290,23 @@ class MappingService:
             print(f"[Mapping Service] Connection closed")
     
     async def get_all_unmapped_fields(self, current_user_email: str) -> List[UnmappedField]:
-        """Get all unmapped fields for the current user."""
+        """
+        Get all unmapped fields for the current user (async).
+        
+        Retrieves all source fields that have NOT been mapped to target fields
+        (where tgt_columns IS NULL), filtered by the current user's email.
+        Executes the database query in a thread pool to avoid blocking the event loop.
+        
+        Args:
+            current_user_email: Email of the current user for filtering results
+            
+        Returns:
+            List[UnmappedField]: List of Pydantic models representing unmapped source fields
+            
+        Raises:
+            Exception: If configuration loading, database connection, or query fails
+            asyncio.TimeoutError: If query takes longer than 30 seconds
+        """
         print("[Mapping Service] get_all_unmapped_fields called")
         
         try:
@@ -372,7 +464,32 @@ class MappingService:
         current_user_email: str,
         mappings: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Apply bulk mappings from CSV upload."""
+        """
+        Apply bulk mappings from CSV upload (async).
+        
+        Processes a list of source field mappings from a CSV upload. For each mapping:
+        - Checks if a record with the same source table/column already exists
+        - If exists, skips it (duplicate)
+        - If not exists, inserts a new record with tgt_columns = NULL (unmapped)
+        
+        This matches the original Streamlit app behavior where CSV uploads only insert
+        new source fields, not update existing ones.
+        
+        Args:
+            current_user_email: Email of the current user (stored in source_owners)
+            mappings: List of dictionaries containing source field information
+            
+        Returns:
+            Dict[str, Any]: Result dictionary with counts:
+                - successful: Number of records inserted
+                - skipped: Number of duplicate records skipped
+                - failed: Number of records that failed
+                - errors: List of error messages
+                
+        Raises:
+            Exception: If configuration loading or database operations fail
+            asyncio.TimeoutError: If operation takes longer than 60 seconds
+        """
         print(f"[Mapping Service] apply_bulk_mappings called with {len(mappings)} mappings")
         
         try:
@@ -465,7 +582,24 @@ class MappingService:
         src_table_name: str,
         src_column_name: str
     ) -> Dict[str, Any]:
-        """Remove mapping for a specific field."""
+        """
+        Remove mapping for a specific field (async).
+        
+        Sets tgt_columns to NULL for the specified source field, effectively
+        unmapping it. The field will then appear in the unmapped fields list.
+        
+        Args:
+            current_user_email: Email of the current user (for authorization)
+            src_table_name: Source table name
+            src_column_name: Source column name
+            
+        Returns:
+            Dict[str, Any]: Result dictionary with status and message
+            
+        Raises:
+            Exception: If configuration loading or database operations fail
+            asyncio.TimeoutError: If operation takes longer than 30 seconds
+        """
         print(f"[Mapping Service] unmap_field called for {src_table_name}.{src_column_name}")
         
         try:
@@ -565,7 +699,23 @@ class MappingService:
             print(f"[Mapping Service] Connection closed")
     
     async def search_semantic_table(self, search_term: str) -> List[Dict[str, Any]]:
-        """Search the semantic table for manual mapping."""
+        """
+        Search the semantic table for manual mapping (async).
+        
+        Searches target field definitions by table name, column name, or comments
+        using case-insensitive LIKE matching. Returns up to 50 results for the
+        user to manually select a mapping.
+        
+        Args:
+            search_term: Text to search for in table names, column names, or comments
+            
+        Returns:
+            List[Dict[str, Any]]: List of matching semantic table records
+            
+        Raises:
+            Exception: If configuration loading or database operations fail
+            asyncio.TimeoutError: If search takes longer than 30 seconds
+        """
         print(f"[Mapping Service] search_semantic_table called with term: {search_term}")
         
         try:
@@ -681,7 +831,28 @@ class MappingService:
         tgt_table_physical: str,
         tgt_column_physical: str
     ) -> Dict[str, Any]:
-        """Save a manual mapping from user selection."""
+        """
+        Save a manual mapping from user selection (async).
+        
+        Updates the mapping table by setting tgt_columns to the selected target field
+        information. This moves the source field from unmapped to mapped status.
+        
+        Args:
+            current_user_email: Email of the current user (for authorization)
+            src_table_name: Source table name
+            src_column_name: Source column name
+            tgt_table_name: Target table name (logical)
+            tgt_column_name: Target column name (logical)
+            tgt_table_physical: Target table physical name
+            tgt_column_physical: Target column physical name
+            
+        Returns:
+            Dict[str, Any]: Result dictionary with status and message
+            
+        Raises:
+            Exception: If configuration loading or database operations fail
+            asyncio.TimeoutError: If operation takes longer than 30 seconds
+        """
         print(f"[Mapping Service] save_manual_mapping called for {src_table_name}.{src_column_name}")
         
         try:

@@ -1,3 +1,16 @@
+"""
+FastAPI application entry point for Source-to-Target Mapping Platform.
+
+This is the main FastAPI application that serves both the API backend and the
+Vue.js frontend (when built). It provides:
+- RESTful API endpoints for mapping, semantic table, and AI suggestions
+- Authentication via Databricks workspace context
+- System health checks
+- Configuration management
+- Static file serving for the Vue.js SPA
+
+The application is designed to run as a Databricks App or locally for development.
+"""
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -40,14 +53,40 @@ app.include_router(ai_mapping.router)
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
+    """
+    Health check endpoint.
+    
+    Simple endpoint to verify the API is running and responsive.
+    
+    Returns:
+        dict: Status dictionary with "healthy" status
+    """
     return {"status": "healthy"}
 
 @app.get("/api/auth/current-user")
 async def get_current_user(request: Request):
     """
     Get current authenticated user from Databricks context.
-    Follows the same logic as the Streamlit app's auth.py
+    
+    Attempts to detect the current user through multiple methods:
+    1. X-Forwarded-Email header (Databricks App primary method)
+    2. Other common Databricks headers (x-databricks-user, etc.)
+    3. Environment variables (DATABRICKS_USER)
+    4. WorkspaceClient API (current_user.me())
+    5. Fallback to demo user for local development
+    
+    Also checks if the user is a member of the configured admin group.
+    Follows the same logic as the original Streamlit app's auth.py.
+    
+    Args:
+        request: FastAPI Request object with headers
+        
+    Returns:
+        dict: User information dictionary containing:
+            - email: User email address
+            - display_name: User's display name
+            - is_admin: Boolean indicating admin status
+            - detection_method: Method used to detect the user
     """
     user_info = {
         "email": None,
@@ -140,7 +179,14 @@ async def get_current_user(request: Request):
 
 @app.get("/api/data")
 async def get_data():
-    """Sample data endpoint"""
+    """
+    Sample data endpoint (for testing/demo purposes).
+    
+    Returns sample data to verify API connectivity and JSON serialization.
+    
+    Returns:
+        dict: Dictionary with sample data array
+    """
     return {
         "data": [
             {"id": 1, "name": "Item 1", "value": 100},
@@ -152,8 +198,18 @@ async def get_data():
 @app.get("/api/system/status")
 async def get_system_status():
     """
-    Get system status with live database check.
-    Uses system service for comprehensive health checks.
+    Get comprehensive system status with live checks.
+    
+    Performs health checks on all critical system components:
+    - Database warehouse connectivity
+    - Vector search endpoint availability
+    - AI model endpoint status
+    - Configuration validation
+    
+    Uses system service for comprehensive health checks with proper timeouts.
+    
+    Returns:
+        dict: System status dictionary with component health information
     """
     return await system_service.get_system_status()
 
@@ -161,7 +217,12 @@ async def get_system_status():
 async def get_config():
     """
     Get the current application configuration.
-    Returns the complete configuration from local file.
+    
+    Returns the complete configuration loaded from the local JSON file,
+    including database, vector search, AI model, UI, support, and security settings.
+    
+    Returns:
+        dict: Complete configuration dictionary
     """
     config = config_service.get_config()
     return config.model_dump()
@@ -170,7 +231,19 @@ async def get_config():
 async def update_config(config_data: dict):
     """
     Update the application configuration.
-    Saves the configuration to local file.
+    
+    Validates the provided configuration data and saves it to the local JSON file.
+    The configuration will be available immediately to all services.
+    
+    Args:
+        config_data: Dictionary containing the complete configuration
+        
+    Returns:
+        dict: Result dictionary with status and message
+        
+    Raises:
+        400: If configuration data is invalid
+        500: If saving configuration fails
     """
     try:
         from backend.models.config import AppConfig
