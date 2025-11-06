@@ -31,6 +31,38 @@ class SemanticService:
         if self._workspace_client is None:
             self._workspace_client = WorkspaceClient()
         return self._workspace_client
+    
+    def _sync_vector_search_index(self) -> bool:
+        """
+        Trigger vector search index sync after semantic table changes.
+        
+        When the semantic table (Delta table) is updated, the vector search index
+        needs to be synced to pick up the changes. Otherwise, AI suggestions will
+        use stale data until the index auto-syncs (which can take several minutes).
+        
+        This matches the behavior of the original Streamlit app.
+        
+        Returns:
+            bool: True if sync was triggered successfully, False otherwise
+        """
+        try:
+            config = self.config_service.get_config()
+            index_name = config.vector_search.index_name
+            
+            print(f"[Semantic Service] Triggering vector search index sync for: {index_name}")
+            
+            # Use WorkspaceClient to trigger index sync
+            self.workspace_client.vector_search_indexes.sync_index(index_name)
+            
+            print(f"[Semantic Service] Vector search index sync triggered successfully")
+            return True
+            
+        except Exception as e:
+            # Don't fail the entire operation if index sync fails
+            # The index will eventually auto-sync
+            print(f"[Semantic Service] Warning: Could not sync vector search index: {str(e)}")
+            print(f"[Semantic Service] Index will auto-sync eventually")
+            return False
         
     def _get_db_config(self) -> Dict[str, str]:
         """Get database configuration."""
@@ -364,7 +396,12 @@ class SemanticService:
             raise
     
     async def create_record(self, record_data: SemanticRecordCreate) -> SemanticRecord:
-        """Create a new semantic table record."""
+        """
+        Create a new semantic table record.
+        
+        After creating the record, triggers a vector search index sync to ensure
+        AI suggestions immediately reflect the new target field.
+        """
         db_config = self._get_db_config()
         
         loop = asyncio.get_event_loop()
@@ -382,10 +419,19 @@ class SemanticService:
             timeout=15.0
         )
         
+        # Trigger vector search index sync after creating record
+        # This ensures AI suggestions reflect the new target field immediately
+        self._sync_vector_search_index()
+        
         return SemanticRecord(**result)
     
     async def update_record(self, record_id: int, record_data: SemanticRecordUpdate) -> SemanticRecord:
-        """Update an existing semantic table record."""
+        """
+        Update an existing semantic table record.
+        
+        After updating the record, triggers a vector search index sync to ensure
+        AI suggestions immediately reflect the updated target field metadata.
+        """
         db_config = self._get_db_config()
         
         loop = asyncio.get_event_loop()
@@ -404,10 +450,19 @@ class SemanticService:
             timeout=15.0
         )
         
+        # Trigger vector search index sync after updating record
+        # This ensures AI suggestions reflect the updated field metadata immediately
+        self._sync_vector_search_index()
+        
         return SemanticRecord(**result)
     
     async def delete_record(self, record_id: int) -> Dict[str, str]:
-        """Delete a semantic table record."""
+        """
+        Delete a semantic table record.
+        
+        After deleting the record, triggers a vector search index sync to ensure
+        AI suggestions no longer include the deleted target field.
+        """
         db_config = self._get_db_config()
         
         loop = asyncio.get_event_loop()
@@ -424,6 +479,10 @@ class SemanticService:
             ),
             timeout=15.0
         )
+        
+        # Trigger vector search index sync after deleting record
+        # This ensures AI suggestions no longer include the deleted field
+        self._sync_vector_search_index()
         
         return result
 
