@@ -216,14 +216,14 @@
                     <Column field="target_column" header="Target Column" />
                     <Column field="confidence_score" header="Match Quality" style="width: 10rem;">
                       <template #body="{ data }">
-                        <div class="confidence-score">
+                        <div 
+                          class="confidence-score"
+                          v-tooltip.top="getScoreTooltip(data.confidence_score)"
+                        >
                           <Tag 
                             :value="getScoreLabel(data.confidence_score)" 
                             :severity="getScoreSeverity(data.confidence_score)"
                           />
-                          <small style="color: var(--gainwell-text-secondary); margin-top: 0.25rem;">
-                            {{ (data.confidence_score * 100).toFixed(2) }}%
-                          </small>
                         </div>
                       </template>
                     </Column>
@@ -937,6 +937,26 @@ const getScoreLabel = (score: number): string => {
   return 'Poor Match'
 }
 
+const getScoreTooltip = (score: number): string => {
+  // Return detailed explanation of the match quality score
+  const rawScore = (score * 100).toFixed(3)
+  const label = getScoreLabel(score)
+  
+  return `Match Quality: ${label}
+  
+This score represents semantic similarity between your source field and this target field, calculated using AI vector embeddings.
+
+Raw Score: ${rawScore}%
+Typical Range: 0.0% - 5.0%
+
+Strong Match (1.5%+): Highly similar meaning and context
+Good Match (1.0-1.5%): Similar meaning with some differences  
+Weak Match (0.5-1.0%): Some similarity but may not be ideal
+Poor Match (<0.5%): Low similarity, likely not a good fit
+
+Higher scores indicate better semantic matches.`
+}
+
 const searchSemanticTable = async () => {
   if (!manualSearchTerm.value.trim()) {
     return
@@ -1447,21 +1467,15 @@ onMounted(() => {
 
 .confidence-score {
   display: flex;
-  flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 0.25rem;
+  cursor: help;
 }
 
 .confidence-score :deep(.p-tag) {
   font-weight: 600;
   font-size: 0.875rem;
   padding: 0.25rem 0.5rem;
-}
-
-.confidence-score small {
-  font-size: 0.75rem;
-  font-family: monospace;
 }
 
 .action-buttons {
