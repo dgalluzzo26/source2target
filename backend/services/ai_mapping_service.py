@@ -230,6 +230,76 @@ class AIMappingService:
             print(f"[AI Mapping Service] Error in get_vector_search_results: {str(e)}")
             raise
     
+    def _call_foundation_model_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        foundation_model_endpoint: str,
+        ai_prompt: str,
+        num_ai_results: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Call Databricks Foundation Model API to generate mapping suggestions (synchronous).
+        
+        Uses ai_query() SQL function to call the foundation model with a structured prompt.
+        The model analyzes vector search results and returns top N suggestions with reasoning.
+        
+        Args:
+            server_hostname: Databricks workspace hostname
+            http_path: SQL warehouse HTTP path
+            foundation_model_endpoint: Foundation model endpoint name
+            ai_prompt: Complete prompt with context and source field info
+            num_ai_results: Number of suggestions to request from the model
+            
+        Returns:
+            List[Dict[str, Any]]: LLM-generated suggestions with reasoning
+        """
+        print(f"[AI Mapping Service] Calling foundation model: {foundation_model_endpoint}")
+        
+        try:
+            connection = self._get_sql_connection(server_hostname, http_path)
+        except Exception as e:
+            print(f"[AI Mapping Service] Connection failed: {str(e)}")
+            raise
+        
+        try:
+            with connection.cursor() as ai_cursor:
+                # Escape single quotes in AI prompt for SQL
+                escaped_ai_prompt = ai_prompt.replace("'", "''")
+                
+                # Call foundation model using ai_query() with structured output
+                query = f"""
+                SELECT 
+                from_json(
+                  ai_query(
+                    '{foundation_model_endpoint}',
+                    '{escaped_ai_prompt}',
+                    responseFormat => 'STRUCT<result: STRUCT<result: ARRAY<STRUCT<table_name:STRING, column_name:STRING, reasoning:STRING>>>>'
+                  ),
+                  'STRUCT<result: ARRAY<STRUCT<table_name:STRING, column_name:STRING, reasoning:STRING>>>'
+                ) as tgt_mapping
+                """
+                
+                print(f"[AI Mapping Service] Executing LLM query...")
+                ai_cursor.execute(query)
+                df = ai_cursor.fetchall_arrow().to_pandas()
+                
+                mapping_obj = df["tgt_mapping"].iloc[0]
+                results = mapping_obj["result"]
+                
+                print(f"[AI Mapping Service] LLM returned {len(results)} suggestions")
+                return [{"table_name": row["table_name"], 
+                        "column_name": row["column_name"], 
+                        "reasoning": row["reasoning"]} 
+                       for row in results]
+                
+        except Exception as e:
+            print(f"[AI Mapping Service] Foundation model call failed: {str(e)}")
+            # Return empty list if LLM fails - we'll fall back to vector search only
+            return []
+        finally:
+            connection.close()
+    
     async def generate_ai_suggestions(
         self,
         src_table_name: str,
@@ -242,13 +312,16 @@ class AIMappingService:
         user_feedback: str = ""
     ) -> List[Dict[str, Any]]:
         """
-        Generate AI-powered mapping suggestions (async).
+        Generate AI-powered mapping suggestions with LLM reasoning (async).
         
         Creates mapping suggestions by:
         1. Building a query string from source field metadata
-        2. Performing vector similarity search
-        3. Ranking results by confidence score
-        4. TODO: Adding LLM-generated reasoning for each suggestion
+        2. Performing vector similarity search to find candidate target fields
+        3. Calling foundation model (LLM) to analyze candidates and provide reasoning
+        4. Ranking results by LLM selection order and vector search confidence
+        
+        The LLM analyzes the vector search results and selects the most appropriate
+        mappings, providing human-readable reasoning for each suggestion.
         
         Args:
             src_table_name: Source table name
@@ -269,7 +342,7 @@ class AIMappingService:
                 - target_column_physical: Target column physical name
                 - semantic_field: Combined semantic field text
                 - confidence_score: Similarity score from vector search
-                - reasoning: Explanation for the suggestion
+                - reasoning: LLM-generated explanation for the suggestion
         
         Raises:
             Exception: If vector search or configuration loading fails
@@ -282,8 +355,86 @@ class AIMappingService:
         # Get vector search results with confidence scores
         vector_results = await self.get_vector_search_results(query_text, num_vector_results)
         
-        # For now, return top results with confidence scores
-        # TODO: Add LLM reasoning in next step
+        # Build LLM prompt with vector search results
+        retrieved_context = [result.get('semantic_field', '') for result in vector_results]
+        
+        # Build feedback section if provided
+        feedback_section = ""
+        if user_feedback:
+            feedback_section = f"\n\nCRITICAL CONSTRAINT: {user_feedback}. You MUST comply with this requirement."
+        
+        # Create structured prompt for LLM
+        results_structure = {"results": [
+            {"table_name":"YOUR_FIRST_GUESS_TABLE_NAME", "column_name":"YOUR_FIRST_GUESS_COLUMN_NAME", "reasoning": "WHY YOU CHOSE THIS MAPPING"},
+            {"table_name":"YOUR_SECOND_GUESS_TABLE_NAME", "column_name":"YOUR_SECOND_GUESS_COLUMN_NAME", "reasoning": "WHY YOU CHOSE THIS MAPPING"},
+            {"table_name":"...", "column_name":"...", "reasoning":"..."}
+        ]}
+        
+        ai_prompt = f"""You are an ETL engineer and your job is to take information on an incoming field from a source database and map it to an existing target table. The incoming field is described by its table name, column name, description, nullability, and datatype. Semantically similar target fields are provided below, and one of these is likely the correct match.
+
+Here are the semantically similar target fields:
+{str(retrieved_context).replace("'","")}
+
+Here is the source field you want to map: {query_text}{feedback_section}
+
+Please return your top {num_ai_results} guesses for the correct target column mapping, in order. Format your response in JSON format with a "results" key containing an array of results:
+{str(results_structure).replace("'","")}
+
+The "reasoning" field should contain a brief explanation of why you think this mapping is correct, including references to semantic or datatype similarities."""
+        
+        # Try to call foundation model for intelligent reasoning
+        try:
+            db_config = self._get_db_config()
+            ai_config = self._get_ai_model_config()
+            
+            loop = asyncio.get_event_loop()
+            llm_results = await asyncio.wait_for(
+                loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._call_foundation_model_sync,
+                        db_config['server_hostname'],
+                        db_config['http_path'],
+                        ai_config['foundation_model_endpoint'],
+                        ai_prompt,
+                        num_ai_results
+                    )
+                ),
+                timeout=30.0
+            )
+            
+            # Match LLM results with vector search results to get confidence scores
+            suggestions = []
+            for i, llm_result in enumerate(llm_results[:num_ai_results]):
+                # Find matching vector search result for confidence score
+                matching_vector_result = next(
+                    (r for r in vector_results 
+                     if r.get('tgt_table_name') == llm_result['table_name'] 
+                     and r.get('tgt_column_name') == llm_result['column_name']),
+                    None
+                )
+                
+                if matching_vector_result:
+                    suggestions.append({
+                        "rank": i + 1,
+                        "target_table": matching_vector_result.get('tgt_table_name', ''),
+                        "target_column": matching_vector_result.get('tgt_column_name', ''),
+                        "target_table_physical": matching_vector_result.get('tgt_table_physical_name', ''),
+                        "target_column_physical": matching_vector_result.get('tgt_column_physical_name', ''),
+                        "semantic_field": matching_vector_result.get('semantic_field', ''),
+                        "confidence_score": float(matching_vector_result.get('search_score', 0.0)) if matching_vector_result.get('search_score') is not None else 0.0,
+                        "reasoning": llm_result.get('reasoning', 'LLM-selected match')
+                    })
+            
+            if suggestions:
+                print(f"[AI Mapping Service] Generated {len(suggestions)} LLM-powered suggestions")
+                return suggestions
+                
+        except Exception as e:
+            print(f"[AI Mapping Service] LLM call failed, falling back to vector search only: {str(e)}")
+        
+        # Fallback: Return vector search results if LLM fails
+        print(f"[AI Mapping Service] Using vector search results without LLM reasoning")
         suggestions = []
         for i, result in enumerate(vector_results[:num_ai_results]):
             suggestions.append({
@@ -297,7 +448,7 @@ class AIMappingService:
                 "reasoning": f"Vector similarity match (score: {result.get('search_score', 0.0):.4f})"
             })
         
-        print(f"[AI Mapping Service] Generated {len(suggestions)} AI suggestions")
+        print(f"[AI Mapping Service] Generated {len(suggestions)} vector-based suggestions")
         return suggestions
 
 
