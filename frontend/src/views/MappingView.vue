@@ -214,13 +214,16 @@
                     </Column>
                     <Column field="target_table" header="Target Table" />
                     <Column field="target_column" header="Target Column" />
-                    <Column field="confidence_score" header="Vector Score" style="width: 8rem;">
+                    <Column field="confidence_score" header="Match Quality" style="width: 10rem;">
                       <template #body="{ data }">
                         <div class="confidence-score">
                           <Tag 
-                            :value="(data.confidence_score * 100).toFixed(1) + '%'" 
+                            :value="getScoreLabel(data.confidence_score)" 
                             :severity="getScoreSeverity(data.confidence_score)"
                           />
+                          <small style="color: var(--gainwell-text-secondary); margin-top: 0.25rem;">
+                            {{ (data.confidence_score * 100).toFixed(2) }}%
+                          </small>
                         </div>
                       </template>
                     </Column>
@@ -916,11 +919,22 @@ const selectAIMapping = (mapping: any) => {
 }
 
 const getScoreSeverity = (score: number): string => {
-  // Return PrimeVue severity based on confidence score
-  if (score >= 0.8) return 'success'    // Green for high confidence (80%+)
-  if (score >= 0.6) return 'info'       // Blue for medium confidence (60-79%)
-  if (score >= 0.4) return 'warning'    // Orange for low confidence (40-59%)
-  return 'danger'                        // Red for very low confidence (<40%)
+  // Return PrimeVue severity based on vector search confidence score
+  // Note: Vector search scores are typically 0.0-0.05 range for GTE-large-en model
+  // These thresholds are calibrated for typical embedding similarity scores
+  if (score >= 0.015) return 'success'   // Green for strong match (1.5%+)
+  if (score >= 0.010) return 'info'      // Blue for good match (1.0-1.5%)
+  if (score >= 0.005) return 'warning'   // Orange for weak match (0.5-1.0%)
+  return 'danger'                         // Red for poor match (<0.5%)
+}
+
+const getScoreLabel = (score: number): string => {
+  // Return human-readable label for vector search score
+  // Vector embeddings typically produce scores in 0.0-0.05 range
+  if (score >= 0.015) return 'Strong Match'
+  if (score >= 0.010) return 'Good Match'
+  if (score >= 0.005) return 'Weak Match'
+  return 'Poor Match'
 }
 
 const searchSemanticTable = async () => {
@@ -1433,14 +1447,21 @@ onMounted(() => {
 
 .confidence-score {
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
+  gap: 0.25rem;
 }
 
 .confidence-score :deep(.p-tag) {
   font-weight: 600;
   font-size: 0.875rem;
   padding: 0.25rem 0.5rem;
+}
+
+.confidence-score small {
+  font-size: 0.75rem;
+  font-family: monospace;
 }
 
 .action-buttons {

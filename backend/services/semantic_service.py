@@ -218,7 +218,7 @@ class SemanticService:
                 cursor.execute(max_id_query)
                 next_id = cursor.fetchone()[0]
                 
-                # Insert with calculated ID
+                # Insert with calculated ID and proper SQL escaping
                 query = f"""
                 INSERT INTO {semantic_table} (
                     id,
@@ -232,16 +232,17 @@ class SemanticService:
                     semantic_field
                 ) VALUES (
                     {next_id},
-                    '{record_data.tgt_table_name}',
-                    '{record_data.tgt_table_physical_name}',
-                    '{record_data.tgt_column_name}',
-                    '{record_data.tgt_column_physical_name}',
+                    '{record_data.tgt_table_name.replace("'", "''")}',
+                    '{record_data.tgt_table_physical_name.replace("'", "''")}',
+                    '{record_data.tgt_column_name.replace("'", "''")}',
+                    '{record_data.tgt_column_physical_name.replace("'", "''")}',
                     '{record_data.tgt_nullable}',
                     '{record_data.tgt_physical_datatype}',
-                    '{record_data.tgt_comments or ""}',
-                    '{semantic_field}'
+                    '{(record_data.tgt_comments or "").replace("'", "''")}',
+                    '{semantic_field.replace("'", "''")}'
                 )
                 """
+                print(f"[Semantic Service] Insert query: {query[:200]}...")
                 cursor.execute(query)
                 connection.commit()
                 
@@ -306,20 +307,21 @@ class SemanticService:
                     updated_data["tgt_physical_datatype"]
                 )
                 
-                # Update query
+                # Update query with proper SQL escaping
                 update_query = f"""
                 UPDATE {semantic_table}
                 SET 
-                    tgt_table_name = '{updated_data["tgt_table_name"]}',
-                    tgt_table_physical_name = '{updated_data["tgt_table_physical_name"]}',
-                    tgt_column_name = '{updated_data["tgt_column_name"]}',
-                    tgt_column_physical_name = '{updated_data["tgt_column_physical_name"]}',
+                    tgt_table_name = '{updated_data["tgt_table_name"].replace("'", "''")}',
+                    tgt_table_physical_name = '{updated_data["tgt_table_physical_name"].replace("'", "''")}',
+                    tgt_column_name = '{updated_data["tgt_column_name"].replace("'", "''")}',
+                    tgt_column_physical_name = '{updated_data["tgt_column_physical_name"].replace("'", "''")}',
                     tgt_nullable = '{updated_data["tgt_nullable"]}',
                     tgt_physical_datatype = '{updated_data["tgt_physical_datatype"]}',
-                    tgt_comments = '{updated_data["tgt_comments"]}',
-                    semantic_field = '{semantic_field}'
+                    tgt_comments = '{updated_data["tgt_comments"].replace("'", "''")}',
+                    semantic_field = '{semantic_field.replace("'", "''")}'
                 WHERE id = {record_id}
                 """
+                print(f"[Semantic Service] Update query: {update_query[:200]}...")
                 cursor.execute(update_query)
                 connection.commit()
                 
