@@ -44,20 +44,70 @@
   </div>
 </template>
 
+/**
+ * HelpButton Component
+ * 
+ * A reusable help button component that displays context-sensitive help documentation
+ * in a modal dialog. The help content is loaded from static HTML files via iframe.
+ * 
+ * Features:
+ * - Configurable button appearance (icon, label, severity, style)
+ * - Maps help types to appropriate HTML documentation files
+ * - Large, readable dialog (90vh) with embedded iframe
+ * - Highly visible close button for better UX
+ * - Support for deep linking to specific sections via anchor tags
+ * - Responsive tooltip on hover
+ * 
+ * Usage:
+ * ```vue
+ * <HelpButton 
+ *   helpType="quick-start"
+ *   label="Quick Start"
+ *   severity="info"
+ * />
+ * ```
+ * 
+ * Help Types:
+ * - quick-start: Getting started guide
+ * - user-guide: Comprehensive user documentation
+ * - ai-mapping: AI suggestion feature help
+ * - manual-search: Manual search feature help
+ * - templates: CSV template upload help
+ * - admin-config: Admin configuration guide
+ * - system-status: System health check help
+ * 
+ * @component
+ */
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import Dialog from 'primevue/dialog'
 
+/**
+ * Component props interface.
+ * 
+ * Defines all configurable properties for the HelpButton component,
+ * allowing flexible customization of appearance and behavior.
+ */
 interface Props {
+  /** Type of help content to display (maps to HTML file) */
   helpType: 'quick-start' | 'user-guide' | 'ai-mapping' | 'manual-search' | 'templates' | 'admin-config' | 'system-status'
+  /** Optional section anchor for deep linking (e.g., "#mapping-fields") */
   section?: string
+  /** Button icon (PrimeIcon class name) */
   icon?: string
+  /** Button text label */
   label?: string
+  /** Button color severity (primary, secondary, success, info, warning, danger) */
   severity?: string
+  /** Whether to use outlined button style */
   outlined?: boolean
+  /** Whether to use text-only button style */
   text?: boolean
+  /** Whether to use rounded button style */
   rounded?: boolean
+  /** Additional CSS class for custom styling */
   customClass?: string
+  /** Tooltip text shown on hover */
   tooltip?: string
 }
 
@@ -72,10 +122,26 @@ const props = withDefaults(defineProps<Props>(), {
   tooltip: 'View help documentation'
 })
 
+// ============================================================================
+// Component State
+// ============================================================================
+
+/** Controls dialog visibility */
 const showDialog = ref(false)
 
+// ============================================================================
+// Computed Properties
+// ============================================================================
+
+/**
+ * Computed URL for help content based on helpType prop.
+ * 
+ * Maps help type to the corresponding HTML file in the /help directory.
+ * Supports optional section anchors for deep linking to specific parts.
+ * 
+ * @returns Full URL path to the help HTML file
+ */
 const helpUrl = computed(() => {
-  // Map help types to their HTML files
   const baseUrl = '/help'
   switch (props.helpType) {
     case 'quick-start':
@@ -97,6 +163,18 @@ const helpUrl = computed(() => {
   }
 })
 
+// ============================================================================
+// Helper Methods
+// ============================================================================
+
+/**
+ * Get icon for dialog header based on help type.
+ * 
+ * Returns an appropriate PrimeIcon class name that visually represents
+ * the type of help content being displayed.
+ * 
+ * @returns PrimeIcon class name (e.g., 'pi pi-book')
+ */
 const getHeaderIcon = () => {
   switch (props.helpType) {
     case 'quick-start':
@@ -118,6 +196,14 @@ const getHeaderIcon = () => {
   }
 }
 
+/**
+ * Get title for dialog header based on help type.
+ * 
+ * Returns a user-friendly title that clearly indicates what help
+ * content is being displayed in the dialog.
+ * 
+ * @returns Human-readable dialog title
+ */
 const getHeaderTitle = () => {
   switch (props.helpType) {
     case 'quick-start':
@@ -139,6 +225,12 @@ const getHeaderTitle = () => {
   }
 }
 
+/**
+ * Iframe load event handler.
+ * 
+ * Called when the help HTML content finishes loading in the iframe.
+ * Currently just logs for debugging; could be extended for loading indicators.
+ */
 const onIframeLoad = () => {
   console.log('Help content loaded')
 }
