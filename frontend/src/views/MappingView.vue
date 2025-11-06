@@ -207,8 +207,23 @@
                     rowHover
                     class="p-datatable-sm"
                   >
+                    <Column field="rank" header="Rank" style="width: 4rem;">
+                      <template #body="{ data }">
+                        <Tag :value="`#${data.rank}`" severity="info" />
+                      </template>
+                    </Column>
                     <Column field="target_table" header="Target Table" />
                     <Column field="target_column" header="Target Column" />
+                    <Column field="confidence_score" header="Vector Score" style="width: 8rem;">
+                      <template #body="{ data }">
+                        <div class="confidence-score">
+                          <Tag 
+                            :value="(data.confidence_score * 100).toFixed(1) + '%'" 
+                            :severity="getScoreSeverity(data.confidence_score)"
+                          />
+                        </div>
+                      </template>
+                    </Column>
                     <Column field="reasoning" header="AI Reasoning">
                       <template #body="{ data }">
                         <div class="reasoning-text">
@@ -216,7 +231,7 @@
                         </div>
                       </template>
                     </Column>
-                    <Column header="Actions">
+                    <Column header="Actions" style="width: 8rem;">
                       <template #body="{ data }">
                         <Button 
                           icon="pi pi-check" 
@@ -714,6 +729,7 @@ import { ref, onMounted, computed } from 'vue'
 import { SemanticAPI, type SemanticRecord, MappingAPI, type MappedField, type UnmappedField, AIMappingAPI, type AISuggestion } from '@/services/api'
 import { useUserStore } from '@/stores/user'
 import HelpButton from '@/components/HelpButton.vue'
+import Tag from 'primevue/tag'
 
 const userStore = useUserStore()
 
@@ -897,6 +913,14 @@ const selectAIMapping = (mapping: any) => {
   }
   
   clearSelection()
+}
+
+const getScoreSeverity = (score: number): string => {
+  // Return PrimeVue severity based on confidence score
+  if (score >= 0.8) return 'success'    // Green for high confidence (80%+)
+  if (score >= 0.6) return 'info'       // Blue for medium confidence (60-79%)
+  if (score >= 0.4) return 'warning'    // Orange for low confidence (40-59%)
+  return 'danger'                        // Red for very low confidence (<40%)
 }
 
 const searchSemanticTable = async () => {
@@ -1405,6 +1429,18 @@ onMounted(() => {
   font-size: 0.875rem;
   color: var(--gainwell-text-secondary);
   line-height: 1.4;
+}
+
+.confidence-score {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.confidence-score :deep(.p-tag) {
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
 }
 
 .action-buttons {
