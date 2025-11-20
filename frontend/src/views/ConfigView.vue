@@ -106,25 +106,95 @@
             </div>
 
             <div class="field">
-              <label for="mapping_table">Mapping Table</label>
+              <label for="catalog">Catalog</label>
               <InputText 
-                id="mapping_table"
-                v-model="config.database.mapping_table"
-                placeholder="catalog.schema.mappings"
+                id="catalog"
+                v-model="config.database.catalog"
+                placeholder="e.g., oztest_dev"
                 class="w-full"
               />
-              <small>Full table name for storing field mappings</small>
+              <small>Databricks catalog name</small>
             </div>
 
             <div class="field">
-              <label for="semantic_table">Semantic Table</label>
+              <label for="schema">Schema</label>
               <InputText 
-                id="semantic_table"
-                v-model="config.database.semantic_table"
-                placeholder="catalog.schema.semantic_table"
+                id="schema"
+                v-model="config.database.schema"
+                placeholder="e.g., source2target"
                 class="w-full"
               />
-              <small>Full table name for semantic search data</small>
+              <small>Databricks schema name</small>
+            </div>
+
+            <Divider />
+
+            <h4>V2 Table Configuration</h4>
+
+            <div class="field">
+              <label for="semantic_fields_table">Semantic Fields Table</label>
+              <InputText 
+                id="semantic_fields_table"
+                v-model="config.database.semantic_fields_table"
+                placeholder="catalog.schema.semantic_fields"
+                class="w-full"
+              />
+              <small>Target field definitions for AI mapping</small>
+            </div>
+
+            <div class="field">
+              <label for="unmapped_fields_table">Unmapped Fields Table</label>
+              <InputText 
+                id="unmapped_fields_table"
+                v-model="config.database.unmapped_fields_table"
+                placeholder="catalog.schema.unmapped_fields"
+                class="w-full"
+              />
+              <small>Source fields awaiting mapping</small>
+            </div>
+
+            <div class="field">
+              <label for="mapped_fields_table">Mapped Fields Table</label>
+              <InputText 
+                id="mapped_fields_table"
+                v-model="config.database.mapped_fields_table"
+                placeholder="catalog.schema.mapped_fields"
+                class="w-full"
+              />
+              <small>Target fields with completed mappings</small>
+            </div>
+
+            <div class="field">
+              <label for="mapping_details_table">Mapping Details Table</label>
+              <InputText 
+                id="mapping_details_table"
+                v-model="config.database.mapping_details_table"
+                placeholder="catalog.schema.mapping_details"
+                class="w-full"
+              />
+              <small>Source field details for each mapping</small>
+            </div>
+
+            <div class="field">
+              <label for="mapping_feedback_table">Mapping Feedback Table</label>
+              <InputText 
+                id="mapping_feedback_table"
+                v-model="config.database.mapping_feedback_table"
+                placeholder="catalog.schema.mapping_feedback"
+                class="w-full"
+              />
+              <small>User feedback on AI suggestions</small>
+            </div>
+
+            <div class="field">
+              <label for="transformation_library_table">Transformation Library Table</label>
+              <InputText 
+                id="transformation_library_table"
+                v-model="config.database.transformation_library_table"
+                placeholder="catalog.schema.transformation_library"
+                class="w-full"
+              />
+              <small>Reusable transformation templates</small>
             </div>
           </div>
         </div>

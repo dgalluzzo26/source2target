@@ -169,9 +169,10 @@ class SemanticService:
                         f"Expected format: catalog.schema.table"
                     )
                 
+                # Databricks uses system.information_schema, not catalog.information_schema
                 check_query = f"""
                 SELECT COUNT(*) as table_exists
-                FROM {catalog}.information_schema.tables
+                FROM system.information_schema.tables
                 WHERE table_catalog = '{catalog}'
                   AND table_schema = '{schema}'
                   AND table_name = '{table}'
