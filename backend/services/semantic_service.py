@@ -193,7 +193,7 @@ class SemanticService:
                 
                 query = f"""
                 SELECT 
-                    id,
+                    semantic_field_id as id,
                     tgt_table_name,
                     tgt_table_physical_name,
                     tgt_column_name,
@@ -257,43 +257,54 @@ class SemanticService:
         
         try:
             with connection.cursor() as cursor:
-                # Get next ID
-                max_id_query = f"SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM {semantic_fields_table}"
-                cursor.execute(max_id_query)
-                next_id = cursor.fetchone()[0]
+                # Note: semantic_field_id is auto-generated (IDENTITY column)
+                # semantic_field is a computed column, so we don't need to insert it
+                # V2 schema: semantic_field_id is auto-generated, so we don't include it in INSERT
                 
-                # Insert with calculated ID and proper SQL escaping
                 query = f"""
                 INSERT INTO {semantic_fields_table} (
-                    id,
                     tgt_table_name,
                     tgt_table_physical_name,
                     tgt_column_name,
                     tgt_column_physical_name,
                     tgt_nullable,
                     tgt_physical_datatype,
-                    tgt_comments,
-                    semantic_field
+                    tgt_comments
                 ) VALUES (
-                    {next_id},
                     '{record_data.tgt_table_name.replace("'", "''")}',
                     '{record_data.tgt_table_physical_name.replace("'", "''")}',
                     '{record_data.tgt_column_name.replace("'", "''")}',
                     '{record_data.tgt_column_physical_name.replace("'", "''")}',
                     '{record_data.tgt_nullable}',
                     '{record_data.tgt_physical_datatype}',
-                    '{(record_data.tgt_comments or "").replace("'", "''")}',
-                    '{semantic_field.replace("'", "''")}'
+                    '{(record_data.tgt_comments or "").replace("'", "''")}'
                 )
                 """
                 print(f"[Semantic Service] Insert query: {query[:200]}...")
                 cursor.execute(query)
                 connection.commit()
                 
-                print(f"[Semantic Service] Successfully inserted record with ID: {next_id}")
+                # Get the auto-generated ID
+                get_id_query = f"""
+                SELECT semantic_field_id 
+                FROM {semantic_fields_table}
+                WHERE tgt_table_name = '{record_data.tgt_table_name.replace("'", "''")}'
+                  AND tgt_column_name = '{record_data.tgt_column_name.replace("'", "''")}'
+                ORDER BY semantic_field_id DESC
+                LIMIT 1
+                """
+                cursor.execute(get_id_query)
+                inserted_id = cursor.fetchone()[0]
+                
+                print(f"[Semantic Service] Successfully inserted record with ID: {inserted_id}")
+                
+                # Get the computed semantic_field value
+                get_record_query = f"SELECT * FROM {semantic_fields_table} WHERE semantic_field_id = {inserted_id}"
+                cursor.execute(get_record_query)
+                inserted_record = cursor.fetchone()
                 
                 return {
-                    "id": next_id,
+                    "id": inserted_id,
                     "tgt_table_name": record_data.tgt_table_name,
                     "tgt_table_physical_name": record_data.tgt_table_physical_name,
                     "tgt_column_name": record_data.tgt_column_name,
@@ -301,7 +312,7 @@ class SemanticService:
                     "tgt_nullable": record_data.tgt_nullable,
                     "tgt_physical_datatype": record_data.tgt_physical_datatype,
                     "tgt_comments": record_data.tgt_comments,
-                    "semantic_field": semantic_field
+                    "semantic_field": inserted_record[8] if inserted_record else ""  # semantic_field is column 8
                 }
         finally:
             connection.close()
@@ -324,7 +335,7 @@ class SemanticService:
         try:
             with connection.cursor() as cursor:
                 # First, get the existing record
-                select_query = f"SELECT * FROM {semantic_fields_table} WHERE id = {record_id}"
+                select_query = f"SELECT * FROM {semantic_fields_table} WHERE semantic_field_id = {record_id}"
                 cursor.execute(select_query)
                 existing = cursor.fetchone()
                 
@@ -352,6 +363,7 @@ class SemanticService:
                 )
                 
                 # Update query with proper SQL escaping
+                # Note: semantic_field is a computed column in V2, so we don't update it manually
                 update_query = f"""
                 UPDATE {semantic_fields_table}
                 SET 
@@ -361,20 +373,24 @@ class SemanticService:
                     tgt_column_physical_name = '{updated_data["tgt_column_physical_name"].replace("'", "''")}',
                     tgt_nullable = '{updated_data["tgt_nullable"]}',
                     tgt_physical_datatype = '{updated_data["tgt_physical_datatype"]}',
-                    tgt_comments = '{updated_data["tgt_comments"].replace("'", "''")}',
-                    semantic_field = '{semantic_field.replace("'", "''")}'
-                WHERE id = {record_id}
+                    tgt_comments = '{updated_data["tgt_comments"].replace("'", "''")}'
+                WHERE semantic_field_id = {record_id}
                 """
                 print(f"[Semantic Service] Update query: {update_query[:200]}...")
                 cursor.execute(update_query)
                 connection.commit()
+                
+                # Get the updated record with computed semantic_field
+                get_updated_query = f"SELECT * FROM {semantic_fields_table} WHERE semantic_field_id = {record_id}"
+                cursor.execute(get_updated_query)
+                updated_record = cursor.fetchone()
                 
                 print(f"[Semantic Service] Successfully updated record ID: {record_id}")
                 
                 return {
                     "id": record_id,
                     **updated_data,
-                    "semantic_field": semantic_field
+                    "semantic_field": updated_record[8] if updated_record else ""  # semantic_field is column 8
                 }
         finally:
             connection.close()
@@ -395,7 +411,7 @@ class SemanticService:
         
         try:
             with connection.cursor() as cursor:
-                query = f"DELETE FROM {semantic_fields_table} WHERE id = {record_id}"
+                query = f"DELETE FROM {semantic_fields_table} WHERE semantic_field_id = {record_id}"
                 cursor.execute(query)
                 connection.commit()
                 
