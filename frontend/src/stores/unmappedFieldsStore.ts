@@ -185,18 +185,23 @@ export const useUnmappedFieldsStore = defineStore('unmappedFields', () => {
     error.value = null
 
     try {
-      // TODO: Replace with real API call
-      // const response = await fetch('/api/v2/unmapped-fields/')
-      // unmappedFields.value = await response.json()
-
-      // Mock: Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 300))
-      unmappedFields.value = [...mockData]
+      console.log('[Unmapped Fields Store] Fetching from API...')
+      const response = await fetch('/api/v2/unmapped-fields/')
       
-      console.log('[Unmapped Fields Store] Loaded', unmappedFields.value.length, 'fields')
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const data = await response.json()
+      unmappedFields.value = data
+      
+      console.log('[Unmapped Fields Store] Loaded', unmappedFields.value.length, 'fields from API')
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch unmapped fields'
       console.error('[Unmapped Fields Store] Error:', error.value)
+      
+      // On error, show empty array instead of mock data
+      unmappedFields.value = []
     } finally {
       loading.value = false
     }
@@ -246,11 +251,16 @@ export const useUnmappedFieldsStore = defineStore('unmappedFields', () => {
     error.value = null
 
     try {
-      // TODO: Replace with real API call
-      // await fetch(`/api/v2/unmapped-fields/${fieldId}`, { method: 'DELETE' })
+      console.log('[Unmapped Fields Store] Deleting field:', fieldId)
+      const response = await fetch(`/api/v2/unmapped-fields/${fieldId}`, { 
+        method: 'DELETE' 
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
 
-      // Mock: Remove from local array
-      await new Promise(resolve => setTimeout(resolve, 200))
+      // Remove from local array
       const index = unmappedFields.value.findIndex(f => f.id === fieldId)
       if (index >= 0) {
         unmappedFields.value.splice(index, 1)

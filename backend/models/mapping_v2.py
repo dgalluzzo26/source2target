@@ -49,6 +49,7 @@ class UnmappedFieldV2(BaseModel):
     src_nullable: str = Field(..., description="Whether column is nullable (YES/NO)")
     src_physical_datatype: str = Field(..., description="Physical data type (e.g., STRING, INT)")
     src_comments: Optional[str] = Field(None, description="Column description or comments")
+    domain: Optional[str] = Field(None, description="Domain category (e.g., claims, member, provider)")
     uploaded_at: Optional[datetime] = Field(None, description="Upload timestamp")
     uploaded_by: Optional[str] = Field(None, description="User who uploaded")
 
@@ -62,6 +63,7 @@ class UnmappedFieldCreateV2(BaseModel):
     src_nullable: str
     src_physical_datatype: str
     src_comments: Optional[str] = None
+    domain: Optional[str] = None
     uploaded_by: Optional[str] = None
 
 

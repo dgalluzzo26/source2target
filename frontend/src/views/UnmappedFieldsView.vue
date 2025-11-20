@@ -330,7 +330,8 @@ function handleDownloadTemplate() {
     'src_column_physical_name',
     'src_physical_datatype',
     'src_nullable',
-    'src_comments'
+    'src_comments',
+    'domain'
   ]
   
   const exampleRow = [
@@ -340,13 +341,14 @@ function handleDownloadTemplate() {
     'member_id',
     'STRING',
     'NO',
-    'Unique member identifier'
+    'Unique member identifier',
+    'member'
   ]
   
   const csvContent = [
     headers.join(','),
     exampleRow.join(','),
-    ',,,,,,', // Empty row for user
+    ',,,,,,,', // Empty row for user
   ].join('\n')
   
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -400,7 +402,8 @@ function handleFileSelect(event: any) {
         src_column_physical_name: values[3]?.trim() || values[2]?.trim() || '',
         src_physical_datatype: values[4]?.trim() || '',
         src_nullable: values[5]?.trim() || 'YES',
-        src_comments: values[6]?.trim() || ''
+        src_comments: values[6]?.trim() || '',
+        domain: values[7]?.trim() || ''
       }
     })
   }
@@ -429,7 +432,8 @@ async function handleBulkUpload() {
         src_column_physical_name: values[3]?.trim() || values[2]?.trim(),
         src_physical_datatype: values[4]?.trim(),
         src_nullable: values[5]?.trim() || 'YES',
-        src_comments: values[6]?.trim() || ''
+        src_comments: values[6]?.trim() || '',
+        domain: values[7]?.trim() || ''
       }
     }).filter(field => 
       field.src_table_name && field.src_column_name && field.src_physical_datatype

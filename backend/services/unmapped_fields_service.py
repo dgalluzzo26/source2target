@@ -122,6 +122,7 @@ class UnmappedFieldsService:
                     src_nullable,
                     src_physical_datatype,
                     src_comments,
+                    domain,
                     uploaded_ts as uploaded_at,
                     uploaded_by
                 FROM {unmapped_fields_table}
@@ -190,6 +191,7 @@ class UnmappedFieldsService:
                     src_nullable,
                     src_physical_datatype,
                     src_comments,
+                    domain,
                     uploaded_by
                 ) VALUES (
                     '{field_data.src_table_name.replace("'", "''")}',
@@ -199,6 +201,7 @@ class UnmappedFieldsService:
                     '{field_data.src_nullable}',
                     '{field_data.src_physical_datatype.replace("'", "''")}',
                     {'NULL' if not field_data.src_comments else "'" + field_data.src_comments.replace("'", "''") + "'"},
+                    {'NULL' if not field_data.domain else "'" + field_data.domain.replace("'", "''") + "'"},
                     {'NULL' if not field_data.uploaded_by else "'" + field_data.uploaded_by.replace("'", "''") + "'"}
                 )
                 """
