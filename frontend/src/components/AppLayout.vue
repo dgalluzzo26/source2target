@@ -27,21 +27,43 @@
       <div class="layout-menu">
         <ul class="layout-menu-root">
           <li>
-            <router-link to="/" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Introduction' : ''">
+            <router-link to="/" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Home' : ''">
               <i class="layout-menuitem-icon pi pi-home"></i>
-              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Introduction</span>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Home</span>
+            </router-link>
+          </li>
+          
+          <!-- Main Workflow -->
+          <li class="menu-section" v-if="!sidebarCollapsed">
+            <span class="menu-section-label">Mapping Workflow</span>
+          </li>
+          <li>
+            <router-link to="/unmapped-fields" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Create Mappings' : ''">
+              <i class="layout-menuitem-icon pi pi-plus-circle"></i>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Create Mappings</span>
             </router-link>
           </li>
           <li>
-            <router-link to="/unmapped-fields" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Field Mapping' : ''">
-              <i class="layout-menuitem-icon pi pi-sitemap"></i>
-              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Field Mapping</span>
+            <router-link to="/mappings" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'View Mappings' : ''">
+              <i class="layout-menuitem-icon pi pi-list"></i>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">View Mappings</span>
+            </router-link>
+          </li>
+          
+          <!-- Admin Section -->
+          <li class="menu-section" v-if="!sidebarCollapsed && userStore.isAdmin">
+            <span class="menu-section-label">Administration</span>
+          </li>
+          <li v-if="userStore.isAdmin">
+            <router-link to="/semantic-fields" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Semantic Fields' : ''">
+              <i class="layout-menuitem-icon pi pi-database"></i>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Semantic Fields</span>
             </router-link>
           </li>
           <li v-if="userStore.isAdmin">
-            <router-link to="/config" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Configuration' : ''">
+            <router-link to="/config" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Settings' : ''">
               <i class="layout-menuitem-icon pi pi-cog"></i>
-              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Configuration</span>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Settings</span>
             </router-link>
           </li>
         </ul>
@@ -221,6 +243,22 @@ onMounted(() => {
 
 .layout-menu-root > li {
   margin-bottom: 0.5rem;
+}
+
+/* Menu Section Labels */
+.menu-section {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0 1rem;
+}
+
+.menu-section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-color-secondary);
+  opacity: 0.7;
 }
 
 /* Menu Items with Gainwell Styling */

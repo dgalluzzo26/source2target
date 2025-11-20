@@ -7,8 +7,10 @@
  * Route Structure:
  * - / (root) → Introduction/Dashboard page
  * - /unmapped-fields → Unmapped Fields page (multi-field mapping)
- * - /mapping-config → Mapping Configuration page (configure mapping)
- * - /config → Admin Configuration page (semantic table, settings)
+ * - /mapping-config → Mapping Configuration Wizard (configure mapping)
+ * - /mappings → View Current Mappings (all users)
+ * - /semantic-fields → Semantic Table Management (admin only)
+ * - /config → Admin Configuration (admin only)
  * 
  * All routes use code-splitting (lazy loading) for better performance,
  * except AppLayout which is loaded immediately as it's always needed.
@@ -53,7 +55,19 @@ const router = createRouter({
           component: () => import('../views/MappingConfigView.vue')
         },
         {
-          // Admin configuration page - semantic table and settings
+          // View current mappings - available to all users
+          path: '/mappings',
+          name: 'mappings',
+          component: () => import('../views/MappingsListView.vue')
+        },
+        {
+          // Semantic table management - admin only
+          path: '/semantic-fields',
+          name: 'semantic-fields',
+          component: () => import('../views/SemanticFieldsView.vue')
+        },
+        {
+          // Admin configuration page - general settings
           path: '/config',
           name: 'config',
           component: () => import('../views/ConfigView.vue')
