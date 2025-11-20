@@ -24,6 +24,8 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import Aura from '@primevue/themes/aura'
+import ConfirmationService from 'primevue/confirmationservice'
+import ToastService from 'primevue/toastservice'
 
 // Root component and router
 import App from './App.vue'
@@ -54,6 +56,10 @@ import Message from 'primevue/message'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Tooltip from 'primevue/tooltip'
+import Toast from 'primevue/toast'
+import ConfirmDialog from 'primevue/confirmdialog'
+import Steps from 'primevue/steps'
+import RadioButton from 'primevue/radiobutton'
 
 // Create Vue application instance
 const app = createApp(App)
@@ -73,6 +79,10 @@ app.use(PrimeVue, {
     }
   }
 })
+
+// Install PrimeVue services for toast notifications and confirmations
+app.use(ToastService)
+app.use(ConfirmationService)
 
 // Register PrimeVue components globally for use in all templates
 // This avoids needing to import them in every component that uses them
@@ -96,6 +106,10 @@ app.component('Divider', Divider)
 app.component('Message', Message)
 app.component('IconField', IconField)
 app.component('InputIcon', InputIcon)
+app.component('Toast', Toast)
+app.component('ConfirmDialog', ConfirmDialog)
+app.component('Steps', Steps)
+app.component('RadioButton', RadioButton)
 
 // Register PrimeVue directives globally
 app.directive('tooltip', Tooltip)

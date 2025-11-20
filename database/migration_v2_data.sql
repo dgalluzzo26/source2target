@@ -20,11 +20,11 @@
 -- STEP 0: Backup V1 Tables
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS main.source2target.semantic_table_v1_backup
-DEEP CLONE main.source2target.semantic_table;
+CREATE TABLE IF NOT EXISTS oztest_dev.source2target.semantic_table_v1_backup
+DEEP CLONE oztest_dev.source2target.semantic_table;
 
-CREATE TABLE IF NOT EXISTS main.source2target.combined_fields_v1_backup
-DEEP CLONE main.source2target.combined_fields;
+CREATE TABLE IF NOT EXISTS oztest_dev.source2target.combined_fields_v1_backup
+DEEP CLONE oztest_dev.source2target.combined_fields;
 
 SELECT 'V1 tables backed up successfully' AS status;
 
@@ -37,7 +37,7 @@ SELECT 'V1 tables backed up successfully' AS status;
 -- - Preserve all audit fields
 -- ============================================================================
 
-INSERT INTO main.source2target.semantic_fields (
+INSERT INTO oztest_dev.source2target.semantic_fields (
   tgt_table_name,
   tgt_table_physical_name,
   tgt_column_name,
@@ -64,10 +64,10 @@ SELECT
   COALESCE(created_ts, CURRENT_TIMESTAMP()) AS created_ts,
   updated_by,
   updated_ts
-FROM main.source2target.semantic_table
+FROM oztest_dev.source2target.semantic_table
 WHERE NOT EXISTS (
   -- Avoid duplicates if migration is re-run
-  SELECT 1 FROM main.source2target.semantic_fields sf
+  SELECT 1 FROM oztest_dev.source2target.semantic_fields sf
   WHERE sf.tgt_table_physical_name = semantic_table.tgt_table_physical_name
     AND sf.tgt_column_physical_name = semantic_table.tgt_column_physical_name
 );
@@ -75,7 +75,7 @@ WHERE NOT EXISTS (
 SELECT 
   'semantic_fields' AS table_name,
   COUNT(*) AS migrated_records
-FROM main.source2target.semantic_fields;
+FROM oztest_dev.source2target.semantic_fields;
 
 -- ============================================================================
 -- STEP 2: Migrate Unmapped Fields → unmapped_fields
@@ -88,7 +88,7 @@ FROM main.source2target.semantic_fields;
 -- - Mapped fields: Records where tgt_table IS NOT NULL (handled in Step 3)
 -- ============================================================================
 
-INSERT INTO main.source2target.unmapped_fields (
+INSERT INTO oztest_dev.source2target.unmapped_fields (
   src_table_name,
   src_column_name,
   src_column_physical_name,
@@ -113,11 +113,11 @@ SELECT
   COALESCE(created_ts, CURRENT_TIMESTAMP()) AS created_ts,
   updated_by,
   updated_ts
-FROM main.source2target.combined_fields
+FROM oztest_dev.source2target.combined_fields
 WHERE tgt_table_physical IS NULL  -- Unmapped fields only
   AND NOT EXISTS (
     -- Avoid duplicates if migration is re-run
-    SELECT 1 FROM main.source2target.unmapped_fields uf
+    SELECT 1 FROM oztest_dev.source2target.unmapped_fields uf
     WHERE uf.src_table_name = combined_fields.src_table_name
       AND uf.src_column_name = combined_fields.src_column_name
   );
@@ -125,7 +125,7 @@ WHERE tgt_table_physical IS NULL  -- Unmapped fields only
 SELECT 
   'unmapped_fields' AS table_name,
   COUNT(*) AS migrated_records
-FROM main.source2target.unmapped_fields;
+FROM oztest_dev.source2target.unmapped_fields;
 
 -- ============================================================================
 -- STEP 3: Migrate Mapped Fields → mapped_fields + mapping_details
@@ -138,7 +138,7 @@ FROM main.source2target.unmapped_fields;
 -- ============================================================================
 
 -- First, insert into mapped_fields (one record per unique target)
-INSERT INTO main.source2target.mapped_fields (
+INSERT INTO oztest_dev.source2target.mapped_fields (
   semantic_field_id,
   tgt_table_name,
   tgt_table_physical_name,
@@ -178,14 +178,14 @@ SELECT
   COALESCE(cf.created_ts, CURRENT_TIMESTAMP()) AS mapped_ts,
   cf.updated_by,
   cf.updated_ts
-FROM main.source2target.combined_fields cf
-INNER JOIN main.source2target.semantic_fields sf
+FROM oztest_dev.source2target.combined_fields cf
+INNER JOIN oztest_dev.source2target.semantic_fields sf
   ON cf.tgt_table_physical = sf.tgt_table_physical_name
   AND cf.tgt_column_physical = sf.tgt_column_physical_name
 WHERE cf.tgt_table_physical IS NOT NULL  -- Only mapped fields
   AND NOT EXISTS (
     -- Avoid duplicates if migration is re-run
-    SELECT 1 FROM main.source2target.mapped_fields mf
+    SELECT 1 FROM oztest_dev.source2target.mapped_fields mf
     WHERE mf.tgt_table_physical_name = cf.tgt_table_physical
       AND mf.tgt_column_physical_name = cf.tgt_column_physical
   );
@@ -193,10 +193,10 @@ WHERE cf.tgt_table_physical IS NOT NULL  -- Only mapped fields
 SELECT 
   'mapped_fields' AS table_name,
   COUNT(*) AS migrated_records
-FROM main.source2target.mapped_fields;
+FROM oztest_dev.source2target.mapped_fields;
 
 -- Second, insert into mapping_details (one record per source field)
-INSERT INTO main.source2target.mapping_details (
+INSERT INTO oztest_dev.source2target.mapping_details (
   mapped_field_id,
   unmapped_field_id,
   src_table_name,
@@ -225,14 +225,14 @@ SELECT
   COALESCE(cf.created_ts, CURRENT_TIMESTAMP()) AS created_ts,
   cf.updated_by,
   cf.updated_ts
-FROM main.source2target.combined_fields cf
-INNER JOIN main.source2target.mapped_fields mf
+FROM oztest_dev.source2target.combined_fields cf
+INNER JOIN oztest_dev.source2target.mapped_fields mf
   ON cf.tgt_table_physical = mf.tgt_table_physical_name
   AND cf.tgt_column_physical = mf.tgt_column_physical_name
 WHERE cf.tgt_table_physical IS NOT NULL  -- Only mapped fields
   AND NOT EXISTS (
     -- Avoid duplicates if migration is re-run
-    SELECT 1 FROM main.source2target.mapping_details md
+    SELECT 1 FROM oztest_dev.source2target.mapping_details md
     WHERE md.mapped_field_id = mf.mapped_field_id
       AND md.src_table_name = cf.src_table_name
       AND md.src_column_name = cf.src_column_name
@@ -241,7 +241,7 @@ WHERE cf.tgt_table_physical IS NOT NULL  -- Only mapped fields
 SELECT 
   'mapping_details' AS table_name,
   COUNT(*) AS migrated_records
-FROM main.source2target.mapping_details;
+FROM oztest_dev.source2target.mapping_details;
 
 -- ============================================================================
 -- STEP 4: Data Quality Checks
@@ -256,12 +256,12 @@ SELECT
 FROM (
   SELECT 
     COUNT(*) AS v1_count 
-  FROM main.source2target.semantic_table
+  FROM oztest_dev.source2target.semantic_table
 ) v1
 CROSS JOIN (
   SELECT 
     COUNT(*) AS v2_count 
-  FROM main.source2target.semantic_fields
+  FROM oztest_dev.source2target.semantic_fields
 ) v2;
 
 -- Check 2: Verify all V1 unmapped fields were migrated
@@ -273,13 +273,13 @@ SELECT
 FROM (
   SELECT 
     COUNT(*) AS v1_count 
-  FROM main.source2target.combined_fields
+  FROM oztest_dev.source2target.combined_fields
   WHERE tgt_table IS NULL
 ) v1
 CROSS JOIN (
   SELECT 
     COUNT(*) AS v2_count 
-  FROM main.source2target.unmapped_fields
+  FROM oztest_dev.source2target.unmapped_fields
 ) v2;
 
 -- Check 3: Verify all V1 mapped fields were migrated
@@ -292,18 +292,18 @@ SELECT
 FROM (
   SELECT 
     COUNT(*) AS v1_count 
-  FROM main.source2target.combined_fields
+  FROM oztest_dev.source2target.combined_fields
   WHERE tgt_table IS NOT NULL
 ) v1
 CROSS JOIN (
   SELECT 
     COUNT(*) AS v2_mapped_count 
-  FROM main.source2target.mapped_fields
+  FROM oztest_dev.source2target.mapped_fields
 ) v2_mapped
 CROSS JOIN (
   SELECT 
     COUNT(*) AS v2_detail_count 
-  FROM main.source2target.mapping_details
+  FROM oztest_dev.source2target.mapping_details
 ) v2_detail;
 
 -- Check 4: Verify referential integrity
@@ -313,8 +313,8 @@ SELECT
   CASE WHEN orphan_count = 0 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM (
   SELECT COUNT(*) AS orphan_count
-  FROM main.source2target.mapping_details md
-  LEFT JOIN main.source2target.mapped_fields mf ON md.mapped_field_id = mf.mapped_field_id
+  FROM oztest_dev.source2target.mapping_details md
+  LEFT JOIN oztest_dev.source2target.mapped_fields mf ON md.mapped_field_id = mf.mapped_field_id
   WHERE mf.mapped_field_id IS NULL
 );
 
@@ -332,7 +332,7 @@ SELECT
   COUNT(DISTINCT tgt_table) AS unique_tables,
   COUNT(DISTINCT domain) AS unique_domains,
   SUM(CASE WHEN domain IS NOT NULL THEN 1 ELSE 0 END) AS records_with_domain
-FROM main.source2target.semantic_fields
+FROM oztest_dev.source2target.semantic_fields
 
 UNION ALL
 
@@ -342,7 +342,7 @@ SELECT
   COUNT(DISTINCT src_table) AS unique_tables,
   COUNT(DISTINCT domain) AS unique_domains,
   SUM(CASE WHEN domain IS NOT NULL THEN 1 ELSE 0 END) AS records_with_domain
-FROM main.source2target.unmapped_fields
+FROM oztest_dev.source2target.unmapped_fields
 
 UNION ALL
 
@@ -352,7 +352,7 @@ SELECT
   COUNT(DISTINCT tgt_table) AS unique_tables,
   COUNT(DISTINCT mapping_source) AS unique_mapping_sources,
   SUM(CASE WHEN confidence_score IS NOT NULL THEN 1 ELSE 0 END) AS records_with_confidence
-FROM main.source2target.mapped_fields
+FROM oztest_dev.source2target.mapped_fields
 
 UNION ALL
 
@@ -362,7 +362,7 @@ SELECT
   COUNT(DISTINCT src_table) AS unique_src_tables,
   COUNT(DISTINCT mapped_field_id) AS unique_mappings,
   SUM(CASE WHEN transformations IS NOT NULL THEN 1 ELSE 0 END) AS records_with_transformations
-FROM main.source2target.mapping_details
+FROM oztest_dev.source2target.mapping_details
 
 UNION ALL
 
@@ -372,7 +372,7 @@ SELECT
   COUNT(DISTINCT category) AS unique_categories,
   SUM(CASE WHEN is_system = true THEN 1 ELSE 0 END) AS system_transformations,
   SUM(CASE WHEN is_system = false THEN 1 ELSE 0 END) AS custom_transformations
-FROM main.source2target.transformation_library;
+FROM oztest_dev.source2target.transformation_library;
 
 -- ============================================================================
 -- STEP 6: Post-Migration Tasks (TODO)
@@ -405,7 +405,7 @@ SELECT 'TODO', '7. Consider dropping V1 tables once migration is validated: comb
 
 /*
 -- Example: Auto-populate domain based on table name prefixes
-UPDATE main.source2target.semantic_fields
+UPDATE oztest_dev.source2target.semantic_fields
 SET domain = CASE
   WHEN LOWER(tgt_table) LIKE '%claim%' OR LOWER(tgt_table) LIKE '%clm%' THEN 'claims'
   WHEN LOWER(tgt_table) LIKE '%member%' OR LOWER(tgt_table) LIKE '%mbr%' THEN 'member'
@@ -418,7 +418,7 @@ SET domain = CASE
 END
 WHERE domain IS NULL;
 
-UPDATE main.source2target.unmapped_fields
+UPDATE oztest_dev.source2target.unmapped_fields
 SET domain = CASE
   WHEN LOWER(src_table) LIKE '%claim%' OR LOWER(src_table) LIKE '%clm%' THEN 'claims'
   WHEN LOWER(src_table) LIKE '%member%' OR LOWER(src_table) LIKE '%mbr%' THEN 'member'

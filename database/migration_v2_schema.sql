@@ -18,7 +18,7 @@
 -- Changes from V1: Added domain-specific columns for enhanced vector search
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS main.source2target.semantic_fields (
+CREATE TABLE IF NOT EXISTS oztest_dev.source2target.semantic_fields (
   semantic_field_id BIGINT GENERATED ALWAYS AS IDENTITY,
   
   -- Logical names (for display/UI)
@@ -73,7 +73,7 @@ TBLPROPERTIES (
 -- Changes from V1: Added domain, removed mapping-related columns
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS main.source2target.unmapped_fields (
+CREATE TABLE IF NOT EXISTS oztest_dev.source2target.unmapped_fields (
   unmapped_field_id BIGINT GENERATED ALWAYS AS IDENTITY,
   
   -- Logical names (for display/UI)
@@ -116,7 +116,7 @@ TBLPROPERTIES (
 -- Key Feature: Multiple source fields can map to single target field
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS main.source2target.mapped_fields (
+CREATE TABLE IF NOT EXISTS oztest_dev.source2target.mapped_fields (
   mapped_field_id BIGINT GENERATED ALWAYS AS IDENTITY,
   
   -- Target field reference
@@ -150,7 +150,7 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapped_fields (
   updated_ts TIMESTAMP COMMENT 'Timestamp when mapping was last updated',
   
   CONSTRAINT pk_mapped_fields PRIMARY KEY (mapped_field_id),
-  CONSTRAINT fk_mapped_semantic FOREIGN KEY (semantic_field_id) REFERENCES main.source2target.semantic_fields(semantic_field_id)
+  CONSTRAINT fk_mapped_semantic FOREIGN KEY (semantic_field_id) REFERENCES oztest_dev.source2target.semantic_fields(semantic_field_id)
   -- Note: UNIQUE constraint on (tgt_table_physical_name, tgt_column_physical_name) not supported - enforce at application level
   -- Note: FOREIGN KEY is informational only (not enforced by Databricks)
 )
@@ -169,7 +169,7 @@ TBLPROPERTIES (
 -- Key Feature: Ordering and per-field transformations
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS main.source2target.mapping_details (
+CREATE TABLE IF NOT EXISTS oztest_dev.source2target.mapping_details (
   mapping_detail_id BIGINT GENERATED ALWAYS AS IDENTITY,
   
   -- Parent mapping reference
@@ -198,8 +198,8 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapping_details (
   updated_ts TIMESTAMP COMMENT 'Timestamp when field was last updated',
   
   CONSTRAINT pk_mapping_details PRIMARY KEY (mapping_detail_id),
-  CONSTRAINT fk_detail_mapped FOREIGN KEY (mapped_field_id) REFERENCES main.source2target.mapped_fields(mapped_field_id),
-  CONSTRAINT fk_detail_unmapped FOREIGN KEY (unmapped_field_id) REFERENCES main.source2target.unmapped_fields(unmapped_field_id)
+  CONSTRAINT fk_detail_mapped FOREIGN KEY (mapped_field_id) REFERENCES oztest_dev.source2target.mapped_fields(mapped_field_id),
+  CONSTRAINT fk_detail_unmapped FOREIGN KEY (unmapped_field_id) REFERENCES oztest_dev.source2target.unmapped_fields(unmapped_field_id)
   -- Note: UNIQUE constraint on (mapped_field_id, src_table_name, src_column_name) not supported - enforce at application level
   -- Note: FOREIGN KEYs are informational only (not enforced by Databricks)
   -- Note: ON DELETE CASCADE/SET NULL not supported - must handle in application code
@@ -219,7 +219,7 @@ TBLPROPERTIES (
 -- Key Feature: Track accepted/rejected/modified suggestions with reasoning
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS main.source2target.mapping_feedback (
+CREATE TABLE IF NOT EXISTS oztest_dev.source2target.mapping_feedback (
   feedback_id BIGINT GENERATED ALWAYS AS IDENTITY,
   
   -- What was suggested
@@ -254,7 +254,7 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapping_feedback (
   feedback_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Timestamp when feedback was provided',
   
   CONSTRAINT pk_mapping_feedback PRIMARY KEY (feedback_id),
-  CONSTRAINT fk_feedback_mapped FOREIGN KEY (mapped_field_id) REFERENCES main.source2target.mapped_fields(mapped_field_id)
+  CONSTRAINT fk_feedback_mapped FOREIGN KEY (mapped_field_id) REFERENCES oztest_dev.source2target.mapped_fields(mapped_field_id)
   -- Note: FOREIGN KEY is informational only (not enforced by Databricks)
   -- Note: ON DELETE SET NULL not supported - must handle in application code
 )
@@ -273,7 +273,7 @@ TBLPROPERTIES (
 -- Key Feature: Template library for standardization
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS main.source2target.transformation_library (
+CREATE TABLE IF NOT EXISTS oztest_dev.source2target.transformation_library (
   transformation_id BIGINT GENERATED ALWAYS AS IDENTITY,
   transformation_name STRING NOT NULL COMMENT 'Friendly name (e.g., Standard Name Format)',
   transformation_code STRING NOT NULL COMMENT 'Short code (e.g., STD_NAME)',
@@ -308,34 +308,34 @@ TBLPROPERTIES (
 -- ============================================================================
 
 -- Enable Liquid Clustering on semantic_fields (clustered by tgt_table_physical_name, domain)
-ALTER TABLE main.source2target.semantic_fields 
+ALTER TABLE oztest_dev.source2target.semantic_fields 
 CLUSTER BY (tgt_table_physical_name, domain);
 
 -- Enable Liquid Clustering on unmapped_fields (clustered by src_table_name, domain)
-ALTER TABLE main.source2target.unmapped_fields 
+ALTER TABLE oztest_dev.source2target.unmapped_fields 
 CLUSTER BY (src_table_name, domain);
 
 -- Enable Liquid Clustering on mapped_fields (clustered by tgt_table_physical_name, mapping_status)
-ALTER TABLE main.source2target.mapped_fields 
+ALTER TABLE oztest_dev.source2target.mapped_fields 
 CLUSTER BY (tgt_table_physical_name, mapping_status);
 
 -- Enable Liquid Clustering on mapping_details (clustered by mapped_field_id)
-ALTER TABLE main.source2target.mapping_details 
+ALTER TABLE oztest_dev.source2target.mapping_details 
 CLUSTER BY (mapped_field_id);
 
 -- Enable Liquid Clustering on mapping_feedback (clustered by feedback_action, feedback_ts)
-ALTER TABLE main.source2target.mapping_feedback 
+ALTER TABLE oztest_dev.source2target.mapping_feedback 
 CLUSTER BY (feedback_action);
 
 -- Enable Liquid Clustering on transformation_library (clustered by category, is_system)
-ALTER TABLE main.source2target.transformation_library 
+ALTER TABLE oztest_dev.source2target.transformation_library 
 CLUSTER BY (category, is_system);
 
 -- ============================================================================
 -- SEED DATA: Common Transformations
 -- ============================================================================
 
-INSERT INTO main.source2target.transformation_library 
+INSERT INTO oztest_dev.source2target.transformation_library 
   (transformation_name, transformation_code, transformation_expression, transformation_description, category, is_system)
 VALUES
   ('Trim Whitespace', 'TRIM', 'TRIM({field})', 'Remove leading and trailing whitespace', 'TEXT', true),
