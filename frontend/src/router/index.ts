@@ -6,7 +6,9 @@
  * 
  * Route Structure:
  * - / (root) → Introduction/Dashboard page
- * - /mapping → Field Mapping page (mapped/unmapped fields, AI suggestions)
+ * - /mapping → Field Mapping page (V1 - legacy)
+ * - /unmapped-fields → Unmapped Fields page (V2 - multi-field mapping)
+ * - /mapping-config → Mapping Configuration page (V2 - configure mapping)
  * - /config → Admin Configuration page (semantic table, settings)
  * 
  * All routes use code-splitting (lazy loading) for better performance,
@@ -38,12 +40,24 @@ const router = createRouter({
           path: '',
           name: 'introduction',
           component: () => import('../views/IntroductionView.vue')
-    },
-    {
-          // Field mapping page - main application functionality
+        },
+        {
+          // V1 Field mapping page (legacy)
           path: '/mapping',
           name: 'mapping',
           component: () => import('../views/MappingView.vue')
+        },
+        {
+          // V2 Unmapped fields page - main entry point for multi-field mapping
+          path: '/unmapped-fields',
+          name: 'unmapped-fields',
+          component: () => import('../views/UnmappedFieldsView.vue')
+        },
+        {
+          // V2 Mapping configuration page - configure multi-field mapping
+          path: '/mapping-config',
+          name: 'mapping-config',
+          component: () => import('../views/MappingConfigView.vue')
         },
         {
           // Admin configuration page - semantic table and settings

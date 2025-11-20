@@ -33,9 +33,16 @@
             </router-link>
           </li>
           <li>
-            <router-link to="/mapping" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Field Mapping' : ''">
+            <router-link to="/unmapped-fields" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Field Mapping (V2)' : ''">
               <i class="layout-menuitem-icon pi pi-sitemap"></i>
-              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Field Mapping</span>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Field Mapping (V2)</span>
+            </router-link>
+          </li>
+          <li>
+            <router-link to="/mapping" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Field Mapping (V1 Legacy)' : ''">
+              <i class="layout-menuitem-icon pi pi-table"></i>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Field Mapping (V1)</span>
+              <Badge value="Legacy" severity="warning" style="margin-left: 0.5rem;" v-if="!sidebarCollapsed" />
             </router-link>
           </li>
           <li v-if="userStore.isAdmin">
