@@ -28,14 +28,22 @@
     <!-- Configuration Tabs -->
     <TabView v-else>
       <!-- Database Configuration Tab -->
-      <TabPanel header="🗄️ Database">
+      <TabPanel>
+        <template #header>
+          <i class="pi pi-database"></i>
+          <span class="tab-label">Database</span>
+        </template>
         <div class="config-section">
           <h3>Database Configuration</h3>
           <p>Configure database connections and table references.</p>
 
           <!-- Connection Help -->
           <Accordion class="connection-help">
-            <AccordionTab header="ℹ️ How to find connection details">
+            <AccordionTab>
+              <template #header>
+                <i class="pi pi-info-circle"></i>
+                <span class="accordion-label">How to find connection details</span>
+              </template>
               <div class="help-content">
                 <h4>Server Hostname:</h4>
                 <ol>
@@ -201,7 +209,11 @@
       </TabPanel>
 
       <!-- AI/ML Models Tab -->
-      <TabPanel header="🤖 AI/ML Models">
+      <TabPanel>
+        <template #header>
+          <i class="pi pi-bolt"></i>
+          <span class="tab-label">AI/ML Models</span>
+        </template>
         <div class="config-section">
           <h3>AI/ML Model Configuration</h3>
           <p>Configure AI model endpoints and parameters for intelligent field mapping.</p>
@@ -245,7 +257,11 @@
       </TabPanel>
 
       <!-- Vector Search Tab -->
-      <TabPanel header="🔍 Vector Search">
+      <TabPanel>
+        <template #header>
+          <i class="pi pi-search"></i>
+          <span class="tab-label">Vector Search</span>
+        </template>
         <div class="config-section">
           <h3>Vector Search Configuration</h3>
           <p>Configure vector search index for semantic field matching.</p>
@@ -290,7 +306,11 @@
       </TabPanel>
 
       <!-- UI Settings Tab -->
-      <TabPanel header="🎨 UI Settings">
+      <TabPanel>
+        <template #header>
+          <i class="pi pi-palette"></i>
+          <span class="tab-label">UI Settings</span>
+        </template>
         <div class="config-section">
           <h3>User Interface Settings</h3>
           <p>Customize the application appearance and behavior.</p>
@@ -333,7 +353,11 @@
       </TabPanel>
 
       <!-- Support Tab -->
-      <TabPanel header="🤝 Support">
+      <TabPanel>
+        <template #header>
+          <i class="pi pi-question-circle"></i>
+          <span class="tab-label">Support</span>
+        </template>
         <div class="config-section">
           <h3>Support Configuration</h3>
           <p>Configure support and help resources.</p>
@@ -354,7 +378,11 @@
       </TabPanel>
 
       <!-- Security Tab -->
-      <TabPanel header="🔐 Security">
+      <TabPanel>
+        <template #header>
+          <i class="pi pi-lock"></i>
+          <span class="tab-label">Security</span>
+        </template>
         <div class="config-section">
           <h3>Security Configuration</h3>
           <p>Configure authentication and authorization settings.</p>
@@ -386,7 +414,11 @@
       </TabPanel>
 
       <!-- Actions Tab -->
-      <TabPanel header="🛠️ Actions">
+      <TabPanel>
+        <template #header>
+          <i class="pi pi-wrench"></i>
+          <span class="tab-label">Actions</span>
+        </template>
         <div class="config-section">
           <h3>Configuration Actions</h3>
           <p>Import, export, and reset configuration settings.</p>
@@ -736,6 +768,42 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
+}
+
+/* Tab header icons - consistent styling */
+:deep(.p-tabview-nav-link) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+:deep(.p-tabview-nav-link i) {
+  color: var(--text-color);
+  font-size: 1rem;
+}
+
+:deep(.p-tabview-nav-link.p-highlight i) {
+  color: var(--gainwell-primary);
+}
+
+.tab-label {
+  font-weight: 500;
+}
+
+/* Accordion header icons */
+:deep(.p-accordion-header-link) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+:deep(.p-accordion-header-link i.pi-info-circle) {
+  color: var(--text-color-secondary);
+  font-size: 1rem;
+}
+
+.accordion-label {
+  font-weight: 500;
 }
 
 .actions-grid {
