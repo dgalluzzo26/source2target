@@ -194,8 +194,8 @@ class UnmappedFieldsService:
                     '{field_data.src_column_physical_name.replace("'", "''")}',
                     '{field_data.src_nullable}',
                     '{field_data.src_physical_datatype.replace("'", "''")}',
-                    {f"'{field_data.src_comments.replace("'", "''")}'" if field_data.src_comments else 'NULL'},
-                    {f"'{field_data.uploaded_by.replace("'", "''")}'" if field_data.uploaded_by else 'NULL'}
+                    {'NULL' if not field_data.src_comments else "'" + field_data.src_comments.replace("'", "''") + "'"},
+                    {'NULL' if not field_data.uploaded_by else "'" + field_data.uploaded_by.replace("'", "''") + "'"}
                 )
                 """
                 

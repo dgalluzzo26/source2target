@@ -99,10 +99,10 @@ class FeedbackService:
                     '{feedback_data.suggested_tgt_table_name.replace("'", "''")}',
                     '{feedback_data.suggested_tgt_column_name.replace("'", "''")}',
                     '{feedback_data.feedback_status}',
-                    {f"'{feedback_data.user_comment.replace("'", "''")}'" if feedback_data.user_comment else 'NULL'},
+                    {'NULL' if not feedback_data.user_comment else "'" + feedback_data.user_comment.replace("'", "''") + "'"},
                     {feedback_data.ai_confidence_score if feedback_data.ai_confidence_score else 'NULL'},
-                    {f"'{feedback_data.ai_reasoning.replace("'", "''")}'" if feedback_data.ai_reasoning else 'NULL'},
-                    {f"'{feedback_data.feedback_by.replace("'", "''")}'" if feedback_data.feedback_by else 'NULL'}
+                    {'NULL' if not feedback_data.ai_reasoning else "'" + feedback_data.ai_reasoning.replace("'", "''") + "'"},
+                    {'NULL' if not feedback_data.feedback_by else "'" + feedback_data.feedback_by.replace("'", "''") + "'"}
                 )
                 """
                 

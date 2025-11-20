@@ -133,11 +133,11 @@ class MappingServiceV2:
                     '{mapped_field_data.tgt_column_name.replace("'", "''")}',
                     '{mapped_field_data.tgt_column_physical_name.replace("'", "''")}',
                     '{mapped_field_data.concat_strategy}',
-                    {f"'{mapped_field_data.custom_concat_value.replace("'", "''")}'" if mapped_field_data.custom_concat_value else 'NULL'},
-                    {f"'{mapped_field_data.final_sql_expression.replace("'", "''")}'" if mapped_field_data.final_sql_expression else 'NULL'},
-                    {f"'{mapped_field_data.mapped_by.replace("'", "''")}'" if mapped_field_data.mapped_by else 'NULL'},
+                    {'NULL' if not mapped_field_data.custom_concat_value else "'" + mapped_field_data.custom_concat_value.replace("'", "''") + "'"},
+                    {'NULL' if not mapped_field_data.final_sql_expression else "'" + mapped_field_data.final_sql_expression.replace("'", "''") + "'"},
+                    {'NULL' if not mapped_field_data.mapped_by else "'" + mapped_field_data.mapped_by.replace("'", "''") + "'"},
                     {mapped_field_data.mapping_confidence_score if mapped_field_data.mapping_confidence_score else 'NULL'},
-                    {f"'{mapped_field_data.ai_reasoning.replace("'", "''")}'" if mapped_field_data.ai_reasoning else 'NULL'}
+                    {'NULL' if not mapped_field_data.ai_reasoning else "'" + mapped_field_data.ai_reasoning.replace("'", "''") + "'"}
                 )
                 """
                 
@@ -167,7 +167,7 @@ class MappingServiceV2:
                         '{detail.src_column_name.replace("'", "''")}',
                         '{detail.src_column_physical_name.replace("'", "''")}',
                         {detail.field_order},
-                        {f"'{detail.transformation_expr.replace("'", "''")}'" if detail.transformation_expr else 'NULL'}
+                        {'NULL' if not detail.transformation_expr else "'" + detail.transformation_expr.replace("'", "''") + "'"}
                     )
                     """
                     
