@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Field Mapping Experience - Interactive Mockup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 24px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .header h1 {
+            color: #2d3748;
+            font-size: 24px;
+        }
+        
+        .badge {
+            background: #4299e1;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .step-indicator {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: #edf2f7;
+            border-radius: 8px;
+        }
+        
+        .step {
+            flex: 1;
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+            text-align: center;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .step.active {
+            border-color: #4299e1;
+            background: #ebf8ff;
+        }
+        
+        .step.completed {
+            border-color: #48bb78;
+            background: #f0fff4;
+        }
+        
+        .step-number {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #cbd5e0;
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .step.active .step-number {
+            background: #4299e1;
+        }
+        
+        .step.completed .step-number {
+            background: #48bb78;
+        }
+        
+        .step-title {
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 14px;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .panel {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            background: #fafafa;
+        }
+        
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .panel-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .info-badge {
+            background: #bee3f8;
+            color: #2c5282;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .target-field {
+            background: #f7fafc;
+            border: 2px solid #4299e1;
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .target-field-label {
+            font-size: 12px;
+            color: #718096;
+            margin-bottom: 4px;
+        }
+        
+        .target-field-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .target-field-meta {
+            font-size: 12px;
+            color: #a0aec0;
+            margin-top: 4px;
+        }
+        
+        .source-fields-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .source-field-item {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .source-field-item:hover {
+            border-color: #4299e1;
+            background: #f7fafc;
+        }
+        
+        .source-field-item.selected {
+            border-color: #48bb78;
+            background: #f0fff4;
+        }
+        
+        .source-field-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        
+        .source-field-name {
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .checkbox {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #cbd5e0;
+            border-radius: 4px;
+            display: inline-block;
+            position: relative;
+        }
+        
+        .source-field-item.selected .checkbox {
+            background: #48bb78;
+            border-color: #48bb78;
+        }
+        
+        .source-field-item.selected .checkbox::after {
+            content: '✓';
+            color: white;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+        }
+        
+        .source-field-meta {
+            font-size: 11px;
+            color: #a0aec0;
+        }
+        
+        .selected-fields-panel {
+            background: white;
+            border: 2px solid #4299e1;
+            border-radius: 8px;
+            padding: 16px;
+            min-height: 200px;
+        }
+        
+        .selected-field-card {
+            background: #f7fafc;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+            position: relative;
+        }
+        
+        .drag-handle {
+            cursor: move;
+            color: #a0aec0;
+            margin-right: 8px;
+            font-size: 18px;
+        }
+        
+        .field-order {
+            background: #4299e1;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+            margin-right: 8px;
+        }
+        
+        .remove-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #fc8181;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        
+        .remove-btn:hover {
+            background: #f56565;
+        }
+        
+        .transformation-select {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #cbd5e0;
+            border-radius: 4px;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+        
+        .concat-options {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .concat-btn {
+            flex: 1;
+            padding: 8px;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        .concat-btn:hover {
+            border-color: #4299e1;
+        }
+        
+        .concat-btn.active {
+            background: #4299e1;
+            color: white;
+            border-color: #4299e1;
+        }
+        
+        .preview-panel {
+            background: #2d3748;
+            color: #e2e8f0;
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        
+        .preview-label {
+            color: #a0aec0;
+            font-size: 11px;
+            margin-bottom: 8px;
+        }
+        
+        .preview-expression {
+            color: #81e6d9;
+            line-height: 1.6;
+        }
+        
+        .ai-suggestions {
+            margin-top: 16px;
+        }
+        
+        .suggestion-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .suggestion-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .suggestion-rank {
+            background: #edf2f7;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .match-quality {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .match-strong {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        
+        .match-good {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+        
+        .suggestion-field {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 4px;
+        }
+        
+        .suggestion-reasoning {
+            font-size: 12px;
+            color: #718096;
+            margin-bottom: 8px;
+        }
+        
+        .suggestion-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        .btn-accept {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .btn-accept:hover {
+            background: #38a169;
+        }
+        
+        .btn-reject {
+            background: #fc8181;
+            color: white;
+        }
+        
+        .btn-reject:hover {
+            background: #f56565;
+        }
+        
+        .btn-modify {
+            background: #4299e1;
+            color: white;
+        }
+        
+        .btn-modify:hover {
+            background: #3182ce;
+        }
+        
+        .feedback-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            padding: 24px;
+            min-width: 400px;
+            max-width: 600px;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .feedback-dialog.show {
+            display: block;
+        }
+        
+        .dialog-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+        
+        .dialog-content textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #cbd5e0;
+            border-radius: 4px;
+            min-height: 100px;
+            font-family: inherit;
+            resize: vertical;
+        }
+        
+        .dialog-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 16px;
+        }
+        
+        .btn-cancel {
+            background: #e2e8f0;
+            color: #2d3748;
+        }
+        
+        .btn-submit {
+            background: #4299e1;
+            color: white;
+        }
+        
+        .action-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 2px solid #e2e8f0;
+        }
+        
+        .btn-large {
+            padding: 12px 24px;
+            font-size: 14px;
+        }
+        
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #2d3748;
+        }
+        
+        .btn-primary {
+            background: #4299e1;
+            color: white;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #a0aec0;
+        }
+        
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+            display: none;
+        }
+        
+        .overlay.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Multi-Field Mapping Experience</h1>
+            <span class="badge">V2 Enhanced</span>
+        </div>
+        
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step completed">
+                <div class="step-number">1</div>
+                <div class="step-title">Select Target</div>
+            </div>
+            <div class="step active">
+                <div class="step-number">2</div>
+                <div class="step-title">Choose Sources</div>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-title">Configure</div>
+            </div>
+            <div class="step">
+                <div class="step-number">4</div>
+                <div class="step-title">Review & Save</div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Panel: Target & AI Suggestions -->
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">Target Field</div>
+                    <span class="info-badge">Member Domain</span>
+                </div>
+                
+                <div class="target-field">
+                    <div class="target-field-label">Selected Target</div>
+                    <div class="target-field-value">Member Table → Full Name</div>
+                    <div class="target-field-meta">slv_member.full_name (STRING)</div>
+                </div>
+                
+                <div class="panel-header">
+                    <div class="panel-title">AI Suggestions</div>
+                    <span class="info-badge">3 Found</span>
+                </div>
+                
+                <div class="ai-suggestions">
+                    <div class="suggestion-card">
+                        <div class="suggestion-header">
+                            <span class="suggestion-rank">#1 Suggestion</span>
+                            <span class="match-quality match-strong">Strong Match</span>
+                        </div>
+                        <div class="suggestion-field">T_MEMBER.FIRST_NAME + T_MEMBER.LAST_NAME</div>
+                        <div class="suggestion-reasoning">
+                            <strong>AI Reasoning:</strong> The semantic similarity between source fields "first name" and "last name" strongly correlates with the target "full name". Concatenating these fields is the standard approach for creating full names.
+                        </div>
+                        <div class="suggestion-actions">
+                            <button class="btn btn-accept" onclick="acceptSuggestion()">✓ Accept</button>
+                            <button class="btn btn-modify" onclick="modifySuggestion()">✎ Modify</button>
+                            <button class="btn btn-reject" onclick="showRejectDialog()">✗ Reject</button>
+                        </div>
+                    </div>
+                    
+                    <div class="suggestion-card">
+                        <div class="suggestion-header">
+                            <span class="suggestion-rank">#2 Suggestion</span>
+                            <span class="match-quality match-good">Good Match</span>
+                        </div>
+                        <div class="suggestion-field">T_MEMBER.NAME_FULL</div>
+                        <div class="suggestion-reasoning">
+                            <strong>AI Reasoning:</strong> Direct field mapping with high semantic similarity. Single source field already contains the full name.
+                        </div>
+                        <div class="suggestion-actions">
+                            <button class="btn btn-accept">✓ Accept</button>
+                            <button class="btn btn-modify">✎ Modify</button>
+                            <button class="btn btn-reject" onclick="showRejectDialog()">✗ Reject</button>
+                        </div>
+                    </div>
+                    
+                    <div class="suggestion-card">
+                        <div class="suggestion-header">
+                            <span class="suggestion-rank">#3 Suggestion</span>
+                            <span class="match-quality match-good">Good Match</span>
+                        </div>
+                        <div class="suggestion-field">T_PERSON.F_NAME + T_PERSON.L_NAME</div>
+                        <div class="suggestion-reasoning">
+                            <strong>AI Reasoning:</strong> Alternative source table with similar field structure. Good fallback if primary source is unavailable.
+                        </div>
+                        <div class="suggestion-actions">
+                            <button class="btn btn-accept">✓ Accept</button>
+                            <button class="btn btn-modify">✎ Modify</button>
+                            <button class="btn btn-reject" onclick="showRejectDialog()">✗ Reject</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Panel: Manual Selection & Configuration -->
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">Manual Source Selection</div>
+                    <span class="info-badge">T_MEMBER Table</span>
+                </div>
+                
+                <div class="source-fields-list">
+                    <div class="source-field-item selected">
+                        <div class="source-field-header">
+                            <span class="source-field-name">FIRST_NAME</span>
+                            <span class="checkbox"></span>
+                        </div>
+                        <div class="source-field-meta">Member Table → First Name (STRING)</div>
+                    </div>
+                    
+                    <div class="source-field-item">
+                        <div class="source-field-header">
+                            <span class="source-field-name">MIDDLE_NAME</span>
+                            <span class="checkbox"></span>
+                        </div>
+                        <div class="source-field-meta">Member Table → Middle Name (STRING)</div>
+                    </div>
+                    
+                    <div class="source-field-item selected">
+                        <div class="source-field-header">
+                            <span class="source-field-name">LAST_NAME</span>
+                            <span class="checkbox"></span>
+                        </div>
+                        <div class="source-field-meta">Member Table → Last Name (STRING)</div>
+                    </div>
+                    
+                    <div class="source-field-item">
+                        <div class="source-field-header">
+                            <span class="source-field-name">NAME_SUFFIX</span>
+                            <span class="checkbox"></span>
+                        </div>
+                        <div class="source-field-meta">Member Table → Name Suffix (STRING)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Selected Fields Configuration Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">Selected Fields & Configuration</div>
+                <span class="info-badge">2 Fields Selected</span>
+            </div>
+            
+            <div class="panel-header" style="margin-top: 16px;">
+                <div class="panel-title" style="font-size: 14px;">Concatenation Strategy</div>
+            </div>
+            <div class="concat-options">
+                <button class="concat-btn">NONE</button>
+                <button class="concat-btn active">SPACE</button>
+                <button class="concat-btn">COMMA</button>
+                <button class="concat-btn">PIPE</button>
+                <button class="concat-btn">CUSTOM</button>
+            </div>
+            
+            <div class="selected-fields-panel">
+                <div class="selected-field-card">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="field-order">1</span>
+                    <strong>FIRST_NAME</strong>
+                    <button class="remove-btn">Remove</button>
+                    <select class="transformation-select">
+                        <option>No Transformation</option>
+                        <option selected>TRIM + INITCAP</option>
+                        <option>TRIM + UPPER</option>
+                        <option>TRIM + LOWER</option>
+                        <option>TRIM only</option>
+                    </select>
+                </div>
+                
+                <div class="selected-field-card">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="field-order">2</span>
+                    <strong>LAST_NAME</strong>
+                    <button class="remove-btn">Remove</button>
+                    <select class="transformation-select">
+                        <option>No Transformation</option>
+                        <option selected>TRIM + INITCAP</option>
+                        <option>TRIM + UPPER</option>
+                        <option>TRIM + LOWER</option>
+                        <option>TRIM only</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="preview-panel">
+                <div class="preview-label">Transformation Expression Preview</div>
+                <div class="preview-expression">
+                    CONCAT(<br>
+                    &nbsp;&nbsp;INITCAP(TRIM(T_MEMBER.FIRST_NAME)),<br>
+                    &nbsp;&nbsp;' ',<br>
+                    &nbsp;&nbsp;INITCAP(TRIM(T_MEMBER.LAST_NAME))<br>
+                    )
+                </div>
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button class="btn btn-large btn-secondary">← Back</button>
+            <div>
+                <button class="btn btn-large btn-secondary" style="margin-right: 8px;">Clear All</button>
+                <button class="btn btn-large btn-primary">Save Mapping →</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Feedback Dialog -->
+    <div class="overlay" id="overlay"></div>
+    <div class="feedback-dialog" id="feedbackDialog">
+        <div class="dialog-title">Why are you rejecting this suggestion?</div>
+        <div class="dialog-content">
+            <textarea placeholder="Please provide feedback to help improve our AI suggestions..."></textarea>
+        </div>
+        <div class="dialog-actions">
+            <button class="btn btn-cancel" onclick="hideFeedbackDialog()">Cancel</button>
+            <button class="btn btn-submit" onclick="submitFeedback()">Submit Feedback</button>
+        </div>
+    </div>
+    
+    <script>
+        function showRejectDialog() {
+            document.getElementById('overlay').classList.add('show');
+            document.getElementById('feedbackDialog').classList.add('show');
+        }
+        
+        function hideFeedbackDialog() {
+            document.getElementById('overlay').classList.remove('show');
+            document.getElementById('feedbackDialog').classList.remove('show');
+        }
+        
+        function submitFeedback() {
+            alert('Feedback submitted! This will help improve our AI model.');
+            hideFeedbackDialog();
+        }
+        
+        function acceptSuggestion() {
+            alert('Suggestion accepted! Fields will be added to your mapping.');
+        }
+        
+        function modifySuggestion() {
+            alert('Opening modification panel... (In actual app, this would populate the selected fields panel with the suggested fields for editing)');
+        }
+        
+        // Make source field items clickable
+        document.querySelectorAll('.source-field-item').forEach(item => {
+            item.addEventListener('click', function() {
+                this.classList.toggle('selected');
+            });
+        });
+        
+        // Make concat buttons clickable
+        document.querySelectorAll('.concat-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.concat-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>
+
