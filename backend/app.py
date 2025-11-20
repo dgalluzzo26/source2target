@@ -20,7 +20,7 @@ from typing import Optional, Dict, Any
 from backend.services.config_service import config_service
 from backend.services.system_service import system_service
 from backend.services.auth_service import auth_service
-from backend.routers import semantic, mapping, ai_mapping
+from backend.routers import semantic, mapping, ai_mapping, unmapped_fields
 
 # Import Databricks SDK for authentication
 try:
@@ -33,8 +33,8 @@ except ImportError:
 
 app = FastAPI(
     title="Source2Target API",
-    description="FastAPI backend for Source2Target Databricks app",
-    version="1.0.0"
+    description="FastAPI backend for Source2Target Databricks app (V2 Multi-Field Mapping)",
+    version="2.0.0"
 )
 
 # Configure CORS for Vue frontend
@@ -46,7 +46,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
+# Include V2 routers
+app.include_router(unmapped_fields.router)
+
+# Include V1 routers (will be deprecated)
 app.include_router(semantic.router)
 app.include_router(mapping.router)
 app.include_router(ai_mapping.router)
