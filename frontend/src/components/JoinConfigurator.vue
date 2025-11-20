@@ -143,13 +143,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import Message from 'primevue/message'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Dropdown from 'primevue/dropdown'
 import Divider from 'primevue/divider'
 import Tag from 'primevue/tag'
+import { useToast } from 'primevue/usetoast'
 
 interface SourceField {
   src_table_name: string
@@ -178,7 +179,10 @@ const emit = defineEmits<{
   (e: 'update:joins', joins: JoinDefinition[]): void
 }>()
 
+const toast = useToast()
 const localJoins = ref<JoinDefinition[]>([...props.joins])
+const allColumnsByTable = ref<Record<string, string[]>>({})
+const loadingColumns = ref(false)
 
 const joinTypes = ['INNER', 'LEFT', 'RIGHT', 'FULL']
 
@@ -197,9 +201,40 @@ const tablePhysicalNames = computed(() => {
   return mapping
 })
 
-// Get columns for a specific table
+// Fetch all columns for all tables from the backend
+async function fetchAllColumns() {
+  loadingColumns.value = true
+  try {
+    const response = await fetch('/api/v2/unmapped-fields/columns-by-table')
+    if (!response.ok) {
+      throw new Error('Failed to fetch columns')
+    }
+    const data = await response.json()
+    allColumnsByTable.value = data
+    console.log('[Join Configurator] Fetched columns for tables:', Object.keys(data))
+  } catch (error) {
+    console.error('[Join Configurator] Error fetching columns:', error)
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to load available columns for join configuration',
+      life: 5000
+    })
+  } finally {
+    loadingColumns.value = false
+  }
+}
+
+// Get columns for a specific table (from all available columns, not just selected fields)
 function getColumnsForTable(tableName: string): string[] {
   if (!tableName) return []
+  
+  // Use the fetched columns from backend if available
+  if (allColumnsByTable.value[tableName]) {
+    return allColumnsByTable.value[tableName]
+  }
+  
+  // Fallback: use columns from current source fields
   return props.sourceFields
     .filter(f => f.src_table_name === tableName)
     .map(f => f.src_column_name)
@@ -285,6 +320,11 @@ watch(() => props.joins, (newJoins) => {
     localJoins.value = [...newJoins]
   }
 }, { deep: true })
+
+// Fetch columns when component mounts
+onMounted(() => {
+  fetchAllColumns()
+})
 </script>
 
 <style scoped>
