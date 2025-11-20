@@ -556,11 +556,11 @@
         <div class="step-indicator">
             <div class="step completed">
                 <div class="step-number">1</div>
-                <div class="step-title">Select Target</div>
+                <div class="step-title">Select Source(s)</div>
             </div>
             <div class="step active">
                 <div class="step-number">2</div>
-                <div class="step-title">Choose Sources</div>
+                <div class="step-title">Choose Target</div>
             </div>
             <div class="step">
                 <div class="step-number">3</div>
@@ -574,79 +574,10 @@
         
         <!-- Main Content -->
         <div class="main-content">
-            <!-- Left Panel: Target & AI Suggestions -->
+            <!-- Left Panel: Unmapped Source Fields -->
             <div class="panel">
                 <div class="panel-header">
-                    <div class="panel-title">Target Field</div>
-                    <span class="info-badge">Member Domain</span>
-                </div>
-                
-                <div class="target-field">
-                    <div class="target-field-label">Selected Target</div>
-                    <div class="target-field-value">Member Table → Full Name</div>
-                    <div class="target-field-meta">slv_member.full_name (STRING)</div>
-                </div>
-                
-                <div class="panel-header">
-                    <div class="panel-title">AI Suggestions</div>
-                    <span class="info-badge">3 Found</span>
-                </div>
-                
-                <div class="ai-suggestions">
-                    <div class="suggestion-card">
-                        <div class="suggestion-header">
-                            <span class="suggestion-rank">#1 Suggestion</span>
-                            <span class="match-quality match-strong">Strong Match</span>
-                        </div>
-                        <div class="suggestion-field">T_MEMBER.FIRST_NAME + T_MEMBER.LAST_NAME</div>
-                        <div class="suggestion-reasoning">
-                            <strong>AI Reasoning:</strong> The semantic similarity between source fields "first name" and "last name" strongly correlates with the target "full name". Concatenating these fields is the standard approach for creating full names.
-                        </div>
-                        <div class="suggestion-actions">
-                            <button class="btn btn-accept" onclick="acceptSuggestion()">✓ Accept</button>
-                            <button class="btn btn-modify" onclick="modifySuggestion()">✎ Modify</button>
-                            <button class="btn btn-reject" onclick="showRejectDialog()">✗ Reject</button>
-                        </div>
-                    </div>
-                    
-                    <div class="suggestion-card">
-                        <div class="suggestion-header">
-                            <span class="suggestion-rank">#2 Suggestion</span>
-                            <span class="match-quality match-good">Good Match</span>
-                        </div>
-                        <div class="suggestion-field">T_MEMBER.NAME_FULL</div>
-                        <div class="suggestion-reasoning">
-                            <strong>AI Reasoning:</strong> Direct field mapping with high semantic similarity. Single source field already contains the full name.
-                        </div>
-                        <div class="suggestion-actions">
-                            <button class="btn btn-accept">✓ Accept</button>
-                            <button class="btn btn-modify">✎ Modify</button>
-                            <button class="btn btn-reject" onclick="showRejectDialog()">✗ Reject</button>
-                        </div>
-                    </div>
-                    
-                    <div class="suggestion-card">
-                        <div class="suggestion-header">
-                            <span class="suggestion-rank">#3 Suggestion</span>
-                            <span class="match-quality match-good">Good Match</span>
-                        </div>
-                        <div class="suggestion-field">T_PERSON.F_NAME + T_PERSON.L_NAME</div>
-                        <div class="suggestion-reasoning">
-                            <strong>AI Reasoning:</strong> Alternative source table with similar field structure. Good fallback if primary source is unavailable.
-                        </div>
-                        <div class="suggestion-actions">
-                            <button class="btn btn-accept">✓ Accept</button>
-                            <button class="btn btn-modify">✎ Modify</button>
-                            <button class="btn btn-reject" onclick="showRejectDialog()">✗ Reject</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Right Panel: Manual Selection & Configuration -->
-            <div class="panel">
-                <div class="panel-header">
-                    <div class="panel-title">Manual Source Selection</div>
+                    <div class="panel-title">Unmapped Source Fields</div>
                     <span class="info-badge">T_MEMBER Table</span>
                 </div>
                 
@@ -682,33 +613,116 @@
                         </div>
                         <div class="source-field-meta">Member Table → Name Suffix (STRING)</div>
                     </div>
+                    
+                    <div class="source-field-item">
+                        <div class="source-field-header">
+                            <span class="source-field-name">SSN</span>
+                            <span class="checkbox"></span>
+                        </div>
+                        <div class="source-field-meta">Member Table → Social Security Number (STRING)</div>
+                    </div>
+                    
+                    <div class="source-field-item">
+                        <div class="source-field-header">
+                            <span class="source-field-name">DATE_OF_BIRTH</span>
+                            <span class="checkbox"></span>
+                        </div>
+                        <div class="source-field-meta">Member Table → Date of Birth (DATE)</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Panel: AI Suggested Target Fields -->
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">AI Target Suggestions</div>
+                    <span class="info-badge">For FIRST_NAME + LAST_NAME</span>
+                </div>
+                
+                <div class="ai-suggestions">
+                    <div class="suggestion-card">
+                        <div class="suggestion-header">
+                            <span class="suggestion-rank">#1 Suggestion</span>
+                            <span class="match-quality match-strong">Strong Match</span>
+                        </div>
+                        <div class="suggestion-field">slv_member.full_name</div>
+                        <div class="suggestion-reasoning">
+                            <strong>AI Reasoning:</strong> The combination of source fields "FIRST_NAME" and "LAST_NAME" strongly correlates with the target "full_name". This is the standard pattern for creating full names from separate name components.
+                        </div>
+                        <div class="suggestion-actions">
+                            <button class="btn btn-accept" onclick="acceptSuggestion()">✓ Accept</button>
+                            <button class="btn btn-modify" onclick="modifySuggestion()">✎ Modify</button>
+                            <button class="btn btn-reject" onclick="showRejectDialog()">✗ Reject</button>
+                        </div>
+                    </div>
+                    
+                    <div class="suggestion-card">
+                        <div class="suggestion-header">
+                            <span class="suggestion-rank">#2 Suggestion</span>
+                            <span class="match-quality match-good">Good Match</span>
+                        </div>
+                        <div class="suggestion-field">slv_member.member_name</div>
+                        <div class="suggestion-reasoning">
+                            <strong>AI Reasoning:</strong> Alternative target field that commonly stores member names. Slightly lower confidence as "member_name" is less specific than "full_name".
+                        </div>
+                        <div class="suggestion-actions">
+                            <button class="btn btn-accept">✓ Accept</button>
+                            <button class="btn btn-modify">✎ Modify</button>
+                            <button class="btn btn-reject" onclick="showRejectDialog()">✗ Reject</button>
+                        </div>
+                    </div>
+                    
+                    <div class="suggestion-card">
+                        <div class="suggestion-header">
+                            <span class="suggestion-rank">#3 Suggestion</span>
+                            <span class="match-quality match-good">Good Match</span>
+                        </div>
+                        <div class="suggestion-field">slv_person.person_full_name</div>
+                        <div class="suggestion-reasoning">
+                            <strong>AI Reasoning:</strong> Alternative target table with similar naming pattern. Could be used if member data is stored in the person table.
+                        </div>
+                        <div class="suggestion-actions">
+                            <button class="btn btn-accept">✓ Accept</button>
+                            <button class="btn btn-modify">✎ Modify</button>
+                            <button class="btn btn-reject" onclick="showRejectDialog()">✗ Reject</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel-header" style="margin-top: 16px;">
+                    <div class="panel-title">Or Select Target Manually</div>
+                </div>
+                
+                <div class="target-field" style="cursor: pointer;" onclick="alert('Opening target field selector...')">
+                    <div class="target-field-label">Click to Select Target Field</div>
+                    <div class="target-field-value" style="color: #a0aec0;">Choose from available target fields...</div>
                 </div>
             </div>
         </div>
         
-        <!-- Selected Fields Configuration Panel -->
+        <!-- Selected Fields & Target Configuration Panel -->
         <div class="panel">
             <div class="panel-header">
-                <div class="panel-title">Selected Fields & Configuration</div>
-                <span class="info-badge">2 Fields Selected</span>
+                <div class="panel-title">Mapping Configuration</div>
+                <span class="info-badge">2 Source Fields → 1 Target</span>
+            </div>
+            
+            <!-- Target Field Display -->
+            <div class="target-field">
+                <div class="target-field-label">Mapping To (Target)</div>
+                <div class="target-field-value">slv_member.full_name</div>
+                <div class="target-field-meta">Member Table → Full Name (STRING)</div>
             </div>
             
             <div class="panel-header" style="margin-top: 16px;">
-                <div class="panel-title" style="font-size: 14px;">Concatenation Strategy</div>
-            </div>
-            <div class="concat-options">
-                <button class="concat-btn">NONE</button>
-                <button class="concat-btn active">SPACE</button>
-                <button class="concat-btn">COMMA</button>
-                <button class="concat-btn">PIPE</button>
-                <button class="concat-btn">CUSTOM</button>
+                <div class="panel-title" style="font-size: 14px;">Source Fields (Order Matters)</div>
             </div>
             
             <div class="selected-fields-panel">
                 <div class="selected-field-card">
                     <span class="drag-handle">⋮⋮</span>
                     <span class="field-order">1</span>
-                    <strong>FIRST_NAME</strong>
+                    <strong>T_MEMBER.FIRST_NAME</strong>
                     <button class="remove-btn">Remove</button>
                     <select class="transformation-select">
                         <option>No Transformation</option>
@@ -722,7 +736,7 @@
                 <div class="selected-field-card">
                     <span class="drag-handle">⋮⋮</span>
                     <span class="field-order">2</span>
-                    <strong>LAST_NAME</strong>
+                    <strong>T_MEMBER.LAST_NAME</strong>
                     <button class="remove-btn">Remove</button>
                     <select class="transformation-select">
                         <option>No Transformation</option>
@@ -734,9 +748,22 @@
                 </div>
             </div>
             
+            <div class="panel-header" style="margin-top: 16px;">
+                <div class="panel-title" style="font-size: 14px;">Concatenation Strategy</div>
+            </div>
+            <div class="concat-options">
+                <button class="concat-btn">NONE</button>
+                <button class="concat-btn active">SPACE</button>
+                <button class="concat-btn">COMMA</button>
+                <button class="concat-btn">PIPE</button>
+                <button class="concat-btn">CUSTOM</button>
+            </div>
+            
             <div class="preview-panel">
                 <div class="preview-label">Transformation Expression Preview</div>
                 <div class="preview-expression">
+                    -- Mapping: T_MEMBER.FIRST_NAME + T_MEMBER.LAST_NAME → slv_member.full_name<br>
+                    <br>
                     CONCAT(<br>
                     &nbsp;&nbsp;INITCAP(TRIM(T_MEMBER.FIRST_NAME)),<br>
                     &nbsp;&nbsp;' ',<br>
