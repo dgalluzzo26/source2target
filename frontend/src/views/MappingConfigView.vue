@@ -244,6 +244,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMappingsStoreV2 } from '@/stores/mappingsStoreV2'
 import { useUnmappedFieldsStore } from '@/stores/unmappedFieldsStore'
+import { useAISuggestionsStoreV2 } from '@/stores/aiSuggestionsStoreV2'
 import { useToast } from 'primevue/usetoast'
 import Steps from 'primevue/steps'
 import Card from 'primevue/card'
@@ -263,6 +264,7 @@ const route = useRoute()
 const router = useRouter()
 const mappingsStore = useMappingsStoreV2()
 const unmappedStore = useUnmappedFieldsStore()
+const aiStore = useAISuggestionsStoreV2()
 const toast = useToast()
 
 // State
@@ -285,33 +287,37 @@ const steps = ref([
 ])
 
 onMounted(() => {
-  // Load data from route params or store
-  if (route.params.sourceFields && route.params.targetSuggestion) {
-    try {
-      sourceFields.value = JSON.parse(route.params.sourceFields as string)
-      targetField.value = JSON.parse(route.params.targetSuggestion as string)
-      
-      // Initialize ordered fields
-      orderedFields.value = sourceFields.value.map((field, index) => ({
-        src_table_name: field.src_table_name,
-        src_table_physical_name: field.src_table_physical_name,
-        src_column_name: field.src_column_name,
-        src_column_physical_name: field.src_column_physical_name,
-        field_order: index + 1,
-        transformation_expr: undefined
-      }))
+  // Load data from AI suggestions store
+  if (aiStore.selectedSuggestion && aiStore.sourceFieldsUsed.length > 0) {
+    sourceFields.value = aiStore.sourceFieldsUsed
+    targetField.value = aiStore.selectedSuggestion
+    
+    // Initialize ordered fields
+    orderedFields.value = sourceFields.value.map((field, index) => ({
+      src_table_name: field.src_table_name,
+      src_table_physical_name: field.src_table_physical_name,
+      src_column_name: field.src_column_name,
+      src_column_physical_name: field.src_column_physical_name,
+      field_order: index + 1,
+      transformation_expr: undefined
+    }))
 
-      // Set initial concat strategy
-      if (sourceFields.value.length === 1) {
-        concatStrategy.value = 'NONE'
-      }
-
-      updateSQLPreview()
-    } catch (e) {
-      console.error('Failed to parse route params:', e)
-      router.push({ name: 'unmapped-fields' })
+    // Set initial concat strategy
+    if (sourceFields.value.length === 1) {
+      concatStrategy.value = 'NONE'
     }
+
+    updateSQLPreview()
+    console.log('[Mapping Config] Loaded from AI store:', sourceFields.value.length, 'fields')
   } else {
+    // No data in store - redirect back to field selection
+    console.warn('[Mapping Config] No data in AI store, redirecting to unmapped fields')
+    toast.add({
+      severity: 'warn',
+      summary: 'No Selection',
+      detail: 'Please select fields and generate AI suggestions first',
+      life: 3000
+    })
     router.push({ name: 'unmapped-fields' })
   }
 })

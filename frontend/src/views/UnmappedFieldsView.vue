@@ -219,14 +219,11 @@ async function handleGetSuggestions() {
 }
 
 function handleSuggestionSelected(suggestion: AISuggestionV2) {
-  // Navigate to mapping configuration view
-  router.push({
-    name: 'mapping-config',
-    params: {
-      sourceFields: JSON.stringify(unmappedStore.selectedFields),
-      targetSuggestion: JSON.stringify(suggestion)
-    }
-  })
+  // The suggestion is already stored in aiStore.selectedSuggestion
+  // The source fields are already in aiStore.sourceFieldsUsed
+  // Just navigate to the mapping configuration view
+  console.log('[Unmapped Fields] Navigating to mapping config with:', suggestion.tgt_column_name)
+  router.push({ name: 'mapping-config' })
 }
 
 function handleDelete(field: UnmappedField) {
