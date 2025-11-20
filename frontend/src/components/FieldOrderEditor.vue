@@ -70,23 +70,26 @@ const emit = defineEmits<Emits>()
 
 const localFields = ref<MappingDetailV2[]>([...props.fields])
 
-// Watch for external changes
+// Watch for external changes to props (only when parent updates)
 watch(() => props.fields, (newFields) => {
-  localFields.value = [...newFields]
-}, { deep: true })
-
-// Watch for local changes
-watch(localFields, (newFields) => {
-  // Update field_order based on new position
-  const updatedFields = newFields.map((field, index) => ({
-    ...field,
-    field_order: index + 1
-  }))
-  emit('update:fields', updatedFields)
+  // Only update if the fields actually changed (avoid circular updates)
+  const currentOrder = localFields.value.map(f => f.src_column_physical_name).join(',')
+  const newOrder = newFields.map(f => f.src_column_physical_name).join(',')
+  
+  if (currentOrder !== newOrder) {
+    localFields.value = [...newFields]
+  }
 }, { deep: true })
 
 function handleDragEnd() {
-  console.log('[Field Order Editor] Drag ended, new order:', localFields.value.map(f => f.src_column_name))
+  // Only emit after drag ends, not on every change
+  const updatedFields = localFields.value.map((field, index) => ({
+    ...field,
+    field_order: index + 1
+  }))
+  
+  console.log('[Field Order Editor] Drag ended, new order:', updatedFields.map(f => f.src_column_name))
+  emit('update:fields', updatedFields)
 }
 </script>
 
