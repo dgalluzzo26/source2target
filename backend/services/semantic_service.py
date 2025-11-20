@@ -126,9 +126,11 @@ class SemanticService:
         """
         Read all records from the semantic_fields table (V2 schema, synchronous, for thread pool).
         """
+        print(f"\n{'='*80}")
         print(f"[Semantic Service] Starting read from table: {semantic_fields_table}")
         print(f"[Semantic Service] Server: {server_hostname}")
         print(f"[Semantic Service] HTTP Path: {http_path}")
+        print(f"{'='*80}\n")
         
         # Check warehouse state first (extract warehouse ID from http_path)
         try:
@@ -158,7 +160,15 @@ class SemanticService:
             with connection.cursor() as cursor:
                 # First, check if table exists
                 print(f"[Semantic Service] Checking if table exists: {semantic_fields_table}")
-                catalog, schema, table = semantic_fields_table.split('.')
+                try:
+                    catalog, schema, table = semantic_fields_table.split('.')
+                    print(f"[Semantic Service] Parsed - Catalog: {catalog}, Schema: {schema}, Table: {table}")
+                except ValueError as e:
+                    raise Exception(
+                        f"Invalid table name format: {semantic_fields_table}. "
+                        f"Expected format: catalog.schema.table"
+                    )
+                
                 check_query = f"""
                 SELECT COUNT(*) as table_exists
                 FROM {catalog}.information_schema.tables
@@ -166,8 +176,11 @@ class SemanticService:
                   AND table_schema = '{schema}'
                   AND table_name = '{table}'
                 """
+                print(f"[Semantic Service] Executing table check query...")
                 cursor.execute(check_query)
                 result = cursor.fetchone()
+                print(f"[Semantic Service] Table check result: {result}")
+                
                 if result and result[0] == 0:
                     raise Exception(
                         f"Table '{semantic_fields_table}' does not exist. "
@@ -175,6 +188,8 @@ class SemanticService:
                         f"1. database/migration_v2_schema.sql\n"
                         f"2. database/migration_v2_data.sql"
                     )
+                
+                print(f"[Semantic Service] ✓ Table exists")
                 
                 query = f"""
                 SELECT 
@@ -190,19 +205,28 @@ class SemanticService:
                 FROM {semantic_fields_table}
                 ORDER BY tgt_table_name, tgt_column_name
                 """
-                print(f"[Semantic Service] Executing query...")
+                print(f"[Semantic Service] Executing main query to fetch semantic fields...")
                 cursor.execute(query)
                 
-                print(f"[Semantic Service] Fetching results...")
+                print(f"[Semantic Service] Query executed successfully, fetching results...")
                 # Fetch results as arrow table and convert to list of dicts
                 arrow_table = cursor.fetchall_arrow()
+                print(f"[Semantic Service] Converting Arrow table to Pandas...")
                 df = arrow_table.to_pandas()
+                print(f"[Semantic Service] ✓ Fetched {len(df)} records")
                 records = df.to_dict('records')
                 
                 print(f"[Semantic Service] Successfully retrieved {len(records)} records")
                 return records
         except Exception as e:
-            print(f"[Semantic Service] Query execution failed: {str(e)}")
+            print(f"\n{'!'*80}")
+            print(f"[Semantic Service] ❌ ERROR reading semantic table")
+            print(f"[Semantic Service] Error type: {type(e).__name__}")
+            print(f"[Semantic Service] Error message: {str(e)}")
+            import traceback
+            print(f"[Semantic Service] Full traceback:")
+            print(traceback.format_exc())
+            print(f"{'!'*80}\n")
             raise
         finally:
             connection.close()
