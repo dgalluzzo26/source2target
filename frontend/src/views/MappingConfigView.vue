@@ -253,14 +253,14 @@
         severity="secondary"
       />
       <Button 
-        v-if="activeStep < 4"
+        v-if="activeStep < 5"
         label="Next" 
         icon="pi pi-chevron-right" 
         iconPos="right"
         @click="handleNext"
       />
       <Button 
-        v-if="activeStep === 4"
+        v-if="activeStep === 5"
         label="Save Mapping" 
         icon="pi pi-save" 
         @click="handleSave"
@@ -406,7 +406,37 @@ function updateSQLPreview() {
 }
 
 function handleNext() {
-  if (activeStep.value < 4) {
+  // Validate current step before proceeding
+  
+  // Step 2: Define Joins - Require at least one join if multiple tables
+  if (activeStep.value === 2 && hasMultipleTables.value) {
+    if (joinDefinitions.value.length === 0) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Join Required',
+        detail: 'Please define at least one join between tables or go back to select fields from a single table.',
+        life: 5000
+      })
+      return
+    }
+    
+    // Validate that all joins have required fields
+    const incompleteJoins = joinDefinitions.value.filter(join => 
+      !join.left_table || !join.left_column || !join.right_table || !join.right_column
+    )
+    
+    if (incompleteJoins.length > 0) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Incomplete Join',
+        detail: 'Please complete all join definitions (table and column selections).',
+        life: 5000
+      })
+      return
+    }
+  }
+  
+  if (activeStep.value < 5) {
     activeStep.value++
   }
 }

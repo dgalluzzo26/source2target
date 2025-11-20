@@ -86,32 +86,35 @@ class UnmappedFieldsService:
         server_hostname: str,
         http_path: str,
         unmapped_fields_table: str,
+        current_user: str,
         limit: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
-        Read unmapped fields from the database (synchronous, for thread pool).
+        Read unmapped fields from the database for the current user (synchronous, for thread pool).
         
         Args:
             server_hostname: Databricks workspace hostname
             http_path: SQL warehouse HTTP path
             unmapped_fields_table: Fully qualified table name
+            current_user: Email of the current user (for filtering)
             limit: Optional limit on number of records to return
             
         Returns:
-            List of unmapped field dictionaries
+            List of unmapped field dictionaries for the current user
         """
         print(f"[Unmapped Fields Service] Starting read from table: {unmapped_fields_table}")
         print(f"[Unmapped Fields Service] Server: {server_hostname}")
         print(f"[Unmapped Fields Service] HTTP Path: {http_path}")
+        print(f"[Unmapped Fields Service] Current User: {current_user}")
         
         connection = self._get_sql_connection(server_hostname, http_path)
         
         try:
             with connection.cursor() as cursor:
-                # Query unmapped fields
+                # Query unmapped fields filtered by current user
                 query = f"""
                 SELECT 
-                    id,
+                    unmapped_field_id as id,
                     src_table_name,
                     src_table_physical_name,
                     src_column_name,
@@ -119,9 +122,10 @@ class UnmappedFieldsService:
                     src_nullable,
                     src_physical_datatype,
                     src_comments,
-                    uploaded_at,
+                    uploaded_ts as uploaded_at,
                     uploaded_by
                 FROM {unmapped_fields_table}
+                WHERE uploaded_by = '{current_user.replace("'", "''")}'
                 ORDER BY src_table_name, src_column_name
                 """
                 
@@ -134,7 +138,7 @@ class UnmappedFieldsService:
                 print(f"[Unmapped Fields Service] Fetching results...")
                 rows = cursor.fetchall()
                 
-                print(f"[Unmapped Fields Service] Found {len(rows)} unmapped fields")
+                print(f"[Unmapped Fields Service] Found {len(rows)} unmapped fields for user {current_user}")
                 
                 # Convert to list of dictionaries
                 columns = [desc[0] for desc in cursor.description]
@@ -253,15 +257,16 @@ class UnmappedFieldsService:
         finally:
             connection.close()
     
-    async def get_all_unmapped_fields(self, limit: Optional[int] = None) -> List[UnmappedFieldV2]:
+    async def get_all_unmapped_fields(self, current_user: str, limit: Optional[int] = None) -> List[UnmappedFieldV2]:
         """
-        Get all unmapped fields from the database.
+        Get all unmapped fields from the database for the current user.
         
         Args:
+            current_user: Email of the current user (for filtering)
             limit: Optional limit on number of records to return
             
         Returns:
-            List of UnmappedFieldV2 models
+            List of UnmappedFieldV2 models for the current user
         """
         try:
             db_config = self._get_db_config()
@@ -281,6 +286,7 @@ class UnmappedFieldsService:
                         db_config['server_hostname'],
                         db_config['http_path'],
                         db_config['unmapped_fields_table'],
+                        current_user,
                         limit
                     )
                 ),
@@ -346,4 +352,36 @@ class UnmappedFieldsService:
                 field_id
             )
         )
+    
+    async def get_columns_by_table(self, current_user: str) -> Dict[str, List[str]]:
+        """
+        Get all unique columns grouped by table for the current user.
+        
+        Used for join configuration - returns all available columns for each table
+        from unmapped fields (and eventually mapped fields).
+        
+        Args:
+            current_user: Email of the current user (for filtering)
+            
+        Returns:
+            Dictionary mapping table names to lists of column names
+        """
+        # Get all unmapped fields for this user
+        unmapped_fields = await self.get_all_unmapped_fields(current_user)
+        
+        # Group columns by table
+        columns_by_table: Dict[str, set] = {}
+        for field in unmapped_fields:
+            if field.src_table_name not in columns_by_table:
+                columns_by_table[field.src_table_name] = set()
+            columns_by_table[field.src_table_name].add(field.src_column_name)
+        
+        # Convert sets to sorted lists
+        result = {
+            table: sorted(list(columns))
+            for table, columns in columns_by_table.items()
+        }
+        
+        print(f"[Unmapped Fields Service] Found {len(result)} tables with columns for user {current_user}")
+        return result
 

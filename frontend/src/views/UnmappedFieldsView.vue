@@ -419,12 +419,10 @@ async function handleBulkUpload() {
     const lines = text.split('\n').filter(line => line.trim())
     const rows = lines.slice(1).filter(line => line.trim() && !line.split(',').every(cell => !cell.trim()))
     
-    let successCount = 0
-    let errorCount = 0
-    
-    for (const line of rows) {
+    // Build field objects
+    const fields = rows.map(line => {
       const values = line.split(',')
-      const field = {
+      return {
         src_table_name: values[0]?.trim(),
         src_table_physical_name: values[1]?.trim() || values[0]?.trim(),
         src_column_name: values[2]?.trim(),
@@ -433,26 +431,39 @@ async function handleBulkUpload() {
         src_nullable: values[5]?.trim() || 'YES',
         src_comments: values[6]?.trim() || ''
       }
-      
-      // Validate
-      if (!field.src_table_name || !field.src_column_name || !field.src_physical_datatype) {
-        errorCount++
-        continue
-      }
-      
-      // TODO: Call API to create unmapped field
-      // For now, just add to store (mock)
-      unmappedStore.unmappedFields.push({
-        id: Date.now() + Math.random(),
-        ...field
+    }).filter(field => 
+      field.src_table_name && field.src_column_name && field.src_physical_datatype
+    )
+    
+    if (fields.length === 0) {
+      toast.add({
+        severity: 'warn',
+        summary: 'No Valid Fields',
+        detail: 'No valid fields found in CSV. Check that required columns are filled.',
+        life: 5000
       })
-      successCount++
+      return
     }
     
+    // Call bulk upload API
+    const response = await fetch('/api/v2/unmapped-fields/bulk', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(fields)
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.statusText}`)
+    }
+    
+    const result = await response.json()
+    
     toast.add({
-      severity: successCount > 0 ? 'success' : 'error',
+      severity: result.success_count > 0 ? 'success' : 'error',
       summary: 'Import Complete',
-      detail: `Imported ${successCount} fields. ${errorCount > 0 ? `${errorCount} failed.` : ''}`,
+      detail: `Imported ${result.success_count} fields. ${result.error_count > 0 ? `${result.error_count} failed.` : ''}`,
       life: 5000
     })
     
