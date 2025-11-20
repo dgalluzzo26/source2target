@@ -2,29 +2,32 @@
 
 ## 🚨 Important: Databricks Constraint Limitations
 
-Databricks Delta tables **DO NOT support** the following SQL constraints:
-- ❌ `UNIQUE` constraints
-- ❌ `FOREIGN KEY` constraints  
-- ❌ `CHECK` constraints (except via Delta table properties)
-- ✅ `PRIMARY KEY` constraints (supported)
-- ✅ `NOT NULL` constraints (supported)
+Databricks Delta tables support these constraints with limitations:
+- ✅ `PRIMARY KEY` constraints (enforced)
+- ✅ `NOT NULL` constraints (enforced)
+- ✅ `CHECK` constraints (enforced via Delta table properties)
+- ⚠️ `FOREIGN KEY` constraints (allowed but **INFORMATIONAL ONLY** - not enforced)
+- ❌ `UNIQUE` constraints (not supported at all)
+- ❌ `ON DELETE CASCADE/SET NULL` (not supported)
 
-## ✅ What We Removed from V2 Schema
+## ✅ What We Changed in V2 Schema
 
-The V2 migration scripts have been updated to remove unsupported constraints:
+The V2 migration scripts have been updated for Databricks compatibility:
 
-### Removed UNIQUE Constraints:
-1. `semantic_fields`: (tgt_table, tgt_column)
-2. `unmapped_fields`: (src_table, src_column)
-3. `mapped_fields`: (tgt_table, tgt_column)
-4. `mapping_details`: (mapped_field_id, src_table, src_column)
-5. `transformation_library`: (transformation_code)
+### Removed UNIQUE Constraints (not supported):
+1. `semantic_fields`: (tgt_table, tgt_column) - **must enforce at application level**
+2. `unmapped_fields`: (src_table, src_column) - **must enforce at application level**
+3. `mapped_fields`: (tgt_table, tgt_column) - **must enforce at application level**
+4. `mapping_details`: (mapped_field_id, src_table, src_column) - **must enforce at application level**
+5. `transformation_library`: (transformation_code) - **must enforce at application level**
 
-### Removed FOREIGN KEY Constraints:
-1. `mapped_fields.semantic_field_id` → `semantic_fields.semantic_field_id`
-2. `mapping_details.mapped_field_id` → `mapped_fields.mapped_field_id`
-3. `mapping_details.unmapped_field_id` → `unmapped_fields.unmapped_field_id`
-4. `mapping_feedback.mapped_field_id` → `mapped_fields.mapped_field_id`
+### Kept FOREIGN KEY Constraints (informational only):
+1. `mapped_fields.semantic_field_id` → `semantic_fields.semantic_field_id` ⚠️ *not enforced*
+2. `mapping_details.mapped_field_id` → `mapped_fields.mapped_field_id` ⚠️ *not enforced*
+3. `mapping_details.unmapped_field_id` → `unmapped_fields.unmapped_field_id` ⚠️ *not enforced*
+4. `mapping_feedback.mapped_field_id` → `mapped_fields.mapped_field_id` ⚠️ *not enforced*
+
+**Note**: Foreign keys are kept for **documentation purposes** but Databricks **does not enforce** them. You must still validate foreign keys in your application code!
 
 ## 🛡️ How to Enforce Constraints at Application Level
 
@@ -105,6 +108,8 @@ async def create_transformation(self, transformation: TransformationCreate):
 ```
 
 ### 2. Enforce FOREIGN KEY Constraints in Python
+
+**Important**: Even though Databricks allows FOREIGN KEY constraint syntax, it **does not enforce** them. You must still validate foreign keys in your application code!
 
 **Example: Validate semantic_field_id exists before creating mapping**
 
@@ -384,16 +389,23 @@ async def test_invalid_foreign_key_raises_error():
 
 ## 📝 Summary
 
-Since Databricks doesn't support UNIQUE and FOREIGN KEY constraints:
+Databricks constraint support:
+- ✅ **PRIMARY KEY**: Enforced by Databricks
+- ✅ **NOT NULL**: Enforced by Databricks
+- ⚠️ **FOREIGN KEY**: Allowed but **INFORMATIONAL ONLY** (not enforced)
+- ❌ **UNIQUE**: Not supported at all
+- ❌ **ON DELETE CASCADE/SET NULL**: Not supported
 
-1. ✅ **Application-Level Validation**: Add validation logic in Python services
+Since constraints are not fully enforced:
+
+1. ✅ **Application-Level Validation**: Add validation logic in Python services for uniqueness and FK validation
 2. ✅ **Frontend Validation**: Catch issues early in the UI
 3. ✅ **Data Quality Monitoring**: Run periodic checks for constraint violations
 4. ✅ **Unit Tests**: Verify constraint enforcement logic
 5. ✅ **MERGE Statements**: Use for idempotent upserts
 6. ✅ **Explicit CASCADE/SET NULL**: Handle in application code
 
-**All uniqueness and referential integrity constraints must be enforced at the application level!**
+**Foreign keys are kept in schema for documentation but you must still validate them in code!**
 
 ---
 

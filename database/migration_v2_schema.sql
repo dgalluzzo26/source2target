@@ -128,12 +128,12 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapped_fields (
   updated_by STRING COMMENT 'User who last updated this mapping',
   updated_ts TIMESTAMP COMMENT 'Timestamp when mapping was last updated',
   
-  CONSTRAINT pk_mapped_fields PRIMARY KEY (mapped_field_id)
-  -- Note: UNIQUE constraint on (tgt_table, tgt_column) enforced at application level
-  -- Note: FOREIGN KEY to semantic_fields enforced at application level
-  -- Databricks Delta tables don't support UNIQUE or FOREIGN KEY constraints
+  CONSTRAINT pk_mapped_fields PRIMARY KEY (mapped_field_id),
+  CONSTRAINT fk_mapped_semantic FOREIGN KEY (semantic_field_id) REFERENCES main.source2target.semantic_fields(semantic_field_id)
+  -- Note: UNIQUE constraint on (tgt_table, tgt_column) not supported - enforce at application level
+  -- Note: FOREIGN KEY is informational only (not enforced by Databricks)
 )
-COMMENT 'Target fields with their source field mappings (one record per target field, supporting multiple sources). Uniqueness on (tgt_table, tgt_column) and foreign key to semantic_fields must be enforced at application level.'
+COMMENT 'Target fields with their source field mappings (one record per target field, supporting multiple sources). Uniqueness on (tgt_table, tgt_column) must be enforced at application level. Foreign keys are informational only.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
@@ -172,13 +172,14 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapping_details (
   updated_by STRING COMMENT 'User who last updated this field',
   updated_ts TIMESTAMP COMMENT 'Timestamp when field was last updated',
   
-  CONSTRAINT pk_mapping_details PRIMARY KEY (mapping_detail_id)
-  -- Note: UNIQUE constraint on (mapped_field_id, src_table, src_column) enforced at application level
-  -- Note: FOREIGN KEY to mapped_fields and unmapped_fields enforced at application level
-  -- Note: CASCADE and SET NULL behaviors must be handled in application code
-  -- Databricks Delta tables don't support UNIQUE or FOREIGN KEY constraints
+  CONSTRAINT pk_mapping_details PRIMARY KEY (mapping_detail_id),
+  CONSTRAINT fk_detail_mapped FOREIGN KEY (mapped_field_id) REFERENCES main.source2target.mapped_fields(mapped_field_id),
+  CONSTRAINT fk_detail_unmapped FOREIGN KEY (unmapped_field_id) REFERENCES main.source2target.unmapped_fields(unmapped_field_id)
+  -- Note: UNIQUE constraint on (mapped_field_id, src_table, src_column) not supported - enforce at application level
+  -- Note: FOREIGN KEYs are informational only (not enforced by Databricks)
+  -- Note: ON DELETE CASCADE/SET NULL not supported - must handle in application code
 )
-COMMENT 'Individual source fields that contribute to each target field mapping, with ordering and transformations. Uniqueness on (mapped_field_id, src_table, src_column) and foreign keys must be enforced at application level.'
+COMMENT 'Individual source fields that contribute to each target field mapping, with ordering and transformations. Uniqueness must be enforced at application level. Foreign keys are informational only. CASCADE/SET NULL must be handled in application.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
@@ -226,12 +227,12 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapping_feedback (
   feedback_by STRING COMMENT 'User who provided feedback',
   feedback_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Timestamp when feedback was provided',
   
-  CONSTRAINT pk_mapping_feedback PRIMARY KEY (feedback_id)
-  -- Note: FOREIGN KEY to mapped_fields enforced at application level
-  -- Note: SET NULL behavior must be handled in application code
-  -- Databricks Delta tables don't support FOREIGN KEY constraints
+  CONSTRAINT pk_mapping_feedback PRIMARY KEY (feedback_id),
+  CONSTRAINT fk_feedback_mapped FOREIGN KEY (mapped_field_id) REFERENCES main.source2target.mapped_fields(mapped_field_id)
+  -- Note: FOREIGN KEY is informational only (not enforced by Databricks)
+  -- Note: ON DELETE SET NULL not supported - must handle in application code
 )
-COMMENT 'User feedback on AI mapping suggestions for model improvement and analytics. Foreign key to mapped_fields must be enforced at application level.'
+COMMENT 'User feedback on AI mapping suggestions for model improvement and analytics. Foreign key is informational only. SET NULL must be handled in application.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
