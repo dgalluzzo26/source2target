@@ -46,10 +46,11 @@ CREATE TABLE IF NOT EXISTS main.source2target.semantic_fields (
     )
   ) COMMENT 'Concatenated field for vector embedding',
   
-  CONSTRAINT pk_semantic_fields PRIMARY KEY (semantic_field_id),
-  CONSTRAINT uk_semantic_fields UNIQUE (tgt_table, tgt_column)
+  CONSTRAINT pk_semantic_fields PRIMARY KEY (semantic_field_id)
+  -- Note: UNIQUE constraint on (tgt_table, tgt_column) enforced at application level
+  -- Databricks Delta tables don't support UNIQUE constraints
 ) 
-COMMENT 'Target field definitions with semantic metadata for AI-powered mapping'
+COMMENT 'Target field definitions with semantic metadata for AI-powered mapping. Uniqueness on (tgt_table, tgt_column) must be enforced at application level.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
@@ -80,10 +81,11 @@ CREATE TABLE IF NOT EXISTS main.source2target.unmapped_fields (
   updated_by STRING COMMENT 'User who last updated this record',
   updated_ts TIMESTAMP COMMENT 'Timestamp when record was last updated',
   
-  CONSTRAINT pk_unmapped_fields PRIMARY KEY (unmapped_field_id),
-  CONSTRAINT uk_unmapped_fields UNIQUE (src_table, src_column)
+  CONSTRAINT pk_unmapped_fields PRIMARY KEY (unmapped_field_id)
+  -- Note: UNIQUE constraint on (src_table, src_column) enforced at application level
+  -- Databricks Delta tables don't support UNIQUE constraints
 )
-COMMENT 'Source fields awaiting mapping to target fields'
+COMMENT 'Source fields awaiting mapping to target fields. Uniqueness on (src_table, src_column) must be enforced at application level.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
@@ -126,11 +128,12 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapped_fields (
   updated_by STRING COMMENT 'User who last updated this mapping',
   updated_ts TIMESTAMP COMMENT 'Timestamp when mapping was last updated',
   
-  CONSTRAINT pk_mapped_fields PRIMARY KEY (mapped_field_id),
-  CONSTRAINT uk_mapped_fields UNIQUE (tgt_table, tgt_column),
-  CONSTRAINT fk_mapped_semantic FOREIGN KEY (semantic_field_id) REFERENCES main.source2target.semantic_fields(semantic_field_id)
+  CONSTRAINT pk_mapped_fields PRIMARY KEY (mapped_field_id)
+  -- Note: UNIQUE constraint on (tgt_table, tgt_column) enforced at application level
+  -- Note: FOREIGN KEY to semantic_fields enforced at application level
+  -- Databricks Delta tables don't support UNIQUE or FOREIGN KEY constraints
 )
-COMMENT 'Target fields with their source field mappings (one record per target field, supporting multiple sources)'
+COMMENT 'Target fields with their source field mappings (one record per target field, supporting multiple sources). Uniqueness on (tgt_table, tgt_column) and foreign key to semantic_fields must be enforced at application level.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
@@ -169,12 +172,13 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapping_details (
   updated_by STRING COMMENT 'User who last updated this field',
   updated_ts TIMESTAMP COMMENT 'Timestamp when field was last updated',
   
-  CONSTRAINT pk_mapping_details PRIMARY KEY (mapping_detail_id),
-  CONSTRAINT uk_mapping_details UNIQUE (mapped_field_id, src_table, src_column),
-  CONSTRAINT fk_detail_mapped FOREIGN KEY (mapped_field_id) REFERENCES main.source2target.mapped_fields(mapped_field_id) ON DELETE CASCADE,
-  CONSTRAINT fk_detail_unmapped FOREIGN KEY (unmapped_field_id) REFERENCES main.source2target.unmapped_fields(unmapped_field_id) ON DELETE SET NULL
+  CONSTRAINT pk_mapping_details PRIMARY KEY (mapping_detail_id)
+  -- Note: UNIQUE constraint on (mapped_field_id, src_table, src_column) enforced at application level
+  -- Note: FOREIGN KEY to mapped_fields and unmapped_fields enforced at application level
+  -- Note: CASCADE and SET NULL behaviors must be handled in application code
+  -- Databricks Delta tables don't support UNIQUE or FOREIGN KEY constraints
 )
-COMMENT 'Individual source fields that contribute to each target field mapping, with ordering and transformations'
+COMMENT 'Individual source fields that contribute to each target field mapping, with ordering and transformations. Uniqueness on (mapped_field_id, src_table, src_column) and foreign keys must be enforced at application level.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
@@ -222,10 +226,12 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapping_feedback (
   feedback_by STRING COMMENT 'User who provided feedback',
   feedback_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Timestamp when feedback was provided',
   
-  CONSTRAINT pk_mapping_feedback PRIMARY KEY (feedback_id),
-  CONSTRAINT fk_feedback_mapped FOREIGN KEY (mapped_field_id) REFERENCES main.source2target.mapped_fields(mapped_field_id) ON DELETE SET NULL
+  CONSTRAINT pk_mapping_feedback PRIMARY KEY (feedback_id)
+  -- Note: FOREIGN KEY to mapped_fields enforced at application level
+  -- Note: SET NULL behavior must be handled in application code
+  -- Databricks Delta tables don't support FOREIGN KEY constraints
 )
-COMMENT 'User feedback on AI mapping suggestions for model improvement and analytics'
+COMMENT 'User feedback on AI mapping suggestions for model improvement and analytics. Foreign key to mapped_fields must be enforced at application level.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
@@ -254,10 +260,11 @@ CREATE TABLE IF NOT EXISTS main.source2target.transformation_library (
   updated_by STRING COMMENT 'User who last updated',
   updated_ts TIMESTAMP COMMENT 'Timestamp when last updated',
   
-  CONSTRAINT pk_transformation_library PRIMARY KEY (transformation_id),
-  CONSTRAINT uk_transformation_code UNIQUE (transformation_code)
+  CONSTRAINT pk_transformation_library PRIMARY KEY (transformation_id)
+  -- Note: UNIQUE constraint on transformation_code enforced at application level
+  -- Databricks Delta tables don't support UNIQUE constraints
 )
-COMMENT 'Library of reusable transformation patterns'
+COMMENT 'Library of reusable transformation patterns. Uniqueness on transformation_code must be enforced at application level.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
