@@ -44,16 +44,24 @@
             v-tooltip.top="'Refresh'"
           />
           <Button 
-            label="Add Field" 
-            icon="pi pi-plus" 
-            @click="showAddDialog = true"
+            label="Download Template" 
+            icon="pi pi-download" 
+            @click="handleDownloadTemplate"
+            severity="secondary"
+            v-tooltip.top="'Download CSV template for bulk upload'"
+          />
+          <Button 
+            label="Upload Fields" 
+            icon="pi pi-upload" 
+            @click="showUploadDialog = true"
+            v-tooltip.top="'Bulk upload semantic fields from CSV'"
           />
         </div>
       </div>
 
       <!-- Info Message -->
       <Message severity="info" :closable="false" class="info-message">
-        <strong>About Semantic Fields:</strong> These target fields are used by the AI to suggest mappings.
+        <strong>Bulk Upload:</strong> Download the CSV template, fill in your semantic fields, and upload for bulk import.
         Each field is automatically vectorized and indexed for semantic similarity search.
         Changes to fields will trigger a re-sync of the vector search index.
       </Message>
@@ -356,6 +364,72 @@
         />
       </template>
     </Dialog>
+
+    <!-- Upload Dialog -->
+    <Dialog 
+      v-model:visible="showUploadDialog" 
+      modal 
+      header="Bulk Upload Semantic Fields"
+      :style="{ width: '600px' }"
+    >
+      <div class="upload-content">
+        <Message severity="info" :closable="false">
+          <strong>CSV Format:</strong> Download the template first to see the required format.
+        </Message>
+
+        <div class="upload-instructions">
+          <h4>Upload Instructions:</h4>
+          <ol>
+            <li>Download the CSV template using the "Download Template" button</li>
+            <li>Fill in your semantic fields in the template</li>
+            <li>Upload the completed CSV file below</li>
+          </ol>
+        </div>
+
+        <div class="file-upload-area">
+          <FileUpload
+            mode="basic"
+            name="semantic_fields"
+            accept=".csv"
+            :maxFileSize="5000000"
+            :auto="false"
+            chooseLabel="Choose CSV File"
+            @select="handleFileSelect"
+            :customUpload="true"
+            @uploader="handleUpload"
+          />
+        </div>
+
+        <div v-if="uploadPreview.length > 0" class="upload-preview">
+          <h4>Preview (First 5 rows):</h4>
+          <DataTable :value="uploadPreview" class="preview-table">
+            <Column field="tgt_table_name" header="Table" style="width: 25%"></Column>
+            <Column field="tgt_column_name" header="Column" style="width: 25%"></Column>
+            <Column field="tgt_physical_datatype" header="Type" style="width: 15%"></Column>
+            <Column field="tgt_comments" header="Description" style="width: 35%"></Column>
+          </DataTable>
+          <p class="preview-info">
+            <strong>{{ uploadPreview.length }}</strong> fields ready to upload
+          </p>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button 
+          label="Cancel" 
+          icon="pi pi-times" 
+          @click="closeUploadDialog" 
+          severity="secondary"
+        />
+        <Button 
+          label="Upload Fields" 
+          icon="pi pi-upload" 
+          @click="handleBulkUpload" 
+          :loading="uploading"
+          :disabled="uploadPreview.length === 0"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -376,6 +450,7 @@ import Dialog from 'primevue/dialog'
 import ProgressSpinner from 'primevue/progressspinner'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
+import FileUpload from 'primevue/fileupload'
 import HelpButton from '@/components/HelpButton.vue'
 import { SemanticAPI } from '@/services/api'
 
@@ -387,11 +462,15 @@ const toast = useToast()
 const semanticFields = ref<any[]>([])
 const loading = ref(false)
 const saving = ref(false)
+const uploading = ref(false)
 const error = ref<string | null>(null)
 const searchQuery = ref('')
 const showAddDialog = ref(false)
 const showEditDialog = ref(false)
+const showUploadDialog = ref(false)
 const editingField = ref<any | null>(null)
+const uploadPreview = ref<any[]>([])
+const selectedFile = ref<File | null>(null)
 
 const newField = ref({
   tgt_table_name: '',
@@ -600,6 +679,181 @@ function closeEditDialog() {
   showEditDialog.value = false
   editingField.value = null
 }
+
+function handleDownloadTemplate() {
+  // Create CSV template
+  const headers = [
+    'tgt_table_name',
+    'tgt_table_physical_name',
+    'tgt_column_name',
+    'tgt_column_physical_name',
+    'tgt_physical_datatype',
+    'tgt_nullable',
+    'tgt_comments'
+  ]
+  
+  const exampleRow = [
+    'slv_member',
+    'slv_member',
+    'full_name',
+    'full_name',
+    'STRING',
+    'NO',
+    'Member full name for display'
+  ]
+  
+  const csvContent = [
+    headers.join(','),
+    exampleRow.join(','),
+    // Add empty row for user to fill
+    ',,,,,,',
+  ].join('\n')
+  
+  // Create and download file
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'semantic_fields_template.csv'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+  
+  toast.add({
+    severity: 'success',
+    summary: 'Template Downloaded',
+    detail: 'Fill in the template and upload to bulk import fields',
+    life: 3000
+  })
+}
+
+function handleFileSelect(event: any) {
+  const file = event.files[0]
+  if (!file) return
+  
+  selectedFile.value = file
+  
+  // Parse CSV to show preview
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const text = e.target?.result as string
+    const lines = text.split('\n').filter(line => line.trim())
+    
+    if (lines.length < 2) {
+      toast.add({
+        severity: 'error',
+        summary: 'Invalid File',
+        detail: 'CSV file must have headers and at least one row',
+        life: 3000
+      })
+      return
+    }
+    
+    // Parse CSV (simple implementation)
+    const headers = lines[0].split(',')
+    const rows = lines.slice(1).filter(line => line.trim() && !line.split(',').every(cell => !cell.trim()))
+    
+    uploadPreview.value = rows.slice(0, 5).map(line => {
+      const values = line.split(',')
+      return {
+        tgt_table_name: values[0]?.trim() || '',
+        tgt_table_physical_name: values[1]?.trim() || values[0]?.trim() || '',
+        tgt_column_name: values[2]?.trim() || '',
+        tgt_column_physical_name: values[3]?.trim() || values[2]?.trim() || '',
+        tgt_physical_datatype: values[4]?.trim() || '',
+        tgt_nullable: values[5]?.trim() || 'NO',
+        tgt_comments: values[6]?.trim() || ''
+      }
+    })
+    
+    toast.add({
+      severity: 'info',
+      summary: 'File Loaded',
+      detail: `Preview showing ${uploadPreview.value.length} of ${rows.length} fields`,
+      life: 3000
+    })
+  }
+  
+  reader.readAsText(file)
+}
+
+async function handleBulkUpload() {
+  if (!selectedFile.value) return
+  
+  uploading.value = true
+  
+  try {
+    // Parse entire file
+    const text = await selectedFile.value.text()
+    const lines = text.split('\n').filter(line => line.trim())
+    const rows = lines.slice(1).filter(line => line.trim() && !line.split(',').every(cell => !cell.trim()))
+    
+    const fieldsToUpload = rows.map(line => {
+      const values = line.split(',')
+      return {
+        tgt_table_name: values[0]?.trim() || '',
+        tgt_table_physical_name: values[1]?.trim() || values[0]?.trim() || '',
+        tgt_column_name: values[2]?.trim() || '',
+        tgt_column_physical_name: values[3]?.trim() || values[2]?.trim() || '',
+        tgt_physical_datatype: values[4]?.trim() || 'STRING',
+        tgt_nullable: values[5]?.trim() || 'NO',
+        tgt_comments: values[6]?.trim() || ''
+      }
+    })
+    
+    // Upload each field
+    let successCount = 0
+    let errorCount = 0
+    
+    for (const field of fieldsToUpload) {
+      try {
+        const result = await SemanticAPI.createRecord(field)
+        if (result.data) {
+          successCount++
+        } else {
+          errorCount++
+        }
+      } catch (e) {
+        errorCount++
+        console.error('Error uploading field:', field, e)
+      }
+    }
+    
+    toast.add({
+      severity: successCount > 0 ? 'success' : 'error',
+      summary: 'Upload Complete',
+      detail: `Successfully uploaded ${successCount} fields. ${errorCount} errors.`,
+      life: 5000
+    })
+    
+    // Reload fields
+    await loadSemanticFields()
+    closeUploadDialog()
+    
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to upload fields'
+    toast.add({
+      severity: 'error',
+      summary: 'Upload Failed',
+      detail: error.value,
+      life: 5000
+    })
+  } finally {
+    uploading.value = false
+  }
+}
+
+function handleUpload(event: any) {
+  // This is called by PrimeVue FileUpload's @uploader event
+  handleBulkUpload()
+}
+
+function closeUploadDialog() {
+  showUploadDialog.value = false
+  uploadPreview.value = []
+  selectedFile.value = null
+}
 </script>
 
 <style scoped>
@@ -766,6 +1020,67 @@ function closeEditDialog() {
   .search-input {
     max-width: none;
   }
+}
+
+/* Upload Dialog */
+.upload-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.upload-instructions {
+  padding: 1rem;
+  background: var(--surface-50);
+  border-radius: 6px;
+}
+
+.upload-instructions h4 {
+  margin: 0 0 0.5rem 0;
+  color: var(--gainwell-dark);
+}
+
+.upload-instructions ol {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.upload-instructions li {
+  margin-bottom: 0.5rem;
+}
+
+.file-upload-area {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+  border: 2px dashed var(--surface-border);
+  border-radius: 6px;
+  background: var(--surface-50);
+}
+
+.upload-preview {
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 1rem;
+  background: white;
+}
+
+.upload-preview h4 {
+  margin: 0 0 1rem 0;
+  color: var(--gainwell-dark);
+}
+
+.preview-table {
+  margin-bottom: 1rem;
+}
+
+.preview-info {
+  margin: 0;
+  padding: 0.5rem;
+  background: var(--green-50);
+  border-radius: 4px;
+  color: var(--green-900);
+  font-weight: 500;
 }
 </style>
 
