@@ -54,7 +54,8 @@ COMMENT 'Target field definitions with semantic metadata for AI-powered mapping.
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
-  'delta.autoOptimize.autoCompact' = 'true'
+  'delta.autoOptimize.autoCompact' = 'true',
+  'delta.feature.allowColumnDefaults' = 'supported'
 );
 
 -- ============================================================================
@@ -89,7 +90,8 @@ COMMENT 'Source fields awaiting mapping to target fields. Uniqueness on (src_tab
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
-  'delta.autoOptimize.autoCompact' = 'true'
+  'delta.autoOptimize.autoCompact' = 'true',
+  'delta.feature.allowColumnDefaults' = 'supported'
 );
 
 -- ============================================================================
@@ -137,7 +139,8 @@ COMMENT 'Target fields with their source field mappings (one record per target f
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
-  'delta.autoOptimize.autoCompact' = 'true'
+  'delta.autoOptimize.autoCompact' = 'true',
+  'delta.feature.allowColumnDefaults' = 'supported'
 );
 
 -- ============================================================================
@@ -183,7 +186,8 @@ COMMENT 'Individual source fields that contribute to each target field mapping, 
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
-  'delta.autoOptimize.autoCompact' = 'true'
+  'delta.autoOptimize.autoCompact' = 'true',
+  'delta.feature.allowColumnDefaults' = 'supported'
 );
 
 -- ============================================================================
@@ -236,7 +240,8 @@ COMMENT 'User feedback on AI mapping suggestions for model improvement and analy
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
-  'delta.autoOptimize.autoCompact' = 'true'
+  'delta.autoOptimize.autoCompact' = 'true',
+  'delta.feature.allowColumnDefaults' = 'supported'
 );
 
 -- ============================================================================
@@ -269,7 +274,8 @@ COMMENT 'Library of reusable transformation patterns. Uniqueness on transformati
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
-  'delta.autoOptimize.autoCompact' = 'true'
+  'delta.autoOptimize.autoCompact' = 'true',
+  'delta.feature.allowColumnDefaults' = 'supported'
 );
 
 -- ============================================================================
