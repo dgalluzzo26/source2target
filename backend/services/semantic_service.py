@@ -156,6 +156,26 @@ class SemanticService:
         
         try:
             with connection.cursor() as cursor:
+                # First, check if table exists
+                print(f"[Semantic Service] Checking if table exists: {semantic_fields_table}")
+                catalog, schema, table = semantic_fields_table.split('.')
+                check_query = f"""
+                SELECT COUNT(*) as table_exists
+                FROM {catalog}.information_schema.tables
+                WHERE table_catalog = '{catalog}'
+                  AND table_schema = '{schema}'
+                  AND table_name = '{table}'
+                """
+                cursor.execute(check_query)
+                result = cursor.fetchone()
+                if result and result[0] == 0:
+                    raise Exception(
+                        f"Table '{semantic_fields_table}' does not exist. "
+                        f"Please run the V2 migration scripts first:\n"
+                        f"1. database/migration_v2_schema.sql\n"
+                        f"2. database/migration_v2_data.sql"
+                    )
+                
                 query = f"""
                 SELECT 
                     id,
