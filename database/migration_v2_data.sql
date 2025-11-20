@@ -38,10 +38,12 @@ SELECT 'V1 tables backed up successfully' AS status;
 -- ============================================================================
 
 INSERT INTO main.source2target.semantic_fields (
-  tgt_table,
-  tgt_column,
-  tgt_data_type,
-  tgt_is_nullable,
+  tgt_table_name,
+  tgt_table_physical_name,
+  tgt_column_name,
+  tgt_column_physical_name,
+  tgt_nullable,
+  tgt_physical_datatype,
   tgt_comments,
   domain,
   created_by,
@@ -50,10 +52,12 @@ INSERT INTO main.source2target.semantic_fields (
   updated_ts
 )
 SELECT 
-  tgt_table,
-  tgt_column,
-  tgt_data_type,
-  tgt_is_nullable,
+  tgt_table_name,
+  tgt_table_physical_name,
+  tgt_column_name,
+  tgt_column_physical_name,
+  tgt_nullable,
+  tgt_physical_datatype,
   tgt_comments,
   NULL AS domain,  -- TODO: Can be populated based on table naming conventions or manual review
   COALESCE(created_by, 'system') AS created_by,
@@ -64,8 +68,8 @@ FROM main.source2target.semantic_table
 WHERE NOT EXISTS (
   -- Avoid duplicates if migration is re-run
   SELECT 1 FROM main.source2target.semantic_fields sf
-  WHERE sf.tgt_table = semantic_table.tgt_table
-    AND sf.tgt_column = semantic_table.tgt_column
+  WHERE sf.tgt_table_physical_name = semantic_table.tgt_table_physical_name
+    AND sf.tgt_column_physical_name = semantic_table.tgt_column_physical_name
 );
 
 SELECT 
@@ -85,10 +89,11 @@ FROM main.source2target.semantic_fields;
 -- ============================================================================
 
 INSERT INTO main.source2target.unmapped_fields (
-  src_table,
-  src_column,
-  src_data_type,
-  src_is_nullable,
+  src_table_name,
+  src_column_name,
+  src_column_physical_name,
+  src_nullable,
+  src_physical_datatype,
   src_comments,
   domain,
   created_by,
@@ -97,10 +102,11 @@ INSERT INTO main.source2target.unmapped_fields (
   updated_ts
 )
 SELECT 
-  src_table,
-  src_column,
-  src_data_type,
-  src_is_nullable,
+  src_table_name,
+  src_column_name,
+  src_column_physical_name,
+  src_nullable,
+  src_physical_datatype,
   src_comments,
   NULL AS domain,  -- TODO: Can be populated based on table naming conventions
   COALESCE(created_by, 'system') AS created_by,
@@ -108,12 +114,12 @@ SELECT
   updated_by,
   updated_ts
 FROM main.source2target.combined_fields
-WHERE tgt_table IS NULL  -- Unmapped fields only
+WHERE tgt_table_physical IS NULL  -- Unmapped fields only
   AND NOT EXISTS (
     -- Avoid duplicates if migration is re-run
     SELECT 1 FROM main.source2target.unmapped_fields uf
-    WHERE uf.src_table = combined_fields.src_table
-      AND uf.src_column = combined_fields.src_column
+    WHERE uf.src_table_name = combined_fields.src_table_name
+      AND uf.src_column_name = combined_fields.src_column_name
   );
 
 SELECT 
@@ -134,8 +140,10 @@ FROM main.source2target.unmapped_fields;
 -- First, insert into mapped_fields (one record per unique target)
 INSERT INTO main.source2target.mapped_fields (
   semantic_field_id,
-  tgt_table,
-  tgt_column,
+  tgt_table_name,
+  tgt_table_physical_name,
+  tgt_column_name,
+  tgt_column_physical_name,
   concat_strategy,
   concat_separator,
   transformation_expression,
@@ -150,12 +158,14 @@ INSERT INTO main.source2target.mapped_fields (
 )
 SELECT 
   sf.semantic_field_id,
-  cf.tgt_table,
-  cf.tgt_column,
+  cf.tgt_table_name,
+  cf.tgt_table_physical,
+  cf.tgt_mapping AS tgt_column_name,  -- V1 used tgt_mapping for logical name
+  cf.tgt_column_physical,
   'NONE' AS concat_strategy,  -- V1 had single field mappings
   NULL AS concat_separator,
   -- Build simple transformation expression from V1 data
-  CONCAT(cf.src_table, '.', cf.src_column) AS transformation_expression,
+  CONCAT(cf.src_table_name, '.', cf.src_column_physical_name) AS transformation_expression,
   cf.confidence_score,
   CASE 
     WHEN cf.mapping_source IS NOT NULL THEN cf.mapping_source
@@ -170,14 +180,14 @@ SELECT
   cf.updated_ts
 FROM main.source2target.combined_fields cf
 INNER JOIN main.source2target.semantic_fields sf
-  ON cf.tgt_table = sf.tgt_table
-  AND cf.tgt_column = sf.tgt_column
-WHERE cf.tgt_table IS NOT NULL  -- Only mapped fields
+  ON cf.tgt_table_physical = sf.tgt_table_physical_name
+  AND cf.tgt_column_physical = sf.tgt_column_physical_name
+WHERE cf.tgt_table_physical IS NOT NULL  -- Only mapped fields
   AND NOT EXISTS (
     -- Avoid duplicates if migration is re-run
     SELECT 1 FROM main.source2target.mapped_fields mf
-    WHERE mf.tgt_table = cf.tgt_table
-      AND mf.tgt_column = cf.tgt_column
+    WHERE mf.tgt_table_physical_name = cf.tgt_table_physical
+      AND mf.tgt_column_physical_name = cf.tgt_column_physical
   );
 
 SELECT 
@@ -189,8 +199,9 @@ FROM main.source2target.mapped_fields;
 INSERT INTO main.source2target.mapping_details (
   mapped_field_id,
   unmapped_field_id,
-  src_table,
-  src_column,
+  src_table_name,
+  src_column_name,
+  src_column_physical_name,
   field_order,
   transformations,
   default_value,
@@ -203,8 +214,9 @@ INSERT INTO main.source2target.mapping_details (
 SELECT 
   mf.mapped_field_id,
   NULL AS unmapped_field_id,  -- Source no longer in unmapped_fields since it's mapped
-  cf.src_table,
-  cf.src_column,
+  cf.src_table_name,
+  cf.src_column_name,
+  cf.src_column_physical_name,
   1 AS field_order,  -- V1 had single field mappings, so always order 1
   NULL AS transformations,  -- V1 didn't track transformations explicitly
   NULL AS default_value,
@@ -215,15 +227,15 @@ SELECT
   cf.updated_ts
 FROM main.source2target.combined_fields cf
 INNER JOIN main.source2target.mapped_fields mf
-  ON cf.tgt_table = mf.tgt_table
-  AND cf.tgt_column = mf.tgt_column
-WHERE cf.tgt_table IS NOT NULL  -- Only mapped fields
+  ON cf.tgt_table_physical = mf.tgt_table_physical_name
+  AND cf.tgt_column_physical = mf.tgt_column_physical_name
+WHERE cf.tgt_table_physical IS NOT NULL  -- Only mapped fields
   AND NOT EXISTS (
     -- Avoid duplicates if migration is re-run
     SELECT 1 FROM main.source2target.mapping_details md
     WHERE md.mapped_field_id = mf.mapped_field_id
-      AND md.src_table = cf.src_table
-      AND md.src_column = cf.src_column
+      AND md.src_table_name = cf.src_table_name
+      AND md.src_column_name = cf.src_column_name
   );
 
 SELECT 

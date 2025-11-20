@@ -20,10 +20,18 @@
 
 CREATE TABLE IF NOT EXISTS main.source2target.semantic_fields (
   semantic_field_id BIGINT GENERATED ALWAYS AS IDENTITY,
-  tgt_table STRING NOT NULL COMMENT 'Target table name (e.g., slv_member)',
-  tgt_column STRING NOT NULL COMMENT 'Target column name (e.g., first_name)',
-  tgt_data_type STRING COMMENT 'Target data type (e.g., STRING, INT, DATE)',
-  tgt_is_nullable BOOLEAN DEFAULT true COMMENT 'Whether target field allows NULL values',
+  
+  -- Logical names (for display/UI)
+  tgt_table_name STRING NOT NULL COMMENT 'Target table logical name (display name, e.g., "Member Table")',
+  tgt_column_name STRING NOT NULL COMMENT 'Target column logical name (display name, e.g., "First Name")',
+  
+  -- Physical names (for database operations)
+  tgt_table_physical_name STRING NOT NULL COMMENT 'Target table physical name (database name, e.g., "slv_member")',
+  tgt_column_physical_name STRING NOT NULL COMMENT 'Target column physical name (database name, e.g., "first_name")',
+  
+  -- Metadata
+  tgt_nullable STRING DEFAULT 'YES' COMMENT 'Whether target field allows NULL values (YES/NO)',
+  tgt_physical_datatype STRING COMMENT 'Physical data type (e.g., STRING, INT, DATE)',
   tgt_comments STRING COMMENT 'Description/comments for target field',
   
   -- Domain classification for enhanced AI recommendations
@@ -38,19 +46,19 @@ CREATE TABLE IF NOT EXISTS main.source2target.semantic_fields (
   -- Computed semantic field for vector search (same as V1)
   semantic_field STRING GENERATED ALWAYS AS (
     CONCAT_WS(' | ',
-      CONCAT('table:', COALESCE(tgt_table, '')),
-      CONCAT('column:', COALESCE(tgt_column, '')),
-      CONCAT('type:', COALESCE(tgt_data_type, '')),
-      CONCAT('description:', COALESCE(tgt_comments, '')),
-      CONCAT('domain:', COALESCE(domain, ''))
+      CONCAT('TABLE NAME: ', COALESCE(tgt_table_name, '')),
+      CONCAT('COLUMN NAME: ', COALESCE(tgt_column_name, '')),
+      CONCAT('TYPE: ', COALESCE(tgt_physical_datatype, '')),
+      CONCAT('DESCRIPTION: ', COALESCE(tgt_comments, '')),
+      CONCAT('DOMAIN: ', COALESCE(domain, ''))
     )
   ) COMMENT 'Concatenated field for vector embedding',
   
   CONSTRAINT pk_semantic_fields PRIMARY KEY (semantic_field_id)
-  -- Note: UNIQUE constraint on (tgt_table, tgt_column) enforced at application level
+  -- Note: UNIQUE constraint on (tgt_table_physical_name, tgt_column_physical_name) enforced at application level
   -- Databricks Delta tables don't support UNIQUE constraints
 ) 
-COMMENT 'Target field definitions with semantic metadata for AI-powered mapping. Uniqueness on (tgt_table, tgt_column) must be enforced at application level.'
+COMMENT 'Target field definitions with semantic metadata for AI-powered mapping. Uniqueness on (tgt_table_physical_name, tgt_column_physical_name) must be enforced at application level.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
@@ -67,10 +75,17 @@ TBLPROPERTIES (
 
 CREATE TABLE IF NOT EXISTS main.source2target.unmapped_fields (
   unmapped_field_id BIGINT GENERATED ALWAYS AS IDENTITY,
-  src_table STRING NOT NULL COMMENT 'Source table name (e.g., T_MEMBER)',
-  src_column STRING NOT NULL COMMENT 'Source column name (e.g., SSN)',
-  src_data_type STRING COMMENT 'Source data type (e.g., STRING, INT, DATE)',
-  src_is_nullable BOOLEAN DEFAULT true COMMENT 'Whether source field allows NULL values',
+  
+  -- Logical names (for display/UI)
+  src_table_name STRING NOT NULL COMMENT 'Source table logical name (display name, e.g., "Member Table")',
+  src_column_name STRING NOT NULL COMMENT 'Source column logical name (display name, e.g., "SSN")',
+  
+  -- Physical name (for database operations)
+  src_column_physical_name STRING NOT NULL COMMENT 'Source column physical name (database name, e.g., "ssn_col")',
+  
+  -- Metadata
+  src_nullable STRING DEFAULT 'YES' COMMENT 'Whether source field allows NULL values (YES/NO)',
+  src_physical_datatype STRING COMMENT 'Physical data type (e.g., STRING, INT, DATE)',
   src_comments STRING COMMENT 'Description/comments for source field',
   
   -- Domain classification for enhanced AI recommendations
@@ -83,10 +98,10 @@ CREATE TABLE IF NOT EXISTS main.source2target.unmapped_fields (
   updated_ts TIMESTAMP COMMENT 'Timestamp when record was last updated',
   
   CONSTRAINT pk_unmapped_fields PRIMARY KEY (unmapped_field_id)
-  -- Note: UNIQUE constraint on (src_table, src_column) enforced at application level
+  -- Note: UNIQUE constraint on (src_table_name, src_column_name) enforced at application level
   -- Databricks Delta tables don't support UNIQUE constraints
 )
-COMMENT 'Source fields awaiting mapping to target fields. Uniqueness on (src_table, src_column) must be enforced at application level.'
+COMMENT 'Source fields awaiting mapping to target fields. Uniqueness on (src_table_name, src_column_name) must be enforced at application level.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
@@ -106,8 +121,12 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapped_fields (
   
   -- Target field reference
   semantic_field_id BIGINT NOT NULL COMMENT 'Foreign key to semantic_fields table',
-  tgt_table STRING NOT NULL COMMENT 'Target table name (denormalized for performance)',
-  tgt_column STRING NOT NULL COMMENT 'Target column name (denormalized for performance)',
+  
+  -- Denormalized target field names (for performance)
+  tgt_table_name STRING NOT NULL COMMENT 'Target table logical name (denormalized)',
+  tgt_table_physical_name STRING NOT NULL COMMENT 'Target table physical name (denormalized)',
+  tgt_column_name STRING NOT NULL COMMENT 'Target column logical name (denormalized)',
+  tgt_column_physical_name STRING NOT NULL COMMENT 'Target column physical name (denormalized)',
   
   -- Multi-source concatenation strategy
   concat_strategy STRING DEFAULT 'NONE' COMMENT 'How to combine multiple source fields: NONE, SPACE, COMMA, PIPE, CONCAT, CUSTOM',
@@ -132,10 +151,10 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapped_fields (
   
   CONSTRAINT pk_mapped_fields PRIMARY KEY (mapped_field_id),
   CONSTRAINT fk_mapped_semantic FOREIGN KEY (semantic_field_id) REFERENCES main.source2target.semantic_fields(semantic_field_id)
-  -- Note: UNIQUE constraint on (tgt_table, tgt_column) not supported - enforce at application level
+  -- Note: UNIQUE constraint on (tgt_table_physical_name, tgt_column_physical_name) not supported - enforce at application level
   -- Note: FOREIGN KEY is informational only (not enforced by Databricks)
 )
-COMMENT 'Target fields with their source field mappings (one record per target field, supporting multiple sources). Uniqueness on (tgt_table, tgt_column) must be enforced at application level. Foreign keys are informational only.'
+COMMENT 'Target fields with their source field mappings (one record per target field, supporting multiple sources). Uniqueness on (tgt_table_physical_name, tgt_column_physical_name) must be enforced at application level. Foreign keys are informational only.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
@@ -158,8 +177,11 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapping_details (
   
   -- Source field reference
   unmapped_field_id BIGINT COMMENT 'Foreign key to unmapped_fields table (NULL if field was removed from unmapped)',
-  src_table STRING NOT NULL COMMENT 'Source table name (denormalized)',
-  src_column STRING NOT NULL COMMENT 'Source column name (denormalized)',
+  
+  -- Denormalized source field names (for performance)
+  src_table_name STRING NOT NULL COMMENT 'Source table logical name (denormalized)',
+  src_column_name STRING NOT NULL COMMENT 'Source column logical name (denormalized)',
+  src_column_physical_name STRING NOT NULL COMMENT 'Source column physical name (denormalized)',
   
   -- Ordering and transformations
   field_order INT NOT NULL COMMENT 'Order of this field in concatenation (1-based)',
@@ -178,11 +200,11 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapping_details (
   CONSTRAINT pk_mapping_details PRIMARY KEY (mapping_detail_id),
   CONSTRAINT fk_detail_mapped FOREIGN KEY (mapped_field_id) REFERENCES main.source2target.mapped_fields(mapped_field_id),
   CONSTRAINT fk_detail_unmapped FOREIGN KEY (unmapped_field_id) REFERENCES main.source2target.unmapped_fields(unmapped_field_id)
-  -- Note: UNIQUE constraint on (mapped_field_id, src_table, src_column) not supported - enforce at application level
+  -- Note: UNIQUE constraint on (mapped_field_id, src_table_name, src_column_name) not supported - enforce at application level
   -- Note: FOREIGN KEYs are informational only (not enforced by Databricks)
   -- Note: ON DELETE CASCADE/SET NULL not supported - must handle in application code
 )
-COMMENT 'Individual source fields that contribute to each target field mapping, with ordering and transformations. Uniqueness must be enforced at application level. Foreign keys are informational only. CASCADE/SET NULL must be handled in application.'
+COMMENT 'Individual source fields that contribute to each target field mapping, with ordering and transformations. Uniqueness on (mapped_field_id, src_table_name, src_column_name) must be enforced at application level. Foreign keys are informational only. CASCADE/SET NULL must be handled in application.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
@@ -285,17 +307,17 @@ TBLPROPERTIES (
 -- Liquid clustering auto-optimizes data layout based on query patterns
 -- ============================================================================
 
--- Enable Liquid Clustering on semantic_fields (clustered by tgt_table, domain)
+-- Enable Liquid Clustering on semantic_fields (clustered by tgt_table_physical_name, domain)
 ALTER TABLE main.source2target.semantic_fields 
-CLUSTER BY (tgt_table, domain);
+CLUSTER BY (tgt_table_physical_name, domain);
 
--- Enable Liquid Clustering on unmapped_fields (clustered by src_table, domain)
+-- Enable Liquid Clustering on unmapped_fields (clustered by src_table_name, domain)
 ALTER TABLE main.source2target.unmapped_fields 
-CLUSTER BY (src_table, domain);
+CLUSTER BY (src_table_name, domain);
 
--- Enable Liquid Clustering on mapped_fields (clustered by tgt_table, mapping_status)
+-- Enable Liquid Clustering on mapped_fields (clustered by tgt_table_physical_name, mapping_status)
 ALTER TABLE main.source2target.mapped_fields 
-CLUSTER BY (tgt_table, mapping_status);
+CLUSTER BY (tgt_table_physical_name, mapping_status);
 
 -- Enable Liquid Clustering on mapping_details (clustered by mapped_field_id)
 ALTER TABLE main.source2target.mapping_details 
