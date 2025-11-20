@@ -2,35 +2,45 @@
   <div class="field-order-editor">
     <Message severity="info" :closable="false" class="info-message">
       <i class="pi pi-info-circle"></i>
-      <strong>Drag and drop</strong> to reorder fields. The first field will appear first in the concatenated result.
+      <strong>Use arrow buttons</strong> to reorder fields. The first field will appear first in the concatenated result.
     </Message>
 
     <div class="field-list">
-      <draggable
-        v-model="localFields"
-        item-key="src_column_physical_name"
-        handle=".drag-handle"
-        @end="handleDragEnd"
-        :animation="200"
-        ghost-class="ghost"
+      <div
+        v-for="(element, index) in localFields"
+        :key="element.src_column_physical_name"
+        class="field-item"
       >
-        <template #item="{ element, index }">
-          <div class="field-item">
-            <div class="drag-handle">
-              <i class="pi pi-bars"></i>
-            </div>
-            <div class="field-order">
-              <Tag :value="`${index + 1}`" severity="info" />
-            </div>
-            <div class="field-content">
-              <div class="field-name">
-                <strong>{{ element.src_table_name }}.{{ element.src_column_name }}</strong>
-                <span class="physical-name">{{ element.src_column_physical_name }}</span>
-              </div>
-            </div>
+        <div class="field-order">
+          <Tag :value="`${index + 1}`" severity="info" />
+        </div>
+        <div class="field-content">
+          <div class="field-name">
+            <strong>{{ element.src_table_name }}.{{ element.src_column_name }}</strong>
+            <span class="physical-name">{{ element.src_column_physical_name }}</span>
           </div>
-        </template>
-      </draggable>
+        </div>
+        <div class="field-actions">
+          <Button
+            icon="pi pi-chevron-up"
+            severity="secondary"
+            text
+            rounded
+            :disabled="index === 0"
+            @click="moveUp(index)"
+            v-tooltip.top="'Move up'"
+          />
+          <Button
+            icon="pi pi-chevron-down"
+            severity="secondary"
+            text
+            rounded
+            :disabled="index === localFields.length - 1"
+            @click="moveDown(index)"
+            v-tooltip.top="'Move down'"
+          />
+        </div>
+      </div>
     </div>
 
     <div class="preview-section">
@@ -52,9 +62,9 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import draggable from 'vuedraggable'
 import Message from 'primevue/message'
 import Tag from 'primevue/tag'
+import Button from 'primevue/button'
 import type { MappingDetailV2 } from '@/stores/mappingsStoreV2'
 
 interface Props {
@@ -85,8 +95,24 @@ watch(localFields, (newFields) => {
   emit('update:fields', updatedFields)
 }, { deep: true })
 
-function handleDragEnd() {
-  console.log('[Field Order Editor] Drag ended, new order:', localFields.value.map(f => f.src_column_name))
+function moveUp(index: number) {
+  if (index > 0) {
+    const temp = localFields.value[index]
+    localFields.value[index] = localFields.value[index - 1]
+    localFields.value[index - 1] = temp
+    // Trigger reactivity
+    localFields.value = [...localFields.value]
+  }
+}
+
+function moveDown(index: number) {
+  if (index < localFields.value.length - 1) {
+    const temp = localFields.value[index]
+    localFields.value[index] = localFields.value[index + 1]
+    localFields.value[index + 1] = temp
+    // Trigger reactivity
+    localFields.value = [...localFields.value]
+  }
 }
 </script>
 
@@ -132,14 +158,10 @@ function handleDragEnd() {
   margin-bottom: 0;
 }
 
-.drag-handle {
-  color: var(--text-color-secondary);
-  cursor: grab;
-  padding: 0.5rem;
-}
-
-.drag-handle:active {
-  cursor: grabbing;
+.field-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
 }
 
 .field-order {
@@ -187,11 +209,6 @@ function handleDragEnd() {
   gap: 0.5rem;
 }
 
-/* Ghost element while dragging */
-.ghost {
-  opacity: 0.5;
-  background: var(--gainwell-light);
-}
 
 /* Responsive */
 @media (max-width: 768px) {
