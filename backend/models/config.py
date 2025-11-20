@@ -22,54 +22,71 @@ from typing import Optional
 
 class DatabaseConfig(BaseModel):
     """
-    Database connection configuration for Databricks SQL Warehouse.
+    Database connection configuration for Databricks SQL Warehouse (V2 Schema).
     
-    Defines the connection details for accessing the mapping and semantic tables
+    Defines the connection details for accessing the V2 multi-field mapping tables
     in Databricks. All operations use the specified warehouse.
     
     Attributes:
         warehouse_name: Display name of the SQL warehouse
-        mapping_table: Fully qualified name of the mappings table (catalog.schema.table)
-        semantic_table: Fully qualified name of the semantic table with target fields
+        catalog: Databricks catalog name
+        schema: Databricks schema name
+        semantic_fields_table: Target field definitions (V2: was semantic_table)
+        unmapped_fields_table: Source fields awaiting mapping (V2: new)
+        mapped_fields_table: Target fields with mappings (V2: new)
+        mapping_details_table: Source fields in each mapping (V2: new)
+        mapping_feedback_table: User feedback on AI suggestions (V2: new)
+        transformation_library_table: Reusable transformation templates (V2: new)
         server_hostname: Databricks workspace hostname
         http_path: SQL warehouse HTTP path for connections
     """
     warehouse_name: str = Field(default="gia-oztest-dev-data-warehouse", description="SQL warehouse display name")
-    mapping_table: str = Field(default="oztest_dev.source_to_target.mappings", description="Mappings table (catalog.schema.table)")
-    semantic_table: str = Field(default="oztest_dev.source_to_target.silver_semantic_full", description="Semantic table (catalog.schema.table)")
+    catalog: str = Field(default="oztest_dev", description="Databricks catalog name")
+    schema: str = Field(default="source2target", description="Databricks schema name")
+    semantic_fields_table: str = Field(default="oztest_dev.source2target.semantic_fields", description="Target field definitions (V2)")
+    unmapped_fields_table: str = Field(default="oztest_dev.source2target.unmapped_fields", description="Source fields awaiting mapping (V2)")
+    mapped_fields_table: str = Field(default="oztest_dev.source2target.mapped_fields", description="Target fields with mappings (V2)")
+    mapping_details_table: str = Field(default="oztest_dev.source2target.mapping_details", description="Source fields in each mapping (V2)")
+    mapping_feedback_table: str = Field(default="oztest_dev.source2target.mapping_feedback", description="User feedback on AI suggestions (V2)")
+    transformation_library_table: str = Field(default="oztest_dev.source2target.transformation_library", description="Reusable transformations (V2)")
     server_hostname: str = Field(default="Acuity-oz-test-ue1.cloud.databricks.com", description="Databricks workspace hostname")
     http_path: str = Field(default="/sql/1.0/warehouses/173ea239ed13be7d", description="SQL warehouse HTTP path")
+    
+    # Legacy V1 fields for backward compatibility
+    mapping_table: Optional[str] = Field(default=None, description="[V1 Legacy] Old mappings table")
+    semantic_table: Optional[str] = Field(default=None, description="[V1 Legacy] Old semantic table")
 
 
 class AIModelConfig(BaseModel):
     """
-    AI model configuration for LLM-powered mapping suggestions.
+    AI model configuration for LLM-powered mapping suggestions (V2).
     
     Defines the foundation model endpoint used for generating intelligent
-    mapping suggestions with reasoning.
+    mapping suggestions with reasoning. V2 uses historical mappings from
+    mapped_fields table for pattern learning.
     
     Attributes:
-        previous_mappings_table_name: Table containing historical mappings for few-shot examples
+        previous_mappings_table_name: Historical mappings for few-shot (V2: mapped_fields)
         foundation_model_endpoint: Name of the Databricks foundation model endpoint
         default_prompt: Default system prompt for the LLM (currently unused)
     """
-    previous_mappings_table_name: str = Field(default="oztest_dev.source_to_target.train_with_comments", description="Historical mappings table")
+    previous_mappings_table_name: str = Field(default="oztest_dev.source2target.mapped_fields", description="Historical mappings table (V2)")
     foundation_model_endpoint: str = Field(default="databricks-meta-llama-3-3-70b-instruct", description="Foundation model endpoint name")
     default_prompt: str = Field(default="", description="Default LLM system prompt")
 
 
 class VectorSearchConfig(BaseModel):
     """
-    Vector search configuration for semantic similarity matching.
+    Vector search configuration for semantic similarity matching (V2).
     
     Defines the Databricks Vector Search index and endpoint used for finding
-    similar target fields based on semantic meaning.
+    similar target fields based on semantic meaning. V2 uses semantic_fields_vs index.
     
     Attributes:
-        index_name: Fully qualified name of the vector search index
+        index_name: Fully qualified name of the vector search index (V2: semantic_fields_vs)
         endpoint_name: Name of the vector search endpoint
     """
-    index_name: str = Field(default="oztest_dev.source_to_target.silver_semantic_full_vs", description="Vector search index name")
+    index_name: str = Field(default="oztest_dev.source2target.semantic_fields_vs", description="Vector search index name (V2)")
     endpoint_name: str = Field(default="s2t_vsendpoint", description="Vector search endpoint name")
 
 

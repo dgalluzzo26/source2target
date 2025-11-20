@@ -70,7 +70,7 @@ class SemanticService:
         return {
             "server_hostname": config.database.server_hostname,
             "http_path": config.database.http_path,
-            "semantic_table": config.database.semantic_table
+            "semantic_fields_table": config.database.semantic_fields_table  # V2: Changed from semantic_table
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):
@@ -122,11 +122,11 @@ class SemanticService:
         )
         return semantic_field
     
-    def _read_semantic_table_sync(self, server_hostname: str, http_path: str, semantic_table: str) -> List[Dict[str, Any]]:
+    def _read_semantic_table_sync(self, server_hostname: str, http_path: str, semantic_fields_table: str) -> List[Dict[str, Any]]:
         """
-        Read all records from the semantic table (synchronous, for thread pool).
+        Read all records from the semantic_fields table (V2 schema, synchronous, for thread pool).
         """
-        print(f"[Semantic Service] Starting read from table: {semantic_table}")
+        print(f"[Semantic Service] Starting read from table: {semantic_fields_table}")
         print(f"[Semantic Service] Server: {server_hostname}")
         print(f"[Semantic Service] HTTP Path: {http_path}")
         
@@ -167,7 +167,7 @@ class SemanticService:
                     tgt_physical_datatype,
                     tgt_comments,
                     semantic_field
-                FROM {semantic_table}
+                FROM {semantic_fields_table}
                 ORDER BY tgt_table_name, tgt_column_name
                 """
                 print(f"[Semantic Service] Executing query...")
@@ -192,7 +192,7 @@ class SemanticService:
         self,
         server_hostname: str,
         http_path: str,
-        semantic_table: str,
+        semantic_fields_table: str,
         record_data: SemanticRecordCreate
     ) -> Dict[str, Any]:
         """
@@ -214,13 +214,13 @@ class SemanticService:
         try:
             with connection.cursor() as cursor:
                 # Get next ID
-                max_id_query = f"SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM {semantic_table}"
+                max_id_query = f"SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM {semantic_fields_table}"
                 cursor.execute(max_id_query)
                 next_id = cursor.fetchone()[0]
                 
                 # Insert with calculated ID and proper SQL escaping
                 query = f"""
-                INSERT INTO {semantic_table} (
+                INSERT INTO {semantic_fields_table} (
                     id,
                     tgt_table_name,
                     tgt_table_physical_name,
@@ -266,12 +266,12 @@ class SemanticService:
         self,
         server_hostname: str,
         http_path: str,
-        semantic_table: str,
+        semantic_fields_table: str,
         record_id: int,
         record_data: SemanticRecordUpdate
     ) -> Dict[str, Any]:
         """
-        Update an existing record in the semantic table (synchronous, for thread pool).
+        Update an existing record in the semantic_fields table (V2 schema, synchronous, for thread pool).
         """
         print(f"[Semantic Service] Updating record ID: {record_id}")
         
@@ -280,7 +280,7 @@ class SemanticService:
         try:
             with connection.cursor() as cursor:
                 # First, get the existing record
-                select_query = f"SELECT * FROM {semantic_table} WHERE id = {record_id}"
+                select_query = f"SELECT * FROM {semantic_fields_table} WHERE id = {record_id}"
                 cursor.execute(select_query)
                 existing = cursor.fetchone()
                 
@@ -309,7 +309,7 @@ class SemanticService:
                 
                 # Update query with proper SQL escaping
                 update_query = f"""
-                UPDATE {semantic_table}
+                UPDATE {semantic_fields_table}
                 SET 
                     tgt_table_name = '{updated_data["tgt_table_name"].replace("'", "''")}',
                     tgt_table_physical_name = '{updated_data["tgt_table_physical_name"].replace("'", "''")}',
@@ -339,11 +339,11 @@ class SemanticService:
         self,
         server_hostname: str,
         http_path: str,
-        semantic_table: str,
+        semantic_fields_table: str,
         record_id: int
     ) -> Dict[str, str]:
         """
-        Delete a record from the semantic table (synchronous, for thread pool).
+        Delete a record from the semantic_fields table (V2 schema, synchronous, for thread pool).
         """
         print(f"[Semantic Service] Deleting record ID: {record_id}")
         
@@ -351,7 +351,7 @@ class SemanticService:
         
         try:
             with connection.cursor() as cursor:
-                query = f"DELETE FROM {semantic_table} WHERE id = {record_id}"
+                query = f"DELETE FROM {semantic_fields_table} WHERE id = {record_id}"
                 cursor.execute(query)
                 connection.commit()
                 
@@ -366,7 +366,7 @@ class SemanticService:
         
         try:
             db_config = self._get_db_config()
-            print(f"[Semantic Service] Config loaded: {db_config['semantic_table']}")
+            print(f"[Semantic Service] Config loaded: {db_config['semantic_fields_table']}")
         except Exception as e:
             print(f"[Semantic Service] Failed to get config: {str(e)}")
             raise
@@ -381,7 +381,7 @@ class SemanticService:
                         self._read_semantic_table_sync,
                         db_config['server_hostname'],
                         db_config['http_path'],
-                        db_config['semantic_table']
+                        db_config['semantic_fields_table']
                     )
                 ),
                 timeout=30.0  # Increased to 30 seconds
@@ -414,7 +414,7 @@ class SemanticService:
                     self._insert_semantic_record_sync,
                     db_config['server_hostname'],
                     db_config['http_path'],
-                    db_config['semantic_table'],
+                    db_config['semantic_fields_table'],
                     record_data
                 )
             ),
@@ -444,7 +444,7 @@ class SemanticService:
                     self._update_semantic_record_sync,
                     db_config['server_hostname'],
                     db_config['http_path'],
-                    db_config['semantic_table'],
+                    db_config['semantic_fields_table'],
                     record_id,
                     record_data
                 )
@@ -475,7 +475,7 @@ class SemanticService:
                     self._delete_semantic_record_sync,
                     db_config['server_hostname'],
                     db_config['http_path'],
-                    db_config['semantic_table'],
+                    db_config['semantic_fields_table'],
                     record_id
                 )
             ),
