@@ -377,7 +377,7 @@ import ProgressSpinner from 'primevue/progressspinner'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import HelpButton from '@/components/HelpButton.vue'
-import * as SemanticAPI from '@/api/semantic'
+import { SemanticAPI } from '@/services/api'
 
 const userStore = useUserStore()
 const confirm = useConfirm()
