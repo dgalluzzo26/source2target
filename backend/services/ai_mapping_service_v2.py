@@ -164,18 +164,22 @@ class AIMappingServiceV2:
                 if len(source_fields) == 1:
                     # Single field: exact match
                     field = source_fields[0]
+                    table_name = field['src_table_physical_name'].replace("'", "''")
+                    column_name = field['src_column_physical_name'].replace("'", "''")
                     where_clause = f"""
-                    WHERE md.src_table_physical_name = '{field['src_table_physical_name'].replace("'", "''")}'
-                      AND md.src_column_physical_name = '{field['src_column_physical_name'].replace("'", "''")}'
+                    WHERE md.src_table_physical_name = '{table_name}'
+                      AND md.src_column_physical_name = '{column_name}'
                     """
                 else:
                     # Multi-field: match combination
                     # Look for mappings where all source fields are present
                     field_conditions = []
                     for field in source_fields:
+                        table_name = field['src_table_physical_name'].replace("'", "''")
+                        column_name = field['src_column_physical_name'].replace("'", "''")
                         field_conditions.append(
-                            f"(md.src_table_physical_name = '{field['src_table_physical_name'].replace("'", "''")}' "
-                            f"AND md.src_column_physical_name = '{field['src_column_physical_name'].replace("'", "''")}')"
+                            f"(md.src_table_physical_name = '{table_name}' "
+                            f"AND md.src_column_physical_name = '{column_name}')"
                         )
                     where_clause = f"WHERE ({' OR '.join(field_conditions)})"
                 
