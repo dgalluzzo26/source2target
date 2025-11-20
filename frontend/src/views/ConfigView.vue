@@ -180,7 +180,18 @@
                 placeholder="catalog.schema.mapping_details"
                 class="w-full"
               />
-              <small>Source field details for each mapping</small>
+              <small>Source field details for each mapping (V2)</small>
+            </div>
+
+            <div class="field">
+              <label for="mapping_joins_table">Mapping Joins Table</label>
+              <InputText 
+                id="mapping_joins_table"
+                v-model="config.database.mapping_joins_table"
+                placeholder="catalog.schema.mapping_joins"
+                class="w-full"
+              />
+              <small>Join definitions for multi-table mappings (V2)</small>
             </div>
 
             <div class="field">
@@ -515,10 +526,19 @@ const isAuthenticated = computed(() => true) // userStore.isAdmin
 const config = ref({
   database: {
     warehouse_name: 'gia-oztest-dev-data-warehouse',
-    mapping_table: 'oztest_dev.source_to_target.mappings',
-    semantic_table: 'oztest_dev.source_to_target.silver_semantic_full',
+    catalog: 'oztest_dev',
+    schema: 'source2target',
+    semantic_fields_table: 'oztest_dev.source2target.semantic_fields',
+    unmapped_fields_table: 'oztest_dev.source2target.unmapped_fields',
+    mapped_fields_table: 'oztest_dev.source2target.mapped_fields',
+    mapping_details_table: 'oztest_dev.source2target.mapping_details',
+    mapping_joins_table: 'oztest_dev.source2target.mapping_joins',
+    mapping_feedback_table: 'oztest_dev.source2target.mapping_feedback',
+    transformation_library_table: 'oztest_dev.source2target.transformation_library',
     server_hostname: 'Acuity-oz-test-ue1.cloud.databricks.com',
-    http_path: '/sql/1.0/warehouses/173ea239ed13be7d'
+    http_path: '/sql/1.0/warehouses/173ea239ed13be7d',
+    mapping_table: undefined,
+    semantic_table: undefined
   },
   ai_model: {
     previous_mappings_table_name: 'oztest_dev.source_to_target.train_with_comments',

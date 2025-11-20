@@ -213,7 +213,56 @@ TBLPROPERTIES (
 );
 
 -- ============================================================================
--- TABLE 5: mapping_feedback (Audit Trail for AI Suggestions)
+-- TABLE 5: mapping_joins (Join Relationships for Multi-Table Mappings)
+-- ============================================================================
+-- Purpose: Define join relationships when source fields come from multiple tables
+-- Key Feature: Track join conditions needed for multi-table transformations
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS oztest_dev.source2target.mapping_joins (
+  mapping_join_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  
+  -- Parent mapping reference
+  mapped_field_id BIGINT NOT NULL COMMENT 'Foreign key to mapped_fields table',
+  
+  -- Left table (primary table)
+  left_table_name STRING NOT NULL COMMENT 'Left table logical name in the join',
+  left_table_physical_name STRING NOT NULL COMMENT 'Left table physical name in the join',
+  left_join_column STRING NOT NULL COMMENT 'Column name from left table used for joining',
+  
+  -- Right table (joining table)
+  right_table_name STRING NOT NULL COMMENT 'Right table logical name in the join',
+  right_table_physical_name STRING NOT NULL COMMENT 'Right table physical name in the join',
+  right_join_column STRING NOT NULL COMMENT 'Column name from right table used for joining',
+  
+  -- Join type
+  join_type STRING DEFAULT 'INNER' COMMENT 'Type of join: INNER, LEFT, RIGHT, FULL',
+  
+  -- Join order (for multiple joins)
+  join_order INT NOT NULL COMMENT 'Order in which joins should be applied (1-based)',
+  
+  -- Audit fields
+  created_by STRING COMMENT 'User who defined this join',
+  created_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Timestamp when join was created',
+  updated_by STRING COMMENT 'User who last updated this join',
+  updated_ts TIMESTAMP COMMENT 'Timestamp when join was last updated',
+  
+  CONSTRAINT pk_mapping_joins PRIMARY KEY (mapping_join_id),
+  CONSTRAINT fk_join_mapped FOREIGN KEY (mapped_field_id) REFERENCES oztest_dev.source2target.mapped_fields(mapped_field_id)
+  -- Note: UNIQUE constraint on (mapped_field_id, left_table_name, right_table_name) not supported - enforce at application level
+  -- Note: FOREIGN KEYs are informational only (not enforced by Databricks)
+  -- Note: ON DELETE CASCADE not supported - must handle in application code
+)
+COMMENT 'Join relationships for mappings that use fields from multiple source tables. When a target field is populated from multiple source tables, this table defines how those tables are joined. Uniqueness on (mapped_field_id, left_table_name, right_table_name) must be enforced at application level.'
+TBLPROPERTIES (
+  'delta.enableChangeDataFeed' = 'true',
+  'delta.autoOptimize.optimizeWrite' = 'true',
+  'delta.autoOptimize.autoCompact' = 'true',
+  'delta.feature.allowColumnDefaults' = 'supported'
+);
+
+-- ============================================================================
+-- TABLE 6: mapping_feedback (Audit Trail for AI Suggestions)
 -- ============================================================================
 -- Purpose: Capture user feedback on AI suggestions for model improvement
 -- Key Feature: Track accepted/rejected/modified suggestions with reasoning
@@ -322,6 +371,10 @@ CLUSTER BY (tgt_table_physical_name, mapping_status);
 -- Enable Liquid Clustering on mapping_details (clustered by mapped_field_id)
 ALTER TABLE oztest_dev.source2target.mapping_details 
 CLUSTER BY (mapped_field_id);
+
+-- Enable Liquid Clustering on mapping_joins (clustered by mapped_field_id and table names)
+ALTER TABLE oztest_dev.source2target.mapping_joins
+CLUSTER BY (mapped_field_id, left_table_physical_name, right_table_physical_name);
 
 -- Enable Liquid Clustering on mapping_feedback (clustered by feedback_action, feedback_ts)
 ALTER TABLE oztest_dev.source2target.mapping_feedback 

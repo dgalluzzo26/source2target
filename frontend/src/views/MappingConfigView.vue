@@ -90,8 +90,39 @@
       </Card>
     </div>
 
-    <!-- Step 3: Concatenation Strategy (Multi-field only) -->
-    <div v-if="activeStep === 2 && sourceFields.length > 1" class="step-content">
+    <!-- Step 3: Define Joins (Multi-table only) -->
+    <div v-if="activeStep === 2 && hasMultipleTables" class="step-content">
+      <Card>
+        <template #title>
+          <i class="pi pi-link"></i>
+          Define Table Joins
+        </template>
+        <template #subtitle>
+          Specify how tables should be joined for the transformation query
+        </template>
+        <template #content>
+          <JoinConfigurator 
+            :source-fields="sourceFields"
+            v-model:joins="joinDefinitions"
+          />
+        </template>
+      </Card>
+    </div>
+
+    <!-- Step 3: Single Table Skip -->
+    <div v-if="activeStep === 2 && !hasMultipleTables" class="step-content">
+      <Card>
+        <template #content>
+          <Message severity="info" :closable="false">
+            <strong>Single Table Mapping:</strong> All fields come from the same table. No joins needed.
+            Click "Next" to continue to concatenation.
+          </Message>
+        </template>
+      </Card>
+    </div>
+
+    <!-- Step 4: Concatenation Strategy (Multi-field only) -->
+    <div v-if="activeStep === 3 && sourceFields.length > 1" class="step-content">
       <Card>
         <template #title>
           <i class="pi pi-link"></i>
@@ -111,8 +142,8 @@
       </Card>
     </div>
 
-    <!-- Step 3: Single Field Skip -->
-    <div v-if="activeStep === 2 && sourceFields.length === 1" class="step-content">
+    <!-- Step 4: Single Field Skip -->
+    <div v-if="activeStep === 3 && sourceFields.length === 1" class="step-content">
       <Card>
         <template #content>
           <Message severity="info" :closable="false">
@@ -123,8 +154,8 @@
       </Card>
     </div>
 
-    <!-- Step 4: Transformations -->
-    <div v-if="activeStep === 3" class="step-content">
+    <!-- Step 5: Transformations -->
+    <div v-if="activeStep === 4" class="step-content">
       <Card>
         <template #title>
           <i class="pi pi-wrench"></i>
@@ -142,8 +173,8 @@
       </Card>
     </div>
 
-    <!-- Step 5: Review & Save -->
-    <div v-if="activeStep === 4" class="step-content">
+    <!-- Step 6: Review & Save -->
+    <div v-if="activeStep === 5" class="step-content">
       <Card>
         <template #title>
           <i class="pi pi-eye"></i>
@@ -256,6 +287,7 @@ import Column from 'primevue/column'
 import FieldOrderEditor from '@/components/FieldOrderEditor.vue'
 import ConcatStrategySelector from '@/components/ConcatStrategySelector.vue'
 import TransformationSelector from '@/components/TransformationSelector.vue'
+import JoinConfigurator from '@/components/JoinConfigurator.vue'
 import type { UnmappedField } from '@/stores/unmappedFieldsStore'
 import type { AISuggestionV2 } from '@/stores/aiSuggestionsStoreV2'
 import type { MappingDetailV2 } from '@/stores/mappingsStoreV2'
@@ -281,10 +313,28 @@ const finalSQLExpression = ref('')
 const steps = ref([
   { label: 'Review' },
   { label: 'Order Fields' },
+  { label: 'Define Joins' },
   { label: 'Concatenation' },
   { label: 'Transformations' },
   { label: 'Review & Save' }
 ])
+
+// Join configuration
+const joinDefinitions = ref<Array<{
+  left_table: string
+  left_table_physical: string
+  left_column: string
+  right_table: string
+  right_table_physical: string
+  right_column: string
+  join_type: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL'
+  join_order: number
+}>>([])
+
+const hasMultipleTables = computed(() => {
+  const tables = new Set(sourceFields.value.map(f => f.src_table_name))
+  return tables.size > 1
+})
 
 onMounted(() => {
   // Load data from AI suggestions store

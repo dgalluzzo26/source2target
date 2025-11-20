@@ -35,6 +35,7 @@ class DatabaseConfig(BaseModel):
         unmapped_fields_table: Source fields awaiting mapping (V2: new)
         mapped_fields_table: Target fields with mappings (V2: new)
         mapping_details_table: Source fields in each mapping (V2: new)
+        mapping_joins_table: Join definitions for multi-table mappings (V2: new)
         mapping_feedback_table: User feedback on AI suggestions (V2: new)
         transformation_library_table: Reusable transformation templates (V2: new)
         server_hostname: Databricks workspace hostname
@@ -47,6 +48,7 @@ class DatabaseConfig(BaseModel):
     unmapped_fields_table: str = Field(default="oztest_dev.source2target.unmapped_fields", description="Source fields awaiting mapping (V2)")
     mapped_fields_table: str = Field(default="oztest_dev.source2target.mapped_fields", description="Target fields with mappings (V2)")
     mapping_details_table: str = Field(default="oztest_dev.source2target.mapping_details", description="Source fields in each mapping (V2)")
+    mapping_joins_table: str = Field(default="oztest_dev.source2target.mapping_joins", description="Join definitions for multi-table mappings (V2)")
     mapping_feedback_table: str = Field(default="oztest_dev.source2target.mapping_feedback", description="User feedback on AI suggestions (V2)")
     transformation_library_table: str = Field(default="oztest_dev.source2target.transformation_library", description="Reusable transformations (V2)")
     server_hostname: str = Field(default="Acuity-oz-test-ue1.cloud.databricks.com", description="Databricks workspace hostname")
