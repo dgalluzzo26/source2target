@@ -22,12 +22,12 @@ CREATE TABLE IF NOT EXISTS main.source2target.semantic_fields (
   semantic_field_id BIGINT GENERATED ALWAYS AS IDENTITY,
   
   -- Logical names (for display/UI)
-  tgt_table_name STRING NOT NULL COMMENT 'Target table logical name (display name, e.g., Member Table)',
-  tgt_column_name STRING NOT NULL COMMENT 'Target column logical name (display name, e.g., First Name)',
+  tgt_table_name STRING NOT NULL COMMENT 'Target table logical name (display name, e.g., "Member Table")',
+  tgt_column_name STRING NOT NULL COMMENT 'Target column logical name (display name, e.g., "First Name")',
   
   -- Physical names (for database operations)
-  tgt_table_physical_name STRING NOT NULL COMMENT 'Target table physical name (database name, e.g., slv_member)',
-  tgt_column_physical_name STRING NOT NULL COMMENT 'Target column physical name (database name, e.g., first_name)',
+  tgt_table_physical_name STRING NOT NULL COMMENT 'Target table physical name (database name, e.g., "slv_member")',
+  tgt_column_physical_name STRING NOT NULL COMMENT 'Target column physical name (database name, e.g., "first_name")',
   
   -- Metadata
   tgt_nullable STRING DEFAULT 'YES' COMMENT 'Whether target field allows NULL values (YES/NO)',
@@ -77,11 +77,11 @@ CREATE TABLE IF NOT EXISTS main.source2target.unmapped_fields (
   unmapped_field_id BIGINT GENERATED ALWAYS AS IDENTITY,
   
   -- Logical names (for display/UI)
-  src_table_name STRING NOT NULL COMMENT 'Source table logical name (display name, e.g., Member Table)',
-  src_column_name STRING NOT NULL COMMENT 'Source column logical name (display name, e.g., SSN)',
+  src_table_name STRING NOT NULL COMMENT 'Source table logical name (display name, e.g., "Member Table")',
+  src_column_name STRING NOT NULL COMMENT 'Source column logical name (display name, e.g., "SSN")',
   
   -- Physical name (for database operations)
-  src_column_physical_name STRING NOT NULL COMMENT 'Source column physical name (database name, e.g., ssn_col)',
+  src_column_physical_name STRING NOT NULL COMMENT 'Source column physical name (database name, e.g., "ssn_col")',
   
   -- Metadata
   src_nullable STRING DEFAULT 'YES' COMMENT 'Whether source field allows NULL values (YES/NO)',
@@ -130,10 +130,10 @@ CREATE TABLE IF NOT EXISTS main.source2target.mapped_fields (
   
   -- Multi-source concatenation strategy
   concat_strategy STRING DEFAULT 'NONE' COMMENT 'How to combine multiple source fields: NONE, SPACE, COMMA, PIPE, CONCAT, CUSTOM',
-  concat_separator STRING COMMENT 'Custom separator if concat_strategy = CUSTOM (e.g.,  - , _)',
+  concat_separator STRING COMMENT 'Custom separator if concat_strategy = CUSTOM (e.g., " - ", "_")',
   
   -- Complete transformation expression
-  transformation_expression STRING COMMENT 'Full SQL expression showing the transformation (e.g., CONCAT(TRIM(UPPER(src1)),  , src2))',
+  transformation_expression STRING COMMENT 'Full SQL expression showing the transformation (e.g., CONCAT(TRIM(UPPER(src1)), " ", src2))',
   
   -- Confidence and mapping metadata
   confidence_score DOUBLE COMMENT 'Overall confidence score for this mapping (0.0 to 1.0)',
@@ -275,9 +275,9 @@ TBLPROPERTIES (
 
 CREATE TABLE IF NOT EXISTS main.source2target.transformation_library (
   transformation_id BIGINT GENERATED ALWAYS AS IDENTITY,
-  transformation_name STRING NOT NULL COMMENT 'Friendly name (e.g., Standard Name Format)',
-  transformation_code STRING NOT NULL COMMENT 'Short code (e.g., STD_NAME)',
-  transformation_expression STRING NOT NULL COMMENT 'SQL expression template (e.g., TRIM(UPPER({field})))',
+  transformation_name STRING NOT NULL COMMENT 'Friendly name (e.g., "Standard Name Format")',
+  transformation_code STRING NOT NULL COMMENT 'Short code (e.g., "STD_NAME")',
+  transformation_expression STRING NOT NULL COMMENT 'SQL expression template (e.g., "TRIM(UPPER({field}))")',
   transformation_description STRING COMMENT 'Description of what this transformation does',
   category STRING COMMENT 'Category (e.g., TEXT, DATE, NUMERIC, CUSTOM)',
   is_system BOOLEAN DEFAULT false COMMENT 'Whether this is a system-provided transformation',
