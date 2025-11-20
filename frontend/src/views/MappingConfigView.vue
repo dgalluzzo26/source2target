@@ -40,7 +40,7 @@
               <i class="pi pi-arrow-down"></i>
             </div>
 
-            <div class="review-item">
+            <div class="review-item" v-if="targetField">
               <h3>Target Field</h3>
               <div class="target-preview">
                 <Tag 
@@ -159,7 +159,7 @@
                   <label>Source Fields:</label>
                   <span>{{ sourceFields.length }} field{{ sourceFields.length !== 1 ? 's' : '' }}</span>
                 </div>
-                <div class="summary-item">
+                <div class="summary-item" v-if="targetField">
                   <label>Target Field:</label>
                   <span>{{ targetField.tgt_table_name }}.{{ targetField.tgt_column_name }}</span>
                 </div>
