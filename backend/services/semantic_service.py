@@ -158,39 +158,10 @@ class SemanticService:
         
         try:
             with connection.cursor() as cursor:
-                # First, check if table exists
-                print(f"[Semantic Service] Checking if table exists: {semantic_fields_table}")
-                try:
-                    catalog, schema, table = semantic_fields_table.split('.')
-                    print(f"[Semantic Service] Parsed - Catalog: {catalog}, Schema: {schema}, Table: {table}")
-                except ValueError as e:
-                    raise Exception(
-                        f"Invalid table name format: {semantic_fields_table}. "
-                        f"Expected format: catalog.schema.table"
-                    )
-                
-                # Databricks uses system.information_schema, not catalog.information_schema
-                check_query = f"""
-                SELECT COUNT(*) as table_exists
-                FROM system.information_schema.tables
-                WHERE table_catalog = '{catalog}'
-                  AND table_schema = '{schema}'
-                  AND table_name = '{table}'
-                """
-                print(f"[Semantic Service] Executing table check query...")
-                cursor.execute(check_query)
-                result = cursor.fetchone()
-                print(f"[Semantic Service] Table check result: {result}")
-                
-                if result and result[0] == 0:
-                    raise Exception(
-                        f"Table '{semantic_fields_table}' does not exist. "
-                        f"Please run the V2 migration scripts first:\n"
-                        f"1. database/migration_v2_schema.sql\n"
-                        f"2. database/migration_v2_data.sql"
-                    )
-                
-                print(f"[Semantic Service] ✓ Table exists")
+                # Note: Skipping table existence check because service principal 
+                # doesn't have access to system.information_schema
+                # Table must exist or query will fail with clear error
+                print(f"[Semantic Service] Querying table: {semantic_fields_table}")
                 
                 query = f"""
                 SELECT 
