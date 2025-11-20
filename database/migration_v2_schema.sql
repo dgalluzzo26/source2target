@@ -279,31 +279,35 @@ TBLPROPERTIES (
 );
 
 -- ============================================================================
--- INDEXES for Performance
+-- LIQUID CLUSTERING for Performance Optimization
+-- ============================================================================
+-- Note: Databricks Liquid Clustering replaces traditional indexes
+-- Liquid clustering auto-optimizes data layout based on query patterns
 -- ============================================================================
 
--- Semantic fields indexes
-CREATE INDEX IF NOT EXISTS idx_semantic_domain ON main.source2target.semantic_fields(domain);
-CREATE INDEX IF NOT EXISTS idx_semantic_table ON main.source2target.semantic_fields(tgt_table);
+-- Enable Liquid Clustering on semantic_fields (clustered by tgt_table, domain)
+ALTER TABLE main.source2target.semantic_fields 
+CLUSTER BY (tgt_table, domain);
 
--- Unmapped fields indexes
-CREATE INDEX IF NOT EXISTS idx_unmapped_domain ON main.source2target.unmapped_fields(domain);
-CREATE INDEX IF NOT EXISTS idx_unmapped_table ON main.source2target.unmapped_fields(src_table);
+-- Enable Liquid Clustering on unmapped_fields (clustered by src_table, domain)
+ALTER TABLE main.source2target.unmapped_fields 
+CLUSTER BY (src_table, domain);
 
--- Mapped fields indexes
-CREATE INDEX IF NOT EXISTS idx_mapped_semantic ON main.source2target.mapped_fields(semantic_field_id);
-CREATE INDEX IF NOT EXISTS idx_mapped_status ON main.source2target.mapped_fields(mapping_status);
-CREATE INDEX IF NOT EXISTS idx_mapped_confidence ON main.source2target.mapped_fields(confidence_score);
+-- Enable Liquid Clustering on mapped_fields (clustered by tgt_table, mapping_status)
+ALTER TABLE main.source2target.mapped_fields 
+CLUSTER BY (tgt_table, mapping_status);
 
--- Mapping details indexes
-CREATE INDEX IF NOT EXISTS idx_detail_mapped ON main.source2target.mapping_details(mapped_field_id);
-CREATE INDEX IF NOT EXISTS idx_detail_unmapped ON main.source2target.mapping_details(unmapped_field_id);
-CREATE INDEX IF NOT EXISTS idx_detail_order ON main.source2target.mapping_details(mapped_field_id, field_order);
+-- Enable Liquid Clustering on mapping_details (clustered by mapped_field_id)
+ALTER TABLE main.source2target.mapping_details 
+CLUSTER BY (mapped_field_id);
 
--- Feedback indexes
-CREATE INDEX IF NOT EXISTS idx_feedback_action ON main.source2target.mapping_feedback(feedback_action);
-CREATE INDEX IF NOT EXISTS idx_feedback_mapped ON main.source2target.mapping_feedback(mapped_field_id);
-CREATE INDEX IF NOT EXISTS idx_feedback_ts ON main.source2target.mapping_feedback(feedback_ts);
+-- Enable Liquid Clustering on mapping_feedback (clustered by feedback_action, feedback_ts)
+ALTER TABLE main.source2target.mapping_feedback 
+CLUSTER BY (feedback_action);
+
+-- Enable Liquid Clustering on transformation_library (clustered by category, is_system)
+ALTER TABLE main.source2target.transformation_library 
+CLUSTER BY (category, is_system);
 
 -- ============================================================================
 -- SEED DATA: Common Transformations
