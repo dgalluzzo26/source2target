@@ -228,6 +228,7 @@ function addJoin() {
     join_order: localJoins.value.length + 1
   }
   localJoins.value.push(newJoin)
+  emitJoins()
 }
 
 function removeJoin(index: number) {
@@ -236,6 +237,11 @@ function removeJoin(index: number) {
   localJoins.value.forEach((join, idx) => {
     join.join_order = idx + 1
   })
+  emitJoins()
+}
+
+function emitJoins() {
+  emit('update:joins', [...localJoins.value])
 }
 
 function getJoinSQL(join: JoinDefinition): string {
@@ -260,14 +266,24 @@ function getFullJoinSQL(): string {
   return sql.trim()
 }
 
-// Watch for changes and emit
-watch(localJoins, (newJoins) => {
-  emit('update:joins', newJoins)
+// Watch for changes in dropdowns and emit (debounced to avoid loops)
+let emitTimeout: ReturnType<typeof setTimeout> | null = null
+watch(localJoins, () => {
+  if (emitTimeout) clearTimeout(emitTimeout)
+  emitTimeout = setTimeout(() => {
+    emitJoins()
+  }, 300)
 }, { deep: true })
 
-// Watch for external changes
+// Watch for external changes from parent
 watch(() => props.joins, (newJoins) => {
-  localJoins.value = [...newJoins]
+  // Only update if the actual content has changed to prevent loops
+  const currentJSON = JSON.stringify(localJoins.value)
+  const newJSON = JSON.stringify(newJoins)
+  
+  if (currentJSON !== newJSON) {
+    localJoins.value = [...newJoins]
+  }
 }, { deep: true })
 </script>
 
