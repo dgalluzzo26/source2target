@@ -80,7 +80,8 @@ CREATE TABLE IF NOT EXISTS oztest_dev.source2target.unmapped_fields (
   src_table_name STRING NOT NULL COMMENT 'Source table logical name (display name, e.g., Member Table)',
   src_column_name STRING NOT NULL COMMENT 'Source column logical name (display name, e.g., SSN)',
   
-  -- Physical name (for database operations)
+  -- Physical names (for database operations)
+  src_table_physical_name STRING NOT NULL COMMENT 'Source table physical name (database name, e.g., t_member)',
   src_column_physical_name STRING NOT NULL COMMENT 'Source column physical name (database name, e.g., ssn_col)',
   
   -- Metadata
@@ -92,16 +93,18 @@ CREATE TABLE IF NOT EXISTS oztest_dev.source2target.unmapped_fields (
   domain STRING COMMENT 'Domain category (e.g., claims, member, provider, finance, pharmacy)',
   
   -- Audit fields
+  uploaded_by STRING COMMENT 'User who uploaded this field',
+  uploaded_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Timestamp when field was uploaded',
   created_by STRING DEFAULT 'system' COMMENT 'User who created this record',
   created_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Timestamp when record was created',
   updated_by STRING COMMENT 'User who last updated this record',
   updated_ts TIMESTAMP COMMENT 'Timestamp when record was last updated',
   
   CONSTRAINT pk_unmapped_fields PRIMARY KEY (unmapped_field_id)
-  -- Note: UNIQUE constraint on (src_table_name, src_column_name) enforced at application level
+  -- Note: UNIQUE constraint on (src_table_physical_name, src_column_physical_name) enforced at application level
   -- Databricks Delta tables don't support UNIQUE constraints
 )
-COMMENT 'Source fields awaiting mapping to target fields. Uniqueness on (src_table_name, src_column_name) must be enforced at application level.'
+COMMENT 'Source fields awaiting mapping to target fields. Uniqueness on (src_table_physical_name, src_column_physical_name) must be enforced at application level.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
