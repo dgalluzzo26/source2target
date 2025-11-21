@@ -24,12 +24,14 @@ export interface MappedFieldV2 {
   tgt_column_name: string
   tgt_column_physical_name: string
   concat_strategy: 'SPACE' | 'COMMA' | 'PIPE' | 'CUSTOM' | 'NONE'
-  custom_concat_value?: string
-  final_sql_expression?: string
+  concat_separator?: string
+  transformation_expression?: string
+  confidence_score?: number
+  mapping_source?: string
+  ai_reasoning?: string
+  mapping_status?: string
   mapped_at?: string
   mapped_by?: string
-  mapping_confidence_score?: number
-  ai_reasoning?: string
   source_fields: MappingDetailV2[]
 }
 
@@ -214,11 +216,13 @@ export const useMappingsStoreV2 = defineStore('mappingsV2', () => {
             tgt_column_name: mappedField.tgt_column_name,
             tgt_column_physical_name: mappedField.tgt_column_physical_name,
             concat_strategy: mappedField.concat_strategy,
-            custom_concat_value: mappedField.custom_concat_value,
-            final_sql_expression: mappedField.final_sql_expression,
+            concat_separator: mappedField.concat_separator,
+            transformation_expression: mappedField.transformation_expression,
             mapped_by: mappedField.mapped_by,
-            mapping_confidence_score: mappedField.mapping_confidence_score,
-            ai_reasoning: mappedField.ai_reasoning
+            confidence_score: mappedField.confidence_score,
+            mapping_source: mappedField.mapping_source,
+            ai_reasoning: mappedField.ai_reasoning,
+            mapping_status: mappedField.mapping_status
           },
           mapping_details: mappedField.source_fields.map(sf => ({
             src_table_name: sf.src_table_name,

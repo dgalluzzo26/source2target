@@ -471,10 +471,12 @@ async function handleSave() {
       tgt_column_name: targetField.value.tgt_column_name,
       tgt_column_physical_name: targetField.value.tgt_column_physical_name,
       concat_strategy: concatStrategy.value,
-      custom_concat_value: customConcatValue.value || undefined,
-      final_sql_expression: finalSQLExpression.value,
-      mapping_confidence_score: targetField.value.search_score,
+      concat_separator: customConcatValue.value || undefined,
+      transformation_expression: finalSQLExpression.value,
+      confidence_score: targetField.value.search_score,
+      mapping_source: 'AI',
       ai_reasoning: targetField.value.ai_reasoning,
+      mapping_status: 'ACTIVE',
       source_fields: orderedFields.value
     })
 
