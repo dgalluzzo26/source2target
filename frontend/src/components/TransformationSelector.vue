@@ -106,10 +106,10 @@ onMounted(async () => {
       code: '{field}'
     },
     ...mappingsStore.transformations.map(t => ({
-      label: t.transform_name,
-      value: t.transform_code,
-      description: t.description,
-      code: t.transform_code,
+      label: t.transformation_name,
+      value: t.transformation_expression,
+      description: t.transformation_description,
+      code: t.transformation_expression,
       category: t.category
     }))
   ]
