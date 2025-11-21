@@ -89,15 +89,27 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
+console.log('[TransformationSelector] Component created!')
+console.log('[TransformationSelector] Props:', props)
+
 const mappingsStore = useMappingsStoreV2()
 const localFields = ref<FieldWithTransformation[]>([])
 const transformationOptions = ref<any[]>([])
 
+console.log('[TransformationSelector] Store initialized')
+
 onMounted(async () => {
-  // Load transformations
-  await mappingsStore.fetchTransformations()
+  console.log('[TransformationSelector] onMounted called!')
   
-  console.log('[TransformationSelector] Raw transformations from store:', mappingsStore.transformations)
+  // Load transformations
+  try {
+    console.log('[TransformationSelector] Calling fetchTransformations...')
+    await mappingsStore.fetchTransformations()
+    console.log('[TransformationSelector] fetchTransformations completed')
+    console.log('[TransformationSelector] Raw transformations from store:', mappingsStore.transformations)
+  } catch (error) {
+    console.error('[TransformationSelector] Error fetching transformations:', error)
+  }
   
   // Build options
   transformationOptions.value = [
@@ -127,6 +139,8 @@ onMounted(async () => {
     selectedTransformation: field.transformation_expr ? 
       findTransformationValue(field.transformation_expr) : null
   }))
+  
+  console.log('[TransformationSelector] Local fields initialized:', localFields.value)
 })
 
 watch(() => props.fields, (newFields) => {
