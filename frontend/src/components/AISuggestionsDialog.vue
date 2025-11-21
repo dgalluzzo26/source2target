@@ -106,7 +106,7 @@
           </Column>
 
           <!-- AI Reasoning -->
-          <Column header="AI Reasoning" style="min-width: 25rem">
+          <Column header="AI Reasoning" style="min-width: 20rem">
             <template #body="{ data }">
               <div class="ai-reasoning">
                 <i class="pi pi-comment"></i>
@@ -115,23 +115,35 @@
             </template>
           </Column>
 
-          <!-- Action -->
-          <Column style="width: 8rem">
+          <!-- Actions -->
+          <Column header="Actions" style="width: 15rem">
             <template #body="{ data }">
-              <Button
-                label="Select"
-                icon="pi pi-check"
-                size="small"
-                @click.stop="handleSelect(data)"
-              />
+              <div class="action-buttons">
+                <Button
+                  label="Accept"
+                  icon="pi pi-check"
+                  size="small"
+                  severity="success"
+                  @click.stop="handleAccept(data)"
+                  v-tooltip.top="'Accept this suggestion and continue with mapping'"
+                />
+                <Button
+                  label="Reject"
+                  icon="pi pi-times"
+                  size="small"
+                  severity="danger"
+                  outlined
+                  @click.stop="handleReject(data)"
+                  v-tooltip.top="'Reject this suggestion and provide feedback'"
+                />
+              </div>
             </template>
           </Column>
         </DataTable>
 
         <!-- Info Message -->
         <Message severity="info" :closable="false" class="info-message">
-          <strong>Tip:</strong> Click on a row or the "Select" button to choose a target field. 
-          The system learns from your choices to improve future suggestions.
+          <strong>Tip:</strong> Accept a suggestion to proceed with mapping configuration, or reject with comments to help improve future AI suggestions.
         </Message>
       </div>
 
@@ -150,14 +162,77 @@
         icon="pi pi-search" 
         @click="handleManualSearch"
         severity="secondary"
+        v-tooltip.top="'Search for target fields manually'"
+      />
+    </template>
+  </Dialog>
+
+  <!-- Rejection Feedback Dialog -->
+  <Dialog
+    v-model:visible="showRejectionDialog"
+    modal
+    header="Provide Feedback on Rejected Suggestion"
+    :style="{ width: '600px' }"
+  >
+    <div class="rejection-content">
+      <Message severity="info" :closable="false">
+        Your feedback helps improve AI suggestions for everyone. Please explain why this suggestion wasn't suitable.
+      </Message>
+
+      <div v-if="rejectedSuggestion" class="rejected-suggestion-summary">
+        <h4>Rejected Suggestion:</h4>
+        <div class="suggestion-details">
+          <div class="detail-row">
+            <label>Target Field:</label>
+            <span><strong>{{ rejectedSuggestion.tgt_table_name }}.{{ rejectedSuggestion.tgt_column_name }}</strong></span>
+          </div>
+          <div class="detail-row">
+            <label>Match Quality:</label>
+            <Tag 
+              :value="rejectedSuggestion.match_quality" 
+              :severity="getMatchQualitySeverity(rejectedSuggestion.match_quality)"
+            />
+          </div>
+          <div class="detail-row">
+            <label>AI Reasoning:</label>
+            <span class="ai-reason-text">{{ rejectedSuggestion.ai_reasoning }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="feedback-form">
+        <label for="rejection-comment">
+          <i class="pi pi-comment"></i>
+          Why is this suggestion incorrect? <span class="required">*</span>
+        </label>
+        <Textarea
+          id="rejection-comment"
+          v-model="rejectionComment"
+          rows="5"
+          placeholder="Example: Wrong data type, different business meaning, already mapped elsewhere..."
+          class="w-full"
+          autofocus
+        />
+        <small>Please provide specific details to help improve future suggestions</small>
+      </div>
+    </div>
+
+    <template #footer>
+      <Button label="Cancel" icon="pi pi-times" @click="closeRejectionDialog" text />
+      <Button 
+        label="Submit Feedback" 
+        icon="pi pi-check" 
+        @click="submitRejectionFeedback"
+        :disabled="!rejectionComment.trim()"
       />
     </template>
   </Dialog>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useAISuggestionsStoreV2 } from '@/stores/aiSuggestionsStoreV2'
+import { useToast } from 'primevue/usetoast'
 import Dialog from 'primevue/dialog'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -166,6 +241,7 @@ import Tag from 'primevue/tag'
 import ProgressBar from 'primevue/progressbar'
 import ProgressSpinner from 'primevue/progressspinner'
 import Message from 'primevue/message'
+import Textarea from 'primevue/textarea'
 import type { AISuggestionV2 } from '@/stores/aiSuggestionsStoreV2'
 
 interface Props {
@@ -181,6 +257,12 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const aiStore = useAISuggestionsStoreV2()
+const toast = useToast()
+
+// Rejection dialog state
+const showRejectionDialog = ref(false)
+const rejectedSuggestion = ref<AISuggestionV2 | null>(null)
+const rejectionComment = ref('')
 
 const isVisible = computed({
   get: () => props.visible,
@@ -236,13 +318,99 @@ function getRowClass(data: AISuggestionV2) {
 }
 
 function handleRowClick(event: any) {
-  handleSelect(event.data)
+  // Disabled for now - users should use explicit Accept/Reject buttons
+  // handleAccept(event.data)
 }
 
-function handleSelect(suggestion: AISuggestionV2) {
+function handleAccept(suggestion: AISuggestionV2) {
+  // Store the suggestion for mapping configuration
   aiStore.selectSuggestion(suggestion)
+  
+  // Record acceptance feedback (non-blocking)
+  recordFeedback(suggestion, 'accepted', 'User accepted this AI suggestion')
+  
+  // Emit event to parent to proceed with mapping
   emit('suggestion-selected', suggestion)
   isVisible.value = false
+  
+  toast.add({
+    severity: 'success',
+    summary: 'Suggestion Accepted',
+    detail: `Proceeding with mapping to ${suggestion.tgt_table_name}.${suggestion.tgt_column_name}`,
+    life: 3000
+  })
+}
+
+function handleReject(suggestion: AISuggestionV2) {
+  rejectedSuggestion.value = suggestion
+  rejectionComment.value = ''
+  showRejectionDialog.value = true
+}
+
+function closeRejectionDialog() {
+  showRejectionDialog.value = false
+  rejectedSuggestion.value = null
+  rejectionComment.value = ''
+}
+
+async function submitRejectionFeedback() {
+  if (!rejectedSuggestion.value || !rejectionComment.value.trim()) {
+    return
+  }
+  
+  // Record rejection feedback
+  await recordFeedback(rejectedSuggestion.value, 'rejected', rejectionComment.value)
+  
+  toast.add({
+    severity: 'info',
+    summary: 'Feedback Recorded',
+    detail: 'Thank you! Your feedback will help improve future suggestions.',
+    life: 3000
+  })
+  
+  closeRejectionDialog()
+}
+
+async function recordFeedback(suggestion: AISuggestionV2, action: 'accepted' | 'rejected', comment: string) {
+  try {
+    // Build feedback payload
+    const feedback = {
+      // Source fields (can be multiple in V2)
+      source_fields: aiStore.sourceFieldsUsed.map(f => ({
+        src_table_name: f.src_table_name,
+        src_column_name: f.src_column_name
+      })),
+      // Suggested target field
+      suggested_tgt_table: suggestion.tgt_table_name,
+      suggested_tgt_column: suggestion.tgt_column_name,
+      // AI metadata
+      search_score: suggestion.search_score,
+      ai_reasoning: suggestion.ai_reasoning,
+      match_quality: suggestion.match_quality,
+      rank: suggestion.rank,
+      // User feedback
+      feedback_action: action,
+      user_comment: comment
+    }
+    
+    console.log('[AI Suggestions] Recording feedback:', feedback)
+    
+    // Call feedback API (non-blocking)
+    const response = await fetch('/api/v2/feedback', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(feedback)
+    })
+    
+    if (!response.ok) {
+      console.warn('[AI Suggestions] Feedback recording failed:', response.statusText)
+    }
+  } catch (error) {
+    console.error('[AI Suggestions] Error recording feedback:', error)
+    // Don't block the user flow if feedback fails
+  }
 }
 
 function handleManualSearch() {
