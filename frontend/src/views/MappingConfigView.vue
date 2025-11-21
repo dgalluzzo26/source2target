@@ -466,6 +466,7 @@ async function handleSave() {
 
   try {
     const mappingId = await mappingsStore.createMapping({
+      semantic_field_id: targetField.value.semantic_field_id,
       tgt_table_name: targetField.value.tgt_table_name,
       tgt_table_physical_name: targetField.value.tgt_table_physical_name,
       tgt_column_name: targetField.value.tgt_column_name,

@@ -19,6 +19,7 @@ export interface MappingDetailV2 {
 
 export interface MappedFieldV2 {
   mapping_id?: number
+  semantic_field_id: number
   tgt_table_name: string
   tgt_table_physical_name: string
   tgt_column_name: string
@@ -211,6 +212,7 @@ export const useMappingsStoreV2 = defineStore('mappingsV2', () => {
         },
         body: JSON.stringify({
           mapped_field: {
+            semantic_field_id: mappedField.semantic_field_id,
             tgt_table_name: mappedField.tgt_table_name,
             tgt_table_physical_name: mappedField.tgt_table_physical_name,
             tgt_column_name: mappedField.tgt_column_name,

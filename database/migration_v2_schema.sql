@@ -19,7 +19,7 @@
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS oztest_dev.source2target.semantic_fields (
-  semantic_field_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  semantic_field_id BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 1 INCREMENT BY 1),
   
   -- Logical names (for display/UI)
   tgt_table_name STRING NOT NULL COMMENT 'Target table logical name (display name, e.g., Member Table)',
@@ -74,7 +74,7 @@ TBLPROPERTIES (
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS oztest_dev.source2target.unmapped_fields (
-  unmapped_field_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  unmapped_field_id BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 1 INCREMENT BY 1),
   
   -- Logical names (for display/UI)
   src_table_name STRING NOT NULL COMMENT 'Source table logical name (display name, e.g., Member Table)',
@@ -120,7 +120,7 @@ TBLPROPERTIES (
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS oztest_dev.source2target.mapped_fields (
-  mapped_field_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  mapped_field_id BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 1 INCREMENT BY 1),
   
   -- Target field reference
   semantic_field_id BIGINT NOT NULL COMMENT 'Foreign key to semantic_fields table',
@@ -173,7 +173,7 @@ TBLPROPERTIES (
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS oztest_dev.source2target.mapping_details (
-  mapping_detail_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  mapping_detail_id BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 1 INCREMENT BY 1),
   
   -- Parent mapping reference
   mapped_field_id BIGINT NOT NULL COMMENT 'Foreign key to mapped_fields table',
@@ -223,7 +223,7 @@ TBLPROPERTIES (
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS oztest_dev.source2target.mapping_joins (
-  mapping_join_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  mapping_join_id BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 1 INCREMENT BY 1),
   
   -- Parent mapping reference
   mapped_field_id BIGINT NOT NULL COMMENT 'Foreign key to mapped_fields table',
@@ -272,7 +272,7 @@ TBLPROPERTIES (
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS oztest_dev.source2target.mapping_feedback (
-  feedback_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  feedback_id BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 1 INCREMENT BY 1),
   
   -- What was suggested
   suggested_src_table STRING NOT NULL COMMENT 'Source table in AI suggestion',
@@ -326,7 +326,7 @@ TBLPROPERTIES (
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS oztest_dev.source2target.transformation_library (
-  transformation_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  transformation_id BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 1 INCREMENT BY 1),
   transformation_name STRING NOT NULL COMMENT 'Friendly name (e.g., Standard Name Format)',
   transformation_code STRING NOT NULL COMMENT 'Short code (e.g., STD_NAME)',
   transformation_expression STRING NOT NULL COMMENT 'SQL expression template (e.g., TRIM(UPPER({field})))',

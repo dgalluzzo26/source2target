@@ -8,6 +8,7 @@ import { ref, computed } from 'vue'
 import type { UnmappedField } from './unmappedFieldsStore'
 
 export interface AISuggestionV2 {
+  semantic_field_id: number  // FK to semantic_fields table
   tgt_table_name: string
   tgt_table_physical_name: string
   tgt_column_name: string
@@ -84,6 +85,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
       if (field.src_column_name === 'SSN') {
         return [
           {
+            semantic_field_id: 1,
             tgt_table_name: 'slv_member',
             tgt_table_physical_name: 'slv_member',
             tgt_column_name: 'ssn_number',
@@ -93,6 +95,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
             ai_reasoning: 'Strong semantic match for Social Security Number. This is the standard field name for SSN storage in the target schema.'
           },
           {
+            semantic_field_id: 2,
             tgt_table_name: 'slv_member',
             tgt_table_physical_name: 'slv_member',
             tgt_column_name: 'member_ssn',
@@ -102,6 +105,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
             ai_reasoning: 'Common alternative field name for SSN storage. Used in 8 previous mappings.'
           },
           {
+            semantic_field_id: 3,
             tgt_table_name: 'slv_person',
             tgt_table_physical_name: 'slv_person',
             tgt_column_name: 'social_security_number',
@@ -111,6 +115,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
             ai_reasoning: 'Full field name variant. Good match but less commonly used in this schema.'
           },
           {
+            semantic_field_id: 4,
             tgt_table_name: 'slv_member',
             tgt_table_physical_name: 'slv_member',
             tgt_column_name: 'ssn',
@@ -123,6 +128,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
       } else if (field.src_column_name === 'NPI') {
         return [
           {
+            semantic_field_id: 5,
             tgt_table_name: 'slv_provider',
             tgt_table_physical_name: 'slv_provider',
             tgt_column_name: 'npi_number',
@@ -132,6 +138,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
             ai_reasoning: 'Perfect match for National Provider Identifier. This is the standard NPI field in the provider table.'
           },
           {
+            semantic_field_id: 6,
             tgt_table_name: 'slv_provider',
             tgt_table_physical_name: 'slv_provider',
             tgt_column_name: 'provider_npi',
@@ -151,6 +158,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
     if (fieldNames === 'FIRST_NAME + LAST_NAME') {
       return [
         {
+          semantic_field_id: 7,
           tgt_table_name: 'slv_member',
           tgt_table_physical_name: 'slv_member',
           tgt_column_name: 'full_name',
@@ -160,6 +168,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
           ai_reasoning: 'The combination of FIRST_NAME and LAST_NAME strongly correlates with full_name. This is the standard pattern confirmed by 15 historical mappings.'
         },
         {
+          semantic_field_id: 8,
           tgt_table_name: 'slv_member',
           tgt_table_physical_name: 'slv_member',
           tgt_column_name: 'member_name',
@@ -169,6 +178,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
           ai_reasoning: 'Member name is a common alternative for storing combined first and last names. Used in 3 historical mappings.'
         },
         {
+          semantic_field_id: 9,
           tgt_table_name: 'slv_person',
           tgt_table_physical_name: 'slv_person',
           tgt_column_name: 'person_full_name',
@@ -178,6 +188,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
           ai_reasoning: 'Person table variant. Good semantic match but less commonly used in this schema.'
         },
         {
+          semantic_field_id: 10,
           tgt_table_name: 'slv_member',
           tgt_table_physical_name: 'slv_member',
           tgt_column_name: 'first_last_name',
@@ -193,6 +204,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
     if (fieldNames.includes('ADDRESS') && fieldNames.includes('CITY')) {
       return [
         {
+          semantic_field_id: 11,
           tgt_table_name: 'slv_member',
           tgt_table_physical_name: 'slv_member',
           tgt_column_name: 'full_address',
@@ -202,6 +214,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
           ai_reasoning: 'The combination of address components (line1, city, state, zip) maps perfectly to full_address. This is the standard address concatenation pattern.'
         },
         {
+          semantic_field_id: 12,
           tgt_table_name: 'slv_member',
           tgt_table_physical_name: 'slv_member',
           tgt_column_name: 'mailing_address',
@@ -211,6 +224,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
           ai_reasoning: 'Mailing address is a common variant for combined address fields. Good semantic match.'
         },
         {
+          semantic_field_id: 13,
           tgt_table_name: 'slv_location',
           tgt_table_physical_name: 'slv_location',
           tgt_column_name: 'location_address',
@@ -225,6 +239,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
     // Default: generic suggestions
     return [
       {
+        semantic_field_id: 14,
         tgt_table_name: 'slv_member',
         tgt_table_physical_name: 'slv_member',
         tgt_column_name: 'combined_field',
@@ -234,6 +249,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
         ai_reasoning: `Moderate semantic similarity for the combination: ${fieldNames}. Review suggested target field carefully.`
       },
       {
+        semantic_field_id: 15,
         tgt_table_name: 'slv_member',
         tgt_table_physical_name: 'slv_member',
         tgt_column_name: 'concatenated_value',

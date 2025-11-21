@@ -93,6 +93,7 @@ class MappedFieldV2(BaseModel):
     model_config = {"from_attributes": True, "arbitrary_types_allowed": True}
     
     mapping_id: Optional[int] = Field(None, description="Unique mapping identifier (auto-generated)")
+    semantic_field_id: int = Field(..., description="Foreign key to semantic_fields table")
     tgt_table_name: str = Field(..., description="Target table logical name")
     tgt_table_physical_name: str = Field(..., description="Target table physical name")
     tgt_column_name: str = Field(..., description="Target column logical name")
@@ -111,6 +112,7 @@ class MappedFieldV2(BaseModel):
 
 class MappedFieldCreateV2(BaseModel):
     """Create request for mapped field."""
+    semantic_field_id: int  # Required: FK to semantic_fields table
     tgt_table_name: str
     tgt_table_physical_name: str
     tgt_column_name: str

@@ -117,6 +117,7 @@ class MappingServiceV2:
                 # Step 1: Insert into mapped_fields
                 mapped_insert = f"""
                 INSERT INTO {mapped_fields_table} (
+                    semantic_field_id,
                     tgt_table_name,
                     tgt_table_physical_name,
                     tgt_column_name,
@@ -130,6 +131,7 @@ class MappingServiceV2:
                     ai_reasoning,
                     mapping_status
                 ) VALUES (
+                    {mapped_field_data.semantic_field_id},
                     '{mapped_field_data.tgt_table_name.replace("'", "''")}',
                     '{mapped_field_data.tgt_table_physical_name.replace("'", "''")}',
                     '{mapped_field_data.tgt_column_name.replace("'", "''")}',
@@ -251,6 +253,7 @@ class MappingServiceV2:
                 query = f"""
                 SELECT 
                     mf.mapped_field_id,
+                    mf.semantic_field_id,
                     mf.tgt_table_name,
                     mf.tgt_table_physical_name,
                     mf.tgt_column_name,
@@ -291,6 +294,7 @@ class MappingServiceV2:
                         # Create mapping entry
                         mappings_dict[mapping_id] = {
                             'mapping_id': mapping_id,
+                            'semantic_field_id': record['semantic_field_id'],
                             'tgt_table_name': record['tgt_table_name'],
                             'tgt_table_physical_name': record['tgt_table_physical_name'],
                             'tgt_column_name': record['tgt_column_name'],
