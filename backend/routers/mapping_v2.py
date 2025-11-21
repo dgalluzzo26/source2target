@@ -170,7 +170,7 @@ async def get_all_mappings(request: Request):
         "tgt_table_name": "slv_member",
         "tgt_column_name": "full_name",
         "concat_strategy": "SPACE",
-        "final_sql_expression": "CONCAT(TRIM(first_name), ' ', TRIM(last_name))",
+        "transformation_expression": "CONCAT(TRIM(first_name), ' ', TRIM(last_name))",
         "mapped_at": "2025-01-15T10:30:00",
         "mapped_by": "john.doe@example.com",
         "source_fields": [

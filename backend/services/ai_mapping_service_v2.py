@@ -189,21 +189,21 @@ class AIMappingServiceV2:
                     mf.tgt_table_name,
                     mf.tgt_column_name,
                     mf.concat_strategy,
-                    mf.mapping_confidence_score,
+                    mf.confidence_score,
                     mf.ai_reasoning,
-                    COUNT(DISTINCT md.detail_id) as source_field_count
+                    COUNT(DISTINCT md.mapping_detail_id) as source_field_count
                 FROM {mapped_fields_table} mf
-                JOIN {mapping_details_table} md ON mf.mapping_id = md.mapping_id
+                JOIN {mapping_details_table} md ON mf.mapped_field_id = md.mapped_field_id
                 {where_clause}
                 GROUP BY 
-                    mf.mapping_id,
+                    mf.mapped_field_id,
                     mf.tgt_table_name,
                     mf.tgt_column_name,
                     mf.concat_strategy,
-                    mf.mapping_confidence_score,
+                    mf.confidence_score,
                     mf.ai_reasoning
-                HAVING COUNT(DISTINCT md.detail_id) >= {len(source_fields)}
-                ORDER BY mf.mapped_at DESC
+                HAVING COUNT(DISTINCT md.mapping_detail_id) >= {len(source_fields)}
+                ORDER BY mf.mapped_ts DESC
                 LIMIT 10
                 """
                 

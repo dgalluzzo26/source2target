@@ -214,10 +214,10 @@ const mappings = computed(() => {
       })),
     concat_strategy: m.concat_strategy,
     has_transformations: m.source_fields.some(sf => !!sf.transformation_expr),
-    status: 'Active',
+    status: m.mapping_status || 'Active',
     created_at: m.mapped_at || new Date().toISOString(),
     mapped_by: m.mapped_by,
-    sql_expression: m.final_sql_expression
+    sql_expression: m.transformation_expression
   }))
 })
 
