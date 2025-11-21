@@ -28,7 +28,7 @@
               <div class="field-list">
                 <Tag 
                   v-for="(field, idx) in sourceFields" 
-                  :key="field.id"
+                  :key="field.unmapped_field_id || idx"
                   :value="`${idx + 1}. ${field.src_table_name}.${field.src_column_name}`"
                   severity="info"
                   icon="pi pi-arrow-right"
