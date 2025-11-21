@@ -104,7 +104,7 @@
 
     <!-- Quick Actions -->
     <div class="actions-grid">
-      <Card class="action-card" @click="navigateTo('/mapping')">
+      <Card class="action-card" @click="navigateTo('/unmapped-fields')">
         <template #content>
           <div class="action-content">
             <i class="pi pi-sitemap action-icon"></i>
