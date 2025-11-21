@@ -250,12 +250,6 @@ async function fetchMappings() {
     console.error('[Mappings List View] Error:', e)
   }
 }
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load mappings'
-  } finally {
-    loading.value = false
-  }
-}
 
 function getConcatLabel(strategy: string): string {
   switch (strategy) {
