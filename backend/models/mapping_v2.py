@@ -152,7 +152,7 @@ class MappingDetailV2(BaseModel):
 
 class MappingDetailCreateV2(BaseModel):
     """Create request for mapping detail."""
-    mapping_id: int
+    mapping_id: Optional[int] = None  # Will be set by backend during creation
     src_table_name: str
     src_table_physical_name: str
     src_column_name: str
