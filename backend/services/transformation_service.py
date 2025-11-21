@@ -79,14 +79,16 @@ class TransformationService:
             with connection.cursor() as cursor:
                 query = f"""
                 SELECT 
-                    transform_id,
-                    transform_name,
-                    transform_code,
-                    description,
+                    transformation_id,
+                    transformation_name,
+                    transformation_code,
+                    transformation_expression,
+                    transformation_description,
                     category,
-                    created_at
+                    is_system,
+                    created_ts
                 FROM {transformation_library_table}
-                ORDER BY category, transform_name
+                ORDER BY category, transformation_name
                 """
                 
                 cursor.execute(query)
