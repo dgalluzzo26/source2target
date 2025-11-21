@@ -122,22 +122,26 @@ class MappingServiceV2:
                     tgt_column_name,
                     tgt_column_physical_name,
                     concat_strategy,
-                    custom_concat_value,
-                    final_sql_expression,
+                    concat_separator,
+                    transformation_expression,
                     mapped_by,
-                    mapping_confidence_score,
-                    ai_reasoning
+                    confidence_score,
+                    mapping_source,
+                    ai_reasoning,
+                    mapping_status
                 ) VALUES (
                     '{mapped_field_data.tgt_table_name.replace("'", "''")}',
                     '{mapped_field_data.tgt_table_physical_name.replace("'", "''")}',
                     '{mapped_field_data.tgt_column_name.replace("'", "''")}',
                     '{mapped_field_data.tgt_column_physical_name.replace("'", "''")}',
                     '{mapped_field_data.concat_strategy}',
-                    {'NULL' if not mapped_field_data.custom_concat_value else "'" + mapped_field_data.custom_concat_value.replace("'", "''") + "'"},
-                    {'NULL' if not mapped_field_data.final_sql_expression else "'" + mapped_field_data.final_sql_expression.replace("'", "''") + "'"},
+                    {'NULL' if not mapped_field_data.concat_separator else "'" + mapped_field_data.concat_separator.replace("'", "''") + "'"},
+                    {'NULL' if not mapped_field_data.transformation_expression else "'" + mapped_field_data.transformation_expression.replace("'", "''") + "'"},
                     {'NULL' if not mapped_field_data.mapped_by else "'" + mapped_field_data.mapped_by.replace("'", "''") + "'"},
-                    {mapped_field_data.mapping_confidence_score if mapped_field_data.mapping_confidence_score else 'NULL'},
-                    {'NULL' if not mapped_field_data.ai_reasoning else "'" + mapped_field_data.ai_reasoning.replace("'", "''") + "'"}
+                    {mapped_field_data.confidence_score if mapped_field_data.confidence_score else 'NULL'},
+                    {'NULL' if not mapped_field_data.mapping_source else "'" + mapped_field_data.mapping_source.replace("'", "''") + "'"},
+                    {'NULL' if not mapped_field_data.ai_reasoning else "'" + mapped_field_data.ai_reasoning.replace("'", "''") + "'"},
+                    {'NULL' if not mapped_field_data.mapping_status else "'" + mapped_field_data.mapping_status.replace("'", "''") + "'"}
                 )
                 """
                 
@@ -254,12 +258,14 @@ class MappingServiceV2:
                     mf.tgt_column_name,
                     mf.tgt_column_physical_name,
                     mf.concat_strategy,
-                    mf.custom_concat_value,
-                    mf.final_sql_expression,
+                    mf.concat_separator,
+                    mf.transformation_expression,
                     mf.mapped_ts as mapped_at,
                     mf.mapped_by,
-                    mf.mapping_confidence_score,
+                    mf.confidence_score,
+                    mf.mapping_source,
                     mf.ai_reasoning,
+                    mf.mapping_status,
                     md.mapping_detail_id as detail_id,
                     md.src_table_name,
                     md.src_table_physical_name,
@@ -293,12 +299,14 @@ class MappingServiceV2:
                             'tgt_column_name': record['tgt_column_name'],
                             'tgt_column_physical_name': record['tgt_column_physical_name'],
                             'concat_strategy': record['concat_strategy'],
-                            'custom_concat_value': record['custom_concat_value'],
-                            'final_sql_expression': record['final_sql_expression'],
+                            'concat_separator': record['concat_separator'],
+                            'transformation_expression': record['transformation_expression'],
                             'mapped_at': record['mapped_at'],
                             'mapped_by': record['mapped_by'],
-                            'mapping_confidence_score': record['mapping_confidence_score'],
+                            'confidence_score': record['confidence_score'],
+                            'mapping_source': record['mapping_source'],
                             'ai_reasoning': record['ai_reasoning'],
+                            'mapping_status': record['mapping_status'],
                             'source_fields': []
                         }
                     

@@ -81,12 +81,14 @@ class MappedFieldV2(BaseModel):
         tgt_column_name: Logical name of the target column
         tgt_column_physical_name: Physical name of the target column in database
         concat_strategy: How to combine multiple source fields (SPACE, COMMA, PIPE, CUSTOM, NONE)
-        custom_concat_value: Custom concatenation string if strategy is CUSTOM
-        final_sql_expression: Complete SQL transformation expression
+        concat_separator: Custom concatenation string if strategy is CUSTOM
+        transformation_expression: Complete SQL transformation expression
         mapped_at: Timestamp when mapping was created
         mapped_by: User who created the mapping
-        mapping_confidence_score: AI confidence score (0.0-1.0) if AI-suggested
+        confidence_score: AI confidence score (0.0-1.0) if AI-suggested
+        mapping_source: Source of the mapping (AI, MANUAL)
         ai_reasoning: AI explanation for the suggested mapping
+        mapping_status: Status of the mapping (ACTIVE, INACTIVE)
     """
     model_config = {"from_attributes": True, "arbitrary_types_allowed": True}
     
