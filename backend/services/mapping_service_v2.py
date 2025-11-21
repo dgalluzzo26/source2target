@@ -248,7 +248,7 @@ class MappingServiceV2:
                 # Query all mappings with their details
                 query = f"""
                 SELECT 
-                    mf.mapping_id,
+                    mf.mapped_field_id,
                     mf.tgt_table_name,
                     mf.tgt_table_physical_name,
                     mf.tgt_column_name,
@@ -256,33 +256,33 @@ class MappingServiceV2:
                     mf.concat_strategy,
                     mf.custom_concat_value,
                     mf.final_sql_expression,
-                    mf.mapped_at,
+                    mf.mapped_ts as mapped_at,
                     mf.mapped_by,
                     mf.mapping_confidence_score,
                     mf.ai_reasoning,
-                    md.detail_id,
+                    md.mapping_detail_id as detail_id,
                     md.src_table_name,
                     md.src_table_physical_name,
                     md.src_column_name,
                     md.src_column_physical_name,
                     md.field_order,
                     md.transformation_expr,
-                    md.added_at
+                    md.created_ts as added_at
                 FROM {mapped_fields_table} mf
-                LEFT JOIN {mapping_details_table} md ON mf.mapping_id = md.mapping_id
+                LEFT JOIN {mapping_details_table} md ON mf.mapped_field_id = md.mapped_field_id
                 {where_clause}
-                ORDER BY mf.mapping_id, md.field_order
+                ORDER BY mf.mapped_field_id, md.field_order
                 """
                 
                 cursor.execute(query)
                 rows = cursor.fetchall()
                 columns = [desc[0] for desc in cursor.description]
                 
-                # Group by mapping_id
+                # Group by mapped_field_id
                 mappings_dict = {}
                 for row in rows:
                     record = dict(zip(columns, row))
-                    mapping_id = record['mapping_id']
+                    mapping_id = record['mapped_field_id']
                     
                     if mapping_id not in mappings_dict:
                         # Create mapping entry

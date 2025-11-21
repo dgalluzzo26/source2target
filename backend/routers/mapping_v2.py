@@ -201,13 +201,25 @@ async def get_all_mappings(request: Request):
         HTTPException 500: If database query fails
     """
     try:
-        current_user_email = get_current_user_email(request)
-        is_admin = is_admin_user(current_user_email)
+        print(f"[Mapping V2 API] GET /api/v2/mappings/ called")
         
-        print(f"[Mapping V2 API] User: {current_user_email}, Admin: {is_admin}")
+        # Get current user
+        current_user_email = get_current_user_email(request)
+        print(f"[Mapping V2 API] User: {current_user_email}")
+        
+        # Check admin status
+        try:
+            is_admin = is_admin_user(current_user_email)
+            print(f"[Mapping V2 API] Admin: {is_admin}")
+        except Exception as admin_check_error:
+            print(f"[Mapping V2 API] Admin check failed: {str(admin_check_error)}")
+            # Default to non-admin if check fails
+            is_admin = False
         
         # Get mappings with optional user filter
         user_filter = None if is_admin else current_user_email
+        print(f"[Mapping V2 API] User filter: {user_filter}")
+        
         mappings = await mapping_service.get_all_mappings(user_filter=user_filter)
         
         print(f"[Mapping V2 API] Retrieved {len(mappings)} mappings")
@@ -215,6 +227,9 @@ async def get_all_mappings(request: Request):
         
     except Exception as e:
         print(f"[Mapping V2 API] Error fetching mappings: {str(e)}")
+        print(f"[Mapping V2 API] Error type: {type(e).__name__}")
+        import traceback
+        print(f"[Mapping V2 API] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
