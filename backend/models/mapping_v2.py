@@ -16,7 +16,7 @@ Models:
 - TransformationV2: Reusable transformation template
 """
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
