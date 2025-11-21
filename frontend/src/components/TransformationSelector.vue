@@ -97,6 +97,8 @@ onMounted(async () => {
   // Load transformations
   await mappingsStore.fetchTransformations()
   
+  console.log('[TransformationSelector] Raw transformations from store:', mappingsStore.transformations)
+  
   // Build options
   transformationOptions.value = [
     {
@@ -105,14 +107,19 @@ onMounted(async () => {
       description: 'No transformation',
       code: '{field}'
     },
-    ...mappingsStore.transformations.map(t => ({
-      label: t.transformation_name,
-      value: t.transformation_expression,
-      description: t.transformation_description,
-      code: t.transformation_expression,
-      category: t.category
-    }))
+    ...mappingsStore.transformations.map(t => {
+      console.log('[TransformationSelector] Mapping transformation:', t)
+      return {
+        label: t.transformation_name || 'Unknown',
+        value: t.transformation_expression || '',
+        description: t.transformation_description || '',
+        code: t.transformation_expression || '',
+        category: t.category || 'OTHER'
+      }
+    })
   ]
+  
+  console.log('[TransformationSelector] Built options:', transformationOptions.value)
 
   // Initialize local fields
   localFields.value = props.fields.map(field => ({
