@@ -223,27 +223,33 @@ class TransformationV2(BaseModel):
     Examples: TRIM, UPPER, LOWER, INITCAP, CAST, etc.
     
     Attributes:
-        transform_id: Unique identifier
-        transform_name: Display name (e.g., "Trim Whitespace")
-        transform_code: SQL function code (e.g., "TRIM({field})")
-        description: Human-readable explanation
+        transformation_id: Unique identifier
+        transformation_name: Display name (e.g., "Trim Whitespace")
+        transformation_code: Short code (e.g., "TRIM")
+        transformation_expression: SQL expression template (e.g., "TRIM({field})")
+        transformation_description: Human-readable explanation
         category: Grouping (e.g., "STRING", "DATE", "NUMERIC")
-        created_at: Timestamp when created
+        is_system: Whether this is a system-provided transformation
+        created_ts: Timestamp when created
     """
     model_config = {"from_attributes": True, "arbitrary_types_allowed": True}
     
-    transform_id: Optional[int] = Field(None, description="Unique identifier (auto-generated)")
-    transform_name: str = Field(..., description="Display name (e.g., 'Trim Whitespace')")
-    transform_code: str = Field(..., description="SQL function code (e.g., 'TRIM({field})')")
-    description: Optional[str] = Field(None, description="Human-readable explanation")
+    transformation_id: Optional[int] = Field(None, description="Unique identifier (auto-generated)")
+    transformation_name: str = Field(..., description="Display name (e.g., 'Trim Whitespace')")
+    transformation_code: str = Field(..., description="Short code (e.g., 'TRIM')")
+    transformation_expression: str = Field(..., description="SQL expression template (e.g., 'TRIM({field})')")
+    transformation_description: Optional[str] = Field(None, description="Human-readable explanation")
     category: Optional[str] = Field(None, description="Grouping (e.g., 'STRING', 'DATE', 'NUMERIC')")
-    created_at: Optional[datetime] = Field(None, description="Creation timestamp")
+    is_system: Optional[bool] = Field(False, description="System-provided transformation")
+    created_ts: Optional[datetime] = Field(None, description="Creation timestamp")
 
 
 class TransformationCreateV2(BaseModel):
     """Create request for transformation."""
-    transform_name: str
-    transform_code: str
-    description: Optional[str] = None
+    transformation_name: str
+    transformation_code: str
+    transformation_expression: str
+    transformation_description: Optional[str] = None
     category: Optional[str] = None
+    is_system: Optional[bool] = False
 

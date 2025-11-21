@@ -34,11 +34,13 @@ export interface MappedFieldV2 {
 }
 
 export interface Transformation {
-  transform_id: number
-  transform_name: string
-  transform_code: string
-  description: string
+  transformation_id: number
+  transformation_name: string
+  transformation_code: string
+  transformation_expression: string
+  transformation_description: string
   category: string
+  is_system?: boolean
 }
 
 export const useMappingsStoreV2 = defineStore('mappingsV2', () => {
@@ -51,60 +53,76 @@ export const useMappingsStoreV2 = defineStore('mappingsV2', () => {
   // Mock transformations
   const mockTransformations: Transformation[] = [
     {
-      transform_id: 1,
-      transform_name: 'Trim Whitespace',
-      transform_code: 'TRIM({field})',
-      description: 'Remove leading and trailing whitespace',
-      category: 'STRING'
+      transformation_id: 1,
+      transformation_name: 'Trim Whitespace',
+      transformation_code: 'TRIM',
+      transformation_expression: 'TRIM({field})',
+      transformation_description: 'Remove leading and trailing whitespace',
+      category: 'STRING',
+      is_system: true
     },
     {
-      transform_id: 2,
-      transform_name: 'Upper Case',
-      transform_code: 'UPPER({field})',
-      description: 'Convert to uppercase',
-      category: 'STRING'
+      transformation_id: 2,
+      transformation_name: 'Upper Case',
+      transformation_code: 'UPPER',
+      transformation_expression: 'UPPER({field})',
+      transformation_description: 'Convert to uppercase',
+      category: 'STRING',
+      is_system: true
     },
     {
-      transform_id: 3,
-      transform_name: 'Lower Case',
-      transform_code: 'LOWER({field})',
-      description: 'Convert to lowercase',
-      category: 'STRING'
+      transformation_id: 3,
+      transformation_name: 'Lower Case',
+      transformation_code: 'LOWER',
+      transformation_expression: 'LOWER({field})',
+      transformation_description: 'Convert to lowercase',
+      category: 'STRING',
+      is_system: true
     },
     {
-      transform_id: 4,
-      transform_name: 'Initial Caps',
-      transform_code: 'INITCAP({field})',
-      description: 'Capitalize first letter of each word',
-      category: 'STRING'
+      transformation_id: 4,
+      transformation_name: 'Initial Caps',
+      transformation_code: 'INITCAP',
+      transformation_expression: 'INITCAP({field})',
+      transformation_description: 'Capitalize first letter of each word',
+      category: 'STRING',
+      is_system: true
     },
     {
-      transform_id: 5,
-      transform_name: 'Cast to String',
-      transform_code: 'CAST({field} AS STRING)',
-      description: 'Convert to string data type',
-      category: 'CONVERSION'
+      transformation_id: 5,
+      transformation_name: 'Cast to String',
+      transformation_code: 'CAST_STRING',
+      transformation_expression: 'CAST({field} AS STRING)',
+      transformation_description: 'Convert to string data type',
+      category: 'CONVERSION',
+      is_system: true
     },
     {
-      transform_id: 6,
-      transform_name: 'Cast to Integer',
-      transform_code: 'CAST({field} AS INT)',
-      description: 'Convert to integer data type',
-      category: 'CONVERSION'
+      transformation_id: 6,
+      transformation_name: 'Cast to Integer',
+      transformation_code: 'CAST_INT',
+      transformation_expression: 'CAST({field} AS INT)',
+      transformation_description: 'Convert to integer data type',
+      category: 'CONVERSION',
+      is_system: true
     },
     {
-      transform_id: 7,
-      transform_name: 'Cast to Date',
-      transform_code: 'CAST({field} AS DATE)',
-      description: 'Convert to date data type',
-      category: 'DATE'
+      transformation_id: 7,
+      transformation_name: 'Cast to Date',
+      transformation_code: 'CAST_DATE',
+      transformation_expression: 'CAST({field} AS DATE)',
+      transformation_description: 'Convert to date data type',
+      category: 'DATE',
+      is_system: true
     },
     {
-      transform_id: 8,
-      transform_name: 'Replace Nulls',
-      transform_code: 'COALESCE({field}, \'\')',
-      description: 'Replace NULL values with empty string',
-      category: 'NULL_HANDLING'
+      transformation_id: 8,
+      transformation_name: 'Replace Nulls',
+      transformation_code: 'COALESCE',
+      transformation_expression: 'COALESCE({field}, \'\')',
+      transformation_description: 'Replace NULL values with empty string',
+      category: 'NULL_HANDLING',
+      is_system: true
     }
   ]
 
