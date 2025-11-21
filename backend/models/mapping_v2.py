@@ -96,12 +96,15 @@ class MappedFieldV2(BaseModel):
     tgt_column_name: str = Field(..., description="Target column logical name")
     tgt_column_physical_name: str = Field(..., description="Target column physical name")
     concat_strategy: str = Field(default="SPACE", description="Concatenation strategy (SPACE, COMMA, PIPE, CUSTOM, NONE)")
-    custom_concat_value: Optional[str] = Field(None, description="Custom concatenation string")
-    final_sql_expression: Optional[str] = Field(None, description="Complete SQL transformation")
+    concat_separator: Optional[str] = Field(None, description="Custom separator for CUSTOM strategy")
+    transformation_expression: Optional[str] = Field(None, description="Complete SQL transformation")
+    confidence_score: Optional[float] = Field(None, description="AI confidence (0.0-1.0)")
+    mapping_source: Optional[str] = Field(default="MANUAL", description="Mapping source (AI, MANUAL, etc.)")
+    ai_reasoning: Optional[str] = Field(None, description="AI explanation for mapping")
+    mapping_status: Optional[str] = Field(default="ACTIVE", description="Mapping status")
     mapped_at: Optional[datetime] = Field(None, description="Mapping timestamp")
     mapped_by: Optional[str] = Field(None, description="User who created mapping")
-    mapping_confidence_score: Optional[float] = Field(None, description="AI confidence (0.0-1.0)")
-    ai_reasoning: Optional[str] = Field(None, description="AI explanation for mapping")
+    source_fields: List['MappingDetailV2'] = Field(default_factory=list, description="Source fields")
 
 
 class MappedFieldCreateV2(BaseModel):
@@ -111,11 +114,13 @@ class MappedFieldCreateV2(BaseModel):
     tgt_column_name: str
     tgt_column_physical_name: str
     concat_strategy: str = "SPACE"
-    custom_concat_value: Optional[str] = None
-    final_sql_expression: Optional[str] = None
+    concat_separator: Optional[str] = None
+    transformation_expression: Optional[str] = None
     mapped_by: Optional[str] = None
-    mapping_confidence_score: Optional[float] = None
+    confidence_score: Optional[float] = None
+    mapping_source: Optional[str] = "MANUAL"
     ai_reasoning: Optional[str] = None
+    mapping_status: Optional[str] = "ACTIVE"
 
 
 class MappingDetailV2(BaseModel):

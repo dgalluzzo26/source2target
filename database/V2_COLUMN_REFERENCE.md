@@ -44,12 +44,13 @@
   - `tgt_table_physical_name` (STRING) - Denormalized
   - `tgt_column_name` (STRING) - Denormalized
   - `tgt_column_physical_name` (STRING) - Denormalized
-  - `concat_strategy` (STRING)
-  - `custom_concat_value` (STRING)
-  - `final_sql_expression` (STRING)
-  - `mapping_status` (STRING)
-  - `mapping_confidence_score` (DOUBLE)
+  - `concat_strategy` (STRING) - 'NONE', 'SPACE', 'COMMA', 'PIPE', 'CONCAT', 'CUSTOM'
+  - `concat_separator` (STRING) - ⚠️ NOT custom_concat_value
+  - `transformation_expression` (STRING) - ⚠️ NOT final_sql_expression
+  - `confidence_score` (DOUBLE) - ⚠️ NOT mapping_confidence_score
+  - `mapping_source` (STRING) - 'AI', 'MANUAL', 'BULK_UPLOAD', 'SYSTEM'
   - `ai_reasoning` (STRING)
+  - `mapping_status` (STRING) - 'ACTIVE', 'INACTIVE', 'PENDING_REVIEW'
   - `mapped_by` (STRING)
   - `mapped_ts` (TIMESTAMP) - ⚠️ NOT mapped_at
   - `updated_ts` (TIMESTAMP)
