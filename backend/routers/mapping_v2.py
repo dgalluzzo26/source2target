@@ -3,18 +3,54 @@ Mapping V2 API endpoints for multi-field mapping management.
 
 Provides CRUD operations for creating, reading, and deleting multi-field mappings.
 """
-from fastapi import APIRouter, HTTPException, Body
-from typing import List, Dict, Any
+from fastapi import APIRouter, HTTPException, Body, Request
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from backend.models.mapping_v2 import (
     MappedFieldCreateV2,
     MappingDetailCreateV2
 )
 from backend.services.mapping_service_v2 import MappingServiceV2
+from backend.services.auth_service import AuthService
 
 router = APIRouter(prefix="/api/v2/mappings", tags=["Mappings V2"])
 
 mapping_service = MappingServiceV2()
+auth_service = AuthService()
+
+
+def get_current_user_email(request: Request) -> str:
+    """
+    Extract the current user's email from request headers.
+    
+    In Databricks Apps, the X-Forwarded-Email header contains the authenticated user's email.
+    For local development, falls back to "local.user@example.com".
+    
+    Args:
+        request: FastAPI Request object
+    
+    Returns:
+        User's email address
+    """
+    forwarded_email = request.headers.get("X-Forwarded-Email")
+    if forwarded_email:
+        return forwarded_email
+    
+    # Fallback for local development
+    return "local.user@example.com"
+
+
+def is_admin_user(email: str) -> bool:
+    """
+    Check if the user is an administrator.
+    
+    Args:
+        email: User's email address
+    
+    Returns:
+        True if user is admin, False otherwise
+    """
+    return auth_service.check_admin_group_membership(email)
 
 
 class CreateMappingRequest(BaseModel):
@@ -113,11 +149,15 @@ async def create_mapping(request: CreateMappingRequest = Body(...)):
 
 
 @router.get("/", response_model=List[Dict[str, Any]])
-async def get_all_mappings():
+async def get_all_mappings(request: Request):
     """
     Get all multi-field mappings.
     
-    Returns all mappings with their source fields. Each mapping includes:
+    Returns mappings with their source fields based on user permissions:
+    - **Regular users**: Only see their own mappings (filtered by mapped_by)
+    - **Admins**: See all mappings from all users
+    
+    Each mapping includes:
     - Target field info (from mapped_fields table)
     - List of source fields (from mapping_details table)
     - Ordering and transformations
@@ -151,6 +191,9 @@ async def get_all_mappings():
     ]
     ```
     
+    Args:
+        request: FastAPI Request object (for extracting user email)
+    
     Returns:
         List of mapping dictionaries with nested source_fields
     
@@ -158,7 +201,15 @@ async def get_all_mappings():
         HTTPException 500: If database query fails
     """
     try:
-        mappings = await mapping_service.get_all_mappings()
+        current_user_email = get_current_user_email(request)
+        is_admin = is_admin_user(current_user_email)
+        
+        print(f"[Mapping V2 API] User: {current_user_email}, Admin: {is_admin}")
+        
+        # Get mappings with optional user filter
+        user_filter = None if is_admin else current_user_email
+        mappings = await mapping_service.get_all_mappings(user_filter=user_filter)
+        
         print(f"[Mapping V2 API] Retrieved {len(mappings)} mappings")
         return mappings
         

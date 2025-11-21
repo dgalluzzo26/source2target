@@ -179,6 +179,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
+import { useMappingsStoreV2 } from '@/stores/mappingsStoreV2'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -193,59 +194,35 @@ import InputIcon from 'primevue/inputicon'
 const router = useRouter()
 const confirm = useConfirm()
 const toast = useToast()
+const mappingsStore = useMappingsStoreV2()
 
 // State
-const mappings = ref<any[]>([])
-const loading = ref(false)
-const error = ref<string | null>(null)
 const searchQuery = ref('')
 
-// Mock data for now
-const mockMappings = [
-  {
-    id: 1,
-    target_table: 'slv_member',
-    target_column: 'full_name',
-    target_physical_name: 'full_name',
-    source_fields: [
-      { table: 'T_MEMBER', column: 'FIRST_NAME' },
-      { table: 'T_MEMBER', column: 'LAST_NAME' }
-    ],
-    concat_strategy: 'SPACE',
-    has_transformations: true,
+// Transform store mappings to view format
+const mappings = computed(() => {
+  return mappingsStore.mappings.map(m => ({
+    id: m.mapping_id,
+    target_table: m.tgt_table_name,
+    target_column: m.tgt_column_name,
+    target_physical_name: m.tgt_column_physical_name,
+    source_fields: m.source_fields
+      .sort((a, b) => a.field_order - b.field_order)
+      .map(sf => ({
+        table: sf.src_table_name,
+        column: sf.src_column_name
+      })),
+    concat_strategy: m.concat_strategy,
+    has_transformations: m.source_fields.some(sf => !!sf.transformation_expr),
     status: 'Active',
-    created_at: '2025-11-15T10:30:00'
-  },
-  {
-    id: 2,
-    target_table: 'slv_member',
-    target_column: 'ssn_number',
-    target_physical_name: 'ssn_number',
-    source_fields: [
-      { table: 'T_MEMBER', column: 'SSN' }
-    ],
-    concat_strategy: 'NONE',
-    has_transformations: false,
-    status: 'Active',
-    created_at: '2025-11-14T14:20:00'
-  },
-  {
-    id: 3,
-    target_table: 'slv_member',
-    target_column: 'full_address',
-    target_physical_name: 'full_address',
-    source_fields: [
-      { table: 'T_ADDRESS', column: 'ADDRESS_LINE1' },
-      { table: 'T_ADDRESS', column: 'CITY' },
-      { table: 'T_ADDRESS', column: 'STATE' },
-      { table: 'T_ADDRESS', column: 'ZIP_CODE' }
-    ],
-    concat_strategy: 'COMMA',
-    has_transformations: true,
-    status: 'Active',
-    created_at: '2025-11-13T09:15:00'
-  }
-]
+    created_at: m.mapped_at || new Date().toISOString(),
+    mapped_by: m.mapped_by,
+    sql_expression: m.final_sql_expression
+  }))
+})
+
+const loading = computed(() => mappingsStore.loading)
+const error = computed(() => mappingsStore.error)
 
 // Computed
 const filteredMappings = computed(() => {
@@ -267,17 +244,12 @@ onMounted(async () => {
 })
 
 async function fetchMappings() {
-  loading.value = true
-  error.value = null
-  
   try {
-    // TODO: Replace with real API call
-    // const response = await fetch('/api/v2/mappings')
-    // mappings.value = await response.json()
-    
-    // Mock: Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500))
-    mappings.value = mockMappings
+    await mappingsStore.fetchMappings()
+  } catch (e) {
+    console.error('[Mappings List View] Error:', e)
+  }
+}
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load mappings'
   } finally {
@@ -358,19 +330,18 @@ function handleDelete(mapping: any) {
     acceptClass: 'p-button-danger',
     accept: async () => {
       try {
-        // TODO: Call delete API
+        await mappingsStore.deleteMapping(mapping.id)
         toast.add({
           severity: 'success',
           summary: 'Deleted',
           detail: 'Mapping deleted successfully',
           life: 3000
         })
-        await fetchMappings()
       } catch (error) {
         toast.add({
           severity: 'error',
           summary: 'Error',
-          detail: 'Failed to delete mapping',
+          detail: error instanceof Error ? error.message : 'Failed to delete mapping',
           life: 3000
         })
       }

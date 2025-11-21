@@ -117,18 +117,28 @@ export const useMappingsStoreV2 = defineStore('mappingsV2', () => {
     error.value = null
 
     try {
-      // TODO: Replace with real API call
-      // const response = await fetch('/api/v2/mappings/')
-      // mappings.value = await response.json()
+      console.log('[Mappings V2 Store] Fetching mappings from API...')
+      
+      const response = await fetch('/api/v2/mappings/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
 
-      // Mock: Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 300))
-      mappings.value = []
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      mappings.value = data
 
       console.log('[Mappings V2 Store] Loaded', mappings.value.length, 'mappings')
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch mappings'
       console.error('[Mappings V2 Store] Error:', error.value)
+      // Return empty array on error (not mock data)
+      mappings.value = []
     } finally {
       loading.value = false
     }
@@ -139,18 +149,29 @@ export const useMappingsStoreV2 = defineStore('mappingsV2', () => {
     error.value = null
 
     try {
-      // TODO: Replace with real API call
-      // const response = await fetch('/api/v2/transformations/')
-      // transformations.value = await response.json()
+      console.log('[Mappings V2 Store] Fetching transformations from API...')
+      
+      const response = await fetch('/api/v2/transformations/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
 
-      // Mock: Use mock data
-      await new Promise(resolve => setTimeout(resolve, 200))
-      transformations.value = [...mockTransformations]
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      transformations.value = data
 
       console.log('[Mappings V2 Store] Loaded', transformations.value.length, 'transformations')
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch transformations'
       console.error('[Mappings V2 Store] Error:', error.value)
+      // Fallback to mock transformations if API fails
+      console.log('[Mappings V2 Store] Falling back to mock transformations')
+      transformations.value = [...mockTransformations]
     } finally {
       loading.value = false
     }
@@ -161,29 +182,55 @@ export const useMappingsStoreV2 = defineStore('mappingsV2', () => {
     error.value = null
 
     try {
-      // TODO: Replace with real API call
-      // const response = await fetch('/api/v2/mappings/', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     mapped_field: mappedField,
-      //     mapping_details: mappedField.source_fields
-      //   })
-      // })
-      // const result = await response.json()
+      console.log('[Mappings V2 Store] Creating mapping:', mappedField.tgt_column_name)
+      
+      const response = await fetch('/api/v2/mappings/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          mapped_field: {
+            tgt_table_name: mappedField.tgt_table_name,
+            tgt_table_physical_name: mappedField.tgt_table_physical_name,
+            tgt_column_name: mappedField.tgt_column_name,
+            tgt_column_physical_name: mappedField.tgt_column_physical_name,
+            concat_strategy: mappedField.concat_strategy,
+            custom_concat_value: mappedField.custom_concat_value,
+            final_sql_expression: mappedField.final_sql_expression,
+            mapped_by: mappedField.mapped_by,
+            mapping_confidence_score: mappedField.mapping_confidence_score,
+            ai_reasoning: mappedField.ai_reasoning
+          },
+          mapping_details: mappedField.source_fields.map(sf => ({
+            src_table_name: sf.src_table_name,
+            src_table_physical_name: sf.src_table_physical_name,
+            src_column_name: sf.src_column_name,
+            src_column_physical_name: sf.src_column_physical_name,
+            field_order: sf.field_order,
+            transformation_expr: sf.transformation_expr
+          }))
+        })
+      })
 
-      // Mock: Add to local array with generated ID
-      await new Promise(resolve => setTimeout(resolve, 500))
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      const mappingId = result.mapping_id
+
+      // Add to local array with returned ID
       const newMapping: MappedFieldV2 = {
         ...mappedField,
-        mapping_id: mappings.value.length + 1,
-        mapped_at: new Date().toISOString(),
-        mapped_by: 'john.doe@example.com'
+        mapping_id: mappingId,
+        mapped_at: new Date().toISOString()
       }
       mappings.value.push(newMapping)
 
-      console.log('[Mappings V2 Store] Created mapping:', newMapping.mapping_id)
-      return newMapping.mapping_id
+      console.log('[Mappings V2 Store] Created mapping:', mappingId)
+      return mappingId
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to create mapping'
       console.error('[Mappings V2 Store] Error:', error.value)
@@ -198,11 +245,18 @@ export const useMappingsStoreV2 = defineStore('mappingsV2', () => {
     error.value = null
 
     try {
-      // TODO: Replace with real API call
-      // await fetch(`/api/v2/mappings/${mappingId}`, { method: 'DELETE' })
+      console.log('[Mappings V2 Store] Deleting mapping:', mappingId)
+      
+      const response = await fetch(`/api/v2/mappings/${mappingId}`, {
+        method: 'DELETE'
+      })
 
-      // Mock: Remove from local array
-      await new Promise(resolve => setTimeout(resolve, 300))
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      // Remove from local array
       const index = mappings.value.findIndex(m => m.mapping_id === mappingId)
       if (index >= 0) {
         mappings.value.splice(index, 1)

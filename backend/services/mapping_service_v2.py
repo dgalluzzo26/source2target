@@ -210,7 +210,8 @@ class MappingServiceV2:
         server_hostname: str,
         http_path: str,
         mapped_fields_table: str,
-        mapping_details_table: str
+        mapping_details_table: str,
+        user_filter: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Get all mappings with their source fields (synchronous).
@@ -224,16 +225,26 @@ class MappingServiceV2:
             http_path: SQL warehouse HTTP path
             mapped_fields_table: Fully qualified mapped_fields table name
             mapping_details_table: Fully qualified mapping_details table name
+            user_filter: Optional email filter (None for admins to see all)
         
         Returns:
             List of mapping dictionaries with nested source_fields
         """
-        print(f"[Mapping Service V2] Fetching all mappings")
+        if user_filter:
+            print(f"[Mapping Service V2] Fetching mappings for user: {user_filter}")
+        else:
+            print(f"[Mapping Service V2] Fetching all mappings (admin mode)")
         
         connection = self._get_sql_connection(server_hostname, http_path)
         
         try:
             with connection.cursor() as cursor:
+                # Build WHERE clause for user filtering
+                where_clause = ""
+                if user_filter:
+                    escaped_email = user_filter.replace("'", "''")
+                    where_clause = f"WHERE mf.mapped_by = '{escaped_email}'"
+                
                 # Query all mappings with their details
                 query = f"""
                 SELECT 
@@ -259,6 +270,7 @@ class MappingServiceV2:
                     md.added_at
                 FROM {mapped_fields_table} mf
                 LEFT JOIN {mapping_details_table} md ON mf.mapping_id = md.mapping_id
+                {where_clause}
                 ORDER BY mf.mapping_id, md.field_order
                 """
                 
@@ -305,6 +317,7 @@ class MappingServiceV2:
                 
                 result = list(mappings_dict.values())
                 print(f"[Mapping Service V2] Found {len(result)} mappings")
+                return result
                 
                 return result
                 
@@ -424,9 +437,12 @@ class MappingServiceV2:
             )
         )
     
-    async def get_all_mappings(self) -> List[Dict[str, Any]]:
+    async def get_all_mappings(self, user_filter: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get all mappings with their source fields (async).
+        
+        Args:
+            user_filter: Optional email filter (None for admins to see all)
         
         Returns:
             List of mapping dictionaries with nested source_fields
@@ -441,7 +457,8 @@ class MappingServiceV2:
                 db_config['server_hostname'],
                 db_config['http_path'],
                 db_config['mapped_fields_table'],
-                db_config['mapping_details_table']
+                db_config['mapping_details_table'],
+                user_filter
             )
         )
     
