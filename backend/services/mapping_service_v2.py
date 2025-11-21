@@ -147,27 +147,25 @@ class MappingServiceV2:
                 
                 cursor.execute(mapped_insert)
                 
-                # Get the generated mapping_id
-                cursor.execute(f"SELECT MAX(mapping_id) FROM {mapped_fields_table}")
-                mapping_id = cursor.fetchone()[0]
+                # Get the generated mapped_field_id
+                cursor.execute(f"SELECT MAX(mapped_field_id) FROM {mapped_fields_table}")
+                mapped_field_id = cursor.fetchone()[0]
                 
-                print(f"[Mapping Service V2] Created mapped_field with mapping_id: {mapping_id}")
+                print(f"[Mapping Service V2] Created mapped_field with mapped_field_id: {mapped_field_id}")
                 
                 # Step 2: Insert all mapping_details
                 for detail in mapping_details:
                     detail_insert = f"""
                     INSERT INTO {mapping_details_table} (
-                        mapping_id,
+                        mapped_field_id,
                         src_table_name,
-                        src_table_physical_name,
                         src_column_name,
                         src_column_physical_name,
                         field_order,
-                        transformation_expr
+                        transformations
                     ) VALUES (
-                        {mapping_id},
+                        {mapped_field_id},
                         '{detail.src_table_name.replace("'", "''")}',
-                        '{detail.src_table_physical_name.replace("'", "''")}',
                         '{detail.src_column_name.replace("'", "''")}',
                         '{detail.src_column_physical_name.replace("'", "''")}',
                         {detail.field_order},
@@ -197,7 +195,7 @@ class MappingServiceV2:
                 print(f"[Mapping Service V2] Mapping created successfully")
                 
                 return {
-                    "mapping_id": mapping_id,
+                    "mapping_id": mapped_field_id,
                     "status": "success",
                     "message": f"Created mapping with {len(mapping_details)} source fields"
                 }
@@ -268,11 +266,10 @@ class MappingServiceV2:
                     mf.mapping_status,
                     md.mapping_detail_id as detail_id,
                     md.src_table_name,
-                    md.src_table_physical_name,
                     md.src_column_name,
                     md.src_column_physical_name,
                     md.field_order,
-                    md.transformation_expr,
+                    md.transformations as transformation_expr,
                     md.created_ts as added_at
                 FROM {mapped_fields_table} mf
                 LEFT JOIN {mapping_details_table} md ON mf.mapped_field_id = md.mapped_field_id
@@ -315,7 +312,6 @@ class MappingServiceV2:
                         mappings_dict[mapping_id]['source_fields'].append({
                             'detail_id': record['detail_id'],
                             'src_table_name': record['src_table_name'],
-                            'src_table_physical_name': record['src_table_physical_name'],
                             'src_column_name': record['src_column_name'],
                             'src_column_physical_name': record['src_column_physical_name'],
                             'field_order': record['field_order'],
