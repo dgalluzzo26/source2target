@@ -326,8 +326,10 @@ function handleAccept(suggestion: AISuggestionV2) {
   // Store the suggestion for mapping configuration
   aiStore.selectSuggestion(suggestion)
   
-  // Record acceptance feedback (non-blocking)
-  recordFeedback(suggestion, 'accepted', 'User accepted this AI suggestion')
+  // Record acceptance feedback (non-blocking, fire and forget)
+  recordFeedback(suggestion, 'accepted', 'User accepted this AI suggestion').catch(err => {
+    console.warn('[AI Suggestions] Feedback recording failed (non-critical):', err)
+  })
   
   // Emit event to parent to proceed with mapping
   emit('suggestion-selected', suggestion)
@@ -358,15 +360,25 @@ async function submitRejectionFeedback() {
     return
   }
   
-  // Record rejection feedback
-  await recordFeedback(rejectedSuggestion.value, 'rejected', rejectionComment.value)
-  
-  toast.add({
-    severity: 'info',
-    summary: 'Feedback Recorded',
-    detail: 'Thank you! Your feedback will help improve future suggestions.',
-    life: 3000
-  })
+  // Record rejection feedback (with error handling)
+  try {
+    await recordFeedback(rejectedSuggestion.value, 'rejected', rejectionComment.value)
+    
+    toast.add({
+      severity: 'info',
+      summary: 'Feedback Recorded',
+      detail: 'Thank you! Your feedback will help improve future suggestions.',
+      life: 3000
+    })
+  } catch (error) {
+    console.warn('[AI Suggestions] Feedback recording failed (non-critical):', error)
+    toast.add({
+      severity: 'warn',
+      summary: 'Feedback Not Saved',
+      detail: 'Your rejection was recorded, but feedback could not be saved.',
+      life: 3000
+    })
+  }
   
   closeRejectionDialog()
 }
