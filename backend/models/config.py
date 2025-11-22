@@ -31,26 +31,26 @@ class DatabaseConfig(BaseModel):
         warehouse_name: Display name of the SQL warehouse
         catalog: Databricks catalog name
         schema: Databricks schema name
-        semantic_fields_table: Target field definitions (V2: was semantic_table)
-        unmapped_fields_table: Source fields awaiting mapping (V2: new)
-        mapped_fields_table: Target fields with mappings (V2: new)
-        mapping_details_table: Source fields in each mapping (V2: new)
-        mapping_joins_table: Join definitions for multi-table mappings (V2: new)
-        mapping_feedback_table: User feedback on AI suggestions (V2: new)
-        transformation_library_table: Reusable transformation templates (V2: new)
+        semantic_fields_table: Target field definitions (table name only, catalog.schema prepended automatically)
+        unmapped_fields_table: Source fields awaiting mapping (table name only)
+        mapped_fields_table: Target fields with mappings (table name only)
+        mapping_details_table: Source fields in each mapping (table name only)
+        mapping_joins_table: Join definitions for multi-table mappings (table name only)
+        mapping_feedback_table: User feedback on AI suggestions (table name only)
+        transformation_library_table: Reusable transformation templates (table name only)
         server_hostname: Databricks workspace hostname
         http_path: SQL warehouse HTTP path for connections
     """
     warehouse_name: str = Field(default="gia-oztest-dev-data-warehouse", description="SQL warehouse display name")
     catalog: str = Field(default="oztest_dev", description="Databricks catalog name")
     schema: str = Field(default="source2target", description="Databricks schema name")
-    semantic_fields_table: str = Field(default="oztest_dev.source2target.semantic_fields", description="Target field definitions (V2)")
-    unmapped_fields_table: str = Field(default="oztest_dev.source2target.unmapped_fields", description="Source fields awaiting mapping (V2)")
-    mapped_fields_table: str = Field(default="oztest_dev.source2target.mapped_fields", description="Target fields with mappings (V2)")
-    mapping_details_table: str = Field(default="oztest_dev.source2target.mapping_details", description="Source fields in each mapping (V2)")
-    mapping_joins_table: str = Field(default="oztest_dev.source2target.mapping_joins", description="Join definitions for multi-table mappings (V2)")
-    mapping_feedback_table: str = Field(default="oztest_dev.source2target.mapping_feedback", description="User feedback on AI suggestions (V2)")
-    transformation_library_table: str = Field(default="oztest_dev.source2target.transformation_library", description="Reusable transformations (V2)")
+    semantic_fields_table: str = Field(default="semantic_fields", description="Target field definitions (V2)")
+    unmapped_fields_table: str = Field(default="unmapped_fields", description="Source fields awaiting mapping (V2)")
+    mapped_fields_table: str = Field(default="mapped_fields", description="Target fields with mappings (V2)")
+    mapping_details_table: str = Field(default="mapping_details", description="Source fields in each mapping (V2)")
+    mapping_joins_table: str = Field(default="mapping_joins", description="Join definitions for multi-table mappings (V2)")
+    mapping_feedback_table: str = Field(default="mapping_feedback", description="User feedback on AI suggestions (V2)")
+    transformation_library_table: str = Field(default="transformation_library", description="Reusable transformations (V2)")
     server_hostname: str = Field(default="Acuity-oz-test-ue1.cloud.databricks.com", description="Databricks workspace hostname")
     http_path: str = Field(default="/sql/1.0/warehouses/173ea239ed13be7d", description="SQL warehouse HTTP path")
     
@@ -68,11 +68,11 @@ class AIModelConfig(BaseModel):
     mapped_fields table for pattern learning.
     
     Attributes:
-        previous_mappings_table_name: Historical mappings for few-shot (V2: mapped_fields)
+        previous_mappings_table_name: Historical mappings table name (just table, catalog.schema from DatabaseConfig)
         foundation_model_endpoint: Name of the Databricks foundation model endpoint
         default_prompt: Default system prompt for the LLM (currently unused)
     """
-    previous_mappings_table_name: str = Field(default="oztest_dev.source2target.mapped_fields", description="Historical mappings table (V2)")
+    previous_mappings_table_name: str = Field(default="mapped_fields", description="Historical mappings table (V2)")
     foundation_model_endpoint: str = Field(default="databricks-meta-llama-3-3-70b-instruct", description="Foundation model endpoint name")
     default_prompt: str = Field(default="", description="Default LLM system prompt")
 
@@ -84,11 +84,14 @@ class VectorSearchConfig(BaseModel):
     Defines the Databricks Vector Search index and endpoint used for finding
     similar target fields based on semantic meaning. V2 uses semantic_fields_vs index.
     
+    NOTE: Vector search index names must be fully qualified (catalog.schema.index_name)
+    because they are managed separately from SQL tables.
+    
     Attributes:
-        index_name: Fully qualified name of the vector search index (V2: semantic_fields_vs)
+        index_name: Fully qualified name of the vector search index (catalog.schema.index_name)
         endpoint_name: Name of the vector search endpoint
     """
-    index_name: str = Field(default="oztest_dev.source2target.semantic_fields_vs", description="Vector search index name (V2)")
+    index_name: str = Field(default="oztest_dev.source2target.semantic_fields_vs", description="Vector search index (fully qualified)")
     endpoint_name: str = Field(default="s2t_vsendpoint", description="Vector search endpoint name")
 
 

@@ -70,7 +70,7 @@ class SemanticService:
         return {
             "server_hostname": config.database.server_hostname,
             "http_path": config.database.http_path,
-            "semantic_fields_table": config.database.semantic_fields_table  # V2: Changed from semantic_table
+            "semantic_fields_table": self.config_service.get_fully_qualified_table_name(config.database.semantic_fields_table)
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):

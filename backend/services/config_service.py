@@ -125,6 +125,28 @@ class ConfigService:
             "server_hostname": config.database.server_hostname,
             "http_path": config.database.http_path
         }
+    
+    def get_fully_qualified_table_name(self, table_name: str) -> str:
+        """
+        Get the fully qualified table name (catalog.schema.table).
+        
+        If table_name already contains dots (.), assumes it's fully qualified.
+        Otherwise, prepends catalog.schema from config.
+        
+        Args:
+            table_name: Table name (may or may not be fully qualified)
+            
+        Returns:
+            Fully qualified table name (catalog.schema.table)
+        """
+        config = self.get_config()
+        
+        # If already fully qualified (contains dots), return as-is
+        if '.' in table_name:
+            return table_name
+        
+        # Otherwise, prepend catalog.schema
+        return f"{config.database.catalog}.{config.database.schema}.{table_name}"
 
 
 # Global instance

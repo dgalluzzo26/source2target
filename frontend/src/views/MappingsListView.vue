@@ -171,6 +171,98 @@
       <p>Start creating field mappings to see them here.</p>
       <Button label="Create First Mapping" icon="pi pi-plus" @click="handleCreateNew" />
     </div>
+
+    <!-- Details Dialog -->
+    <Dialog 
+      v-model:visible="showDetailsDialog" 
+      modal 
+      header="Mapping Details" 
+      :style="{ width: '50rem' }"
+      :breakpoints="{ '1199px': '75vw', '575px': '90vw' }"
+    >
+      <div v-if="selectedMapping" class="mapping-details">
+        <!-- Target Field Section -->
+        <div class="detail-section">
+          <h3><i class="pi pi-arrow-circle-right"></i> Target Field</h3>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <label>Table</label>
+              <div class="detail-value">{{ selectedMapping.target_table }}</div>
+            </div>
+            <div class="detail-item">
+              <label>Column</label>
+              <div class="detail-value">{{ selectedMapping.target_column }}</div>
+            </div>
+            <div class="detail-item">
+              <label>Physical Name</label>
+              <div class="detail-value code">{{ selectedMapping.target_physical_name }}</div>
+            </div>
+            <div class="detail-item">
+              <label>Status</label>
+              <Tag 
+                :value="selectedMapping.status" 
+                :severity="getStatusSeverity(selectedMapping.status)"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Source Fields Section -->
+        <div class="detail-section">
+          <h3><i class="pi pi-list"></i> Source Fields</h3>
+          <div class="source-fields-list">
+            <div 
+              v-for="(field, idx) in selectedMapping.source_fields" 
+              :key="idx" 
+              class="source-field-item"
+            >
+              <Badge :value="`${idx + 1}`" class="field-order-badge" />
+              <div class="field-details">
+                <strong>{{ field.table }}.{{ field.column }}</strong>
+                <span v-if="field.transformation" class="transformation">{{ field.transformation }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Concatenation Section -->
+        <div class="detail-section">
+          <h3><i class="pi pi-link"></i> Concatenation Strategy</h3>
+          <Tag 
+            :value="getConcatLabel(selectedMapping.concat_strategy)" 
+            severity="secondary"
+            size="large"
+          />
+        </div>
+
+        <!-- SQL Expression Section -->
+        <div v-if="selectedMapping.sql_expression" class="detail-section">
+          <h3><i class="pi pi-code"></i> SQL Expression</h3>
+          <pre class="sql-expression">{{ selectedMapping.sql_expression }}</pre>
+        </div>
+
+        <!-- Metadata Section -->
+        <div class="detail-section">
+          <h3><i class="pi pi-info-circle"></i> Metadata</h3>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <label>Created</label>
+              <div class="detail-value">{{ formatDate(selectedMapping.created_at) }}</div>
+            </div>
+            <div class="detail-item">
+              <label>Created By</label>
+              <div class="detail-value">{{ selectedMapping.mapped_by || 'Unknown' }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <template #footer>
+        <Button label="Close" icon="pi pi-times" @click="showDetailsDialog = false" severity="secondary" />
+        <Button label="Edit" icon="pi pi-pencil" @click="handleEdit(selectedMapping)" />
+        <Button label="Delete" icon="pi pi-trash" @click="handleDelete(selectedMapping); showDetailsDialog = false" severity="danger" />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -190,6 +282,7 @@ import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
+import Dialog from 'primevue/dialog'
 
 const router = useRouter()
 const confirm = useConfirm()
@@ -198,6 +291,8 @@ const mappingsStore = useMappingsStoreV2()
 
 // State
 const searchQuery = ref('')
+const showDetailsDialog = ref(false)
+const selectedMapping = ref<any>(null)
 
 // Transform store mappings to view format
 const mappings = computed(() => {
@@ -297,28 +392,24 @@ function formatDate(dateString: string): string {
 }
 
 function handleView(mapping: any) {
-  toast.add({
-    severity: 'info',
-    summary: 'View Mapping',
-    detail: `Viewing details for ${mapping.target_table}.${mapping.target_column}`,
-    life: 3000
-  })
-  // TODO: Open details dialog
+  selectedMapping.value = mapping
+  showDetailsDialog.value = true
 }
 
 function handleEdit(mapping: any) {
   toast.add({
-    severity: 'info',
-    summary: 'Edit Mapping',
-    detail: `Editing ${mapping.target_table}.${mapping.target_column}`,
+    severity: 'warn',
+    summary: 'Not Yet Implemented',
+    detail: 'Mapping edit functionality is coming soon',
     life: 3000
   })
-  // TODO: Navigate to edit view
+  // TODO: Implement edit functionality - navigate to edit wizard
+  // router.push({ name: 'mapping-edit', params: { id: mapping.id } })
 }
 
 function handleDelete(mapping: any) {
   confirm.require({
-    message: `Are you sure you want to delete the mapping for "${mapping.target_table}.${mapping.target_column}"?`,
+    message: `Are you sure you want to delete the mapping for "${mapping.target_table}.${mapping.target_column}"? This action cannot be undone.`,
     header: 'Confirm Deletion',
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
@@ -331,6 +422,8 @@ function handleDelete(mapping: any) {
           detail: 'Mapping deleted successfully',
           life: 3000
         })
+        // Refresh the list
+        await fetchMappings()
       } catch (error) {
         toast.add({
           severity: 'error',
@@ -498,6 +591,106 @@ function handleCreateNew() {
   opacity: 0.6;
 }
 
+/* Details Dialog Styles */
+.mapping-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.detail-section {
+  border-bottom: 1px solid var(--surface-border);
+  padding-bottom: 1rem;
+}
+
+.detail-section:last-child {
+  border-bottom: none;
+}
+
+.detail-section h3 {
+  margin: 0 0 1rem 0;
+  color: var(--primary-color);
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.detail-item label {
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detail-value {
+  font-size: 1rem;
+  color: var(--text-color);
+}
+
+.detail-value.code {
+  font-family: 'Courier New', monospace;
+  background: var(--surface-50);
+  padding: 0.5rem;
+  border-radius: 4px;
+}
+
+.source-fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.source-field-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: var(--surface-50);
+  border-radius: 6px;
+}
+
+.field-order-badge {
+  flex-shrink: 0;
+}
+
+.field-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.field-details .transformation {
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  font-family: 'Courier New', monospace;
+}
+
+.sql-expression {
+  background: var(--surface-50);
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+  border: 1px solid var(--surface-border);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .mappings-list-view {
@@ -516,6 +709,10 @@ function handleCreateNew() {
   
   .search-input {
     max-width: none;
+  }
+  
+  .detail-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
