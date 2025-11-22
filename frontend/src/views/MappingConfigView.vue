@@ -478,7 +478,8 @@ async function handleSave() {
       mapping_source: 'AI',
       ai_reasoning: targetField.value.ai_reasoning,
       mapping_status: 'ACTIVE',
-      source_fields: orderedFields.value
+      source_fields: orderedFields.value,
+      mapping_joins: joinDefinitions.value
     })
 
     toast.add({

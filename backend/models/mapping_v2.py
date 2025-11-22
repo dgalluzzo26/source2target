@@ -262,3 +262,45 @@ class TransformationCreateV2(BaseModel):
     category: Optional[str] = None
     is_system: Optional[bool] = False
 
+
+class MappingJoinV2(BaseModel):
+    """
+    Join condition for multi-table mappings (V2 schema).
+    
+    When a mapping uses source fields from multiple tables, join conditions
+    define how those tables are related to enable correct query generation.
+    
+    Attributes:
+        mapping_join_id: Unique identifier (auto-generated)
+        mapped_field_id: FK to mapped_fields table
+        left_table: Left side of join (table name)
+        left_column: Left side of join (column name)
+        right_table: Right side of join (table name)
+        right_column: Right side of join (column name)
+        join_type: Type of join (INNER, LEFT, RIGHT, FULL)
+        join_order: Order in which joins are applied
+        created_ts: Timestamp when created
+    """
+    model_config = {"from_attributes": True, "arbitrary_types_allowed": True}
+    
+    mapping_join_id: Optional[int] = Field(None, description="Unique identifier (auto-generated)")
+    mapped_field_id: int = Field(..., description="FK to mapped_fields table")
+    left_table: str = Field(..., description="Left table name")
+    left_column: str = Field(..., description="Left column name")
+    right_table: str = Field(..., description="Right table name")
+    right_column: str = Field(..., description="Right column name")
+    join_type: str = Field(default="INNER", description="Join type (INNER, LEFT, RIGHT, FULL)")
+    join_order: int = Field(..., description="Order in which joins are applied (1, 2, 3...)")
+    created_ts: Optional[datetime] = Field(None, description="Creation timestamp")
+
+
+class MappingJoinCreateV2(BaseModel):
+    """Create request for mapping join."""
+    mapped_field_id: Optional[int] = None  # Will be set by backend
+    left_table: str
+    left_column: str
+    right_table: str
+    right_column: str
+    join_type: str = "INNER"
+    join_order: int
+

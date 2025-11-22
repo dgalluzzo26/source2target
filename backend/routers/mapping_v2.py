@@ -8,7 +8,8 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from backend.models.mapping_v2 import (
     MappedFieldCreateV2,
-    MappingDetailCreateV2
+    MappingDetailCreateV2,
+    MappingJoinCreateV2
 )
 from backend.services.mapping_service_v2 import MappingServiceV2
 from backend.services.auth_service import AuthService
@@ -60,6 +61,7 @@ class CreateMappingRequest(BaseModel):
     Attributes:
         mapped_field: Target field information
         mapping_details: List of source fields with ordering and transformations
+        mapping_joins: Optional list of join conditions for multi-table mappings
     """
     mapped_field: MappedFieldCreateV2 = Field(
         ...,
@@ -69,6 +71,10 @@ class CreateMappingRequest(BaseModel):
         ...,
         description="Source fields with ordering (must have at least 1)",
         min_length=1
+    )
+    mapping_joins: Optional[List[MappingJoinCreateV2]] = Field(
+        default=[],
+        description="Join conditions for multi-table mappings"
     )
 
 
@@ -130,10 +136,12 @@ async def create_mapping(request: CreateMappingRequest = Body(...)):
     try:
         print(f"[Mapping V2 API] Creating mapping: {request.mapped_field.tgt_column_name}")
         print(f"[Mapping V2 API] Source fields: {len(request.mapping_details)}")
+        print(f"[Mapping V2 API] Join conditions: {len(request.mapping_joins or [])}")
         
         result = await mapping_service.create_mapping(
             mapped_field_data=request.mapped_field,
-            mapping_details=request.mapping_details
+            mapping_details=request.mapping_details,
+            mapping_joins=request.mapping_joins or []
         )
         
         print(f"[Mapping V2 API] Mapping created with ID: {result['mapping_id']}")

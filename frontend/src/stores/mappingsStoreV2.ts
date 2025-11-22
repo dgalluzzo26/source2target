@@ -17,6 +17,17 @@ export interface MappingDetailV2 {
   added_at?: string
 }
 
+export interface MappingJoinV2 {
+  mapping_join_id?: number
+  mapped_field_id?: number
+  left_table: string
+  left_column: string
+  right_table: string
+  right_column: string
+  join_type: string
+  join_order: number
+}
+
 export interface MappedFieldV2 {
   mapping_id?: number
   semantic_field_id: number
@@ -34,6 +45,7 @@ export interface MappedFieldV2 {
   mapped_at?: string
   mapped_by?: string
   source_fields: MappingDetailV2[]
+  mapping_joins?: MappingJoinV2[]
 }
 
 export interface Transformation {
@@ -233,6 +245,14 @@ export const useMappingsStoreV2 = defineStore('mappingsV2', () => {
             src_column_physical_name: sf.src_column_physical_name,
             field_order: sf.field_order,
             transformation_expr: sf.transformation_expr
+          })),
+          mapping_joins: (mappedField.mapping_joins || []).map(join => ({
+            left_table: join.left_table,
+            left_column: join.left_column,
+            right_table: join.right_table,
+            right_column: join.right_column,
+            join_type: join.join_type,
+            join_order: join.join_order
           }))
         })
       })

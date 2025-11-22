@@ -18,7 +18,8 @@ from backend.models.mapping_v2 import (
     MappedFieldV2,
     MappedFieldCreateV2,
     MappingDetailV2,
-    MappingDetailCreateV2
+    MappingDetailCreateV2,
+    MappingJoinCreateV2
 )
 from backend.services.config_service import ConfigService
 
@@ -82,9 +83,11 @@ class MappingServiceV2:
         http_path: str,
         mapped_fields_table: str,
         mapping_details_table: str,
+        mapping_joins_table: str,
         unmapped_fields_table: str,
         mapped_field_data: MappedFieldCreateV2,
-        mapping_details: List[MappingDetailCreateV2]
+        mapping_details: List[MappingDetailCreateV2],
+        mapping_joins: List[MappingJoinCreateV2]
     ) -> Dict[str, Any]:
         """
         Create a complete multi-field mapping (synchronous).
@@ -92,23 +95,27 @@ class MappingServiceV2:
         Transaction workflow:
         1. Insert into mapped_fields (get mapping_id)
         2. Insert all mapping_details records
-        3. Delete source fields from unmapped_fields
-        4. Commit transaction
+        3. Insert all mapping_joins records (if any)
+        4. Delete source fields from unmapped_fields
+        5. Commit transaction
         
         Args:
             server_hostname: Databricks workspace hostname
             http_path: SQL warehouse HTTP path
             mapped_fields_table: Fully qualified mapped_fields table name
             mapping_details_table: Fully qualified mapping_details table name
+            mapping_joins_table: Fully qualified mapping_joins table name
             unmapped_fields_table: Fully qualified unmapped_fields table name
             mapped_field_data: Mapped field data (target field info)
             mapping_details: List of mapping detail data (source fields)
+            mapping_joins: List of join definitions
         
         Returns:
             Dictionary with mapping_id and success message
         """
         print(f"[Mapping Service V2] Creating mapping: {mapped_field_data.tgt_table_name}.{mapped_field_data.tgt_column_name}")
         print(f"[Mapping Service V2] Source fields: {len(mapping_details)}")
+        print(f"[Mapping Service V2] Join conditions: {len(mapping_joins)}")
         
         connection = self._get_sql_connection(server_hostname, http_path)
         
@@ -179,7 +186,34 @@ class MappingServiceV2:
                 
                 print(f"[Mapping Service V2] Inserted {len(mapping_details)} mapping details")
                 
-                # Step 3: Delete source fields from unmapped_fields
+                # Step 3: Insert all mapping_joins (if any)
+                if mapping_joins:
+                    for join in mapping_joins:
+                        join_insert = f"""
+                        INSERT INTO {mapping_joins_table} (
+                            mapped_field_id,
+                            left_table,
+                            left_column,
+                            right_table,
+                            right_column,
+                            join_type,
+                            join_order
+                        ) VALUES (
+                            {mapped_field_id},
+                            '{join.left_table.replace("'", "''")}',
+                            '{join.left_column.replace("'", "''")}',
+                            '{join.right_table.replace("'", "''")}',
+                            '{join.right_column.replace("'", "''")}',
+                            '{join.join_type}',
+                            {join.join_order}
+                        )
+                        """
+                        
+                        cursor.execute(join_insert)
+                    
+                    print(f"[Mapping Service V2] Inserted {len(mapping_joins)} join conditions")
+                
+                # Step 4: Delete source fields from unmapped_fields
                 for detail in mapping_details:
                     delete_unmapped = f"""
                     DELETE FROM {unmapped_fields_table}
@@ -416,7 +450,8 @@ class MappingServiceV2:
     async def create_mapping(
         self,
         mapped_field_data: MappedFieldCreateV2,
-        mapping_details: List[MappingDetailCreateV2]
+        mapping_details: List[MappingDetailCreateV2],
+        mapping_joins: List[MappingJoinCreateV2] = []
     ) -> Dict[str, Any]:
         """
         Create a complete multi-field mapping (async).
@@ -424,6 +459,7 @@ class MappingServiceV2:
         Args:
             mapped_field_data: Target field information
             mapping_details: List of source field details with ordering
+            mapping_joins: Optional list of join conditions for multi-table mappings
         
         Returns:
             Dictionary with mapping_id and status
@@ -439,9 +475,11 @@ class MappingServiceV2:
                 db_config['http_path'],
                 db_config['mapped_fields_table'],
                 db_config['mapping_details_table'],
+                db_config['mapping_joins_table'],
                 db_config['unmapped_fields_table'],
                 mapped_field_data,
-                mapping_details
+                mapping_details,
+                mapping_joins
             )
         )
     
