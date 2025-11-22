@@ -138,16 +138,21 @@
             <Divider />
 
             <h4>V2 Table Configuration</h4>
+            <Message severity="info" :closable="false" class="table-config-note">
+              <strong>Note:</strong> Enter table names only. The catalog and schema specified above will be automatically prepended.
+              <br />
+              Example: Enter <code>semantic_fields</code> instead of <code>catalog.schema.semantic_fields</code>
+            </Message>
 
             <div class="field">
               <label for="semantic_fields_table">Semantic Fields Table</label>
               <InputText 
                 id="semantic_fields_table"
                 v-model="config.database.semantic_fields_table"
-                placeholder="catalog.schema.semantic_fields"
+                placeholder="semantic_fields"
                 class="w-full"
               />
-              <small>Target field definitions for AI mapping</small>
+              <small>Target field definitions for AI mapping (table name only)</small>
             </div>
 
             <div class="field">
@@ -155,10 +160,10 @@
               <InputText 
                 id="unmapped_fields_table"
                 v-model="config.database.unmapped_fields_table"
-                placeholder="catalog.schema.unmapped_fields"
+                placeholder="unmapped_fields"
                 class="w-full"
               />
-              <small>Source fields awaiting mapping</small>
+              <small>Source fields awaiting mapping (table name only)</small>
             </div>
 
             <div class="field">
@@ -166,10 +171,10 @@
               <InputText 
                 id="mapped_fields_table"
                 v-model="config.database.mapped_fields_table"
-                placeholder="catalog.schema.mapped_fields"
+                placeholder="mapped_fields"
                 class="w-full"
               />
-              <small>Target fields with completed mappings</small>
+              <small>Target fields with completed mappings (table name only)</small>
             </div>
 
             <div class="field">
@@ -177,10 +182,10 @@
               <InputText 
                 id="mapping_details_table"
                 v-model="config.database.mapping_details_table"
-                placeholder="catalog.schema.mapping_details"
+                placeholder="mapping_details"
                 class="w-full"
               />
-              <small>Source field details for each mapping (V2)</small>
+              <small>Source field details for each mapping (table name only)</small>
             </div>
 
             <div class="field">
@@ -188,10 +193,10 @@
               <InputText 
                 id="mapping_joins_table"
                 v-model="config.database.mapping_joins_table"
-                placeholder="catalog.schema.mapping_joins"
+                placeholder="mapping_joins"
                 class="w-full"
               />
-              <small>Join definitions for multi-table mappings (V2)</small>
+              <small>Join definitions for multi-table mappings (table name only)</small>
             </div>
 
             <div class="field">
@@ -199,10 +204,10 @@
               <InputText 
                 id="mapping_feedback_table"
                 v-model="config.database.mapping_feedback_table"
-                placeholder="catalog.schema.mapping_feedback"
+                placeholder="mapping_feedback"
                 class="w-full"
               />
-              <small>User feedback on AI suggestions</small>
+              <small>User feedback on AI suggestions (table name only)</small>
             </div>
 
             <div class="field">
@@ -210,10 +215,10 @@
               <InputText 
                 id="transformation_library_table"
                 v-model="config.database.transformation_library_table"
-                placeholder="catalog.schema.transformation_library"
+                placeholder="transformation_library"
                 class="w-full"
               />
-              <small>Reusable transformation templates</small>
+              <small>Reusable transformation templates (table name only)</small>
             </div>
           </div>
         </div>
@@ -734,6 +739,18 @@ onMounted(() => {
 .config-section p {
   margin: 0 0 1.5rem 0;
   color: var(--gainwell-text-secondary);
+}
+
+.table-config-note {
+  margin-bottom: 1.5rem;
+}
+
+.table-config-note code {
+  background: var(--surface-100);
+  padding: 0.125rem 0.375rem;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
 }
 
 .connection-help {
