@@ -20,10 +20,12 @@ export interface MappingDetailV2 {
 export interface MappingJoinV2 {
   mapping_join_id?: number
   mapped_field_id?: number
-  left_table: string
-  left_column: string
-  right_table: string
-  right_column: string
+  left_table_name: string
+  left_table_physical_name: string
+  left_join_column: string
+  right_table_name: string
+  right_table_physical_name: string
+  right_join_column: string
   join_type: string
   join_order: number
 }
@@ -247,10 +249,12 @@ export const useMappingsStoreV2 = defineStore('mappingsV2', () => {
             transformation_expr: sf.transformation_expr
           })),
           mapping_joins: (mappedField.mapping_joins || []).map(join => ({
-            left_table: join.left_table,
-            left_column: join.left_column,
-            right_table: join.right_table,
-            right_column: join.right_column,
+            left_table_name: join.left_table_name,
+            left_table_physical_name: join.left_table_physical_name,
+            left_join_column: join.left_join_column,
+            right_table_name: join.right_table_name,
+            right_table_physical_name: join.right_table_physical_name,
+            right_join_column: join.right_join_column,
             join_type: join.join_type,
             join_order: join.join_order
           }))

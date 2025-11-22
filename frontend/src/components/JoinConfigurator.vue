@@ -62,7 +62,7 @@
               <div class="join-side">
                 <label>Left Table</label>
                 <Dropdown 
-                  v-model="join.left_table" 
+                  v-model="join.left_table_name" 
                   :options="uniqueTables"
                   placeholder="Select left table"
                   @change="onTableChange(join, 'left')"
@@ -74,10 +74,10 @@
               <div class="join-side">
                 <label>Left Join Column</label>
                 <Dropdown 
-                  v-model="join.left_column" 
-                  :options="getColumnsForTable(join.left_table)"
+                  v-model="join.left_join_column" 
+                  :options="getColumnsForTable(join.left_table_name)"
                   placeholder="Select join column"
-                  :disabled="!join.left_table"
+                  :disabled="!join.left_table_name"
                   class="w-full"
                 />
               </div>
@@ -96,8 +96,8 @@
               <div class="join-side">
                 <label>Right Table</label>
                 <Dropdown 
-                  v-model="join.right_table" 
-                  :options="uniqueTables.filter(t => t !== join.left_table)"
+                  v-model="join.right_table_name" 
+                  :options="uniqueTables.filter(t => t !== join.left_table_name)"
                   placeholder="Select right table"
                   @change="onTableChange(join, 'right')"
                   class="w-full"
@@ -108,17 +108,17 @@
               <div class="join-side">
                 <label>Right Join Column</label>
                 <Dropdown 
-                  v-model="join.right_column" 
-                  :options="getColumnsForTable(join.right_table)"
+                  v-model="join.right_join_column" 
+                  :options="getColumnsForTable(join.right_table_name)"
                   placeholder="Select join column"
-                  :disabled="!join.right_table"
+                  :disabled="!join.right_table_name"
                   class="w-full"
                 />
               </div>
             </div>
 
             <!-- SQL Preview -->
-            <div v-if="join.left_table && join.left_column && join.right_table && join.right_column" class="sql-preview">
+            <div v-if="join.left_table_name && join.left_join_column && join.right_table_name && join.right_join_column" class="sql-preview">
               <label>SQL Preview:</label>
               <code>{{ getJoinSQL(join) }}</code>
             </div>
@@ -160,12 +160,12 @@ interface SourceField {
 }
 
 interface JoinDefinition {
-  left_table: string
-  left_table_physical: string
-  left_column: string
-  right_table: string
-  right_table_physical: string
-  right_column: string
+  left_table_name: string
+  left_table_physical_name: string
+  left_join_column: string
+  right_table_name: string
+  right_table_physical_name: string
+  right_join_column: string
   join_type: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL'
   join_order: number
 }
@@ -243,22 +243,22 @@ function getColumnsForTable(tableName: string): string[] {
 // Handle table selection change
 function onTableChange(join: JoinDefinition, side: 'left' | 'right') {
   if (side === 'left') {
-    join.left_table_physical = tablePhysicalNames.value[join.left_table] || join.left_table
-    join.left_column = '' // Reset column when table changes
+    join.left_table_physical_name = tablePhysicalNames.value[join.left_table_name] || join.left_table_name
+    join.left_join_column = '' // Reset column when table changes
   } else {
-    join.right_table_physical = tablePhysicalNames.value[join.right_table] || join.right_table
-    join.right_column = '' // Reset column when table changes
+    join.right_table_physical_name = tablePhysicalNames.value[join.right_table_name] || join.right_table_name
+    join.right_join_column = '' // Reset column when table changes
   }
 }
 
 function addJoin() {
   const newJoin: JoinDefinition = {
-    left_table: '',
-    left_table_physical: '',
-    left_column: '',
-    right_table: '',
-    right_table_physical: '',
-    right_column: '',
+    left_table_name: '',
+    left_table_physical_name: '',
+    left_join_column: '',
+    right_table_name: '',
+    right_table_physical_name: '',
+    right_join_column: '',
     join_type: 'INNER',
     join_order: localJoins.value.length + 1
   }
@@ -280,9 +280,9 @@ function emitJoins() {
 }
 
 function getJoinSQL(join: JoinDefinition): string {
-  const leftPhysical = join.left_table_physical || join.left_table
-  const rightPhysical = join.right_table_physical || join.right_table
-  return `${join.join_type} JOIN ${rightPhysical} ON ${leftPhysical}.${join.left_column} = ${rightPhysical}.${join.right_column}`
+  const leftPhysical = join.left_table_physical_name || join.left_table_name
+  const rightPhysical = join.right_table_physical_name || join.right_table_name
+  return `${join.join_type} JOIN ${rightPhysical} ON ${leftPhysical}.${join.left_join_column} = ${rightPhysical}.${join.right_join_column}`
 }
 
 function getFullJoinSQL(): string {
@@ -290,7 +290,7 @@ function getFullJoinSQL(): string {
   
   // Start with first table
   const firstJoin = localJoins.value[0]
-  const leftPhysical = firstJoin.left_table_physical || firstJoin.left_table
+  const leftPhysical = firstJoin.left_table_physical_name || firstJoin.left_table_name
   
   let sql = `FROM ${leftPhysical}\n`
   

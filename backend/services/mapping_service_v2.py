@@ -193,18 +193,22 @@ class MappingServiceV2:
                         join_insert = f"""
                         INSERT INTO {mapping_joins_table} (
                             mapped_field_id,
-                            left_table,
-                            left_column,
-                            right_table,
-                            right_column,
+                            left_table_name,
+                            left_table_physical_name,
+                            left_join_column,
+                            right_table_name,
+                            right_table_physical_name,
+                            right_join_column,
                             join_type,
                             join_order
                         ) VALUES (
                             {mapped_field_id},
-                            '{join.left_table.replace("'", "''")}',
-                            '{join.left_column.replace("'", "''")}',
-                            '{join.right_table.replace("'", "''")}',
-                            '{join.right_column.replace("'", "''")}',
+                            '{join.left_table_name.replace("'", "''")}',
+                            '{join.left_table_physical_name.replace("'", "''")}',
+                            '{join.left_join_column.replace("'", "''")}',
+                            '{join.right_table_name.replace("'", "''")}',
+                            '{join.right_table_physical_name.replace("'", "''")}',
+                            '{join.right_join_column.replace("'", "''")}',
                             '{join.join_type}',
                             {join.join_order}
                         )

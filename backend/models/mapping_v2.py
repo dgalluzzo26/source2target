@@ -273,10 +273,12 @@ class MappingJoinV2(BaseModel):
     Attributes:
         mapping_join_id: Unique identifier (auto-generated)
         mapped_field_id: FK to mapped_fields table
-        left_table: Left side of join (table name)
-        left_column: Left side of join (column name)
-        right_table: Right side of join (table name)
-        right_column: Right side of join (column name)
+        left_table_name: Left table logical name
+        left_table_physical_name: Left table physical name
+        left_join_column: Left side join column name
+        right_table_name: Right table logical name
+        right_table_physical_name: Right table physical name
+        right_join_column: Right side join column name
         join_type: Type of join (INNER, LEFT, RIGHT, FULL)
         join_order: Order in which joins are applied
         created_ts: Timestamp when created
@@ -285,10 +287,12 @@ class MappingJoinV2(BaseModel):
     
     mapping_join_id: Optional[int] = Field(None, description="Unique identifier (auto-generated)")
     mapped_field_id: int = Field(..., description="FK to mapped_fields table")
-    left_table: str = Field(..., description="Left table name")
-    left_column: str = Field(..., description="Left column name")
-    right_table: str = Field(..., description="Right table name")
-    right_column: str = Field(..., description="Right column name")
+    left_table_name: str = Field(..., description="Left table logical name")
+    left_table_physical_name: str = Field(..., description="Left table physical name")
+    left_join_column: str = Field(..., description="Left join column name")
+    right_table_name: str = Field(..., description="Right table logical name")
+    right_table_physical_name: str = Field(..., description="Right table physical name")
+    right_join_column: str = Field(..., description="Right join column name")
     join_type: str = Field(default="INNER", description="Join type (INNER, LEFT, RIGHT, FULL)")
     join_order: int = Field(..., description="Order in which joins are applied (1, 2, 3...)")
     created_ts: Optional[datetime] = Field(None, description="Creation timestamp")
@@ -297,10 +301,12 @@ class MappingJoinV2(BaseModel):
 class MappingJoinCreateV2(BaseModel):
     """Create request for mapping join."""
     mapped_field_id: Optional[int] = None  # Will be set by backend
-    left_table: str
-    left_column: str
-    right_table: str
-    right_column: str
+    left_table_name: str
+    left_table_physical_name: str
+    left_join_column: str
+    right_table_name: str
+    right_table_physical_name: str
+    right_join_column: str
     join_type: str = "INNER"
     join_order: int
 
