@@ -246,11 +246,10 @@ async def delete_mapping(mapping_id: int):
     """
     Delete a mapping by ID.
     
-    Deletes the mapping and all associated source field details.
-    Optionally restores source fields to unmapped_fields table.
+    Deletes the mapping and all associated source field details and join conditions.
     
     Args:
-        mapping_id: ID of the mapping to delete
+        mapping_id: ID of the mapping to delete (mapped_field_id)
     
     Returns:
         Success message

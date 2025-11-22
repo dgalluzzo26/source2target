@@ -408,17 +408,18 @@ class MappingServiceV2:
         http_path: str,
         mapped_fields_table: str,
         mapping_details_table: str,
+        mapping_joins_table: str,
         unmapped_fields_table: str,
-        mapping_id: int
+        mapped_field_id: int
     ) -> Dict[str, str]:
         """
         Delete a mapping and restore source fields to unmapped (synchronous).
         
         Transaction workflow:
         1. Get all source fields from mapping_details
-        2. Delete from mapping_details
-        3. Delete from mapped_fields
-        4. Restore source fields to unmapped_fields
+        2. Delete from mapping_joins (if any)
+        3. Delete from mapping_details
+        4. Delete from mapped_fields
         5. Commit transaction
         
         Args:
@@ -426,13 +427,14 @@ class MappingServiceV2:
             http_path: SQL warehouse HTTP path
             mapped_fields_table: Fully qualified mapped_fields table name
             mapping_details_table: Fully qualified mapping_details table name
+            mapping_joins_table: Fully qualified mapping_joins table name
             unmapped_fields_table: Fully qualified unmapped_fields table name
-            mapping_id: ID of the mapping to delete
+            mapped_field_id: ID of the mapping to delete
         
         Returns:
             Dictionary with status message
         """
-        print(f"[Mapping Service V2] Deleting mapping ID: {mapping_id}")
+        print(f"[Mapping Service V2] Deleting mapping ID: {mapped_field_id}")
         
         connection = self._get_sql_connection(server_hostname, http_path)
         
@@ -446,23 +448,23 @@ class MappingServiceV2:
                     src_column_name,
                     src_column_physical_name
                 FROM {mapping_details_table}
-                WHERE mapping_id = {mapping_id}
+                WHERE mapped_field_id = {mapped_field_id}
                 """
                 
                 cursor.execute(get_details)
                 source_fields = cursor.fetchall()
                 
-                # Step 2: Delete from mapping_details
-                delete_details = f"DELETE FROM {mapping_details_table} WHERE mapping_id = {mapping_id}"
+                # Step 2: Delete from mapping_joins (if any)
+                delete_joins = f"DELETE FROM {mapping_joins_table} WHERE mapped_field_id = {mapped_field_id}"
+                cursor.execute(delete_joins)
+                
+                # Step 3: Delete from mapping_details
+                delete_details = f"DELETE FROM {mapping_details_table} WHERE mapped_field_id = {mapped_field_id}"
                 cursor.execute(delete_details)
                 
-                # Step 3: Delete from mapped_fields
-                delete_mapped = f"DELETE FROM {mapped_fields_table} WHERE mapping_id = {mapping_id}"
+                # Step 4: Delete from mapped_fields
+                delete_mapped = f"DELETE FROM {mapped_fields_table} WHERE mapped_field_id = {mapped_field_id}"
                 cursor.execute(delete_mapped)
-                
-                # Step 4: Restore to unmapped_fields (optional - user may want to re-map)
-                # This would require having the original field metadata
-                # For now, we'll just delete the mapping
                 
                 connection.commit()
                 
@@ -470,7 +472,7 @@ class MappingServiceV2:
                 
                 return {
                     "status": "success",
-                    "message": f"Deleted mapping ID {mapping_id} with {len(source_fields)} source fields"
+                    "message": f"Deleted mapping ID {mapped_field_id} with {len(source_fields)} source fields"
                 }
                 
         except Exception as e:
@@ -542,12 +544,12 @@ class MappingServiceV2:
             )
         )
     
-    async def delete_mapping(self, mapping_id: int) -> Dict[str, str]:
+    async def delete_mapping(self, mapped_field_id: int) -> Dict[str, str]:
         """
         Delete a mapping by ID (async).
         
         Args:
-            mapping_id: ID of the mapping to delete
+            mapped_field_id: ID of the mapping to delete
         
         Returns:
             Dictionary with status message
@@ -563,8 +565,9 @@ class MappingServiceV2:
                 db_config['http_path'],
                 db_config['mapped_fields_table'],
                 db_config['mapping_details_table'],
+                db_config['mapping_joins_table'],
                 db_config['unmapped_fields_table'],
-                mapping_id
+                mapped_field_id
             )
         )
 
