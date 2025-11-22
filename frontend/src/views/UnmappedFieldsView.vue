@@ -464,10 +464,22 @@ async function handleBulkUpload() {
     
     const result = await response.json()
     
+    // Show success/skipped/error summary
+    const parts = []
+    if (result.success_count > 0) {
+      parts.push(`${result.success_count} imported`)
+    }
+    if (result.skipped_count > 0) {
+      parts.push(`${result.skipped_count} skipped (duplicates)`)
+    }
+    if (result.error_count > 0) {
+      parts.push(`${result.error_count} failed`)
+    }
+    
     toast.add({
-      severity: result.success_count > 0 ? 'success' : 'error',
+      severity: result.success_count > 0 ? 'success' : (result.skipped_count > 0 ? 'info' : 'error'),
       summary: 'Import Complete',
-      detail: `Imported ${result.success_count} fields. ${result.error_count > 0 ? `${result.error_count} failed.` : ''}`,
+      detail: parts.join(', '),
       life: 5000
     })
     

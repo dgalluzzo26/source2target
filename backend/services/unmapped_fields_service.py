@@ -166,6 +166,11 @@ class UnmappedFieldsService:
         """
         Insert a new unmapped field (synchronous, for thread pool).
         
+        Checks for duplicates before inserting. A duplicate is defined as:
+        - Same src_table_physical_name
+        - Same src_column_physical_name
+        - Same uploaded_by (user)
+        
         Args:
             server_hostname: Databricks workspace hostname
             http_path: SQL warehouse HTTP path
@@ -174,6 +179,9 @@ class UnmappedFieldsService:
             
         Returns:
             Dictionary with the inserted field data
+            
+        Raises:
+            Exception: If duplicate field already exists for this user
         """
         print(f"[Unmapped Fields Service] Inserting unmapped field: {field_data.src_table_name}.{field_data.src_column_name}")
         
@@ -181,6 +189,23 @@ class UnmappedFieldsService:
         
         try:
             with connection.cursor() as cursor:
+                # Check for duplicates
+                duplicate_check_query = f"""
+                SELECT COUNT(*) as count
+                FROM {unmapped_fields_table}
+                WHERE src_table_physical_name = '{field_data.src_table_physical_name.replace("'", "''")}'
+                  AND src_column_physical_name = '{field_data.src_column_physical_name.replace("'", "''")}'
+                  AND uploaded_by = '{field_data.uploaded_by.replace("'", "''")}'
+                """
+                
+                cursor.execute(duplicate_check_query)
+                result = cursor.fetchone()
+                duplicate_count = result[0] if result else 0
+                
+                if duplicate_count > 0:
+                    print(f"[Unmapped Fields Service] Duplicate field found: {field_data.src_table_physical_name}.{field_data.src_column_physical_name} for user {field_data.uploaded_by}")
+                    raise Exception(f"Field {field_data.src_table_name}.{field_data.src_column_name} already exists for this user")
+                
                 # Insert with auto-generated ID
                 query = f"""
                 INSERT INTO {unmapped_fields_table} (

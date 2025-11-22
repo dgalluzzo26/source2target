@@ -100,25 +100,27 @@ async def bulk_create_unmapped_fields(request: Request, fields: List[UnmappedFie
     Bulk create unmapped field records.
     
     Adds multiple source fields to the unmapped_fields table in one operation.
-    Used for CSV bulk upload.
+    Used for CSV bulk upload. Automatically skips duplicates (same table.column for same user).
     
     Args:
         request: FastAPI request (for user email)
         fields: List of unmapped field data to insert
         
     Returns:
-        Dictionary with success_count and error_count
+        Dictionary with success_count, skipped_count, error_count, and errors list
         
     Raises:
-        HTTPException: If bulk insert fails
+        HTTPException: If bulk insert fails completely
     """
     try:
         current_user_email = get_current_user_email(request)
         print(f"[Unmapped Fields API] Bulk creating {len(fields)} unmapped fields for user: {current_user_email}")
         
         success_count = 0
+        skipped_count = 0
         error_count = 0
         errors = []
+        skipped = []
         
         for field_data in fields:
             try:
@@ -128,13 +130,24 @@ async def bulk_create_unmapped_fields(request: Request, fields: List[UnmappedFie
                 await unmapped_fields_service.create_unmapped_field(field_data)
                 success_count += 1
             except Exception as e:
-                error_count += 1
-                errors.append(f"{field_data.src_table_name}.{field_data.src_column_name}: {str(e)}")
-                print(f"[Unmapped Fields API] Error creating field {field_data.src_table_name}.{field_data.src_column_name}: {str(e)}")
+                error_message = str(e)
+                # Check if it's a duplicate error
+                if "already exists" in error_message.lower():
+                    skipped_count += 1
+                    skipped.append(f"{field_data.src_table_name}.{field_data.src_column_name}")
+                    print(f"[Unmapped Fields API] Skipping duplicate: {field_data.src_table_name}.{field_data.src_column_name}")
+                else:
+                    error_count += 1
+                    errors.append(f"{field_data.src_table_name}.{field_data.src_column_name}: {error_message}")
+                    print(f"[Unmapped Fields API] Error creating field {field_data.src_table_name}.{field_data.src_column_name}: {error_message}")
+        
+        print(f"[Unmapped Fields API] Bulk upload complete - Success: {success_count}, Skipped: {skipped_count}, Errors: {error_count}")
         
         return {
             "success_count": success_count,
+            "skipped_count": skipped_count,
             "error_count": error_count,
+            "skipped": skipped if skipped else None,
             "errors": errors if errors else None
         }
     except Exception as e:
