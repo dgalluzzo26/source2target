@@ -422,7 +422,7 @@ function handleNext() {
     
     // Validate that all joins have required fields
     const incompleteJoins = joinDefinitions.value.filter(join => 
-      !join.left_table || !join.left_column || !join.right_table || !join.right_column
+      !join.left_table_name || !join.left_join_column || !join.right_table_name || !join.right_join_column
     )
     
     if (incompleteJoins.length > 0) {
