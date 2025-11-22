@@ -254,24 +254,27 @@ class MappingServiceV2:
         http_path: str,
         mapped_fields_table: str,
         mapping_details_table: str,
+        mapping_joins_table: str,
         user_filter: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Get all mappings with their source fields (synchronous).
+        Get all mappings with their source fields and joins (synchronous).
         
         Returns a list of mappings where each mapping includes:
         - Target field info (from mapped_fields)
         - List of source fields (from mapping_details)
+        - List of join conditions (from mapping_joins)
         
         Args:
             server_hostname: Databricks workspace hostname
             http_path: SQL warehouse HTTP path
             mapped_fields_table: Fully qualified mapped_fields table name
             mapping_details_table: Fully qualified mapping_details table name
+            mapping_joins_table: Fully qualified mapping_joins table name
             user_filter: Optional email filter (None for admins to see all)
         
         Returns:
-            List of mapping dictionaries with nested source_fields
+            List of mapping dictionaries with nested source_fields and mapping_joins
         """
         if user_filter:
             print(f"[Mapping Service V2] Fetching mappings for user: {user_filter}")
@@ -362,10 +365,35 @@ class MappingServiceV2:
                             'added_at': record['added_at']
                         })
                 
+                # Fetch joins for each mapping (from mapping_joins table)
+                for mapping_id, mapping_data in mappings_dict.items():
+                    join_query = f"""
+                    SELECT 
+                        mapping_join_id,
+                        left_table_name,
+                        left_table_physical_name,
+                        left_join_column,
+                        right_table_name,
+                        right_table_physical_name,
+                        right_join_column,
+                        join_type,
+                        join_order
+                    FROM {mapping_joins_table}
+                    WHERE mapped_field_id = {mapping_id}
+                    ORDER BY join_order
+                    """
+                    
+                    cursor.execute(join_query)
+                    join_rows = cursor.fetchall()
+                    join_columns = [desc[0] for desc in cursor.description]
+                    
+                    mapping_data['mapping_joins'] = [
+                        dict(zip(join_columns, join_row))
+                        for join_row in join_rows
+                    ]
+                
                 result = list(mappings_dict.values())
                 print(f"[Mapping Service V2] Found {len(result)} mappings")
-                return result
-                
                 return result
                 
         except Exception as e:
@@ -490,13 +518,13 @@ class MappingServiceV2:
     
     async def get_all_mappings(self, user_filter: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Get all mappings with their source fields (async).
+        Get all mappings with their source fields and joins (async).
         
         Args:
             user_filter: Optional email filter (None for admins to see all)
         
         Returns:
-            List of mapping dictionaries with nested source_fields
+            List of mapping dictionaries with nested source_fields and mapping_joins
         """
         db_config = self._get_db_config()
         
@@ -509,6 +537,7 @@ class MappingServiceV2:
                 db_config['http_path'],
                 db_config['mapped_fields_table'],
                 db_config['mapping_details_table'],
+                db_config['mapping_joins_table'],
                 user_filter
             )
         )

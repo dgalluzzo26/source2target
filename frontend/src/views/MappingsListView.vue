@@ -225,6 +225,28 @@
           </div>
         </div>
 
+        <!-- Join Conditions Section (if multi-table) -->
+        <div v-if="selectedMapping.joins && selectedMapping.joins.length > 0" class="detail-section">
+          <h3><i class="pi pi-share-alt"></i> Join Conditions</h3>
+          <div class="joins-list">
+            <div 
+              v-for="(join, idx) in selectedMapping.joins" 
+              :key="idx" 
+              class="join-item"
+            >
+              <Badge :value="`${idx + 1}`" severity="info" class="join-order-badge" />
+              <div class="join-details">
+                <div class="join-sql">
+                  <strong>{{ join.join_type }} JOIN</strong>
+                  {{ join.right_table_name }} 
+                  <span class="join-on">ON</span>
+                  {{ join.left_table_name }}.{{ join.left_join_column }} = {{ join.right_table_name }}.{{ join.right_join_column }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Concatenation Section -->
         <div class="detail-section">
           <h3><i class="pi pi-link"></i> Concatenation Strategy</h3>
@@ -312,7 +334,8 @@ const mappings = computed(() => {
     status: m.mapping_status || 'Active',
     created_at: m.mapped_at || new Date().toISOString(),
     mapped_by: m.mapped_by,
-    sql_expression: m.transformation_expression
+    sql_expression: m.transformation_expression,
+    joins: m.mapping_joins || []
   }))
 })
 
@@ -677,6 +700,48 @@ function handleCreateNew() {
   font-size: 0.85rem;
   color: var(--text-color-secondary);
   font-family: 'Courier New', monospace;
+}
+
+/* Join Conditions Styles */
+.joins-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.join-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: var(--blue-50);
+  border-left: 3px solid var(--blue-500);
+  border-radius: 6px;
+}
+
+.join-order-badge {
+  flex-shrink: 0;
+}
+
+.join-details {
+  flex: 1;
+}
+
+.join-sql {
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.join-sql strong {
+  color: var(--blue-600);
+  font-weight: 700;
+}
+
+.join-sql .join-on {
+  color: var(--blue-700);
+  font-weight: 600;
+  padding: 0 0.25rem;
 }
 
 .sql-expression {
