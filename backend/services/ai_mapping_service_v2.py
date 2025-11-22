@@ -49,9 +49,9 @@ class AIMappingServiceV2:
         return {
             "server_hostname": config.database.server_hostname,
             "http_path": config.database.http_path,
-            "semantic_fields_table": config.database.semantic_fields_table,
-            "mapped_fields_table": config.database.mapped_fields_table,
-            "mapping_details_table": config.database.mapping_details_table
+            "semantic_fields_table": self.config_service.get_fully_qualified_table_name(config.database.semantic_fields_table),
+            "mapped_fields_table": self.config_service.get_fully_qualified_table_name(config.database.mapped_fields_table),
+            "mapping_details_table": self.config_service.get_fully_qualified_table_name(config.database.mapping_details_table)
         }
     
     def _get_vector_search_config(self) -> Dict[str, str]:

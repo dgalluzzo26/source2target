@@ -37,7 +37,7 @@ class TransformationService:
         return {
             "server_hostname": config.database.server_hostname,
             "http_path": config.database.http_path,
-            "transformation_library_table": config.database.transformation_library_table
+            "transformation_library_table": self.config_service.get_fully_qualified_table_name(config.database.transformation_library_table)
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):

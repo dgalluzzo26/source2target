@@ -37,7 +37,7 @@ class FeedbackService:
         return {
             "server_hostname": config.database.server_hostname,
             "http_path": config.database.http_path,
-            "mapping_feedback_table": config.database.mapping_feedback_table
+            "mapping_feedback_table": self.config_service.get_fully_qualified_table_name(config.database.mapping_feedback_table)
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):

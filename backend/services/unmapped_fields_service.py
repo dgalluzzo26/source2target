@@ -44,7 +44,7 @@ class UnmappedFieldsService:
         return {
             "server_hostname": config.database.server_hostname,
             "http_path": config.database.http_path,
-            "unmapped_fields_table": config.database.unmapped_fields_table
+            "unmapped_fields_table": self.config_service.get_fully_qualified_table_name(config.database.unmapped_fields_table)
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):
