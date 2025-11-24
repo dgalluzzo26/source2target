@@ -285,6 +285,186 @@
         <Button label="Delete" icon="pi pi-trash" @click="handleDelete(selectedMapping); showDetailsDialog = false" severity="danger" />
       </template>
     </Dialog>
+
+    <!-- Edit Mapping Dialog -->
+    <Dialog 
+      v-model:visible="showEditDialog" 
+      modal 
+      header="Edit Mapping" 
+      :style="{ width: '800px' }"
+      :breakpoints="{ '1199px': '90vw', '575px': '95vw' }"
+      @hide="resetEditForm"
+    >
+      <div v-if="editFormData" class="edit-mapping-form">
+        
+        <!-- Target Field (Read-Only) -->
+        <div class="form-section">
+          <div class="section-header">
+            <i class="pi pi-map-marker"></i>
+            <h3>Target Field (Read-Only)</h3>
+          </div>
+          <Message severity="info" :closable="false">
+            To change the target field, you must delete this mapping and create a new one.
+          </Message>
+          <div class="readonly-field">
+            <div class="field-item">
+              <label>Table:</label>
+              <span>{{ editFormData.target_table }}</span>
+            </div>
+            <div class="field-item">
+              <label>Column:</label>
+              <span>{{ editFormData.target_column }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Source Fields with Transformations -->
+        <div class="form-section">
+          <div class="section-header">
+            <i class="pi pi-database"></i>
+            <h3>Source Fields</h3>
+          </div>
+          <Message severity="warn" :closable="false">
+            Cannot add, remove, or reorder source fields. Only transformations can be edited.
+          </Message>
+          
+          <div v-for="(field, index) in editFormData.source_fields" :key="field.detail_id" class="source-field-edit">
+            <div class="field-header">
+              <Badge :value="field.field_order" severity="info" />
+              <strong>{{ field.src_column_name }}</strong>
+              <span class="table-name">({{ field.src_table_name }})</span>
+            </div>
+            
+            <div class="field">
+              <label :for="`transformation-${field.detail_id}`">Transformation</label>
+              <Dropdown
+                :id="`transformation-${field.detail_id}`"
+                v-model="field.transformation_expr"
+                :options="transformationOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Select transformation or enter custom"
+                editable
+                class="w-full"
+              >
+                <template #value="slotProps">
+                  <span v-if="slotProps.value">{{ slotProps.value }}</span>
+                  <span v-else class="placeholder-text">No transformation</span>
+                </template>
+              </Dropdown>
+              <small class="field-hint">Choose from library or enter custom SQL expression</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- Concatenation Strategy -->
+        <div class="form-section">
+          <div class="section-header">
+            <i class="pi pi-link"></i>
+            <h3>Concatenation</h3>
+          </div>
+          
+          <div class="field">
+            <label for="concat-strategy">Strategy</label>
+            <Dropdown
+              id="concat-strategy"
+              v-model="editFormData.concat_strategy"
+              :options="concatStrategyOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Select strategy"
+              class="w-full"
+            />
+            <small class="field-hint">How to combine multiple source fields</small>
+          </div>
+
+          <div v-if="editFormData.concat_strategy === 'CUSTOM'" class="field">
+            <label for="concat-separator">Custom Separator</label>
+            <InputText
+              id="concat-separator"
+              v-model="editFormData.concat_separator"
+              placeholder="Enter custom separator (e.g., ' - ', '|')"
+              class="w-full"
+            />
+          </div>
+        </div>
+
+        <!-- Join Conditions -->
+        <div class="form-section">
+          <div class="section-header">
+            <i class="pi pi-sitemap"></i>
+            <h3>Join Conditions</h3>
+            <Button 
+              icon="pi pi-plus" 
+              label="Add Join"
+              size="small"
+              @click="addJoinCondition"
+            />
+          </div>
+
+          <div v-if="editFormData.joins && editFormData.joins.length > 0" class="joins-list">
+            <div v-for="(join, index) in editFormData.joins" :key="index" class="join-item">
+              <div class="join-fields">
+                <div class="field">
+                  <label>Left Table</label>
+                  <InputText v-model="join.left_table" placeholder="table_name" class="w-full" />
+                </div>
+                <div class="field">
+                  <label>Left Column</label>
+                  <InputText v-model="join.left_column" placeholder="column_name" class="w-full" />
+                </div>
+                <div class="field">
+                  <label>Join Type</label>
+                  <Dropdown
+                    v-model="join.join_type"
+                    :options="['INNER', 'LEFT', 'RIGHT', 'FULL']"
+                    placeholder="JOIN"
+                    class="w-full"
+                  />
+                </div>
+                <div class="field">
+                  <label>Right Table</label>
+                  <InputText v-model="join.right_table" placeholder="table_name" class="w-full" />
+                </div>
+                <div class="field">
+                  <label>Right Column</label>
+                  <InputText v-model="join.right_column" placeholder="column_name" class="w-full" />
+                </div>
+                <div class="field">
+                  <label>&nbsp;</label>
+                  <Button 
+                    icon="pi pi-trash" 
+                    severity="danger"
+                    text
+                    @click="removeJoinCondition(index)"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div v-else class="no-joins">
+            <p>No join conditions defined. Click "Add Join" to create one.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <template #footer>
+        <Button 
+          label="Cancel" 
+          icon="pi pi-times" 
+          @click="showEditDialog = false" 
+          severity="secondary"
+        />
+        <Button 
+          label="Save Changes" 
+          icon="pi pi-check" 
+          @click="saveEditedMapping"
+          :loading="savingEdit"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -298,6 +478,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
+import Dropdown from 'primevue/dropdown'
 import Tag from 'primevue/tag'
 import Badge from 'primevue/badge'
 import Message from 'primevue/message'
@@ -305,6 +486,7 @@ import ProgressSpinner from 'primevue/progressspinner'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Dialog from 'primevue/dialog'
+import api from '@/services/api'
 
 const router = useRouter()
 const confirm = useConfirm()
@@ -315,6 +497,30 @@ const mappingsStore = useMappingsStoreV2()
 const searchQuery = ref('')
 const showDetailsDialog = ref(false)
 const selectedMapping = ref<any>(null)
+const showEditDialog = ref(false)
+const editFormData = ref<any>(null)
+const savingEdit = ref(false)
+const transformations = ref<any[]>([])
+
+// Concat strategy options
+const concatStrategyOptions = [
+  { label: 'Space ( )', value: 'SPACE' },
+  { label: 'Comma (,)', value: 'COMMA' },
+  { label: 'Pipe (|)', value: 'PIPE' },
+  { label: 'Custom', value: 'CUSTOM' },
+  { label: 'None (no concat)', value: 'NONE' }
+]
+
+// Computed transformation options for dropdown
+const transformationOptions = computed(() => {
+  const options = transformations.value.map(t => ({
+    label: `${t.transformation_name} - ${t.transformation_expression}`,
+    value: t.transformation_expression
+  }))
+  // Add "No transformation" option
+  options.unshift({ label: 'No transformation', value: '' })
+  return options
+})
 
 // Transform store mappings to view format
 const mappings = computed(() => {
@@ -358,7 +564,10 @@ const filteredMappings = computed(() => {
 })
 
 onMounted(async () => {
-  await fetchMappings()
+  await Promise.all([
+    fetchMappings(),
+    loadTransformations()
+  ])
 })
 
 async function fetchMappings() {
@@ -420,14 +629,114 @@ function handleView(mapping: any) {
 }
 
 function handleEdit(mapping: any) {
-  toast.add({
-    severity: 'warn',
-    summary: 'Not Yet Implemented',
-    detail: 'Mapping edit functionality is coming soon',
-    life: 3000
+  // Close details dialog if open
+  showDetailsDialog.value = false
+  
+  // Clone the mapping data for editing
+  editFormData.value = {
+    mapping_id: mapping.id,
+    target_table: mapping.target_table,
+    target_column: mapping.target_column,
+    concat_strategy: mapping.concat_strategy || 'SPACE',
+    concat_separator: mapping.concat_separator || '',
+    source_fields: mapping.source_fields.map((sf: any) => ({
+      detail_id: sf.detail_id,
+      src_table_name: sf.src_table_name,
+      src_column_name: sf.src_column_name,
+      field_order: sf.field_order,
+      transformation_expr: sf.transformation_expr || ''
+    })),
+    joins: mapping.mapping_joins ? mapping.mapping_joins.map((j: any) => ({
+      left_table: j.left_table,
+      left_column: j.left_column,
+      right_table: j.right_table,
+      right_column: j.right_column,
+      join_type: j.join_type
+    })) : []
+  }
+  
+  showEditDialog.value = true
+}
+
+function resetEditForm() {
+  editFormData.value = null
+}
+
+function addJoinCondition() {
+  if (!editFormData.value.joins) {
+    editFormData.value.joins = []
+  }
+  editFormData.value.joins.push({
+    left_table: '',
+    left_column: '',
+    right_table: '',
+    right_column: '',
+    join_type: 'LEFT'
   })
-  // TODO: Implement edit functionality - navigate to edit wizard
-  // router.push({ name: 'mapping-edit', params: { id: mapping.id } })
+}
+
+function removeJoinCondition(index: number) {
+  editFormData.value.joins.splice(index, 1)
+}
+
+async function saveEditedMapping() {
+  if (!editFormData.value) return
+  
+  savingEdit.value = true
+  
+  try {
+    // Build transformation updates object (detail_id -> transformation_expr)
+    const transformation_updates: Record<number, string> = {}
+    editFormData.value.source_fields.forEach((field: any) => {
+      transformation_updates[field.detail_id] = field.transformation_expr || ''
+    })
+    
+    // Build request body
+    const updateRequest = {
+      concat_strategy: editFormData.value.concat_strategy,
+      concat_separator: editFormData.value.concat_strategy === 'CUSTOM' ? editFormData.value.concat_separator : null,
+      transformation_updates,
+      mapping_joins: editFormData.value.joins.length > 0 ? editFormData.value.joins : []
+    }
+    
+    console.log('Updating mapping:', editFormData.value.mapping_id, updateRequest)
+    
+    // Call API
+    await api.put(`/api/v2/mappings/${editFormData.value.mapping_id}`, updateRequest)
+    
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Mapping updated successfully',
+      life: 3000
+    })
+    
+    // Close dialog and refresh
+    showEditDialog.value = false
+    await fetchMappings()
+    
+  } catch (error: any) {
+    console.error('Error updating mapping:', error)
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: error.response?.data?.detail || 'Failed to update mapping',
+      life: 5000
+    })
+  } finally {
+    savingEdit.value = false
+  }
+}
+
+async function loadTransformations() {
+  try {
+    const response = await api.get('/api/v2/transformations/')
+    transformations.value = response.data
+    console.log(`Loaded ${transformations.value.length} transformations`)
+  } catch (error) {
+    console.error('Error loading transformations:', error)
+    // Non-critical error, user can still enter custom transformations
+  }
 }
 
 function handleDelete(mapping: any) {
@@ -778,6 +1087,161 @@ function handleCreateNew() {
   
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Edit Mapping Dialog Styles */
+.edit-mapping-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-section {
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  padding: 1rem;
+  background: var(--surface-50);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.section-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-color);
+}
+
+.section-header i {
+  color: var(--primary-color);
+}
+
+.readonly-field {
+  display: flex;
+  gap: 2rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--surface-100);
+  border-radius: 6px;
+}
+
+.field-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.field-item label {
+  font-weight: 600;
+  color: var(--text-color-secondary);
+}
+
+.field-item span {
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.source-field-edit {
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  background: white;
+}
+
+.field-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 1rem;
+}
+
+.table-name {
+  color: var(--text-color-secondary);
+  font-size: 0.9rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.field label {
+  font-weight: 500;
+  color: var(--text-color);
+  font-size: 0.95rem;
+}
+
+.field-hint {
+  color: var(--text-color-secondary);
+  font-size: 0.85rem;
+  margin-top: -0.25rem;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.placeholder-text {
+  color: var(--text-color-secondary);
+  font-style: italic;
+}
+
+.joins-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.join-item {
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 1rem;
+  background: white;
+}
+
+.join-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto 1fr 1fr auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.no-joins {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-color-secondary);
+}
+
+.no-joins p {
+  margin: 0;
+}
+
+@media (max-width: 968px) {
+  .join-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .readonly-field {
+    flex-direction: column;
+    gap: 0.75rem;
   }
 }
 </style>
