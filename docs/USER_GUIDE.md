@@ -1,28 +1,33 @@
-# Source-to-Target Mapping Tool - User Guide
+# Source-to-Target Mapping Platform - User Guide
 
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Getting Started](#getting-started)
 3. [Dashboard Overview](#dashboard-overview)
-4. [Field Mapping](#field-mapping)
-5. [AI-Powered Mapping](#ai-powered-mapping)
-6. [Manual Search](#manual-search)
-7. [Managing Mappings](#managing-mappings)
-8. [Templates](#templates)
-9. [FAQ](#faq)
+4. [Creating Mappings](#creating-mappings)
+5. [Multi-Field Mappings](#multi-field-mappings)
+6. [Using Transformations](#using-transformations)
+7. [AI-Powered Suggestions](#ai-powered-suggestions)
+8. [Manual Search](#manual-search)
+9. [Managing Mappings](#managing-mappings)
+10. [Editing Mappings](#editing-mappings)
+11. [Best Practices](#best-practices)
+12. [FAQ](#faq)
 
 ---
 
 ## Introduction
 
-The Source-to-Target Mapping Tool helps you map source database fields to target semantic fields using AI-powered suggestions and manual search capabilities. This tool streamlines the data mapping process and ensures consistency across your data integration projects.
+The Source-to-Target Mapping Platform helps you map source database fields to target semantic fields using AI-powered suggestions and manual search capabilities. **Version 2.0** introduces multi-field mapping, transformation library, and mapping editing capabilities.
 
 ### Key Features
 - 🤖 **AI-Powered Suggestions**: Get intelligent field mapping recommendations
+- 🔄 **Multi-Field Mapping**: Map multiple source fields to one target field
+- 🔧 **Transformation Library**: Apply pre-built or custom SQL transformations
+- ✏️ **Mapping Editor**: Edit transformations and join conditions without recreating
+- 🔗 **Join Support**: Define joins across multiple source tables
 - 🔍 **Manual Search**: Search and select target fields manually
 - 📊 **Real-Time Status**: Monitor system health and configuration
-- 📁 **Bulk Operations**: Upload/download field mappings via CSV templates
-- 🔒 **User Permissions**: Role-based access control for admins and users
 
 ---
 
@@ -34,304 +39,381 @@ The Source-to-Target Mapping Tool helps you map source database fields to target
 3. Your user type (Admin/User) will be displayed in the header
 
 ### User Roles
-- **Admin**: Full access to all features including configuration and semantic table management
-- **User**: Access to field mapping features only
+- **Admin**: Full access including transformation library management
+- **User**: Access to all mapping features
+
+### Navigation Menu
+- **Home**: System status and quick links
+- **Create Mappings**: Main workspace for creating new mappings
+- **View Mappings**: Browse and manage existing mappings
+- **Semantic Fields** (Admin): Manage target field definitions
+- **Admin Tools** (Admin): Transformation library management
+- **Settings** (Admin): System configuration
 
 ---
 
 ## Dashboard Overview
 
-The main navigation menu provides access to:
+### Home Page
+The home page shows system status indicators:
 
-### 📊 Introduction
-- System status overview
-- Quick access to key features
-- System health indicators:
-  - Database Connection
-  - Vector Search Status
-  - AI Model Status
-  - Configuration Validity
+- **Database Connection**: SQL warehouse connectivity
+- **Vector Search Status**: AI search engine availability
+- **AI Model Status**: Suggestion engine readiness
+- **Configuration Validity**: System settings verification
 
-### 🗺️ Field Mapping
-Your primary workspace for mapping source fields to target fields.
-
-### ⚙️ Configuration (Admin Only)
-- Database settings
-- Vector Search configuration
-- AI Model configuration
-- Admin group settings
-
-### 📋 Semantic Table (Admin Only)
-- View and manage semantic field definitions
-- Add, edit, and delete semantic records
+All should show green ✅ for optimal performance. Contact your administrator if any checks fail.
 
 ---
 
-## Field Mapping
+## Creating Mappings
 
-The Field Mapping page is divided into three main sections:
+### Workflow Overview
+1. Select source field(s) from unmapped fields
+2. Choose target field (AI suggestions or manual search)
+3. Configure transformations and concatenation
+4. Define join conditions (if needed)
+5. Save mapping
 
-### 1. Unmapped Fields
-**Purpose**: Shows source fields that haven't been mapped to target fields yet.
+### Step-by-Step Process
 
-**Features**:
-- Search/filter unmapped fields
-- View field metadata (name, datatype, nullable, comments)
-- Select a field to start mapping
+#### 1. Access Create Mappings Page
+- Click **"Create Mappings"** in the sidebar
+- View your unmapped source fields table
+- Use search to filter specific fields
 
-**How to Use**:
-1. Browse or search for an unmapped field
-2. Click on a row to select it
-3. The selected field will be highlighted
-4. Use AI Suggestions or Manual Search to find a target field
+#### 2. Select Source Fields
+**Single Field:**
+- Click checkbox next to one field
+- Click **"Map Selected Fields"** button
 
-### 2. Mapped Fields
-**Purpose**: Shows source fields that have already been mapped.
+**Multiple Fields:**
+- Click checkboxes next to related fields (e.g., FIRST_NAME, LAST_NAME)
+- Click **"Map Selected Fields"** button
+- These will be combined into one target field
 
-**Features**:
-- View existing mappings
-- Search/filter mapped fields
-- Delete mappings (unmaps the field)
+#### 3. Choose Target Field
 
-**How to Delete a Mapping**:
-1. Find the mapped field
-2. Click the trash icon in the Actions column
-3. Confirm the deletion
-4. The field will move back to Unmapped Fields
+**Option A: AI Suggestions**
+1. Review AI configuration settings
+2. Click **"🤖 Get AI Suggestions"**
+3. Wait 15-25 seconds
+4. Review suggestions with confidence scores
+5. Click **"Select"** on best match
 
-### 3. Selected Field Details
-When you select an unmapped field, this section displays:
-- Source table and column names
-- Physical names
-- Data type
-- Nullable status
-- Comments/description
+**Option B: Manual Search**
+1. Enter search term in search box
+2. Click **"🔍 Search"**
+3. Browse results
+4. Click **"Select"** on desired field
+
+#### 4. Configure Mapping
+The mapping configuration wizard opens with selected fields.
 
 ---
 
-## AI-Powered Mapping
+## Multi-Field Mappings
 
-### How AI Suggestions Work
-The AI system uses:
+### What is Multi-Field Mapping?
+Combine multiple source fields into a single target field with customizable concatenation and transformations.
+
+### Use Cases
+- **Full Name**: FIRST_NAME + LAST_NAME → full_name
+- **Address**: STREET + CITY + STATE + ZIP → full_address
+- **Date-Time**: DATE + TIME → datetime_stamp
+- **Identifiers**: PREFIX + ID + SUFFIX → complete_id
+
+### Concatenation Strategies
+
+#### SPACE
+Joins fields with a single space.
+```
+John + Doe = "John Doe"
+```
+
+#### COMMA
+Joins fields with comma and space.
+```
+John + Doe = "John, Doe"
+```
+
+#### PIPE
+Joins fields with pipe delimiter.
+```
+John + Doe = "John|Doe"
+```
+
+#### CUSTOM
+Use your own separator.
+```
+Separator: " - "
+John + Doe = "John - Doe"
+```
+
+#### NONE
+No concatenation (useful for overwrite scenarios).
+```
+John + Doe = "Doe" (uses last field)
+```
+
+### Field Order
+Fields are concatenated in the order you selected them. Order is preserved and displayed as badges (1️⃣, 2️⃣, 3️⃣, etc.).
+
+---
+
+## Using Transformations
+
+### What are Transformations?
+SQL expressions applied to source fields before mapping. Transform data to match target requirements.
+
+### Transformation Library
+Pre-built transformations managed by administrators:
+
+#### String Transformations
+- **TRIM**: Remove leading/trailing whitespace
+- **UPPER**: Convert to uppercase
+- **LOWER**: Convert to lowercase
+- **INITCAP**: Capitalize first letter of each word
+- **TRIM_UPPER**: Trim and convert to uppercase
+- **TRIM_LOWER**: Trim and convert to lowercase
+
+#### Data Type Conversions
+- **CAST_STRING**: Convert to string
+- **CAST_INT**: Convert to integer
+- **CAST_DATE**: Convert to date
+- **CAST_TIMESTAMP**: Convert to timestamp
+
+#### Null Handling
+- **COALESCE**: Replace NULL with empty string
+- **COALESCE_ZERO**: Replace NULL with zero
+
+#### Custom Transformations
+Enter any valid SQL expression using `{field}` as placeholder.
+
+### Applying Transformations
+
+#### In Mapping Wizard
+1. For each source field, find the transformation dropdown
+2. Select from library or choose custom
+3. Enter custom SQL if needed
+4. Preview shows the expression
+
+#### Example: Clean and Uppercase Name
+```
+Source: first_name
+Transformation: TRIM_UPPER
+Result: UPPER(TRIM(first_name))
+```
+
+#### Example: Custom Phone Format
+```
+Source: phone_number
+Transformation: Custom
+Expression: REGEXP_REPLACE({field}, '[^0-9]', '')
+Result: REGEXP_REPLACE(phone_number, '[^0-9]', '')
+```
+
+### Transformation Expression Preview
+The final SQL expression is shown in the mapping wizard, combining:
+- Individual field transformations
+- Concatenation strategy
+- Join conditions (if applicable)
+
+---
+
+## AI-Powered Suggestions
+
+### How AI Works
 1. **Vector Search**: Finds semantically similar target fields
-2. **Confidence Scores**: Ranks suggestions by relevance
-3. **Context**: Uses field names, descriptions, and data types
+2. **Confidence Scoring**: Ranks matches by relevance
+3. **Context Analysis**: Uses field names, descriptions, and data types
 
 ### Using AI Suggestions
 
-#### Step 1: Configure AI Settings
-- **Number of Vector Results**: How many candidates to retrieve (default: 25)
-- **Number of AI Results**: How many suggestions to display (default: 10)
-- **User Feedback**: Optional text to guide the AI (e.g., "Focus on patient fields")
+#### Configuration Options
+- **Number of Vector Results**: Candidates to retrieve (default: 25)
+- **Number of AI Results**: Suggestions to display (default: 10)
+- **User Feedback**: Optional context (e.g., "Focus on patient fields", "Date fields only")
 
-#### Step 2: Generate Suggestions
-1. Select an unmapped source field
-2. Adjust AI settings if needed
-3. Click "🤖 Generate AI Mapping Suggestions"
-4. Wait for suggestions to load
+#### Generating Suggestions
+1. Select source field(s)
+2. Click "Map Selected Fields"
+3. Click **"🤖 Get AI Suggestions"**
+4. Wait for processing (15-25 seconds)
 
-#### Step 3: Review Suggestions
-Each suggestion shows:
-- **Rank**: Order by confidence score
-- **Target Table**: Logical table name
-- **Target Column**: Logical column name
+#### Reviewing Suggestions
+Each suggestion displays:
+- **Rank**: Order by confidence
+- **Target Table & Column**: Destination field
 - **Physical Names**: Actual database names
-- **Confidence Score**: How confident the AI is (0-1 scale)
-- **Reasoning**: Why this mapping was suggested
+- **Confidence Score**: 0.0 to 1.0 scale
+  - 0.8-1.0: Excellent match
+  - 0.6-0.8: Good match
+  - 0.4-0.6: Possible match
+  - <0.4: Consider manual search
+- **Reasoning**: Why this match was suggested
 
-#### Step 4: Select a Mapping
-1. Review the suggestions
-2. Click "Select Target" on the best match
-3. The mapping is saved automatically
-4. The field moves from Unmapped to Mapped
+#### Selecting a Suggestion
+1. Review top 3-5 suggestions
+2. Check confidence scores
+3. Read reasoning
+4. Click **"Select"** on best match
+5. Proceed to mapping configuration
 
-### Tips for Best Results
-- ✅ Fill in source field comments/descriptions when possible
-- ✅ Use User Feedback to provide context
-- ✅ Review confidence scores - higher is better
-- ✅ Start with AI suggestions before manual search
+### Tips for Better Suggestions
+- ✅ Select related fields together for multi-field suggestions
+- ✅ Provide clear, descriptive source field names
+- ✅ Use the User Feedback field for context
+- ✅ Ensure source fields have good descriptions/comments
 
 ---
 
 ## Manual Search
 
 ### When to Use Manual Search
-- When AI suggestions don't provide good matches
-- When you know the exact target field you need
-- For special cases requiring human judgment
+- AI suggestions have low confidence
+- You know the exact target field needed
+- Special business rules apply
+- Need to explore available target fields
 
-### How to Search
+### Searching
 
-#### Step 1: Select Source Field
-1. Choose an unmapped field from the table
-2. The field details will appear below
+#### Step 1: Enter Search Term
+Type in the search box. Search covers:
+- Target table names
+- Target column names
+- Field descriptions/comments
 
-#### Step 2: Enter Search Term
-1. Type your search term in the manual search box
-2. Search by:
-   - Target table name
-   - Target column name
-   - Field description/comments
+#### Step 2: Execute Search
+1. Click **"🔍 Search"**
+2. Results load (up to 50 matches)
+3. Results sorted by table and column name
 
-#### Step 3: Execute Search
-1. Click "🔍 Search Semantic Table"
-2. Wait for results (up to 50 matches)
-3. Results are sorted by table and column name
+#### Step 3: Review Results
+Browse the results table showing:
+- Target table and column names
+- Physical names
+- Data types
+- Descriptions
 
-#### Step 4: Select Target Field
-1. Review the search results table
-2. Click "Select Target" on the desired field
-3. The mapping is saved automatically
-4. Search results are cleared
+#### Step 4: Select Target
+1. Find the desired field
+2. Click **"Select"** button
+3. Proceed to mapping configuration
 
 ### Search Tips
-- 🔍 Use partial names (e.g., "patient" finds "patient_demographics")
-- 🔍 Search by domain terms (e.g., "identifier", "date", "code")
-- 🔍 Try different variations if first search yields no results
+- Try partial names: "patient" finds "patient_demographics"
+- Use domain terms: "identifier", "date", "code"
+- Search descriptions if field names don't match
+- Try variations if first search yields no results
 
 ---
 
 ## Managing Mappings
 
-### Viewing Mapped Fields
-1. Go to the "Mapped Fields" tab
-2. Use the search box to filter mappings
-3. View source and target field details
+### Viewing Mappings
 
-### Deleting a Mapping
-1. Locate the mapped field
-2. Click the 🗑️ (trash) icon
-3. Confirm the deletion in the dialog
-4. The field returns to "Unmapped Fields"
+#### Access View Mappings Page
+- Click **"View Mappings"** in sidebar
+- See all your completed mappings
+- Mappings display as expandable rows
 
-### Why Delete a Mapping?
-- Incorrect mapping was selected
-- Requirements changed
-- Need to remap to a different target field
+#### Understanding the Mappings List
+Each mapping shows:
+- **Target Field**: Destination table.column
+- **Source Fields**: Origin fields (badges show count)
+- **Concatenation**: Strategy used
+- **Transformations**: Indicator if transformations applied
+- **Status**: Active/Inactive
+- **Created**: Date and time
+- **Actions**: View, Edit, Delete buttons
 
----
+#### View Mapping Details
+Click the **eye icon** (👁️) to see:
+- Complete source field list with order
+- All transformations
+- Concatenation details
+- Join conditions
+- SQL expression
+- Metadata (created by, date)
 
-## Templates
-
-Templates allow bulk upload of source fields for mapping.
-
-### Downloading a Template
-
-#### Purpose
-Get a CSV template with the correct format and an example row.
-
-#### Steps
-1. Go to the "Unmapped Fields" section
-2. Click "Download Template" button
-3. A CSV file will download with:
-   - Column headers
-   - One example row showing the format
-
-### Uploading a Template
-
-#### Purpose
-Add multiple source fields at once for future mapping.
-
-#### Steps
-1. Fill in the CSV template with your source fields:
-   - `src_table_name`: Source table name
-   - `src_column_name`: Source column name
-   - `src_column_physical_name`: Physical column name
-   - `src_nullable`: "Null" or "Not Null"
-   - `src_physical_datatype`: Data type (STRING, INT, etc.)
-   - `src_comments`: Field description
-
-2. Click "Upload Template" button
-3. Select your filled CSV file
-4. Wait for upload to complete
-5. Review the results:
-   - ✅ Successfully added
-   - ⏭️ Skipped (duplicates)
-   - ❌ Failed (with error messages)
-
-#### Important Notes
-- 📝 Template is for adding **source fields only**
-- 📝 Uploaded fields start as **unmapped**
-- 📝 You must map them using AI or manual search
-- 📝 Duplicates are automatically skipped
-- 📝 Only source columns are required
+### Search and Filter
+Use the search box to filter by:
+- Target table or column name
+- Source table or column name
+- Any visible field content
 
 ---
 
-## FAQ
+## Editing Mappings
 
-### General Questions
+### What Can Be Edited
+✅ **Allowed:**
+- Transformation expressions for existing source fields
+- Concatenation strategy and separator
+- Join conditions (add, modify, remove)
 
-**Q: Why can't I see the Configuration page?**  
-A: Only users with Admin role can access Configuration and Semantic Table pages. Contact your administrator if you need admin access.
+❌ **Not Allowed** (requires delete + recreate):
+- Target field
+- Add or remove source fields
+- Change field order
 
-**Q: How do I know if a mapping is good?**  
-A: Check the confidence score (higher is better), review the field names and descriptions, and verify the data types match your requirements.
+### Edit Process
 
-**Q: Can I change a mapping after saving it?**  
-A: Yes, delete the existing mapping and create a new one with the correct target field.
+#### Step 1: Open Editor
+1. Go to **View Mappings** page
+2. Find the mapping to edit
+3. Click the **pencil icon** (✏️)
+4. Edit dialog opens
 
-### AI Suggestions
+#### Step 2: Review Current Settings
+The dialog shows:
+- **Target Field** (read-only, grayed out)
+- **Source Fields** with current transformations
+- **Concatenation** strategy
+- **Join Conditions** (if any)
 
-**Q: Why am I not getting any AI suggestions?**  
-A: Check that:
-- Vector Search is available (see system status)
-- AI Model is ready (see system status)
-- The source field has sufficient metadata (name, comments)
+#### Step 3: Make Changes
 
-**Q: What's a good confidence score?**  
-A: Scores range from 0 to 1:
-- 0.8-1.0: Excellent match
-- 0.6-0.8: Good match, review carefully
-- 0.4-0.6: Possible match, use judgment
-- Below 0.4: Consider manual search
+**Edit Transformations:**
+- For each source field, use the dropdown
+- Select from transformation library
+- Or enter custom SQL expression
+- Expression updates immediately
 
-**Q: Can I influence the AI suggestions?**  
-A: Yes! Use the "User Feedback" field to provide context like "Focus on patient demographics" or "Look for date fields".
+**Change Concatenation:**
+- Select new strategy from dropdown
+- If CUSTOM, enter separator
+- Preview updates automatically
 
-### Manual Search
+**Manage Joins:**
+- Click **"+ Add Join"** to create new
+- Edit existing join fields inline
+- Click trash icon to remove join
+- Support for LEFT, RIGHT, INNER, FULL joins
 
-**Q: Why are my search results empty?**  
-A: Try:
-- Using broader search terms
-- Checking spelling
-- Searching by field description instead of name
-- Verifying the target field exists in the semantic table
+#### Step 4: Save Changes
+1. Review all modifications
+2. Click **"Save Changes"**
+3. Mapping updates immediately
+4. List refreshes automatically
 
-**Q: How many results will I see?**  
-A: Manual search returns up to 50 matching records.
+### Edit Examples
 
-### Templates
+#### Example 1: Change Transformation
+**Before:** `TRIM(first_name)`
+**Edit:** Change dropdown to "Trim and Upper"
+**After:** `UPPER(TRIM(first_name))`
 
-**Q: What happens if I upload duplicate fields?**  
-A: Duplicates are automatically skipped. Only new fields are added.
+#### Example 2: Add Join Condition
+**Before:** No joins
+**Edit:** Add LEFT JOIN t_address ON t_member.member_id = t_address.member_id
+**After:** Multi-table mapping with join
 
-**Q: Can I include target mappings in the upload?**  
-A: No, templates are for adding source fields only. Use AI or manual search to map them to targets.
-
-**Q: My upload failed. What should I do?**  
-A: Check that:
-- File is in CSV format
-- All required columns are present
-- Field names don't contain special characters
-- File size is reasonable (under 10MB)
-
-### Troubleshooting
-
-**Q: The page is loading slowly**  
-A: This can happen if:
-- The data warehouse is starting up (serverless)
-- Large number of records are being loaded
-- Network connectivity issues
-
-**Q: I see an error message**  
-A: Try:
-1. Refresh the page
-2. Check the system status on the Introduction page
-3. Contact your administrator if the issue persists
-
-**Q: My changes aren't showing**  
-A: Click the refresh button or reload the page to fetch the latest data.
+#### Example 3: Change Concatenation
+**Before:** SPACE strategy
+**Edit:** Change to PIPE strategy
+**After:** Fields joined with | instead of space
 
 ---
 
@@ -340,21 +422,137 @@ A: Click the refresh button or reload the page to fetch the latest data.
 ### For Efficient Mapping
 1. ✅ Start with AI suggestions for most fields
 2. ✅ Use manual search for special cases
-3. ✅ Review confidence scores before accepting
-4. ✅ Add good descriptions to source fields
-5. ✅ Work in batches to maintain context
+3. ✅ Group related fields for multi-field mappings
+4. ✅ Apply transformations from the library
+5. ✅ Edit existing mappings instead of recreating
 
 ### For Data Quality
-1. ✅ Verify data types match
-2. ✅ Check nullable constraints
-3. ✅ Review physical names for accuracy
-4. ✅ Document any special mapping rules
+1. ✅ Verify data types match target requirements
+2. ✅ Test transformations with sample data
+3. ✅ Use appropriate concatenation strategies
+4. ✅ Document custom transformations
+5. ✅ Review AI confidence scores carefully
 
-### For Team Collaboration
-1. ✅ Use consistent naming conventions
-2. ✅ Add clear field descriptions
-3. ✅ Review others' mappings periodically
-4. ✅ Communicate mapping decisions
+### For Multi-Field Mappings
+1. ✅ Select fields in logical order
+2. ✅ Choose appropriate concatenation strategy
+3. ✅ Apply consistent transformations (e.g., TRIM all)
+4. ✅ Test final expression with sample data
+5. ✅ Use NONE strategy only when appropriate
+
+### For Transformations
+1. ✅ Start with library transformations
+2. ✅ Test custom SQL expressions before applying
+3. ✅ Keep expressions simple and readable
+4. ✅ Document complex custom transformations
+5. ✅ Reuse common patterns via transformation library
+
+### For Join Conditions
+1. ✅ Define all necessary joins upfront
+2. ✅ Use appropriate join types (LEFT, INNER, etc.)
+3. ✅ Verify join columns match data types
+4. ✅ Document join logic for future reference
+5. ✅ Test multi-table mappings carefully
+
+---
+
+## FAQ
+
+### General Questions
+
+**Q: What's new in Version 2.0?**  
+A: Multi-field mapping, transformation library, mapping editor, and join support.
+
+**Q: Can I map multiple source fields to one target?**  
+A: Yes! Select multiple fields before creating the mapping.
+
+**Q: What's the difference between V1 and V2 mappings?**  
+A: V2 supports multiple source fields per target, transformations, and joins. V1 was 1-to-1 only.
+
+**Q: Why can't I access Admin Tools?**  
+A: Only users with Admin role can access transformation library management.
+
+### Creating Mappings
+
+**Q: How many source fields can I select?**  
+A: You can select as many as needed. Common patterns are 2-4 fields.
+
+**Q: What if my fields are in different tables?**  
+A: Use join conditions to define relationships between tables.
+
+**Q: Can I map one field without transformations?**  
+A: Yes, just don't select any transformation (leave dropdown empty).
+
+**Q: What happens if I select fields in wrong order?**  
+A: Delete the mapping and recreate with correct order. Field order cannot be edited.
+
+### Transformations
+
+**Q: Where do transformations come from?**  
+A: System transformations are pre-loaded. Admins can add custom ones to the library.
+
+**Q: Can I write my own transformation?**  
+A: Yes, select "Custom" and enter any valid SQL expression.
+
+**Q: What is the {field} placeholder?**  
+A: It's replaced with the actual field name at runtime. Use it in custom transformations.
+
+**Q: Can I chain multiple transformations?**  
+A: Yes, in custom expressions. Example: `UPPER(TRIM(COALESCE(field, '')))`
+
+### AI Suggestions
+
+**Q: Why no AI suggestions?**  
+A: Check system status - Vector Search and AI Model must be ready.
+
+**Q: Can I improve AI suggestions?**  
+A: Yes, use User Feedback field and ensure source fields have good descriptions.
+
+**Q: What if AI suggests wrong field?**  
+A: Use manual search or try different source field selections.
+
+**Q: How long should AI take?**  
+A: Typically 15-25 seconds. Longer times may indicate system issues.
+
+### Editing Mappings
+
+**Q: Can I add another source field after saving?**  
+A: No, you must delete and recreate the mapping with all desired fields.
+
+**Q: Can I change the target field?**  
+A: No, you must delete and recreate the mapping with the new target.
+
+**Q: Why can't I change field order?**  
+A: Order affects concatenation result. Changing it would alter the mapping's meaning.
+
+**Q: What happens if I edit a transformation?**  
+A: The SQL expression updates immediately. Source data isn't affected until ETL runs.
+
+### Troubleshooting
+
+**Q: Page is loading slowly**  
+A: SQL warehouse may be starting up (serverless). Wait and retry.
+
+**Q: Changes aren't showing**  
+A: Refresh the page or check if there was an error during save.
+
+**Q: I see duplicate mappings**  
+A: Each mapping is unique by target field. Check if mapping was created multiple times.
+
+**Q: Error when saving mapping**  
+A: Check for:
+- Required fields filled
+- Valid SQL expressions
+- Join columns exist
+- Network connectivity
+
+---
+
+## Keyboard Shortcuts
+
+- **Ctrl/Cmd + K**: Focus search box
+- **Esc**: Close dialogs
+- **Enter**: Submit search/form (when focused)
 
 ---
 
@@ -362,12 +560,13 @@ A: Click the refresh button or reload the page to fetch the latest data.
 
 If you need assistance:
 1. Review this user guide
-2. Check the system status on the Introduction page
-3. Contact your administrator
-4. Reach out to the development team
+2. Check the Quick Start guide
+3. Verify system status on Home page
+4. Contact your administrator
+5. Check with the development team
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: November 2025
-
+**Version**: 2.0  
+**Last Updated**: November 2025  
+**New Features**: Multi-field mapping, Transformation library, Mapping editor, Join support

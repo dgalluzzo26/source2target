@@ -1,12 +1,14 @@
 # Quick Start Guide
 
-## Welcome to the Source-to-Target Mapping Tool! 🎉
+## Welcome to the Source-to-Target Mapping Platform! 🎉
 
-This guide will get you started mapping fields in just a few minutes.
+This guide will get you started mapping fields in just a few minutes. The platform now supports **multi-field mappings** with transformations!
+
+---
 
 ## Step 1: Check System Status
 
-1. Click on **"📊 Introduction"** in the left sidebar
+1. Click on **"Home"** in the left sidebar
 2. Verify all system checks are green:
    - ✅ Database Connection
    - ✅ Vector Search Available
@@ -15,109 +17,192 @@ This guide will get you started mapping fields in just a few minutes.
 
 If any checks fail, contact your administrator.
 
-## Step 2: Navigate to Field Mapping
+---
 
-1. Click on **"🗺️ Field Mapping"** in the left sidebar
-2. You'll see three main sections:
-   - **Unmapped Fields** - Fields waiting to be mapped
-   - **Mapped Fields** - Fields already mapped
-   - **Selected Field Details** - Details of your selection
+## Step 2: Navigate to Create Mappings
 
-## Step 3: Select a Source Field
+1. Click on **"Create Mappings"** in the left sidebar
+2. You'll see your **Unmapped Fields** table
+3. Browse available source fields waiting to be mapped
 
-1. Browse the **Unmapped Fields** table
-2. Use the search box to find specific fields
-3. Click on any row to select it
-4. The field details will appear below the tables
+---
 
-## Step 4: Get AI Suggestions (Recommended)
+## Step 3: Select Source Fields for Mapping
 
-1. Review the AI Configuration settings:
-   - **Number of Vector Results**: 25 (default is fine)
-   - **Number of AI Results**: 10 (default is fine)
-   - **User Feedback**: Optional - add context like "focus on patient fields"
+### Single Field Mapping
+1. Click the checkbox next to a source field
+2. Click **"Map Selected Fields"** button
+3. The mapping wizard opens
 
-2. Click **"🤖 Generate AI Mapping Suggestions"**
+### Multiple Fields to One Target (Advanced)
+1. Select multiple related fields (e.g., FIRST_NAME, LAST_NAME)
+2. Click **"Map Selected Fields"**
+3. The platform will help you combine them into one target field
 
-3. Wait for the suggestions to load (usually 15-20 seconds)
+---
 
-4. Review the suggestions table:
-   - Look at **Confidence Score** - higher is better (0.8+ is excellent)
-   - Check **Target Table** and **Target Column** names
-   - Read the **Reasoning** for context
+## Step 4: Choose Your Target Field
 
-5. Click **"Select Target"** on the best match
+### Option A: Get AI Suggestions (Recommended)
+1. Review the AI Configuration section
+2. Click **"🤖 Get AI Suggestions"**
+3. Wait 15-25 seconds for intelligent recommendations
+4. Review suggestions with confidence scores
+5. Click **"Select"** on the best match
 
-6. Done! The field is now mapped and moved to the Mapped Fields table.
+### Option B: Manual Search
+1. Type a search term in the search box
+2. Click **"🔍 Search"**
+3. Browse search results
+4. Click **"Select"** on your desired target field
 
-## Step 5: Try Manual Search (Alternative)
+---
 
-If AI suggestions don't provide a good match:
+## Step 5: Configure Your Mapping
 
-1. Select an unmapped field (if not already selected)
+Once you've selected a target field:
 
-2. Enter a search term in the **Manual Search** box:
-   - Try table names: "patient", "claim", "provider"
-   - Try column names: "id", "date", "code"
-   - Try descriptions: "identifier", "timestamp"
+### 1. Review Source Fields
+- See all selected source fields
+- Order is preserved (for multi-field mappings)
 
-3. Click **"🔍 Search Semantic Table"**
+### 2. Add Transformations (Optional)
+For each source field:
+- Click the **transformation dropdown**
+- Choose from the library: TRIM, UPPER, LOWER, etc.
+- Or enter a custom SQL expression
+- Example: `UPPER(TRIM(first_name))`
 
-4. Browse the search results
+### 3. Set Concatenation Strategy (Multi-Field Only)
+If mapping multiple fields to one target:
+- **SPACE**: Join with space (e.g., "John Doe")
+- **COMMA**: Join with comma (e.g., "John,Doe")
+- **PIPE**: Join with pipe (e.g., "John|Doe")
+- **CUSTOM**: Use your own separator
+- **NONE**: No concatenation
 
-5. Click **"Select Target"** on the desired field
+### 4. Add Join Conditions (Advanced)
+If fields come from different tables:
+- Click **"+ Add Join"**
+- Define LEFT, RIGHT, INNER, or FULL joins
+- Specify join columns
 
-6. Done! The mapping is saved automatically.
+---
 
-## Step 6: Manage Your Mappings
+## Step 6: Save Your Mapping
 
-### View Mapped Fields
-- Switch to the **Mapped Fields** tab
-- See all your completed mappings
-- Use search to find specific mappings
+1. Review all settings
+2. Click **"Save Mapping"**
+3. Success! The mapping is created
+4. Source fields are removed from unmapped list
+
+---
+
+## Step 7: View and Manage Mappings
+
+### View Your Mappings
+1. Click **"View Mappings"** in the sidebar
+2. See all your completed mappings
+3. Use search to filter specific mappings
+
+### Edit a Mapping
+You can edit (without recreating):
+- ✏️ **Transformations** on existing fields
+- 🔗 **Join conditions**
+- 📋 **Concatenation strategy**
+
+**Cannot edit** (requires delete + recreate):
+- ❌ Target field
+- ❌ Add/remove source fields  
+- ❌ Field order
+
+**To Edit:**
+1. Find your mapping
+2. Click the **pencil icon** (✏️)
+3. Make changes in the dialog
+4. Click **"Save Changes"**
 
 ### Delete a Mapping
-- Find the mapped field
-- Click the 🗑️ (trash) icon
-- Confirm the deletion
-- The field returns to Unmapped Fields
+1. Find the mapping
+2. Click the **trash icon** (🗑️)
+3. Confirm deletion
+4. Fields return to unmapped list
 
-## Tips for Success
+---
 
-### Getting Better AI Suggestions
-✅ Add descriptions to your source fields  
-✅ Use the User Feedback field to provide context  
-✅ Review multiple suggestions before deciding  
-✅ Look for high confidence scores (0.7+)  
+## Quick Tips
 
-### Efficient Workflow
-✅ Start with AI suggestions for most fields  
-✅ Use manual search for edge cases  
-✅ Work in batches of related fields  
-✅ Double-check data types match  
+### 🎯 For Best AI Suggestions
+- ✅ Select related fields together
+- ✅ Provide context in the feedback field
+- ✅ Review confidence scores (0.8+ is excellent)
+- ✅ Check multiple suggestions before deciding
 
-### When to Use Manual Search
-- AI suggestions have low confidence (<0.6)
-- You know exactly which target field you need
-- Special business rules apply
-- Field has unique characteristics
+### ⚡ For Efficient Mapping
+- ✅ Start with AI suggestions
+- ✅ Use transformations from the library
+- ✅ Work on related fields in batches
+- ✅ Edit existing mappings instead of recreating
+
+### 🔧 Using Transformations
+- ✅ **TRIM**: Remove whitespace
+- ✅ **UPPER/LOWER**: Change case
+- ✅ **CAST**: Change data type
+- ✅ **COALESCE**: Handle nulls
+- ✅ **Custom**: Write your own SQL
+
+### 🔗 Multi-Field Mapping Examples
+
+**Example 1: Full Name**
+- Source: FIRST_NAME, LAST_NAME
+- Target: full_name
+- Concat: SPACE
+- Transformations: TRIM on both
+- Result: `CONCAT(TRIM(first_name), ' ', TRIM(last_name))`
+
+**Example 2: Address Line**
+- Source: STREET, CITY, STATE, ZIP
+- Target: full_address
+- Concat: COMMA
+- Transformations: TRIM on all
+- Result: `CONCAT(TRIM(street), ', ', TRIM(city), ', ', TRIM(state), ', ', TRIM(zip))`
+
+---
 
 ## Common Questions
 
-**Q: How long does AI take?**  
-A: Usually 15-25 seconds for vector search and suggestions.
+**Q: Can I map multiple source fields to one target?**  
+A: Yes! Select multiple fields before clicking "Map Selected Fields".
 
-**Q: Can I change a mapping?**  
-A: Yes! Delete the old mapping and create a new one.
+**Q: How do I change a transformation after saving?**  
+A: Click the edit icon (✏️) on your mapping, change the transformation, and save.
 
-**Q: What's a good confidence score?**  
-A: 0.8-1.0 is excellent, 0.6-0.8 is good, below 0.6 review carefully.
+**Q: What if I need to add another source field to my mapping?**  
+A: You must delete the mapping and recreate it with all desired source fields.
 
-**Q: Why don't I see suggestions?**  
-A: Check system status - Vector Search and AI Model must be ready.
+**Q: Can I see the final SQL expression?**  
+A: Yes! View the mapping details to see the complete transformation expression.
 
-**Q: Can I map multiple fields at once?**  
-A: Not currently, but you can use CSV templates to add unmapped fields in bulk.
+**Q: What's the difference between transformation library and custom?**  
+A: Library has pre-built transformations (TRIM, UPPER, etc.). Custom lets you write any SQL expression.
+
+---
+
+## Your First Mapping Checklist
+
+- [ ] Check system status (all green)
+- [ ] Go to Create Mappings page
+- [ ] Select one or more unmapped fields
+- [ ] Get AI suggestions or search manually
+- [ ] Select target field
+- [ ] Add transformations (optional)
+- [ ] Set concatenation if multiple fields
+- [ ] Save mapping
+- [ ] Verify in View Mappings page
+
+**Congratulations! You've completed your first mapping!** 🎊
+
+---
 
 ## Need More Help?
 
@@ -125,21 +210,8 @@ A: Not currently, but you can use CSV templates to add unmapped fields in bulk.
 ⚙️ **Admin Guide**: [docs/ADMIN_GUIDE.md](ADMIN_GUIDE.md)  
 💻 **Developer Guide**: [docs/DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
 
-## Your First Mapping Checklist
-
-- [ ] Check system status (all green)
-- [ ] Go to Field Mapping page
-- [ ] Select an unmapped field
-- [ ] Generate AI suggestions
-- [ ] Review confidence scores
-- [ ] Select a target field
-- [ ] Verify mapping appears in Mapped Fields
-
-**Congratulations! You've completed your first mapping!** 🎊
-
-Continue mapping more fields using the same process. The more you use the tool, the faster and more efficient you'll become.
-
 ---
 
-**Need help?** Contact your administrator or check the full documentation.
-
+**Version**: 2.0  
+**Last Updated**: November 2025  
+**New Features**: Multi-field mapping, Transformation library, Mapping editor

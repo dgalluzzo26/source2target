@@ -710,12 +710,26 @@ async function saveEditedMapping() {
       transformation_updates[field.detail_id] = field.transformation_expr || ''
     })
     
+    // Map frontend join format to backend format
+    const mapping_joins = editFormData.value.joins.length > 0
+      ? editFormData.value.joins.map((join: any, index: number) => ({
+          left_table_name: join.left_table,
+          left_table_physical_name: join.left_table,  // Use logical name as physical
+          left_join_column: join.left_column,
+          right_table_name: join.right_table,
+          right_table_physical_name: join.right_table,  // Use logical name as physical
+          right_join_column: join.right_column,
+          join_type: join.join_type,
+          join_order: index + 1
+        }))
+      : []
+    
     // Build request body
     const updateRequest = {
       concat_strategy: editFormData.value.concat_strategy,
       concat_separator: editFormData.value.concat_strategy === 'CUSTOM' ? editFormData.value.concat_separator : null,
       transformation_updates,
-      mapping_joins: editFormData.value.joins.length > 0 ? editFormData.value.joins : []
+      mapping_joins
     }
     
     console.log('Updating mapping:', editFormData.value.mapping_id, updateRequest)
