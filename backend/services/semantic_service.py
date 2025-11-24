@@ -32,7 +32,7 @@ class SemanticService:
             self._workspace_client = WorkspaceClient()
         return self._workspace_client
     
-    def _sync_vector_search_index(self) -> bool:
+    async def _sync_vector_search_index(self) -> bool:
         """
         Trigger vector search index sync after semantic table changes.
         
@@ -49,19 +49,39 @@ class SemanticService:
             config = self.config_service.get_config()
             index_name = config.vector_search.index_name
             
-            print(f"[Semantic Service] Triggering vector search index sync for: {index_name}")
+            print(f"\n{'='*80}")
+            print(f"[Vector Search Sync] Triggering sync for index: {index_name}")
+            print(f"{'='*80}")
             
-            # Use WorkspaceClient to trigger index sync
-            self.workspace_client.vector_search_indexes.sync_index(index_name)
+            # Run sync in executor since WorkspaceClient methods are synchronous
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                executor,
+                functools.partial(
+                    self.workspace_client.vector_search_indexes.sync_index,
+                    index_name
+                )
+            )
             
-            print(f"[Semantic Service] Vector search index sync triggered successfully")
+            print(f"[Vector Search Sync] ✅ Sync triggered successfully")
+            print(f"[Vector Search Sync] Note: Full sync may take a few moments to complete")
+            print(f"{'='*80}\n")
             return True
             
         except Exception as e:
             # Don't fail the entire operation if index sync fails
             # The index will eventually auto-sync
-            print(f"[Semantic Service] Warning: Could not sync vector search index: {str(e)}")
-            print(f"[Semantic Service] Index will auto-sync eventually")
+            print(f"\n{'!'*80}")
+            print(f"[Vector Search Sync] ⚠️  Warning: Could not sync vector search index")
+            print(f"[Vector Search Sync] Error type: {type(e).__name__}")
+            print(f"[Vector Search Sync] Error message: {str(e)}")
+            print(f"[Vector Search Sync] The index will auto-sync eventually (may take 5-10 minutes)")
+            print(f"{'!'*80}\n")
+            
+            import traceback
+            print(f"[Vector Search Sync] Full traceback:")
+            print(traceback.format_exc())
+            
             return False
         
     def _get_db_config(self) -> Dict[str, str]:
@@ -455,7 +475,7 @@ class SemanticService:
         
         # Trigger vector search index sync after creating record
         # This ensures AI suggestions reflect the new target field immediately
-        self._sync_vector_search_index()
+        await self._sync_vector_search_index()
         
         return SemanticRecord(**result)
     
@@ -486,7 +506,7 @@ class SemanticService:
         
         # Trigger vector search index sync after updating record
         # This ensures AI suggestions reflect the updated field metadata immediately
-        self._sync_vector_search_index()
+        await self._sync_vector_search_index()
         
         return SemanticRecord(**result)
     
@@ -516,7 +536,7 @@ class SemanticService:
         
         # Trigger vector search index sync after deleting record
         # This ensures AI suggestions no longer include the deleted field
-        self._sync_vector_search_index()
+        await self._sync_vector_search_index()
         
         return result
 
