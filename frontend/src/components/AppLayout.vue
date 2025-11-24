@@ -220,7 +220,7 @@ onMounted(() => {
   position: fixed;
   top: 4rem;
   left: 0;
-  width: 16rem;
+  width: 20rem;
   height: calc(100vh - 4rem);
   z-index: 996;
   background: var(--gainwell-light);
@@ -312,10 +312,10 @@ onMounted(() => {
 
 /* Main Content Area */
 .layout-main-container {
-  margin-left: 16rem;
+  margin-left: 20rem;
   margin-top: 4rem;
   min-height: calc(100vh - 4rem);
-  width: calc(100% - 16rem);
+  width: calc(100% - 20rem);
   max-width: none;
   transition: margin-left 0.3s ease, width 0.3s ease;
 }
