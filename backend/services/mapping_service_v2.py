@@ -570,4 +570,175 @@ class MappingServiceV2:
                 mapped_field_id
             )
         )
+    
+    def _update_mapping_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        mapped_fields_table: str,
+        mapping_details_table: str,
+        mapping_joins_table: str,
+        mapping_id: int,
+        concat_strategy: Optional[str],
+        concat_separator: Optional[str],
+        transformation_updates: Dict[int, str],
+        mapping_joins: Optional[List[MappingJoinCreateV2]]
+    ) -> Dict[str, Any]:
+        """
+        Update a mapping with restricted fields (synchronous).
+        
+        Only updates:
+        - concat_strategy and concat_separator in mapped_fields
+        - transformation_expr for specified mapping_details (by detail_id)
+        - mapping_joins (replaces all existing joins)
+        
+        Args:
+            server_hostname: Databricks workspace hostname
+            http_path: SQL warehouse HTTP path
+            mapped_fields_table: Fully qualified mapped_fields table name
+            mapping_details_table: Fully qualified mapping_details table name
+            mapping_joins_table: Fully qualified mapping_joins table name
+            mapping_id: ID of the mapping to update
+            concat_strategy: New concatenation strategy (or None to keep current)
+            concat_separator: New concatenation separator (or None to keep current)
+            transformation_updates: Dict mapping detail_id to new transformation_expr
+            mapping_joins: New list of joins (or None to keep current)
+        
+        Returns:
+            Dictionary with updated mapping info
+        """
+        print(f"[Mapping Service V2] Updating mapping ID: {mapping_id}")
+        
+        connection = self._get_sql_connection(server_hostname, http_path)
+        
+        try:
+            # Start transaction
+            cursor = connection.cursor()
+            
+            # 1. Update mapped_fields if concat strategy/separator provided
+            if concat_strategy is not None or concat_separator is not None:
+                updates = []
+                if concat_strategy is not None:
+                    updates.append(f"concat_strategy = '{concat_strategy}'")
+                if concat_separator is not None:
+                    sep_value = concat_separator.replace("'", "''") if concat_separator else ""
+                    updates.append(f"concat_separator = '{sep_value}'")
+                
+                if updates:
+                    update_query = f"""
+                    UPDATE {mapped_fields_table}
+                    SET {', '.join(updates)}
+                    WHERE mapping_id = {mapping_id}
+                    """
+                    print(f"[Mapping Service V2] Updating mapped_fields: {updates}")
+                    cursor.execute(update_query)
+            
+            # 2. Update transformations for specific source fields
+            if transformation_updates:
+                for detail_id, transformation_expr in transformation_updates.items():
+                    expr_escaped = transformation_expr.replace("'", "''") if transformation_expr else ""
+                    update_detail_query = f"""
+                    UPDATE {mapping_details_table}
+                    SET transformation_expr = '{expr_escaped}'
+                    WHERE detail_id = {detail_id} AND mapping_id = {mapping_id}
+                    """
+                    print(f"[Mapping Service V2] Updating transformation for detail_id {detail_id}")
+                    cursor.execute(update_detail_query)
+            
+            # 3. Replace join conditions if provided
+            if mapping_joins is not None:
+                # Delete existing joins
+                delete_joins_query = f"""
+                DELETE FROM {mapping_joins_table}
+                WHERE mapping_id = {mapping_id}
+                """
+                print(f"[Mapping Service V2] Deleting existing joins")
+                cursor.execute(delete_joins_query)
+                
+                # Insert new joins
+                if mapping_joins:
+                    for join in mapping_joins:
+                        insert_join_query = f"""
+                        INSERT INTO {mapping_joins_table} (
+                            mapping_id,
+                            left_table,
+                            left_column,
+                            right_table,
+                            right_column,
+                            join_type
+                        ) VALUES (
+                            {mapping_id},
+                            '{join.left_table.replace("'", "''")}',
+                            '{join.left_column.replace("'", "''")}',
+                            '{join.right_table.replace("'", "''")}',
+                            '{join.right_column.replace("'", "''")}',
+                            '{join.join_type}'
+                        )
+                        """
+                        print(f"[Mapping Service V2] Inserting join: {join.left_table}.{join.left_column} -> {join.right_table}.{join.right_column}")
+                        cursor.execute(insert_join_query)
+            
+            # Commit transaction
+            connection.commit()
+            
+            print(f"[Mapping Service V2] Mapping {mapping_id} updated successfully")
+            
+            return {
+                "status": "success",
+                "message": f"Mapping {mapping_id} updated successfully",
+                "mapping_id": mapping_id,
+                "updates": {
+                    "concat_strategy_updated": concat_strategy is not None,
+                    "transformations_updated": len(transformation_updates),
+                    "joins_updated": mapping_joins is not None
+                }
+            }
+            
+        except Exception as e:
+            print(f"[Mapping Service V2] Error updating mapping: {str(e)}")
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+    
+    async def update_mapping(
+        self,
+        mapping_id: int,
+        concat_strategy: Optional[str] = None,
+        concat_separator: Optional[str] = None,
+        transformation_updates: Dict[int, str] = {},
+        mapping_joins: Optional[List[MappingJoinCreateV2]] = None
+    ) -> Dict[str, Any]:
+        """
+        Update a mapping with restricted fields (async).
+        
+        Args:
+            mapping_id: ID of the mapping to update
+            concat_strategy: New concatenation strategy (or None to keep current)
+            concat_separator: New concatenation separator (or None to keep current)
+            transformation_updates: Dict mapping detail_id to new transformation_expr
+            mapping_joins: New list of joins (or None to keep current)
+        
+        Returns:
+            Dictionary with updated mapping info
+        """
+        db_config = self._get_db_config()
+        
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            executor,
+            functools.partial(
+                self._update_mapping_sync,
+                db_config['server_hostname'],
+                db_config['http_path'],
+                db_config['mapped_fields_table'],
+                db_config['mapping_details_table'],
+                db_config['mapping_joins_table'],
+                mapping_id,
+                concat_strategy,
+                concat_separator,
+                transformation_updates,
+                mapping_joins
+            )
+        )
 

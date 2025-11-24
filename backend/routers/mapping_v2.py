@@ -241,6 +241,114 @@ async def get_all_mappings(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class UpdateMappingRequest(BaseModel):
+    """
+    Request body for updating an existing mapping (restricted fields only).
+    
+    Only allows updating:
+    - concat_strategy and concat_separator
+    - transformation_expr for existing source fields (by detail_id)
+    - join conditions
+    
+    Cannot change:
+    - Target field
+    - Source fields list (add/remove)
+    - Field order
+    
+    Attributes:
+        concat_strategy: Concatenation strategy (SPACE, COMMA, PIPE, CUSTOM, NONE)
+        concat_separator: Custom separator if strategy is CUSTOM
+        transformation_updates: Dict mapping detail_id to new transformation_expr
+        mapping_joins: Updated list of join conditions
+    """
+    concat_strategy: Optional[str] = Field(None, description="Concatenation strategy")
+    concat_separator: Optional[str] = Field(None, description="Custom separator")
+    transformation_updates: Optional[Dict[int, str]] = Field(
+        default={},
+        description="Map of detail_id to new transformation_expr"
+    )
+    mapping_joins: Optional[List[MappingJoinCreateV2]] = Field(
+        default=None,
+        description="Updated join conditions (replaces all existing joins)"
+    )
+
+
+@router.put("/{mapping_id}", response_model=Dict[str, Any])
+async def update_mapping(mapping_id: int, request: UpdateMappingRequest = Body(...)):
+    """
+    Update an existing mapping (restricted fields only).
+    
+    **Allowed Updates:**
+    - Concatenation strategy and separator
+    - Transformation expressions for existing source fields
+    - Join conditions
+    
+    **NOT Allowed (requires delete + create new):**
+    - Change target field
+    - Add/remove source fields
+    - Change field order
+    
+    **Example:**
+    ```json
+    {
+      "concat_strategy": "PIPE",
+      "concat_separator": null,
+      "transformation_updates": {
+        "1": "UPPER(TRIM(first_name))",
+        "2": "UPPER(TRIM(last_name))"
+      },
+      "mapping_joins": [
+        {
+          "left_table": "t_member",
+          "left_column": "member_id",
+          "right_table": "t_address",
+          "right_column": "member_id",
+          "join_type": "LEFT"
+        }
+      ]
+    }
+    ```
+    
+    Args:
+        mapping_id: ID of the mapping to update
+        request: UpdateMappingRequest with allowed updates
+    
+    Returns:
+        Dictionary with updated mapping info
+    
+    Raises:
+        HTTPException 404: If mapping not found
+        HTTPException 400: If validation fails
+        HTTPException 500: If database operation fails
+    """
+    try:
+        print(f"[Mapping V2 API] Updating mapping ID: {mapping_id}")
+        print(f"[Mapping V2 API] Concat strategy: {request.concat_strategy}")
+        print(f"[Mapping V2 API] Transformation updates: {len(request.transformation_updates or {})}")
+        print(f"[Mapping V2 API] Join updates: {len(request.mapping_joins or [])}")
+        
+        result = await mapping_service.update_mapping(
+            mapping_id=mapping_id,
+            concat_strategy=request.concat_strategy,
+            concat_separator=request.concat_separator,
+            transformation_updates=request.transformation_updates or {},
+            mapping_joins=request.mapping_joins
+        )
+        
+        print(f"[Mapping V2 API] Mapping {mapping_id} updated successfully")
+        
+        return result
+        
+    except ValueError as e:
+        print(f"[Mapping V2 API] Validation error: {str(e)}")
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[Mapping V2 API] Error updating mapping: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/{mapping_id}")
 async def delete_mapping(mapping_id: int):
     """
