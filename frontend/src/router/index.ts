@@ -11,6 +11,7 @@
  * - /mappings → View Current Mappings (all users)
  * - /semantic-fields → Semantic Table Management (admin only)
  * - /config → Admin Configuration (admin only)
+ * - /admin → Admin Tools - Transformations, User Management (admin only)
  * 
  * All routes use code-splitting (lazy loading) for better performance,
  * except AppLayout which is loaded immediately as it's always needed.
@@ -71,6 +72,12 @@ const router = createRouter({
           path: '/config',
           name: 'config',
           component: () => import('../views/ConfigView.vue')
+        },
+        {
+          // Admin tools - transformations, user management, etc.
+          path: '/admin',
+          name: 'admin',
+          component: () => import('../views/AdminView.vue')
         }
       ]
     }
