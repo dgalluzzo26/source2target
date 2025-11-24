@@ -650,7 +650,7 @@ class MappingServiceV2:
                 # Delete existing joins
                 delete_joins_query = f"""
                 DELETE FROM {mapping_joins_table}
-                WHERE mapping_id = {mapping_id}
+                WHERE mapped_field_id = {mapping_id}
                 """
                 print(f"[Mapping Service V2] Deleting existing joins")
                 cursor.execute(delete_joins_query)
@@ -660,19 +660,25 @@ class MappingServiceV2:
                     for join in mapping_joins:
                         insert_join_query = f"""
                         INSERT INTO {mapping_joins_table} (
-                            mapping_id,
-                            left_table,
-                            left_column,
-                            right_table,
-                            right_column,
-                            join_type
+                            mapped_field_id,
+                            left_table_name,
+                            left_table_physical_name,
+                            left_join_column,
+                            right_table_name,
+                            right_table_physical_name,
+                            right_join_column,
+                            join_type,
+                            join_order
                         ) VALUES (
                             {mapping_id},
-                            '{join.left_table.replace("'", "''")}',
-                            '{join.left_column.replace("'", "''")}',
-                            '{join.right_table.replace("'", "''")}',
-                            '{join.right_column.replace("'", "''")}',
-                            '{join.join_type}'
+                            '{join.left_table_name.replace("'", "''")}',
+                            '{join.left_table_physical_name.replace("'", "''")}',
+                            '{join.left_join_column.replace("'", "''")}',
+                            '{join.right_table_name.replace("'", "''")}',
+                            '{join.right_table_physical_name.replace("'", "''")}',
+                            '{join.right_join_column.replace("'", "''")}',
+                            '{join.join_type}',
+                            {join.join_order}
                         )
                         """
                         print(f"[Mapping Service V2] Inserting join: {join.left_table}.{join.left_column} -> {join.right_table}.{join.right_column}")
