@@ -55,15 +55,15 @@
             <span class="menu-section-label">Administration</span>
           </li>
           <li v-if="userStore.isAdmin">
-            <router-link to="/semantic-fields" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Semantic Fields' : ''">
+            <router-link to="/semantic-fields" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Semantic Management' : ''">
               <i class="layout-menuitem-icon pi pi-database"></i>
-              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Semantic Fields</span>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Semantic Management</span>
             </router-link>
           </li>
           <li v-if="userStore.isAdmin">
-            <router-link to="/admin" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Admin Tools' : ''">
+            <router-link to="/admin" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Transformation Management' : ''">
               <i class="layout-menuitem-icon pi pi-shield"></i>
-              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Admin Tools</span>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Transformation Management</span>
             </router-link>
           </li>
           <li v-if="userStore.isAdmin">

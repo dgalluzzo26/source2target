@@ -46,8 +46,8 @@ The Source-to-Target Mapping Platform helps you map source database fields to ta
 - **Home**: System status and quick links
 - **Create Mappings**: Main workspace for creating new mappings
 - **View Mappings**: Browse and manage existing mappings
-- **Semantic Fields** (Admin): Manage target field definitions
-- **Admin Tools** (Admin): Transformation library management
+- **Semantic Management** (Admin): Manage target field definitions
+- **Transformation Management** (Admin): Transformation library management
 - **Settings** (Admin): System configuration
 
 ---
@@ -469,7 +469,7 @@ A: Yes! Select multiple fields before creating the mapping.
 **Q: What's the difference between V1 and V2 mappings?**  
 A: V2 supports multiple source fields per target, transformations, and joins. V1 was 1-to-1 only.
 
-**Q: Why can't I access Admin Tools?**  
+**Q: Why can't I access Transformation Management?**  
 A: Only users with Admin role can access transformation library management.
 
 ### Creating Mappings
