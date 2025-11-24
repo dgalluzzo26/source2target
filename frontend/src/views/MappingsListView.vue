@@ -632,28 +632,47 @@ function handleEdit(mapping: any) {
   // Close details dialog if open
   showDetailsDialog.value = false
   
-  // Clone the mapping data for editing
+  // Get the original mapping from store (has full data)
+  const originalMapping = mappingsStore.mappings.find(m => m.mapping_id === mapping.id)
+  
+  if (!originalMapping) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Could not find mapping data',
+      life: 3000
+    })
+    return
+  }
+  
+  console.log('Original mapping for edit:', originalMapping)
+  
+  // Clone the mapping data for editing (from original store data)
   editFormData.value = {
-    mapping_id: mapping.id,
-    target_table: mapping.target_table,
-    target_column: mapping.target_column,
-    concat_strategy: mapping.concat_strategy || 'SPACE',
-    concat_separator: mapping.concat_separator || '',
-    source_fields: mapping.source_fields.map((sf: any) => ({
-      detail_id: sf.detail_id,
-      src_table_name: sf.src_table_name,
-      src_column_name: sf.src_column_name,
-      field_order: sf.field_order,
-      transformation_expr: sf.transformation_expr || ''
-    })),
-    joins: mapping.mapping_joins ? mapping.mapping_joins.map((j: any) => ({
-      left_table: j.left_table,
-      left_column: j.left_column,
-      right_table: j.right_table,
-      right_column: j.right_column,
+    mapping_id: originalMapping.mapping_id,
+    target_table: originalMapping.tgt_table_name,
+    target_column: originalMapping.tgt_column_name,
+    concat_strategy: originalMapping.concat_strategy || 'SPACE',
+    concat_separator: originalMapping.concat_separator || '',
+    source_fields: originalMapping.source_fields
+      .sort((a, b) => a.field_order - b.field_order)
+      .map(sf => ({
+        detail_id: sf.detail_id,
+        src_table_name: sf.src_table_name,
+        src_column_name: sf.src_column_name,
+        field_order: sf.field_order,
+        transformation_expr: sf.transformation_expr || ''
+      })),
+    joins: originalMapping.mapping_joins ? originalMapping.mapping_joins.map(j => ({
+      left_table: j.left_table_name,
+      left_column: j.left_join_column,
+      right_table: j.right_table_name,
+      right_column: j.right_join_column,
       join_type: j.join_type
     })) : []
   }
+  
+  console.log('Edit form data:', editFormData.value)
   
   showEditDialog.value = true
 }
