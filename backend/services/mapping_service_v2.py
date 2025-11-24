@@ -684,6 +684,88 @@ class MappingServiceV2:
                         print(f"[Mapping Service V2] Inserting join: {join.left_table_name}.{join.left_join_column} -> {join.right_table_name}.{join.right_join_column}")
                         cursor.execute(insert_join_query)
             
+            # 4. Rebuild and update the complete transformation_expression
+            # Query current mapping details to get all source fields with transformations
+            query_details = f"""
+            SELECT 
+                src_table_name,
+                src_column_name,
+                src_column_physical_name,
+                field_order,
+                transformations
+            FROM {mapping_details_table}
+            WHERE mapped_field_id = {mapping_id}
+            ORDER BY field_order
+            """
+            cursor.execute(query_details)
+            details = cursor.fetchall()
+            
+            # Get current concat strategy
+            query_concat = f"""
+            SELECT concat_strategy, concat_separator
+            FROM {mapped_fields_table}
+            WHERE mapped_field_id = {mapping_id}
+            """
+            cursor.execute(query_concat)
+            concat_row = cursor.fetchone()
+            current_strategy = concat_row[0] if concat_row else 'SPACE'
+            current_separator = concat_row[1] if concat_row and concat_row[1] else ' '
+            
+            # Build the transformation expression
+            if len(details) == 0:
+                final_expression = None
+            elif len(details) == 1:
+                # Single field - just use its transformation or column name
+                detail = details[0]
+                if detail[4]:  # Has transformation
+                    final_expression = detail[4]
+                else:
+                    final_expression = f"{detail[0]}.{detail[2]}"  # table.column_physical
+            else:
+                # Multiple fields - build CONCAT expression
+                field_exprs = []
+                for detail in details:
+                    if detail[4]:  # Has transformation
+                        field_exprs.append(detail[4])
+                    else:
+                        field_exprs.append(f"{detail[0]}.{detail[2]}")  # table.column_physical
+                
+                # Build separator based on strategy
+                if current_strategy == 'SPACE':
+                    sep = "' '"
+                elif current_strategy == 'COMMA':
+                    sep = "', '"
+                elif current_strategy == 'PIPE':
+                    sep = "' | '"
+                elif current_strategy == 'CUSTOM' and current_separator:
+                    sep = f"'{current_separator}'"
+                elif current_strategy == 'NONE':
+                    # No concatenation - just use last field
+                    final_expression = field_exprs[-1] if field_exprs else None
+                    sep = None
+                else:
+                    sep = "' '"
+                
+                if sep:
+                    # Build CONCAT expression
+                    concat_parts = []
+                    for i, expr in enumerate(field_exprs):
+                        concat_parts.append(expr)
+                        if i < len(field_exprs) - 1:  # Not the last field
+                            concat_parts.append(sep)
+                    final_expression = f"CONCAT({', '.join(concat_parts)})"
+            
+            # Update the transformation_expression in mapped_fields
+            if final_expression:
+                expr_escaped = final_expression.replace("'", "''")
+                update_expr_query = f"""
+                UPDATE {mapped_fields_table}
+                SET transformation_expression = '{expr_escaped}'
+                WHERE mapped_field_id = {mapping_id}
+                """
+                print(f"[Mapping Service V2] Updating transformation_expression: {final_expression}")
+                cursor.execute(update_expr_query)
+            
             # Commit transaction
             connection.commit()
             

@@ -801,14 +801,57 @@ function handleDelete(mapping: any) {
   })
 }
 
-function handleExport() {
-  toast.add({
-    severity: 'info',
-    summary: 'Export',
-    detail: 'Exporting mappings to CSV...',
-    life: 3000
-  })
-  // TODO: Implement export
+async function handleExport() {
+  try {
+    toast.add({
+      severity: 'info',
+      summary: 'Export',
+      detail: 'Exporting mappings to CSV...',
+      life: 3000
+    })
+    
+    // Call export endpoint
+    const response = await fetch('/api/v2/mappings/export', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'text/csv',
+      },
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Export failed: ${response.statusText}`)
+    }
+    
+    // Get the CSV data
+    const blob = await response.blob()
+    
+    // Create download link
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `mappings_export_${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    
+    // Cleanup
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+    
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Mappings exported successfully',
+      life: 3000
+    })
+  } catch (error: any) {
+    console.error('Export error:', error)
+    toast.add({
+      severity: 'error',
+      summary: 'Export Failed',
+      detail: error.message || 'Failed to export mappings',
+      life: 5000
+    })
+  }
 }
 
 function handleCreateNew() {

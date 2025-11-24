@@ -4,8 +4,11 @@ Mapping V2 API endpoints for multi-field mapping management.
 Provides CRUD operations for creating, reading, and deleting multi-field mappings.
 """
 from fastapi import APIRouter, HTTPException, Body, Request
+from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
+import io
+import csv
 from backend.models.mapping_v2 import (
     MappedFieldCreateV2,
     MappingDetailCreateV2,
@@ -236,6 +239,155 @@ async def get_all_mappings(request: Request):
     except Exception as e:
         print(f"[Mapping V2 API] Error fetching mappings: {str(e)}")
         print(f"[Mapping V2 API] Error type: {type(e).__name__}")
+        import traceback
+        print(f"[Mapping V2 API] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/export")
+async def export_mappings(request: Request):
+    """
+    Export all mappings to CSV format.
+    
+    Each mapping is exported as a single row containing all details needed to
+    generate SQL transformation logic.
+    
+    **CSV Columns:**
+    - mapping_id: Unique mapping identifier
+    - target_table: Target table name
+    - target_column: Target column name
+    - source_tables: Pipe-separated list of source tables
+    - source_columns: Pipe-separated list of source columns (in order)
+    - source_columns_physical: Pipe-separated list of physical column names
+    - field_transformations: Pipe-separated list of transformations for each field
+    - concat_strategy: How fields are concatenated (SPACE, COMMA, PIPE, CUSTOM, NONE)
+    - concat_separator: Custom separator if applicable
+    - transformation_expression: Complete SQL expression
+    - join_conditions: Pipe-separated list of join conditions
+    - mapped_by: User who created the mapping
+    - mapped_at: Timestamp when created
+    - confidence_score: AI confidence score (if applicable)
+    - mapping_source: Source of mapping (AI, MANUAL)
+    
+    Args:
+        request: FastAPI Request object (for extracting user email)
+    
+    Returns:
+        StreamingResponse: CSV file download
+    
+    Raises:
+        HTTPException 500: If export fails
+    """
+    try:
+        print(f"[Mapping V2 API] GET /api/v2/mappings/export called")
+        
+        # Get current user
+        current_user_email = get_current_user_email(request)
+        print(f"[Mapping V2 API] Export user: {current_user_email}")
+        
+        # Check admin status
+        try:
+            is_admin = is_admin_user(current_user_email)
+            print(f"[Mapping V2 API] Admin: {is_admin}")
+        except Exception as admin_check_error:
+            print(f"[Mapping V2 API] Admin check failed: {str(admin_check_error)}")
+            is_admin = False
+        
+        # Get mappings with optional user filter
+        user_filter = None if is_admin else current_user_email
+        mappings = await mapping_service.get_all_mappings(user_filter=user_filter)
+        
+        print(f"[Mapping V2 API] Exporting {len(mappings)} mappings")
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'mapping_id',
+            'target_table',
+            'target_table_physical',
+            'target_column',
+            'target_column_physical',
+            'source_tables',
+            'source_columns',
+            'source_columns_physical',
+            'field_order',
+            'field_transformations',
+            'concat_strategy',
+            'concat_separator',
+            'transformation_expression',
+            'join_conditions',
+            'mapped_by',
+            'mapped_at',
+            'confidence_score',
+            'mapping_source',
+            'ai_reasoning',
+            'mapping_status'
+        ])
+        
+        # Write data rows
+        for mapping in mappings:
+            # Extract source field info
+            source_tables = []
+            source_columns = []
+            source_columns_physical = []
+            field_orders = []
+            field_transformations = []
+            
+            for field in sorted(mapping.get('source_fields', []), key=lambda x: x.get('field_order', 0)):
+                source_tables.append(field.get('src_table_name', ''))
+                source_columns.append(field.get('src_column_name', ''))
+                source_columns_physical.append(field.get('src_column_physical_name', ''))
+                field_orders.append(str(field.get('field_order', '')))
+                field_transformations.append(field.get('transformation_expr', ''))
+            
+            # Extract join info
+            join_conditions = []
+            for join in mapping.get('mapping_joins', []):
+                join_str = f"{join.get('left_table_name', '')}.{join.get('left_join_column', '')} {join.get('join_type', 'INNER')} JOIN {join.get('right_table_name', '')}.{join.get('right_join_column', '')}"
+                join_conditions.append(join_str)
+            
+            # Write row
+            writer.writerow([
+                mapping.get('mapping_id', ''),
+                mapping.get('tgt_table_name', ''),
+                mapping.get('tgt_table_physical_name', ''),
+                mapping.get('tgt_column_name', ''),
+                mapping.get('tgt_column_physical_name', ''),
+                ' | '.join(source_tables),
+                ' | '.join(source_columns),
+                ' | '.join(source_columns_physical),
+                ' | '.join(field_orders),
+                ' | '.join(field_transformations),
+                mapping.get('concat_strategy', ''),
+                mapping.get('concat_separator', ''),
+                mapping.get('transformation_expression', ''),
+                ' | '.join(join_conditions),
+                mapping.get('mapped_by', ''),
+                str(mapping.get('mapped_at', '')),
+                mapping.get('confidence_score', ''),
+                mapping.get('mapping_source', ''),
+                mapping.get('ai_reasoning', ''),
+                mapping.get('mapping_status', '')
+            ])
+        
+        # Prepare for download
+        output.seek(0)
+        
+        print(f"[Mapping V2 API] Export complete, returning CSV")
+        
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=mappings_export.csv"
+            }
+        )
+        
+    except Exception as e:
+        print(f"[Mapping V2 API] Error exporting mappings: {str(e)}")
         import traceback
         print(f"[Mapping V2 API] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
