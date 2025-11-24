@@ -628,7 +628,7 @@ class MappingServiceV2:
                     update_query = f"""
                     UPDATE {mapped_fields_table}
                     SET {', '.join(updates)}
-                    WHERE mapping_id = {mapping_id}
+                    WHERE mapped_field_id = {mapping_id}
                     """
                     print(f"[Mapping Service V2] Updating mapped_fields: {updates}")
                     cursor.execute(update_query)
@@ -640,7 +640,7 @@ class MappingServiceV2:
                     update_detail_query = f"""
                     UPDATE {mapping_details_table}
                     SET transformation_expr = '{expr_escaped}'
-                    WHERE detail_id = {detail_id} AND mapping_id = {mapping_id}
+                    WHERE detail_id = {detail_id} AND mapped_field_id = {mapping_id}
                     """
                     print(f"[Mapping Service V2] Updating transformation for detail_id {detail_id}")
                     cursor.execute(update_detail_query)
@@ -681,7 +681,7 @@ class MappingServiceV2:
                             {join.join_order}
                         )
                         """
-                        print(f"[Mapping Service V2] Inserting join: {join.left_table}.{join.left_column} -> {join.right_table}.{join.right_column}")
+                        print(f"[Mapping Service V2] Inserting join: {join.left_table_name}.{join.left_join_column} -> {join.right_table_name}.{join.right_join_column}")
                         cursor.execute(insert_join_query)
             
             # Commit transaction
