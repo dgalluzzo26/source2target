@@ -640,9 +640,9 @@ class MappingServiceV2:
                     update_detail_query = f"""
                     UPDATE {mapping_details_table}
                     SET transformations = '{expr_escaped}'
-                    WHERE detail_id = {detail_id} AND mapped_field_id = {mapping_id}
+                    WHERE mapping_detail_id = {detail_id} AND mapped_field_id = {mapping_id}
                     """
-                    print(f"[Mapping Service V2] Updating transformation for detail_id {detail_id}")
+                    print(f"[Mapping Service V2] Updating transformation for mapping_detail_id {detail_id}")
                     cursor.execute(update_detail_query)
             
             # 3. Replace join conditions if provided
