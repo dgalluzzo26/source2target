@@ -563,9 +563,121 @@ export class AIMappingAPI {
   }
 }
 
-export default {
+/**
+ * Generic HTTP methods for API calls
+ */
+const api = {
+  /**
+   * Generic GET request
+   */
+  async get<T = any>(endpoint: string): Promise<{ data: T }> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }))
+      throw {
+        response: {
+          status: response.status,
+          data: error
+        },
+        message: `HTTP ${response.status}: ${response.statusText}`
+      }
+    }
+
+    const data = await response.json()
+    return { data }
+  },
+
+  /**
+   * Generic POST request
+   */
+  async post<T = any>(endpoint: string, body: any): Promise<{ data: T }> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }))
+      throw {
+        response: {
+          status: response.status,
+          data: error
+        },
+        message: `HTTP ${response.status}: ${response.statusText}`
+      }
+    }
+
+    const data = await response.json()
+    return { data }
+  },
+
+  /**
+   * Generic PUT request
+   */
+  async put<T = any>(endpoint: string, body: any): Promise<{ data: T }> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }))
+      throw {
+        response: {
+          status: response.status,
+          data: error
+        },
+        message: `HTTP ${response.status}: ${response.statusText}`
+      }
+    }
+
+    const data = await response.json()
+    return { data }
+  },
+
+  /**
+   * Generic DELETE request
+   */
+  async delete<T = any>(endpoint: string): Promise<{ data: T }> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }))
+      throw {
+        response: {
+          status: response.status,
+          data: error
+        },
+        message: `HTTP ${response.status}: ${response.statusText}`
+      }
+    }
+
+    const data = await response.json()
+    return { data }
+  },
+
+  // Legacy methods
   checkHealth,
   getData,
   postData,
 }
+
+export default api
 

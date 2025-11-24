@@ -337,13 +337,28 @@ const loadTransformations = async () => {
   try {
     const response = await api.get('/api/v2/transformations/');
     transformations.value = response.data;
+    console.log(`[Transformations] Loaded ${response.data.length} transformations`);
   } catch (error: any) {
     console.error('Error loading transformations:', error);
+    
+    let errorMessage = 'Failed to load transformations';
+    
+    if (error.response) {
+      // Server responded with error
+      errorMessage = error.response.data?.detail || `Server error: ${error.response.status}`;
+    } else if (error.request) {
+      // Request made but no response
+      errorMessage = 'No response from server. Is the backend running?';
+    } else {
+      // Error setting up request
+      errorMessage = error.message || 'Unknown error occurred';
+    }
+    
     toast.add({
       severity: 'error',
-      summary: 'Error',
-      detail: error.response?.data?.detail || 'Failed to load transformations',
-      life: 5000
+      summary: 'Error Loading Transformations',
+      detail: errorMessage,
+      life: 8000
     });
   } finally {
     loading.value = false;
