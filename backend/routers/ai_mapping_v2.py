@@ -4,7 +4,7 @@ AI Mapping V2 API endpoints for multi-field mapping suggestions.
 Provides intelligent suggestions for mapping multiple source fields to a single target field.
 """
 from fastapi import APIRouter, HTTPException, Body
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from backend.services.ai_mapping_service_v2 import AIMappingServiceV2
 
@@ -74,7 +74,7 @@ class MappingSuggestion(BaseModel):
     tgt_column_name: str
     tgt_table_physical_name: str = ""
     tgt_column_physical_name: str = ""
-    tgt_comments: str = ""
+    tgt_comments: Optional[str] = ""
     search_score: float
     match_quality: str
     ai_reasoning: str

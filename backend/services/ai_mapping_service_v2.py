@@ -426,6 +426,10 @@ Respond in JSON format:
                             else:
                                 enriched['ai_reasoning'] = "Lower semantic similarity; may require manual review to confirm suitability."
                         
+                        # Ensure tgt_comments is not None (convert to empty string)
+                        if enriched.get('tgt_comments') is None:
+                            enriched['tgt_comments'] = ""
+                        
                         enriched_results.append(enriched)
                     
                     # Sort by match quality (Excellent > Strong > Good > Weak)
