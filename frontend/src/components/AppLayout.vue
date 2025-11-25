@@ -82,10 +82,11 @@
               <HelpButton 
                 help-type="quick-start" 
                 label="Quick Start" 
-                severity="info"
+                severity="secondary"
                 icon="pi pi-bolt"
                 tooltip=""
-                style="width: 100%;"
+                :outlined="true"
+                custom-class="sidebar-help-button"
               />
             </div>
           </li>
@@ -94,10 +95,11 @@
               <HelpButton 
                 help-type="user-guide" 
                 label="User Guide" 
-                severity="info"
+                severity="secondary"
                 icon="pi pi-book"
                 tooltip=""
-                style="width: 100%;"
+                :outlined="true"
+                custom-class="sidebar-help-button"
               />
             </div>
           </li>
@@ -106,10 +108,11 @@
               <HelpButton 
                 help-type="admin-config" 
                 label="Admin Guide" 
-                severity="info"
+                severity="secondary"
                 icon="pi pi-cog"
                 tooltip=""
-                style="width: 100%;"
+                :outlined="true"
+                custom-class="sidebar-help-button"
               />
             </div>
           </li>
@@ -359,6 +362,7 @@ onMounted(() => {
   border: none !important;
   box-shadow: none !important;
   cursor: default;
+  width: 100%;
 }
 
 .help-button-wrapper:hover {
@@ -369,6 +373,46 @@ onMounted(() => {
 
 .layout-sidebar.collapsed .help-button-wrapper {
   padding: 0.25rem !important;
+}
+
+/* Style help buttons to match menu items */
+:deep(.sidebar-help-button) {
+  width: 100% !important;
+  justify-content: flex-start !important;
+  background: white !important;
+  color: var(--gainwell-dark) !important;
+  border: 1px solid transparent !important;
+  padding: 0.75rem 1rem !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  text-align: left !important;
+}
+
+:deep(.sidebar-help-button:hover) {
+  background: white !important;
+  border-color: var(--gainwell-secondary) !important;
+  box-shadow: 0 4px 12px rgba(56, 161, 105, 0.15) !important;
+  color: var(--gainwell-dark) !important;
+}
+
+:deep(.sidebar-help-button .p-button-label) {
+  font-weight: 500 !important;
+  flex: 1 !important;
+  text-align: left !important;
+}
+
+:deep(.sidebar-help-button .p-button-icon) {
+  color: inherit !important;
+  font-size: 1.125rem !important;
+}
+
+.layout-sidebar.collapsed :deep(.sidebar-help-button) {
+  justify-content: center !important;
+  padding: 0.75rem 0.5rem !important;
+}
+
+.layout-sidebar.collapsed :deep(.sidebar-help-button .p-button-label) {
+  display: none !important;
 }
 
 /* Main Content Area */
