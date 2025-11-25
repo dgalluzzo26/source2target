@@ -259,6 +259,7 @@ class AIMappingServiceV2:
                 # Vector search query
                 query = f"""
                 SELECT 
+                    semantic_field_id,
                     tgt_table_name,
                     tgt_column_name,
                     tgt_table_physical_name,

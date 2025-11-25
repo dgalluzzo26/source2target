@@ -59,6 +59,7 @@ class MappingSuggestion(BaseModel):
     AI-powered mapping suggestion response.
     
     Attributes:
+        semantic_field_id: Primary key of the semantic field (required for mapping creation)
         tgt_table_name: Target table logical name
         tgt_column_name: Target column logical name
         tgt_table_physical_name: Target table physical name
@@ -68,6 +69,7 @@ class MappingSuggestion(BaseModel):
         match_quality: Human-readable quality rating (Excellent, Strong, Good, Weak)
         ai_reasoning: LLM explanation for this suggestion
     """
+    semantic_field_id: int
     tgt_table_name: str
     tgt_column_name: str
     tgt_table_physical_name: str = ""

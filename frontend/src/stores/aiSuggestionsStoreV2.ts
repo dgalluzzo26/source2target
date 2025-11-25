@@ -8,7 +8,7 @@ import { ref, computed } from 'vue'
 import type { UnmappedField } from './unmappedFieldsStore'
 
 export interface AISuggestionV2 {
-  semantic_field_id?: number  // FK to semantic_fields table (optional)
+  semantic_field_id: number  // FK to semantic_fields table (REQUIRED for mapping creation)
   tgt_table_name: string
   tgt_table_physical_name: string
   tgt_column_name: string
