@@ -63,6 +63,7 @@ class MappingSuggestion(BaseModel):
         tgt_column_name: Target column logical name
         tgt_table_physical_name: Target table physical name
         tgt_column_physical_name: Target column physical name
+        tgt_comments: Description/comments for the target field
         search_score: Vector search confidence score (0.0-1.0)
         match_quality: Human-readable quality rating (Excellent, Strong, Good, Weak)
         ai_reasoning: LLM explanation for this suggestion
@@ -71,6 +72,7 @@ class MappingSuggestion(BaseModel):
     tgt_column_name: str
     tgt_table_physical_name: str = ""
     tgt_column_physical_name: str = ""
+    tgt_comments: str = ""
     search_score: float
     match_quality: str
     ai_reasoning: str

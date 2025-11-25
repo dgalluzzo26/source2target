@@ -65,6 +65,12 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
 
       suggestions.value = await response.json()
       
+      // Debug: Check if tgt_comments is in the response
+      if (suggestions.value.length > 0) {
+        console.log('[AI Suggestions V2] Sample suggestion:', suggestions.value[0])
+        console.log('[AI Suggestions V2] tgt_comments in first result:', suggestions.value[0].tgt_comments)
+      }
+      
       // Add rank to each suggestion
       suggestions.value.forEach((sug, idx) => {
         sug.rank = idx + 1
