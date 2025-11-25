@@ -413,14 +413,15 @@ class MappingServiceV2:
         mapped_field_id: int
     ) -> Dict[str, str]:
         """
-        Delete a mapping and restore source fields to unmapped (synchronous).
+        Delete a mapping by primary key (synchronous).
         
         Transaction workflow:
-        1. Get all source fields from mapping_details
-        2. Delete from mapping_joins (if any)
-        3. Delete from mapping_details
-        4. Delete from mapped_fields
-        5. Commit transaction
+        1. Delete from mapping_joins (cascade delete for join conditions)
+        2. Delete from mapping_details (cascade delete for source fields)
+        3. Delete from mapped_fields (delete the main mapping record)
+        4. Commit transaction
+        
+        Only requires the PK (mapped_field_id) - no need to query source fields.
         
         Args:
             server_hostname: Databricks workspace hostname
@@ -428,8 +429,8 @@ class MappingServiceV2:
             mapped_fields_table: Fully qualified mapped_fields table name
             mapping_details_table: Fully qualified mapping_details table name
             mapping_joins_table: Fully qualified mapping_joins table name
-            unmapped_fields_table: Fully qualified unmapped_fields table name
-            mapped_field_id: ID of the mapping to delete
+            unmapped_fields_table: Fully qualified unmapped_fields table name (unused)
+            mapped_field_id: ID of the mapping to delete (PK)
         
         Returns:
             Dictionary with status message
@@ -440,39 +441,34 @@ class MappingServiceV2:
         
         try:
             with connection.cursor() as cursor:
-                # Step 1: Get source fields before deleting
-                get_details = f"""
-                SELECT 
-                    src_table_name,
-                    src_table_physical_name,
-                    src_column_name,
-                    src_column_physical_name
-                FROM {mapping_details_table}
-                WHERE mapped_field_id = {mapped_field_id}
-                """
-                
-                cursor.execute(get_details)
-                source_fields = cursor.fetchall()
-                
-                # Step 2: Delete from mapping_joins (if any)
+                # Step 1: Delete from mapping_joins (if any)
                 delete_joins = f"DELETE FROM {mapping_joins_table} WHERE mapped_field_id = {mapped_field_id}"
+                print(f"[Mapping Service V2] Deleting join conditions...")
                 cursor.execute(delete_joins)
+                joins_deleted = cursor.rowcount
                 
-                # Step 3: Delete from mapping_details
+                # Step 2: Delete from mapping_details
                 delete_details = f"DELETE FROM {mapping_details_table} WHERE mapped_field_id = {mapped_field_id}"
+                print(f"[Mapping Service V2] Deleting source field details...")
                 cursor.execute(delete_details)
+                details_deleted = cursor.rowcount
                 
-                # Step 4: Delete from mapped_fields
+                # Step 3: Delete from mapped_fields
                 delete_mapped = f"DELETE FROM {mapped_fields_table} WHERE mapped_field_id = {mapped_field_id}"
+                print(f"[Mapping Service V2] Deleting main mapping record...")
                 cursor.execute(delete_mapped)
+                mapped_deleted = cursor.rowcount
+                
+                if mapped_deleted == 0:
+                    raise ValueError(f"Mapping ID {mapped_field_id} not found")
                 
                 connection.commit()
                 
-                print(f"[Mapping Service V2] Mapping deleted successfully")
+                print(f"[Mapping Service V2] Mapping deleted successfully: {details_deleted} source fields, {joins_deleted} joins")
                 
                 return {
                     "status": "success",
-                    "message": f"Deleted mapping ID {mapped_field_id} with {len(source_fields)} source fields"
+                    "message": f"Deleted mapping ID {mapped_field_id} ({details_deleted} source fields, {joins_deleted} joins)"
                 }
                 
         except Exception as e:
@@ -639,7 +635,7 @@ class MappingServiceV2:
                     expr_escaped = transformation_expr.replace("'", "''") if transformation_expr else ""
                     update_detail_query = f"""
                     UPDATE {mapping_details_table}
-                    SET transformations = '{expr_escaped}'
+                    SET transformation_expr = '{expr_escaped}'
                     WHERE mapping_detail_id = {detail_id} AND mapped_field_id = {mapping_id}
                     """
                     print(f"[Mapping Service V2] Updating transformation for mapping_detail_id {detail_id}")

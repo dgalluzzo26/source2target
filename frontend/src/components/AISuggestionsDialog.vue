@@ -15,12 +15,23 @@
           Selected Source Fields ({{ aiStore.sourceFieldsUsed.length }})
         </h3>
         <div class="source-fields-list">
-          <Tag 
+          <div 
             v-for="field in aiStore.sourceFieldsUsed" 
             :key="field.id"
-            :value="`${field.src_table_name}.${field.src_column_name}`"
-            severity="info"
-          />
+            class="source-field-card"
+          >
+            <div class="field-name">
+              <Tag 
+                :value="`${field.src_table_name}.${field.src_column_name}`"
+                severity="info"
+              />
+              <span class="datatype-badge">{{ field.src_physical_datatype }}</span>
+            </div>
+            <div v-if="field.src_comments" class="field-description">
+              <i class="pi pi-info-circle"></i>
+              <span>{{ field.src_comments }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -62,11 +73,15 @@
           </Column>
 
           <!-- Target Field -->
-          <Column header="Target Field" style="min-width: 15rem">
+          <Column header="Target Field" style="min-width: 20rem">
             <template #body="{ data }">
               <div class="target-field">
                 <strong>{{ data.tgt_table_name }}.{{ data.tgt_column_name }}</strong>
                 <span class="physical-name">{{ data.tgt_column_physical_name }}</span>
+                <div v-if="data.tgt_comments" class="target-description">
+                  <i class="pi pi-info-circle"></i>
+                  <span>{{ data.tgt_comments }}</span>
+                </div>
               </div>
             </template>
           </Column>
@@ -80,28 +95,7 @@
                   :severity="getMatchQualitySeverity(data.match_quality)"
                   :icon="getMatchQualityIcon(data.match_quality)"
                 />
-                <div class="score-tooltip">
-                  <i 
-                    class="pi pi-info-circle" 
-                    v-tooltip.right="{
-                      value: getScoreTooltip(data.search_score),
-                      escape: true
-                    }"
-                  ></i>
-                </div>
               </div>
-            </template>
-          </Column>
-
-          <!-- Search Score -->
-          <Column header="Similarity" style="min-width: 8rem">
-            <template #body="{ data }">
-              <ProgressBar 
-                :value="(data.search_score * 1000)" 
-                :showValue="false"
-                style="height: 0.5rem"
-              />
-              <span class="score-value">{{ (data.search_score * 1000).toFixed(1) }}</span>
             </template>
           </Column>
 
@@ -308,11 +302,6 @@ function getMatchQualityIcon(quality: string): string {
   }
 }
 
-function getScoreTooltip(score: number): string {
-  const normalized = (score * 1000).toFixed(1)
-  return `Vector Similarity Score: ${normalized}\n\nScore Range:\n- 40+ = Excellent match\n- 20-40 = Good match\n- < 20 = Weak match\n\nThis score represents semantic similarity between source and target fields based on names, descriptions, and historical patterns.`
-}
-
 function getRowClass(data: AISuggestionV2) {
   return data.rank === 1 ? 'top-suggestion' : ''
 }
@@ -459,8 +448,45 @@ function handleClose() {
 
 .source-fields-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.source-field-card {
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
+}
+
+.source-field-card .field-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.source-field-card .datatype-badge {
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  color: var(--text-color-secondary);
+  background: var(--surface-100);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.source-field-card .field-description {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding-left: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-color-secondary);
+  line-height: 1.4;
+}
+
+.source-field-card .field-description i {
+  color: var(--gainwell-secondary);
+  margin-top: 0.15rem;
+  flex-shrink: 0;
 }
 
 .loading-container {
@@ -539,22 +565,29 @@ function handleClose() {
   font-family: 'Courier New', monospace;
 }
 
+.target-description {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  line-height: 1.4;
+  padding: 0.5rem;
+  background: var(--surface-50);
+  border-radius: 4px;
+}
+
+.target-description i {
+  color: var(--gainwell-secondary);
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+
 .match-quality {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.score-tooltip i {
-  color: var(--text-color-secondary);
-  cursor: help;
-}
-
-.score-value {
-  font-size: 0.85rem;
-  color: var(--text-color-secondary);
-  margin-top: 0.25rem;
-  display: block;
 }
 
 .ai-reasoning {

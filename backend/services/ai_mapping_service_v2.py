@@ -266,6 +266,7 @@ class AIMappingServiceV2:
                     tgt_column_name,
                     tgt_table_physical_name,
                     tgt_column_physical_name,
+                    tgt_comments,
                     semantic_field,
                     search_score
                 FROM vector_search(
@@ -393,8 +394,19 @@ Respond in JSON format:
                     enriched_results = []
                     for i, result in enumerate(vector_results[:10]):  # Top 10
                         enriched = result.copy()
+                        score = result.get('search_score', 0.0)
                         
-                        # Find matching LLM suggestion
+                        # ALWAYS use score-based match quality (deterministic, consistent)
+                        if score >= 0.040:
+                            enriched['match_quality'] = 'Excellent'
+                        elif score >= 0.025:
+                            enriched['match_quality'] = 'Strong'
+                        elif score >= 0.015:
+                            enriched['match_quality'] = 'Good'
+                        else:
+                            enriched['match_quality'] = 'Weak'
+                        
+                        # Find matching LLM suggestion for reasoning only
                         matching_llm = None
                         for llm_sug in llm_suggestions:
                             if (llm_sug.get('tgt_table_name') == result['tgt_table_name'] and
@@ -403,20 +415,24 @@ Respond in JSON format:
                                 break
                         
                         if matching_llm:
-                            enriched['match_quality'] = matching_llm.get('match_quality', 'Unknown')
+                            # Use LLM reasoning but NOT match_quality (we calculated it from score above)
                             enriched['ai_reasoning'] = matching_llm.get('reasoning', '')
                         else:
                             # Default reasoning if LLM didn't provide
-                            if i < 3:
-                                enriched['match_quality'] = 'Good'
-                                enriched['ai_reasoning'] = f"Semantic similarity suggests this is a relevant match for the combined source fields."
+                            if score >= 0.025:
+                                enriched['ai_reasoning'] = f"High semantic similarity suggests this is a strong match for the combined source fields."
+                            elif score >= 0.015:
+                                enriched['ai_reasoning'] = f"Moderate semantic similarity indicates a reasonable match for the source fields."
                             else:
-                                enriched['match_quality'] = 'Weak'
-                                enriched['ai_reasoning'] = "Lower semantic similarity; may not be the best match."
+                                enriched['ai_reasoning'] = "Lower semantic similarity; may require manual review to confirm suitability."
                         
                         enriched_results.append(enriched)
                     
-                    print(f"[AI Mapping Service V2] Enriched {len(enriched_results)} results with AI reasoning")
+                    # Sort by match quality (Excellent > Strong > Good > Weak)
+                    quality_order = {'Excellent': 0, 'Strong': 1, 'Good': 2, 'Weak': 3, 'Unknown': 4}
+                    enriched_results.sort(key=lambda x: (quality_order.get(x.get('match_quality', 'Unknown'), 4), -x.get('search_score', 0)))
+                    
+                    print(f"[AI Mapping Service V2] Enriched and sorted {len(enriched_results)} results by match quality")
                     return enriched_results
                     
             except json.JSONDecodeError as e:
@@ -430,10 +446,14 @@ Respond in JSON format:
                 enriched = result.copy()
                 score = result.get('search_score', 0.0)
                 
-                if score > 0.04:
+                # Deterministic match quality based on score
+                if score >= 0.040:
+                    enriched['match_quality'] = 'Excellent'
+                    enriched['ai_reasoning'] = "Excellent semantic similarity indicates a very strong match."
+                elif score >= 0.025:
                     enriched['match_quality'] = 'Strong'
                     enriched['ai_reasoning'] = "High semantic similarity indicates a strong match."
-                elif score > 0.02:
+                elif score >= 0.015:
                     enriched['match_quality'] = 'Good'
                     enriched['ai_reasoning'] = "Moderate semantic similarity suggests a reasonable match."
                 else:
@@ -441,6 +461,10 @@ Respond in JSON format:
                     enriched['ai_reasoning'] = "Low semantic similarity; may require review."
                 
                 enriched_results.append(enriched)
+            
+            # Sort by match quality (Excellent > Strong > Good > Weak)
+            quality_order = {'Excellent': 0, 'Strong': 1, 'Good': 2, 'Weak': 3, 'Unknown': 4}
+            enriched_results.sort(key=lambda x: (quality_order.get(x.get('match_quality', 'Unknown'), 4), -x.get('search_score', 0)))
             
             return enriched_results
             
@@ -452,9 +476,24 @@ Respond in JSON format:
             fallback_results = []
             for result in vector_results[:10]:
                 enriched = result.copy()
-                enriched['match_quality'] = 'Unknown'
+                score = result.get('search_score', 0.0)
+                
+                # Use score-based match quality even in fallback
+                if score >= 0.040:
+                    enriched['match_quality'] = 'Excellent'
+                elif score >= 0.025:
+                    enriched['match_quality'] = 'Strong'
+                elif score >= 0.015:
+                    enriched['match_quality'] = 'Good'
+                else:
+                    enriched['match_quality'] = 'Weak'
+                
                 enriched['ai_reasoning'] = "AI reasoning unavailable; based on vector search similarity only."
                 fallback_results.append(enriched)
+            
+            # Sort by match quality
+            quality_order = {'Excellent': 0, 'Strong': 1, 'Good': 2, 'Weak': 3, 'Unknown': 4}
+            fallback_results.sort(key=lambda x: (quality_order.get(x.get('match_quality', 'Unknown'), 4), -x.get('search_score', 0)))
             
             return fallback_results
     
