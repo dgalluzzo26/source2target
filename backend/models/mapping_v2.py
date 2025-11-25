@@ -179,33 +179,33 @@ class MappingFeedbackV2(BaseModel):
     
     Attributes:
         feedback_id: Unique identifier for feedback record
-        src_table_name: Source table logical name
-        src_table_physical_name: Source table physical name
-        src_column_name: Source column logical name
-        src_column_physical_name: Source column physical name
-        suggested_tgt_table_name: AI-suggested target table logical name
-        suggested_tgt_column_name: AI-suggested target column logical name
-        feedback_status: User response (ACCEPTED, REJECTED, PENDING)
-        user_comment: Optional user explanation for rejection
+        suggested_src_table: Source table in AI suggestion
+        suggested_src_column: Source column in AI suggestion
+        suggested_tgt_table: Target table in AI suggestion
+        suggested_tgt_column: Target column in AI suggestion
+        feedback_action: User response (ACCEPTED, REJECTED, MODIFIED)
+        user_comments: Optional user explanation
         ai_confidence_score: AI confidence score for this suggestion
         ai_reasoning: AI explanation for this suggestion
-        feedback_at: Timestamp when feedback was provided
+        vector_search_score: Raw vector search similarity score
+        suggestion_rank: Rank of this suggestion
+        feedback_ts: Timestamp when feedback was provided
         feedback_by: User who provided feedback
     """
     model_config = {"from_attributes": True, "arbitrary_types_allowed": True}
     
     feedback_id: Optional[int] = Field(None, description="Unique feedback identifier (auto-generated)")
-    src_table_name: str = Field(..., description="Source table logical name")
-    src_table_physical_name: str = Field(..., description="Source table physical name")
-    src_column_name: str = Field(..., description="Source column logical name")
-    src_column_physical_name: str = Field(..., description="Source column physical name")
-    suggested_tgt_table_name: str = Field(..., description="AI-suggested target table logical name")
-    suggested_tgt_column_name: str = Field(..., description="AI-suggested target column logical name")
-    feedback_status: str = Field(default="PENDING", description="User response (ACCEPTED, REJECTED, PENDING)")
-    user_comment: Optional[str] = Field(None, description="User explanation for rejection")
+    suggested_src_table: str = Field(..., description="Source table in AI suggestion")
+    suggested_src_column: str = Field(..., description="Source column in AI suggestion")
+    suggested_tgt_table: str = Field(..., description="Target table in AI suggestion")
+    suggested_tgt_column: str = Field(..., description="Target column in AI suggestion")
+    feedback_action: str = Field(default="PENDING", description="User response (ACCEPTED, REJECTED, MODIFIED)")
+    user_comments: Optional[str] = Field(None, description="User explanation")
     ai_confidence_score: Optional[float] = Field(None, description="AI confidence (0.0-1.0)")
     ai_reasoning: Optional[str] = Field(None, description="AI explanation for suggestion")
-    feedback_at: Optional[datetime] = Field(None, description="Feedback timestamp")
+    vector_search_score: Optional[float] = Field(None, description="Raw vector search similarity score")
+    suggestion_rank: Optional[int] = Field(None, description="Rank of this suggestion (1 = top)")
+    feedback_ts: Optional[datetime] = Field(None, description="Feedback timestamp")
     feedback_by: Optional[str] = Field(None, description="User who provided feedback")
 
 

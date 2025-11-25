@@ -72,7 +72,7 @@ class FeedbackService:
         feedback_data: MappingFeedbackCreateV2
     ) -> Dict[str, Any]:
         """Create feedback record (synchronous)."""
-        print(f"[Feedback Service] Creating feedback: {feedback_data.feedback_status}")
+        print(f"[Feedback Service] Creating feedback: {feedback_data.feedback_action}")
         
         connection = self._get_sql_connection(server_hostname, http_path)
         

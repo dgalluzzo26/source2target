@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/v2/feedback", tags=["Feedback V2"])
 feedback_service = FeedbackService()
 
 
-@router.post("/", response_model=MappingFeedbackV2)
+@router.post("", response_model=MappingFeedbackV2)
 async def create_feedback(feedback_data: MappingFeedbackCreateV2 = Body(...)):
     """
     Submit feedback on an AI mapping suggestion.
@@ -20,24 +20,24 @@ async def create_feedback(feedback_data: MappingFeedbackCreateV2 = Body(...)):
     Captures user acceptance or rejection of AI suggestions to improve
     future recommendations through pattern learning.
     
-    **Feedback Status Values:**
+    **Feedback Action Values:**
     - `ACCEPTED`: User accepted the AI suggestion
     - `REJECTED`: User rejected the AI suggestion
-    - `PENDING`: Suggestion not yet reviewed
+    - `MODIFIED`: User modified the AI suggestion
     
     **Example Request:**
     ```json
     {
-      "src_table_name": "T_MEMBER",
-      "src_table_physical_name": "t_member",
-      "src_column_name": "FIRST_NAME",
-      "src_column_physical_name": "first_name",
-      "suggested_tgt_table_name": "slv_member",
-      "suggested_tgt_column_name": "full_name",
-      "feedback_status": "ACCEPTED",
-      "user_comment": "Good match, used it",
+      "suggested_src_table": "T_MEMBER",
+      "suggested_src_column": "FIRST_NAME",
+      "suggested_tgt_table": "slv_member",
+      "suggested_tgt_column": "full_name",
+      "feedback_action": "ACCEPTED",
+      "user_comments": "Good match, used it",
       "ai_confidence_score": 0.95,
       "ai_reasoning": "Strong semantic match",
+      "vector_search_score": 0.012,
+      "suggestion_rank": 1,
       "feedback_by": "john.doe@example.com"
     }
     ```
@@ -54,7 +54,7 @@ async def create_feedback(feedback_data: MappingFeedbackCreateV2 = Body(...)):
     """
     try:
         result = await feedback_service.create_feedback(feedback_data)
-        print(f"[Feedback API] Created feedback: {feedback_data.feedback_status}")
+        print(f"[Feedback API] Created feedback: {feedback_data.feedback_action}")
         return result
         
     except ValueError as e:
