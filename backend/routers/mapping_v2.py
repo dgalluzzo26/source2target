@@ -341,7 +341,9 @@ async def export_mappings(request: Request):
                 source_columns.append(field.get('src_column_name', ''))
                 source_columns_physical.append(field.get('src_column_physical_name', ''))
                 field_orders.append(str(field.get('field_order', '')))
-                field_transformations.append(field.get('transformation_expr', ''))
+                # Handle None transformations - convert to empty string
+                transformation = field.get('transformation_expr')
+                field_transformations.append(transformation if transformation is not None else '')
             
             # Extract join info
             join_conditions = []
