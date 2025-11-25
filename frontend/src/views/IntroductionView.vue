@@ -14,7 +14,7 @@
               comprehensive data discovery, and intelligent automation tools.
             </p>
           </div>
-          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
             <HelpButton 
               help-type="quick-start" 
               label="Quick Start" 

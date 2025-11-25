@@ -72,6 +72,47 @@
               <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Settings</span>
             </router-link>
           </li>
+          
+          <!-- Help Section -->
+          <li class="menu-section" v-if="!sidebarCollapsed">
+            <span class="menu-section-label">Help</span>
+          </li>
+          <li>
+            <div class="layout-menuitem-link help-button-wrapper" v-tooltip.right="sidebarCollapsed ? 'Quick Start' : ''">
+              <HelpButton 
+                help-type="quick-start" 
+                label="Quick Start" 
+                severity="info"
+                icon="pi pi-bolt"
+                tooltip=""
+                style="width: 100%;"
+              />
+            </div>
+          </li>
+          <li>
+            <div class="layout-menuitem-link help-button-wrapper" v-tooltip.right="sidebarCollapsed ? 'User Guide' : ''">
+              <HelpButton 
+                help-type="user-guide" 
+                label="User Guide" 
+                severity="info"
+                icon="pi pi-book"
+                tooltip=""
+                style="width: 100%;"
+              />
+            </div>
+          </li>
+          <li v-if="userStore.isAdmin">
+            <div class="layout-menuitem-link help-button-wrapper" v-tooltip.right="sidebarCollapsed ? 'Admin Guide' : ''">
+              <HelpButton 
+                help-type="admin-config" 
+                label="Admin Guide" 
+                severity="info"
+                icon="pi pi-cog"
+                tooltip=""
+                style="width: 100%;"
+              />
+            </div>
+          </li>
         </ul>
       </div>
     </div>
@@ -89,6 +130,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import Badge from 'primevue/badge'
+import HelpButton from '@/components/HelpButton.vue'
 
 const userStore = useUserStore()
 const sidebarCollapsed = ref(false)
@@ -308,6 +350,25 @@ onMounted(() => {
 
 .layout-menuitem-text {
   font-weight: 500;
+}
+
+/* Help Button Wrapper in Sidebar */
+.help-button-wrapper {
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  cursor: default;
+}
+
+.help-button-wrapper:hover {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.layout-sidebar.collapsed .help-button-wrapper {
+  padding: 0.25rem !important;
 }
 
 /* Main Content Area */

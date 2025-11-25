@@ -305,42 +305,76 @@ If your source fields come from different tables:
 
 ## Complete Example: Mapping Full Name
 
-Let's walk through a complete example:
+Let's walk through the complete **6-step process** with a real example:
 
 ### Scenario
-Map `FIRST_NAME` and `LAST_NAME` to `full_name` target field.
+Map `FIRST_NAME` and `LAST_NAME` from the source system to a `full_name` target field.
 
-### Step-by-Step
+### Step-by-Step Walkthrough
 
-1. **Navigate**: Click "Create Mappings"
+#### STEP 1: Check System Status ✅
+1. Click **"Home"** in the left sidebar
+2. Verify all indicators are green:
+   - ✅ Database Connection: Connected
+   - ✅ Vector Search: Available
+   - ✅ AI Model: Ready
+   - ✅ Configuration: Valid
+3. All systems operational - ready to proceed!
 
-2. **Select Source Fields**:
+#### STEP 2: Navigate to Create Mappings ➕
+1. Click **"Create Mappings"** in the left sidebar
+2. Unmapped Fields table loads
+3. See list of available source fields
+
+#### STEP 3: Select Source Field(s) ☑️
+1. Find and select fields:
    - ☑️ FIRST_NAME (from t_member table)
    - ☑️ LAST_NAME (from t_member table)
-   - Click "Map Selected Fields"
+2. Click **"Map Selected Fields"** button
+3. Mapping wizard opens
 
-3. **Get AI Suggestions**:
-   - Click "🤖 Get AI Suggestions"
-   - Wait for results
-   - AI suggests: `slv_member.full_name` (confidence: 0.92)
-   - Click "Select" on that suggestion
+#### STEP 4: Choose Target Field 🎯
+**Using AI Suggestions:**
+1. Click **"🤖 Get AI Suggestions"**
+2. Wait 15-20 seconds for AI processing
+3. Review suggestions:
+   - **Rank #1**: `slv_member.full_name` (confidence: 0.92) ⭐
+   - **Rank #2**: `slv_demographics.member_name` (confidence: 0.78)
+   - **Rank #3**: `slv_person.full_legal_name` (confidence: 0.65)
+4. Click **"Select"** on Rank #1 (best match)
+5. Target field populated: `slv_member.full_name`
 
-4. **Configure Mapping**:
-   - **Source Field 1** (FIRST_NAME):
-     - Transformation: `TRIM_UPPER` → `UPPER(TRIM(first_name))`
-   - **Source Field 2** (LAST_NAME):
-     - Transformation: `TRIM_UPPER` → `UPPER(TRIM(last_name))`
-   - **Concatenation**: `SPACE`
-   - **Result Preview**: `CONCAT(UPPER(TRIM(first_name)), ' ', UPPER(TRIM(last_name)))`
+#### STEP 5: Configure Mapping 🔧
+**Configure Source Fields:**
+1. **FIRST_NAME** (Field 1️⃣):
+   - Transformation dropdown: Select "Trim and Upper"
+   - Expression: `UPPER(TRIM(first_name))`
 
-5. **Save Mapping**:
-   - Click "Save Mapping"
-   - Success! ✅
+2. **LAST_NAME** (Field 2️⃣):
+   - Transformation dropdown: Select "Trim and Upper"
+   - Expression: `UPPER(TRIM(last_name))`
 
-6. **Verify**:
-   - Go to "View Mappings"
-   - See: `slv_member.full_name` ← `FIRST_NAME | LAST_NAME`
-   - Status: ACTIVE
+**Set Concatenation:**
+3. Concatenation Strategy: **SPACE**
+4. Preview: `CONCAT(UPPER(TRIM(first_name)), ' ', UPPER(TRIM(last_name)))`
+
+**Review:**
+- Source: FIRST_NAME + LAST_NAME
+- Target: slv_member.full_name
+- Result: "JOHN DOE" (uppercase, trimmed, space-separated)
+
+#### STEP 6: Save & Verify 💾
+1. Click **"Save Mapping"**
+2. Success message: "Mapping created successfully!"
+3. Wizard closes
+4. **Verify:**
+   - Click **"View Mappings"** in sidebar
+   - Find row: `slv_member.full_name`
+   - Source shows: `FIRST_NAME | LAST_NAME` with badge "2 fields"
+   - Status: ACTIVE ✅
+   - Created: Just now
+
+**🎉 Mapping Complete!** The full_name field will now be populated by combining FIRST_NAME and LAST_NAME with the transformations applied.
 
 ---
 

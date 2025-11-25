@@ -160,11 +160,24 @@
     <div class="container">
         <div class="header">
             <h1>⚙️ Administrator Configuration Guide</h1>
-            <p>Complete guide to managing system configuration and settings</p>
+            <p>Complete guide to managing transformations, semantic fields, and system configuration</p>
         </div>
 
         <div class="info-box">
             <strong>📸 Interactive Demo:</strong> <a href="config_mockup.html">View Configuration Page Demo →</a>
+        </div>
+
+        <div class="section">
+            <h2>📋 Admin Navigation</h2>
+            <p>The administration section includes three main areas:</p>
+            <ul>
+                <li><strong>🛡️ Transformation Management</strong> - Manage SQL transformation templates for field mappings</li>
+                <li><strong>📊 Semantic Management</strong> - Manage target field definitions in the semantic table</li>
+                <li><strong>⚙️ Configuration</strong> - Configure database, vector search, and AI model settings</li>
+            </ul>
+            <div class="info-box">
+                <strong>💡 Note:</strong> These admin features are only visible to users in designated admin groups.
+            </div>
         </div>
 
         <div class="section">
@@ -219,19 +232,88 @@
                     <td>mapping_metadata</td>
                 </tr>
                 <tr>
-                    <td><code>mapping_table</code></td>
-                    <td>Table storing source-to-target mappings</td>
-                    <td>source_target_mappings</td>
-                </tr>
-                <tr>
                     <td><code>semantic_table</code></td>
                     <td>Table with target field definitions</td>
                     <td>target_semantic_layer</td>
                 </tr>
             </table>
 
+            <h3>V2 Multi-Field Mapping Tables</h3>
+            <p>The V2 schema supports multi-field mappings with the following tables:</p>
+            <table>
+                <tr>
+                    <th>Table</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><code>mapped_fields</code></td>
+                    <td>Main mapping records (one per target field)</td>
+                </tr>
+                <tr>
+                    <td><code>mapping_details</code></td>
+                    <td>Individual source fields (multiple per mapping)</td>
+                </tr>
+                <tr>
+                    <td><code>mapping_joins</code></td>
+                    <td>Join conditions for multi-table mappings</td>
+                </tr>
+                <tr>
+                    <td><code>transformations</code></td>
+                    <td>SQL transformation templates library</td>
+                </tr>
+                <tr>
+                    <td><code>unmapped_fields</code></td>
+                    <td>Source fields awaiting mapping</td>
+                </tr>
+            </table>
+
             <div class="warning-box">
                 <strong>⚠️ Important:</strong> Ensure the SQL Warehouse is running before saving database configuration changes. Incorrect settings will cause connection failures.
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔗 V2 Multi-Field Mapping Features</h2>
+            <p>Version 2 introduces powerful multi-field mapping capabilities for complex ETL scenarios.</p>
+
+            <h3>Key Capabilities</h3>
+            <ul>
+                <li><strong>Multiple Source Fields:</strong> Map 2+ source fields to one target field (e.g., FIRST_NAME + LAST_NAME → full_name)</li>
+                <li><strong>Individual Transformations:</strong> Apply different SQL transformations to each source field</li>
+                <li><strong>Concatenation Strategies:</strong> Combine fields with SPACE, COMMA, PIPE, CUSTOM separator, or NONE</li>
+                <li><strong>Cross-Table Joins:</strong> Map fields from different source tables with SQL join conditions</li>
+                <li><strong>Generated SQL:</strong> Complete transformation expression auto-generated for ETL use</li>
+                <li><strong>Export Mappings:</strong> Download all mappings as CSV with SQL expressions</li>
+            </ul>
+
+            <h3>Editing Restrictions</h3>
+            <p>To maintain data integrity, certain mapping changes are restricted:</p>
+            <table>
+                <tr>
+                    <th>Can Edit</th>
+                    <th>Cannot Edit</th>
+                </tr>
+                <tr>
+                    <td>
+                        <ul>
+                            <li>Transformations on source fields</li>
+                            <li>Concatenation strategy</li>
+                            <li>Custom separator</li>
+                            <li>Join conditions</li>
+                        </ul>
+                    </td>
+                    <td>
+                        <ul>
+                            <li>Target field (table/column)</li>
+                            <li>Adding/removing source fields</li>
+                            <li>Changing source field order</li>
+                        </ul>
+                    </td>
+                </tr>
+            </table>
+
+            <div class="info-box">
+                <strong>💡 Tip:</strong> To change the target field or source field structure, delete the existing mapping and create a new one.
             </div>
         </div>
 
@@ -326,60 +408,147 @@
         </div>
 
         <div class="section">
-            <h2>📊 Managing Semantic Table</h2>
-            <p>The semantic table contains all target field definitions that AI uses for matching.</p>
+            <h2>🛡️ Transformation Management</h2>
+            <p>Manage SQL transformation templates that can be applied to source fields during mapping. Navigate to <strong>Administration → Transformation Management</strong>.</p>
+
+            <h3>Transformation Library</h3>
+            <p>The transformation library contains reusable SQL expressions that standardize data during ETL:</p>
+            <ul>
+                <li><strong>TRIM</strong> - Remove leading/trailing whitespace: <code>TRIM(field)</code></li>
+                <li><strong>TRIM + INITCAP</strong> - Capitalize first letter of each word: <code>INITCAP(TRIM(field))</code></li>
+                <li><strong>TRIM + UPPER</strong> - Convert to uppercase: <code>UPPER(TRIM(field))</code></li>
+                <li><strong>TRIM + LOWER</strong> - Convert to lowercase: <code>LOWER(TRIM(field))</code></li>
+                <li><strong>TO_DATE</strong> - Convert string to date: <code>TO_DATE(field, 'yyyy-MM-dd')</code></li>
+                <li><strong>Custom Transformations</strong> - Add your own SQL expressions</li>
+            </ul>
+
+            <h3>Managing Transformations</h3>
+            <table>
+                <tr>
+                    <th>Operation</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><strong>Add Transformation</strong></td>
+                    <td>Click "Add Transformation" button, provide code, description, and SQL expression template</td>
+                </tr>
+                <tr>
+                    <td><strong>Edit Transformation</strong></td>
+                    <td>Click edit icon to modify description or SQL expression (custom transformations only)</td>
+                </tr>
+                <tr>
+                    <td><strong>Delete Transformation</strong></td>
+                    <td>Click delete icon to remove transformation (custom transformations only)</td>
+                </tr>
+                <tr>
+                    <td><strong>Search</strong></td>
+                    <td>Use search box to filter transformations by code or description</td>
+                </tr>
+            </table>
+
+            <h3>System vs Custom Transformations</h3>
+            <ul>
+                <li><strong>System Transformations:</strong> Built-in transformations marked with a shield icon 🛡️ - cannot be edited or deleted</li>
+                <li><strong>Custom Transformations:</strong> User-created transformations that can be fully managed</li>
+            </ul>
+
+            <h3>Creating Custom Transformations</h3>
+            <ol style="margin-left: 2rem;">
+                <li>Click <strong>Add Transformation</strong></li>
+                <li>Enter a unique <strong>Code</strong> (e.g., "CUSTOM_FORMAT")</li>
+                <li>Provide a <strong>Description</strong> (e.g., "Format phone number")</li>
+                <li>Enter the <strong>SQL Expression</strong> using <code>{field}</code> as placeholder:
+                    <ul>
+                        <li>Example: <code>REGEXP_REPLACE({field}, '[^0-9]', '')</code></li>
+                        <li>The <code>{field}</code> placeholder will be replaced with actual field names</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Save</strong></li>
+                <li>New transformation appears immediately in the mapping interface</li>
+            </ol>
+
+            <div class="warning-box">
+                <strong>⚠️ Important:</strong> Test custom SQL expressions thoroughly before deploying. Invalid SQL will cause mapping errors.
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📊 Semantic Management</h2>
+            <p>Manage target field definitions in the semantic table. Navigate to <strong>Administration → Semantic Management</strong>.</p>
+
+            <h3>About the Semantic Table</h3>
+            <p>The semantic table contains all target field definitions that AI uses for matching source fields to target fields. Each record represents one target column available for mapping.</p>
 
             <h3>Semantic Table Operations</h3>
             <ul>
-                <li><strong>View:</strong> Browse all target fields in the Semantic Table tab (admin only)</li>
+                <li><strong>View:</strong> Browse all target fields in the Semantic Management view (admin only)</li>
                 <li><strong>Search:</strong> Filter by table name, column name, or description</li>
+                <li><strong>Add:</strong> Create new target field definitions manually</li>
                 <li><strong>Edit:</strong> Update target field details, datatypes, nullable, comments</li>
                 <li><strong>Delete:</strong> Remove target fields (with confirmation)</li>
-                <li><strong>Bulk Add:</strong> Import multiple target fields via CSV (coming soon)</li>
+                <li><strong>Vector Search Sync:</strong> Automatically syncs vector search index after changes</li>
             </ul>
 
-            <h3>Required Columns</h3>
+            <h3>Semantic Table Schema</h3>
             <table>
                 <tr>
                     <th>Column</th>
                     <th>Purpose</th>
+                    <th>Example</th>
                 </tr>
                 <tr>
                     <td><code>tgt_table_name</code></td>
                     <td>Target table logical name</td>
+                    <td>slv_member</td>
                 </tr>
                 <tr>
                     <td><code>tgt_column_name</code></td>
                     <td>Target column logical name</td>
+                    <td>full_name</td>
                 </tr>
                 <tr>
                     <td><code>tgt_table_physical_name</code></td>
                     <td>Actual table name in database</td>
+                    <td>healthcare_data.silver.member</td>
                 </tr>
                 <tr>
                     <td><code>tgt_column_physical_name</code></td>
                     <td>Actual column name in database</td>
+                    <td>member_full_name</td>
                 </tr>
                 <tr>
                     <td><code>tgt_comments</code></td>
                     <td>Description (helps AI matching)</td>
+                    <td>Member full name combined from first and last name</td>
                 </tr>
                 <tr>
                     <td><code>tgt_physical_datatype</code></td>
-                    <td>Column datatype (STRING, INT, etc.)</td>
+                    <td>Column datatype</td>
+                    <td>STRING, INT, DATE, TIMESTAMP, etc.</td>
                 </tr>
                 <tr>
                     <td><code>tgt_nullable</code></td>
+                    <td>Null constraint</td>
                     <td>"Null" or "Not Null"</td>
                 </tr>
                 <tr>
                     <td><code>semantic_field</code></td>
                     <td>Combined text for vector search</td>
+                    <td>Auto-generated from table, column, and comments</td>
                 </tr>
             </table>
 
+            <h3>Vector Search Sync</h3>
+            <p>The vector search index must stay synchronized with the semantic table for AI suggestions to work correctly:</p>
+            <ul>
+                <li><strong>Automatic Sync:</strong> The system automatically triggers a sync after add/edit/delete operations</li>
+                <li><strong>Sync Status:</strong> Look for "Vector search index sync triggered successfully" message after changes</li>
+                <li><strong>Sync Delay:</strong> Changes may take 1-2 minutes to appear in AI suggestions</li>
+                <li><strong>Manual Sync:</strong> If needed, contact your Databricks admin to manually sync the index</li>
+            </ul>
+
             <div class="info-box">
-                <strong>💡 Important:</strong> After adding/editing target fields, the Vector Search index must be resynced to include the changes.
+                <strong>💡 Important:</strong> After adding/editing target fields, wait 1-2 minutes before expecting them to appear in AI suggestions. The vector search index syncs asynchronously.
             </div>
         </div>
 
@@ -422,6 +591,7 @@
                 <li>Check server hostname and HTTP path are correct</li>
                 <li>Ensure app has OAuth access to workspace</li>
                 <li>Verify catalog and schema names exist</li>
+                <li>Confirm all V2 tables exist (mapped_fields, mapping_details, mapping_joins, transformations, unmapped_fields)</li>
             </ul>
 
             <h3>Vector Search Not Available</h3>
@@ -430,6 +600,7 @@
                 <li>Verify index name matches exactly</li>
                 <li>Ensure index is synced with semantic table</li>
                 <li>Check app has permission to query endpoint</li>
+                <li>Wait 1-2 minutes after semantic table changes for sync to complete</li>
             </ul>
 
             <h3>AI Model Not Ready</h3>
@@ -447,15 +618,94 @@
                 <li>User may need to log out and back in</li>
                 <li>Check Databricks workspace for group membership</li>
             </ul>
+
+            <h3>Transformations Not Appearing</h3>
+            <ul>
+                <li>Verify transformation was saved successfully (check for success message)</li>
+                <li>Refresh the mapping page if transformations don't appear in dropdowns</li>
+                <li>Check for duplicate transformation codes (must be unique)</li>
+                <li>Ensure transformations table exists in database</li>
+            </ul>
+
+            <h3>Mapping Edit Fails</h3>
+            <ul>
+                <li>Cannot edit target field - this requires deleting and recreating the mapping</li>
+                <li>Cannot add/remove source fields - create a new mapping instead</li>
+                <li>Check that transformation expressions are valid SQL</li>
+                <li>Verify join conditions reference existing tables and columns</li>
+                <li>Ensure custom separators are valid strings</li>
+            </ul>
+
+            <h3>Export Fails or Missing Data</h3>
+            <ul>
+                <li>Ensure you have at least one mapped field to export</li>
+                <li>Check browser allows CSV downloads</li>
+                <li>Verify database connection is active</li>
+                <li>Check that mapped_fields and mapping_details tables are accessible</li>
+            </ul>
+
+            <h3>Vector Search Index Not Syncing</h3>
+            <ul>
+                <li>Check the browser console for error messages</li>
+                <li>Verify the vector search endpoint has permission to sync</li>
+                <li>Ensure the index source table matches the semantic table</li>
+                <li>Try manually triggering a sync via Databricks console</li>
+                <li>Check Databricks logs for vector search sync errors</li>
+            </ul>
         </div>
 
         <div class="section" style="background: linear-gradient(135deg, #e8f4fd, #f0f8ff); border-left-color: #38a169;">
             <h2>📚 Additional Resources</h2>
             <ul>
-                <li><strong>⚡ Quick Start:</strong> <a href="quick-start.html">Step-by-step guide for first mapping</a></li>
+                <li><strong>⚡ Quick Start:</strong> <a href="quick-start.html">6-step V2 multi-field mapping guide</a></li>
                 <li><strong>📖 User Guide:</strong> <a href="user-guide.html">Complete user documentation</a></li>
-                <li><strong>📸 Config Demo:</strong> <a href="config_mockup.html">Interactive configuration page demo</a></li>
+                <li><strong>📸 Multi-Field Mapping Demo:</strong> <a href="multi_field_mapping_mockup.html">Interactive V2 mapping workflow</a></li>
+                <li><strong>⚙️ Config Demo:</strong> <a href="config_mockup.html">Interactive configuration page demo</a></li>
             </ul>
+
+            <h2 style="margin-top: 2rem;">🎯 Quick Reference: Admin Tasks</h2>
+            <table>
+                <tr>
+                    <th>Task</th>
+                    <th>Location</th>
+                    <th>Action</th>
+                </tr>
+                <tr>
+                    <td>Add SQL transformation</td>
+                    <td>Administration → Transformation Management</td>
+                    <td>Click "Add Transformation" button</td>
+                </tr>
+                <tr>
+                    <td>Manage target fields</td>
+                    <td>Administration → Semantic Management</td>
+                    <td>Add, edit, or delete semantic table entries</td>
+                </tr>
+                <tr>
+                    <td>Configure database</td>
+                    <td>Administration → Configuration</td>
+                    <td>Update database settings, save, validate</td>
+                </tr>
+                <tr>
+                    <td>Configure vector search</td>
+                    <td>Administration → Configuration</td>
+                    <td>Update endpoint and index names</td>
+                </tr>
+                <tr>
+                    <td>Configure AI model</td>
+                    <td>Administration → Configuration</td>
+                    <td>Update model endpoint and parameters</td>
+                </tr>
+                <tr>
+                    <td>Export all mappings</td>
+                    <td>Field Mapping → Mapped Fields</td>
+                    <td>Click "Export Mappings" button</td>
+                </tr>
+                <tr>
+                    <td>Check system status</td>
+                    <td>Introduction page</td>
+                    <td>Review all four status indicators</td>
+                </tr>
+            </table>
         </div>
     </div>
 </body>

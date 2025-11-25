@@ -165,131 +165,111 @@
 
         <div class="step">
             <div class="step-number">1</div>
-            <h2><span class="icon">✅</span> Check System Status</h2>
-            <p>Before you begin, verify the system is ready:</p>
+            <h2><span class="icon">📋</span> Select Source Field(s)</h2>
+            <p>Choose one or more source fields to map:</p>
             <ul>
-                <li>Look at the <strong>Introduction</strong> page (📊 icon in sidebar)</li>
-                <li>Check that all system status indicators show success:
-                    <ul>
-                        <li>✅ <span class="highlight">Database Connection</span> - Connected</li>
-                        <li>✅ <span class="highlight">Vector Search</span> - Available</li>
-                        <li>✅ <span class="highlight">AI Model</span> - Ready</li>
-                        <li>✅ <span class="highlight">Configuration</span> - Valid</li>
-                    </ul>
-                </li>
+                <li>Navigate to <strong>Field Mapping</strong> in the left sidebar</li>
+                <li>Click the <strong>Unmapped Fields</strong> tab</li>
+                <li>Select one or more source fields from the table (use checkboxes for multiple)</li>
+                <li><strong>Multi-field mapping:</strong> Select multiple related fields (e.g., FIRST_NAME + LAST_NAME) to combine into a single target field</li>
             </ul>
             <div class="tip">
-                <strong>💡 Tip:</strong> If any status shows an error or warning, contact your administrator before proceeding. The system needs all components ready for optimal performance.
+                <strong>💡 Tip:</strong> Multi-field mappings are powerful! Combine related fields like name components, address parts, or date/time fields into a single target field.
             </div>
-            <p style="margin-top: 1rem;"><a href="app_mockup.html" style="color: #003366; text-decoration: underline; font-weight: 600;">📸 View Introduction Page Demo →</a></p>
+            <p style="margin-top: 1rem;"><a href="multi_field_mapping_mockup.html" style="color: #003366; text-decoration: underline; font-weight: 600;">📸 View Multi-Field Mapping Demo →</a></p>
         </div>
 
         <div class="step">
             <div class="step-number">2</div>
-            <h2><span class="icon">🗺️</span> Navigate to Field Mapping</h2>
-            <p>Open the mapping workspace:</p>
+            <h2><span class="icon">🎯</span> Choose Target Field</h2>
+            <p>Select or let AI suggest the target field:</p>
             <ul>
-                <li>Click <strong>Field Mapping</strong> in the left sidebar</li>
-                <li>You'll see three main tabs:
-                    <ul>
-                        <li><strong>📋 Unmapped Fields</strong> - Source fields that need to be mapped</li>
-                        <li><strong>✅ Mapped Fields</strong> - Fields that are already mapped</li>
-                        <li><strong>📊 Semantic Table</strong> (Admin only) - All available target fields</li>
-                    </ul>
-                </li>
-            </ul>
-            <p style="margin-top: 1rem;"><a href="field_mapping_mockup.html" style="color: #003366; text-decoration: underline; font-weight: 600;">📸 View Field Mapping Demo →</a></p>
-        </div>
-
-        <div class="step">
-            <div class="step-number">3</div>
-            <h2><span class="icon">📌</span> Select an Unmapped Field</h2>
-            <p>Choose a source field to map:</p>
-            <ul>
-                <li>Browse the <strong>Unmapped Fields</strong> table</li>
-                <li>Use the <strong>search box</strong> to filter by table name, column name, or description</li>
-                <li>Click on any row to select it</li>
-                <li>The selected field details will appear below the table</li>
+                <li><strong>AI Suggestions (Recommended):</strong> Click <strong>Get AI Suggestions</strong> to see AI-recommended target fields based on semantic similarity</li>
+                <li><strong>Manual Selection:</strong> Browse the semantic table and manually select a target field</li>
+                <li>Review the suggested target field's table name, column name, data type, and description</li>
+                <li>Accept the suggestion or modify it</li>
             </ul>
             <div class="tip">
-                <strong>💡 Tip:</strong> Fields with good descriptions get better AI suggestions! Look for fields that have meaningful comments or descriptions.
+                <strong>🤖 AI Power:</strong> The AI analyzes field names, descriptions, and data types to suggest the best target matches. It's especially good at detecting multi-field patterns like "full_name" for FIRST_NAME + LAST_NAME.
             </div>
         </div>
 
         <div class="step">
-            <div class="step-number">4</div>
-            <h2><span class="icon">🤖</span> Generate AI Mapping Suggestions</h2>
-            <p>Let AI find the best target field matches:</p>
+            <div class="step-number">3</div>
+            <h2><span class="icon">🔄</span> Configure Transformations</h2>
+            <p>Apply SQL transformations to each source field:</p>
             <ul>
-                <li>Review the <strong>AI Configuration</strong> panel:
+                <li>For each selected source field, choose a transformation from the dropdown:
                     <ul>
-                        <li><code>Number of Vector Results: 25</code> (default is fine)</li>
-                        <li><code>Number of AI Results: 10</code> (default is fine)</li>
-                        <li><code>User Feedback:</code> Optional - add context like "Focus on patient demographics"</li>
+                        <li><strong>TRIM + INITCAP</strong> - Capitalize first letter of each word, remove spaces</li>
+                        <li><strong>TRIM + UPPER</strong> - Convert to uppercase, remove spaces</li>
+                        <li><strong>TRIM + LOWER</strong> - Convert to lowercase, remove spaces</li>
+                        <li><strong>TO_DATE</strong> - Convert string to date format</li>
+                        <li><strong>No Transformation</strong> - Use the field as-is</li>
                     </ul>
                 </li>
-                <li>Click <strong>🤖 Generate AI Mapping Suggestions</strong></li>
-                <li>Wait 15-25 seconds for the AI to process and return suggestions</li>
+                <li>Transformations are applied <strong>before</strong> concatenation</li>
+                <li>Custom transformations can be managed in <strong>Administration → Transformation Management</strong></li>
             </ul>
         </div>
 
         <div class="step">
-            <div class="step-number">5</div>
-            <h2><span class="icon">🎯</span> Review Suggestions & Select</h2>
-            <p>Evaluate the AI-generated mapping suggestions:</p>
+            <div class="step-number">4</div>
+            <h2><span class="icon">🔗</span> Set Concatenation Strategy</h2>
+            <p>Define how multiple source fields are combined:</p>
             <ul>
-                <li>Review the suggestions table showing:
-                    <ul>
-                        <li><strong>Rank</strong> - Ordered by confidence (best first)</li>
-                        <li><strong>Target Table & Column</strong> - Suggested target field</li>
-                        <li><strong>Confidence Score</strong> - How confident the AI is (0-1 scale)</li>
-                        <li><strong>Reasoning</strong> - Why this match was suggested</li>
-                    </ul>
-                </li>
-                <li>Find the best match and click <strong>Select Target</strong></li>
-                <li>The mapping is saved automatically!</li>
-                <li>The field moves from <span class="highlight">Unmapped</span> to <span class="highlight">Mapped Fields</span></li>
+                <li><strong>SPACE</strong> - Combine with space: "John" + "Doe" → "John Doe"</li>
+                <li><strong>COMMA</strong> - Combine with comma: "John" + "Doe" → "John,Doe"</li>
+                <li><strong>PIPE</strong> - Combine with pipe: "John" + "Doe" → "John|Doe"</li>
+                <li><strong>CUSTOM</strong> - Specify your own separator (e.g., " - ", ", ")</li>
+                <li><strong>NONE</strong> - No concatenation (for single-field mappings)</li>
             </ul>
             <div class="tip">
-                <strong>🎯 Understanding Confidence Scores:</strong>
-                <ul>
-                    <li><strong>0.8-1.0</strong> = Excellent match! ⭐⭐⭐</li>
-                    <li><strong>0.6-0.8</strong> = Good match, review carefully ⭐⭐</li>
-                    <li><strong>0.4-0.6</strong> = Possible match, use your judgment ⭐</li>
-                    <li><strong>&lt;0.4</strong> = Consider manual search instead 🔍</li>
-                </ul>
+                <strong>💡 Tip:</strong> Choose SPACE for names, COMMA for address components, PIPE for data exports, or CUSTOM for special formatting needs.
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">5</div>
+            <h2><span class="icon">🔀</span> Define Join Conditions (Optional)</h2>
+            <p>If mapping fields from multiple source tables, define how they join:</p>
+            <ul>
+                <li>Click <strong>Add Join Condition</strong> to create a join</li>
+                <li>Specify:
+                    <ul>
+                        <li><strong>Left Table & Column</strong> - First join key</li>
+                        <li><strong>Join Type</strong> - INNER, LEFT, RIGHT, FULL OUTER</li>
+                        <li><strong>Join Operator</strong> - = (equals), != (not equals), &lt;, &gt;, etc.</li>
+                        <li><strong>Right Table & Column</strong> - Second join key</li>
+                    </ul>
+                </li>
+                <li>Add multiple join conditions if needed (joined with AND)</li>
+            </ul>
+            <div class="tip">
+                <strong>💡 Tip:</strong> Most joins use INNER with = operator. Only needed when combining fields from different source tables.
             </div>
         </div>
 
         <div class="step">
             <div class="step-number">6</div>
-            <h2><span class="icon">🔍</span> Alternative: Manual Search</h2>
-            <p>If AI suggestions aren't a good match, use manual search:</p>
+            <h2><span class="icon">💾</span> Review & Save Mapping</h2>
+            <p>Preview the SQL transformation and save:</p>
             <ul>
-                <li>Scroll to the <strong>🔍 Manual Search</strong> section</li>
-                <li>Enter a search term:
+                <li>Review the <strong>Transformation Expression Preview</strong> showing the generated SQL</li>
+                <li>Verify:
                     <ul>
-                        <li>Target table name (e.g., "patient", "claim", "provider")</li>
-                        <li>Target column name (e.g., "patient_id", "claim_date")</li>
-                        <li>Description keywords (e.g., "identifier", "timestamp", "code")</li>
+                        <li>Source fields are in the correct order</li>
+                        <li>Transformations are applied correctly</li>
+                        <li>Concatenation strategy is appropriate</li>
+                        <li>Join conditions (if any) are accurate</li>
                     </ul>
                 </li>
-                <li>Click <strong>🔍 Search Semantic Table</strong></li>
-                <li>Browse up to 50 matching results</li>
-                <li>Click <strong>Select Target</strong> on the desired field</li>
+                <li>Click <strong>Save Mapping</strong> to commit the mapping</li>
+                <li>The mapping appears in the <strong>Mapped Fields</strong> tab</li>
             </ul>
-        </div>
-
-        <div class="step">
-            <div class="step-number">7</div>
-            <h2><span class="icon">✅</span> View Your Mapped Fields</h2>
-            <p>Check your completed mappings:</p>
-            <ul>
-                <li>Switch to the <strong>✅ Mapped Fields</strong> tab</li>
-                <li>See all your completed source-to-target mappings</li>
-                <li>Use the search box to find specific mappings</li>
-                <li>Click the <strong>🗑️ Delete</strong> button if you need to unmap a field</li>
-            </ul>
+            <div class="tip">
+                <strong>✅ Success!</strong> Your mapping is now saved and can be exported for use in ETL processes. You can edit transformations, joins, and concatenation strategy later, but cannot change the target field or add/remove source fields without creating a new mapping.
+            </div>
         </div>
 
         <div class="success-box">
@@ -301,31 +281,35 @@
         <div class="step">
             <h2><span class="icon">📚</span> Pro Tips for Better Mappings</h2>
             <ul>
-                <li>✅ <strong>Start with AI suggestions</strong> - They're usually very accurate and save time</li>
-                <li>✅ <strong>Check confidence scores</strong> - Higher scores (0.7+) are more reliable</li>
-                <li>✅ <strong>Add field descriptions</strong> - Source fields with good descriptions get better matches</li>
-                <li>✅ <strong>Use User Feedback</strong> - Guide the AI with context like "Healthcare claims data"</li>
-                <li>✅ <strong>Verify data types</strong> - Make sure source and target data types are compatible</li>
-                <li>✅ <strong>Check nullable constraints</strong> - Ensure nullable settings align</li>
-                <li>✅ <strong>Work in batches</strong> - Map related fields together for consistency</li>
-                <li>✅ <strong>Review your work</strong> - Check the Mapped Fields tab periodically</li>
+                <li>✅ <strong>Group related fields</strong> - Map name components, address parts, or dates together for multi-field mappings</li>
+                <li>✅ <strong>Use AI suggestions first</strong> - AI is excellent at detecting multi-field patterns and semantic matches</li>
+                <li>✅ <strong>Order matters</strong> - Arrange source fields in the correct order (e.g., FIRST_NAME before LAST_NAME)</li>
+                <li>✅ <strong>Choose appropriate transformations</strong> - Use INITCAP for names, UPPER for codes, TO_DATE for dates</li>
+                <li>✅ <strong>Preview the SQL</strong> - Always review the transformation expression before saving</li>
+                <li>✅ <strong>Test concatenation</strong> - Make sure SPACE, COMMA, or PIPE produces the desired output format</li>
+                <li>✅ <strong>Verify data types</strong> - Ensure source and target data types are compatible</li>
+                <li>✅ <strong>Add field descriptions</strong> - Better descriptions improve AI suggestions</li>
+                <li>✅ <strong>Export mappings</strong> - Use the Export button in Mapped Fields to download SQL for ETL processes</li>
             </ul>
         </div>
 
         <div class="step">
             <h2><span class="icon">❓</span> Common Questions</h2>
             
-            <p><strong>Q: How long does AI take?</strong></p>
-            <p>A: Typically 15-25 seconds. Vector search needs to analyze semantic similarity across thousands of possible matches.</p>
+            <p><strong>Q: Can I map multiple source fields to one target field?</strong></p>
+            <p>A: Yes! Select multiple source fields (e.g., FIRST_NAME + LAST_NAME) and map them to a single target field (e.g., full_name). Choose a concatenation strategy to combine them.</p>
             
-            <p style="margin-top: 1rem;"><strong>Q: Can I change a mapping after saving it?</strong></p>
-            <p>A: Yes! Go to Mapped Fields, click the 🗑️ Delete button to unmap it, then create a new mapping.</p>
+            <p style="margin-top: 1rem;"><strong>Q: Can I edit a mapping after saving it?</strong></p>
+            <p>A: Yes! You can edit transformations, join conditions, and concatenation strategy. However, you cannot change the target field or add/remove source fields - those require creating a new mapping.</p>
             
-            <p style="margin-top: 1rem;"><strong>Q: What if I get no AI suggestions?</strong></p>
-            <p>A: First check that Vector Search and AI Model show "Ready" on the Introduction page. If they do, use Manual Search instead.</p>
+            <p style="margin-top: 1rem;"><strong>Q: What transformations are available?</strong></p>
+            <p>A: System transformations include TRIM, INITCAP, UPPER, LOWER, and TO_DATE. Admins can add custom transformations in <strong>Administration → Transformation Management</strong>.</p>
             
-            <p style="margin-top: 1rem;"><strong>Q: How many fields should I map in one session?</strong></p>
-            <p>A: Work at your own pace. Most users map 10-30 fields per session. Take breaks to maintain accuracy.</p>
+            <p style="margin-top: 1rem;"><strong>Q: When do I need join conditions?</strong></p>
+            <p>A: Only when mapping fields from multiple source tables. For example, combining T_MEMBER.FIRST_NAME and T_ADDRESS.CITY requires a join condition linking the tables.</p>
+            
+            <p style="margin-top: 1rem;"><strong>Q: How do I export my mappings?</strong></p>
+            <p>A: Go to the <strong>Mapped Fields</strong> tab and click the <strong>Export Mappings</strong> button. You'll get a CSV with all mapping details and generated SQL expressions.</p>
             
             <p style="margin-top: 1rem;"><strong>Q: Can I bulk upload unmapped fields?</strong></p>
             <p>A: Yes! Use the <strong>Upload Template</strong> button in Unmapped Fields to bulk add source fields via CSV.</p>
@@ -335,9 +319,11 @@
             <h2><span class="icon">🚀</span> Next Steps</h2>
             <p>Now that you know the basics, explore these advanced features:</p>
             <ul>
+                <li><strong>✅ Mapped Fields Tab</strong> - View all your mappings, edit transformations/joins, export to CSV</li>
                 <li><strong>📁 Templates</strong> - Download a CSV template of unmapped fields, or upload new fields in bulk</li>
-                <li><strong>📊 Semantic Table</strong> (Admin only) - View, add, edit, or delete target field definitions</li>
-                <li><strong>⚙️ Configuration</strong> (Admin only) - Adjust database, vector search, and AI model settings <a href="config_mockup.html" style="color: #003366; text-decoration: underline; font-weight: 600;">(📸 View Config Demo)</a></li>
+                <li><strong>📊 Semantic Management</strong> (Admin only) - Manage target field definitions in the semantic table</li>
+                <li><strong>🛡️ Transformation Management</strong> (Admin only) - Add, edit, or delete SQL transformation templates <a href="config_mockup.html" style="color: #003366; text-decoration: underline; font-weight: 600;">(📸 View Config Demo)</a></li>
+                <li><strong>⚙️ Configuration</strong> (Admin only) - Adjust database, vector search, and AI model settings</li>
             </ul>
             <p style="margin-top: 1rem; font-weight: 500;">For detailed information on all features, click the <strong>User Guide</strong> button!</p>
         </div>
