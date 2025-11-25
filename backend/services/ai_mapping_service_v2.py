@@ -397,11 +397,12 @@ Respond in JSON format:
                         score = result.get('search_score', 0.0)
                         
                         # ALWAYS use score-based match quality (deterministic, consistent)
-                        if score >= 0.040:
+                        # Adjusted for typical vector search similarity scores (0.001-0.02 range)
+                        if score >= 0.010:
                             enriched['match_quality'] = 'Excellent'
-                        elif score >= 0.025:
+                        elif score >= 0.006:
                             enriched['match_quality'] = 'Strong'
-                        elif score >= 0.015:
+                        elif score >= 0.003:
                             enriched['match_quality'] = 'Good'
                         else:
                             enriched['match_quality'] = 'Weak'
@@ -419,9 +420,9 @@ Respond in JSON format:
                             enriched['ai_reasoning'] = matching_llm.get('reasoning', '')
                         else:
                             # Default reasoning if LLM didn't provide
-                            if score >= 0.025:
+                            if score >= 0.006:
                                 enriched['ai_reasoning'] = f"High semantic similarity suggests this is a strong match for the combined source fields."
-                            elif score >= 0.015:
+                            elif score >= 0.003:
                                 enriched['ai_reasoning'] = f"Moderate semantic similarity indicates a reasonable match for the source fields."
                             else:
                                 enriched['ai_reasoning'] = "Lower semantic similarity; may require manual review to confirm suitability."
@@ -479,11 +480,12 @@ Respond in JSON format:
                 score = result.get('search_score', 0.0)
                 
                 # Use score-based match quality even in fallback
-                if score >= 0.040:
+                # Adjusted for typical vector search similarity scores (0.001-0.02 range)
+                if score >= 0.010:
                     enriched['match_quality'] = 'Excellent'
-                elif score >= 0.025:
+                elif score >= 0.006:
                     enriched['match_quality'] = 'Strong'
-                elif score >= 0.015:
+                elif score >= 0.003:
                     enriched['match_quality'] = 'Good'
                 else:
                     enriched['match_quality'] = 'Weak'
