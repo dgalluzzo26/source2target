@@ -188,7 +188,8 @@ class AIMappingServiceV2:
                     mf.concat_strategy,
                     mf.confidence_score,
                     mf.ai_reasoning,
-                    COUNT(DISTINCT md.mapping_detail_id) as source_field_count
+                    COUNT(DISTINCT md.mapping_detail_id) as source_field_count,
+                    MAX(mf.mapped_ts) as most_recent_mapping
                 FROM {mapped_fields_table} mf
                 JOIN {mapping_details_table} md ON mf.mapped_field_id = md.mapped_field_id
                 {where_clause}
@@ -200,7 +201,7 @@ class AIMappingServiceV2:
                     mf.confidence_score,
                     mf.ai_reasoning
                 HAVING COUNT(DISTINCT md.mapping_detail_id) >= {len(source_fields)}
-                ORDER BY mf.mapped_ts DESC
+                ORDER BY most_recent_mapping DESC
                 LIMIT 10
                 """
                 
