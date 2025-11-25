@@ -232,7 +232,7 @@ export const useMappingsStoreV2 = defineStore('mappingsV2', () => {
             tgt_column_name: mappedField.tgt_column_name,
             tgt_column_physical_name: mappedField.tgt_column_physical_name,
             concat_strategy: mappedField.concat_strategy,
-            concat_separator: mappedField.concat_separator,
+            ...(mappedField.concat_separator ? { concat_separator: mappedField.concat_separator } : {}),
             transformation_expression: mappedField.transformation_expression,
             mapped_by: mappedField.mapped_by,
             confidence_score: mappedField.confidence_score,
