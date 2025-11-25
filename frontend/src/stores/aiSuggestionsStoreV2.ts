@@ -13,6 +13,7 @@ export interface AISuggestionV2 {
   tgt_table_physical_name: string
   tgt_column_name: string
   tgt_column_physical_name: string
+  tgt_comments?: string  // Target field description/comments
   search_score: number
   match_quality: 'Excellent' | 'Strong' | 'Good' | 'Weak' | 'Unknown'
   ai_reasoning: string
