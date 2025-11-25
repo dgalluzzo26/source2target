@@ -80,28 +80,28 @@ class FeedbackService:
             with connection.cursor() as cursor:
                 query = f"""
                 INSERT INTO {mapping_feedback_table} (
-                    src_table_name,
-                    src_table_physical_name,
-                    src_column_name,
-                    src_column_physical_name,
-                    suggested_tgt_table_name,
-                    suggested_tgt_column_name,
-                    feedback_status,
-                    user_comment,
+                    suggested_src_table,
+                    suggested_src_column,
+                    suggested_tgt_table,
+                    suggested_tgt_column,
+                    feedback_action,
+                    user_comments,
                     ai_confidence_score,
                     ai_reasoning,
+                    vector_search_score,
+                    suggestion_rank,
                     feedback_by
                 ) VALUES (
-                    '{feedback_data.src_table_name.replace("'", "''")}',
-                    '{feedback_data.src_table_physical_name.replace("'", "''")}',
-                    '{feedback_data.src_column_name.replace("'", "''")}',
-                    '{feedback_data.src_column_physical_name.replace("'", "''")}',
-                    '{feedback_data.suggested_tgt_table_name.replace("'", "''")}',
-                    '{feedback_data.suggested_tgt_column_name.replace("'", "''")}',
-                    '{feedback_data.feedback_status}',
-                    {'NULL' if not feedback_data.user_comment else "'" + feedback_data.user_comment.replace("'", "''") + "'"},
+                    '{feedback_data.suggested_src_table.replace("'", "''")}',
+                    '{feedback_data.suggested_src_column.replace("'", "''")}',
+                    '{feedback_data.suggested_tgt_table.replace("'", "''")}',
+                    '{feedback_data.suggested_tgt_column.replace("'", "''")}',
+                    '{feedback_data.feedback_action}',
+                    {'NULL' if not feedback_data.user_comments else "'" + feedback_data.user_comments.replace("'", "''") + "'"},
                     {feedback_data.ai_confidence_score if feedback_data.ai_confidence_score else 'NULL'},
                     {'NULL' if not feedback_data.ai_reasoning else "'" + feedback_data.ai_reasoning.replace("'", "''") + "'"},
+                    {feedback_data.vector_search_score if feedback_data.vector_search_score else 'NULL'},
+                    {feedback_data.suggestion_rank if feedback_data.suggestion_rank else 'NULL'},
                     {'NULL' if not feedback_data.feedback_by else "'" + feedback_data.feedback_by.replace("'", "''") + "'"}
                 )
                 """

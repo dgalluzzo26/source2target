@@ -211,16 +211,16 @@ class MappingFeedbackV2(BaseModel):
 
 class MappingFeedbackCreateV2(BaseModel):
     """Create request for mapping feedback."""
-    src_table_name: str
-    src_table_physical_name: str
-    src_column_name: str
-    src_column_physical_name: str
-    suggested_tgt_table_name: str
-    suggested_tgt_column_name: str
-    feedback_status: str = "PENDING"
-    user_comment: Optional[str] = None
+    suggested_src_table: str
+    suggested_src_column: str
+    suggested_tgt_table: str
+    suggested_tgt_column: str
+    feedback_action: str = "PENDING"  # ACCEPTED, REJECTED, MODIFIED
+    user_comments: Optional[str] = None
     ai_confidence_score: Optional[float] = None
     ai_reasoning: Optional[str] = None
+    vector_search_score: Optional[float] = None
+    suggestion_rank: Optional[int] = None
     feedback_by: Optional[str] = None
 
 

@@ -172,7 +172,8 @@
     v-model:visible="showRejectionDialog"
     modal
     header="Provide Feedback on Rejected Suggestion"
-    :style="{ width: '600px' }"
+    :style="{ width: '700px' }"
+    class="rejection-feedback-dialog"
   >
     <div class="rejection-content">
       <Message severity="info" :closable="false">
@@ -201,19 +202,20 @@
       </div>
 
       <div class="feedback-form">
-        <label for="rejection-comment">
+        <label for="rejection-comment" class="feedback-label">
           <i class="pi pi-comment"></i>
           Why is this suggestion incorrect? <span class="required">*</span>
         </label>
         <Textarea
           id="rejection-comment"
           v-model="rejectionComment"
-          rows="5"
+          rows="6"
           placeholder="Example: Wrong data type, different business meaning, already mapped elsewhere..."
-          class="w-full"
+          class="w-full feedback-textarea"
           autofocus
+          autoResize
         />
-        <small>Please provide specific details to help improve future suggestions</small>
+        <small class="feedback-hint">Please provide specific details to help improve future suggestions</small>
       </div>
     </div>
 
@@ -380,39 +382,44 @@ async function submitRejectionFeedback() {
 
 async function recordFeedback(suggestion: AISuggestionV2, action: 'accepted' | 'rejected', comment: string) {
   try {
-    // Build feedback payload
-    const feedback = {
-      // Source fields (can be multiple in V2)
-      source_fields: aiStore.sourceFieldsUsed.map(f => ({
-        src_table_name: f.src_table_name,
-        src_column_name: f.src_column_name
-      })),
-      // Suggested target field
-      suggested_tgt_table: suggestion.tgt_table_name,
-      suggested_tgt_column: suggestion.tgt_column_name,
-      // AI metadata
-      search_score: suggestion.search_score,
-      ai_reasoning: suggestion.ai_reasoning,
-      match_quality: suggestion.match_quality,
-      rank: suggestion.rank,
-      // User feedback
-      feedback_action: action,
-      user_comment: comment
-    }
+    // For V2 multi-field mappings, create one feedback record per source field
+    const feedbackAction = action === 'accepted' ? 'ACCEPTED' : 'REJECTED'
     
-    console.log('[AI Suggestions] Recording feedback:', feedback)
+    // Get current user email (from headers or demo user)
+    const currentUser = 'demo.user@gainwell.com' // TODO: Get from auth context
     
-    // Call feedback API (non-blocking)
-    const response = await fetch('/api/v2/feedback', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(feedback)
-    })
-    
-    if (!response.ok) {
-      console.warn('[AI Suggestions] Feedback recording failed:', response.statusText)
+    for (const sourceField of aiStore.sourceFieldsUsed) {
+      const feedbackPayload = {
+        suggested_src_table: sourceField.src_table_name || '',
+        suggested_src_column: sourceField.src_column_name || '',
+        suggested_tgt_table: suggestion.tgt_table_name,
+        suggested_tgt_column: suggestion.tgt_column_name,
+        feedback_action: feedbackAction,
+        user_comments: comment || null,
+        ai_confidence_score: suggestion.search_score || null,
+        ai_reasoning: suggestion.ai_reasoning || null,
+        vector_search_score: suggestion.search_score || null,
+        suggestion_rank: suggestion.rank || null,
+        feedback_by: currentUser
+      }
+      
+      console.log('[AI Suggestions] Recording feedback:', feedbackPayload)
+      
+      // Call feedback API (non-blocking)
+      const response = await fetch('/api/v2/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(feedbackPayload)
+      })
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.warn('[AI Suggestions] Feedback recording failed:', response.statusText, errorText)
+      } else {
+        console.log('[AI Suggestions] Feedback recorded successfully for', sourceField.src_column_name)
+      }
     }
   } catch (error) {
     console.error('[AI Suggestions] Error recording feedback:', error)
@@ -651,6 +658,105 @@ function handleClose() {
 :deep(.p-datatable-tbody > tr:hover) {
   background: var(--surface-hover);
   cursor: pointer;
+}
+
+/* Rejection Feedback Dialog Styles */
+.rejection-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 0.5rem 0;
+}
+
+.rejected-suggestion-summary {
+  background: linear-gradient(135deg, #fff3cd, #ffe8a1);
+  padding: 1.25rem;
+  border-radius: 8px;
+  border-left: 4px solid #ffc107;
+}
+
+.rejected-suggestion-summary h4 {
+  margin: 0 0 1rem 0;
+  color: #856404;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.suggestion-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.detail-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.detail-row label {
+  font-weight: 600;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.detail-row span {
+  color: #212529;
+}
+
+.ai-reason-text {
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
+
+.feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.feedback-label {
+  display: block;
+  font-weight: 600;
+  color: #4a5568;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.feedback-label i {
+  margin-right: 0.5rem;
+  color: #38a169;
+}
+
+.feedback-label .required {
+  color: #dc3545;
+  margin-left: 0.25rem;
+}
+
+.feedback-textarea {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.feedback-textarea:focus {
+  border-color: #38a169;
+  box-shadow: 0 0 0 0.2rem rgba(56, 161, 105, 0.25);
+}
+
+.feedback-hint {
+  color: #6c757d;
+  font-size: 0.85rem;
+  font-style: italic;
+  margin-top: -0.25rem;
+}
+
+.rejection-feedback-dialog :deep(.p-dialog-content) {
+  overflow-y: auto;
+  max-height: 70vh;
 }
 </style>
 
