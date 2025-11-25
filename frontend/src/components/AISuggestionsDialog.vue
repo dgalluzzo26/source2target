@@ -148,21 +148,137 @@
       </div>
 
       <!-- No Suggestions -->
-      <div v-if="!aiStore.loading && !aiStore.hasSuggestions" class="no-suggestions">
+      <div v-if="!aiStore.loading && !aiStore.hasSuggestions && !showManualSearch" class="no-suggestions">
         <i class="pi pi-inbox" style="font-size: 3rem; color: var(--text-color-secondary);"></i>
         <h3>No Suggestions Available</h3>
         <p>The AI could not generate suggestions for the selected fields.</p>
+        <p>Try using Manual Search to browse all available target fields.</p>
+      </div>
+
+      <!-- Manual Search Section -->
+      <div v-if="showManualSearch" class="manual-search-section">
+        <h3>
+          <i class="pi pi-search"></i>
+          Manual Search - Browse Target Fields
+        </h3>
+
+        <div class="search-controls">
+          <div class="search-input-group">
+            <InputText
+              v-model="manualSearchTerm"
+              placeholder="Search by table name, column name, or description..."
+              class="search-input"
+              @keyup.enter="performManualSearch"
+            />
+            <Button
+              label="Search"
+              icon="pi pi-search"
+              @click="performManualSearch"
+              :loading="manualSearchLoading"
+              :disabled="!manualSearchTerm.trim()"
+            />
+            <Button
+              label="Clear"
+              icon="pi pi-times"
+              @click="clearManualSearch"
+              severity="secondary"
+              outlined
+            />
+          </div>
+          <small class="search-hint">
+            <i class="pi pi-info-circle"></i>
+            Enter keywords to search across all target fields. Results are limited to 50 matches.
+          </small>
+        </div>
+
+        <!-- Manual Search Results -->
+        <div v-if="manualSearchResults.length > 0" class="search-results">
+          <p class="results-count">Found {{ manualSearchResults.length }} matching target field(s)</p>
+          
+          <DataTable
+            :value="manualSearchResults"
+            dataKey="tgt_column_name"
+            :paginator="true"
+            :rows="10"
+            class="manual-search-table"
+            stripedRows
+          >
+            <!-- Target Field -->
+            <Column header="Target Field" style="min-width: 15rem">
+              <template #body="{ data }">
+                <div class="target-field">
+                  <strong>{{ data.tgt_table_name }}.{{ data.tgt_column_name }}</strong>
+                  <span class="physical-name">{{ data.tgt_table_physical_name }}.{{ data.tgt_column_physical_name }}</span>
+                </div>
+              </template>
+            </Column>
+
+            <!-- Datatype -->
+            <Column header="Datatype" style="width: 10rem">
+              <template #body="{ data }">
+                <Tag :value="data.tgt_physical_datatype" severity="info" />
+              </template>
+            </Column>
+
+            <!-- Nullable -->
+            <Column header="Nullable" style="width: 8rem">
+              <template #body="{ data }">
+                <Tag 
+                  :value="data.tgt_nullable" 
+                  :severity="data.tgt_nullable === 'Null' ? 'warning' : 'success'"
+                />
+              </template>
+            </Column>
+
+            <!-- Description -->
+            <Column header="Description" style="min-width: 20rem">
+              <template #body="{ data }">
+                <span class="field-description">{{ data.tgt_comments || 'No description' }}</span>
+              </template>
+            </Column>
+
+            <!-- Actions -->
+            <Column header="Action" style="width: 10rem">
+              <template #body="{ data }">
+                <Button
+                  label="Select"
+                  icon="pi pi-check"
+                  size="small"
+                  severity="success"
+                  @click="handleManualSelect(data)"
+                  v-tooltip.top="'Use this target field for mapping'"
+                />
+              </template>
+            </Column>
+          </DataTable>
+        </div>
+
+        <!-- No Results -->
+        <div v-if="!manualSearchLoading && manualSearchResults.length === 0 && manualSearchTerm" class="no-results">
+          <i class="pi pi-search" style="font-size: 2.5rem; color: var(--text-color-secondary);"></i>
+          <h4>No matching target fields found</h4>
+          <p>Try different keywords or check your search term</p>
+        </div>
       </div>
     </div>
 
     <template #footer>
       <Button label="Cancel" icon="pi pi-times" @click="handleClose" text />
       <Button 
+        v-if="!showManualSearch"
         label="Manual Search" 
         icon="pi pi-search" 
         @click="handleManualSearch"
         severity="secondary"
         v-tooltip.top="'Search for target fields manually'"
+      />
+      <Button 
+        v-else
+        label="Back to AI Suggestions" 
+        icon="pi pi-arrow-left" 
+        @click="hideManualSearch"
+        severity="secondary"
+        v-tooltip.top="'Return to AI suggestions'"
       />
     </template>
   </Dialog>
@@ -234,12 +350,14 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useAISuggestionsStoreV2 } from '@/stores/aiSuggestionsStoreV2'
+import { useUserStore } from '@/stores/user'
 import { useToast } from 'primevue/usetoast'
 import Dialog from 'primevue/dialog'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
+import InputText from 'primevue/inputtext'
 import ProgressBar from 'primevue/progressbar'
 import ProgressSpinner from 'primevue/progressspinner'
 import Message from 'primevue/message'
@@ -259,12 +377,19 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const aiStore = useAISuggestionsStoreV2()
+const userStore = useUserStore()
 const toast = useToast()
 
 // Rejection dialog state
 const showRejectionDialog = ref(false)
 const rejectedSuggestion = ref<AISuggestionV2 | null>(null)
 const rejectionComment = ref('')
+
+// Manual search state
+const showManualSearch = ref(false)
+const manualSearchTerm = ref('')
+const manualSearchResults = ref<any[]>([])
+const manualSearchLoading = ref(false)
 
 const isVisible = computed({
   get: () => props.visible,
@@ -385,8 +510,8 @@ async function recordFeedback(suggestion: AISuggestionV2, action: 'accepted' | '
     // For V2 multi-field mappings, create one feedback record per source field
     const feedbackAction = action === 'accepted' ? 'ACCEPTED' : 'REJECTED'
     
-    // Get current user email (from headers or demo user)
-    const currentUser = 'demo.user@gainwell.com' // TODO: Get from auth context
+    // Get current user email from user store
+    const currentUser = userStore.userEmail || 'demo.user@gainwell.com'
     
     for (const sourceField of aiStore.sourceFieldsUsed) {
       const feedbackPayload = {
@@ -428,12 +553,87 @@ async function recordFeedback(suggestion: AISuggestionV2, action: 'accepted' | '
 }
 
 function handleManualSearch() {
-  // TODO: Navigate to manual search
   console.log('[AI Suggestions Dialog] Manual search requested')
+  showManualSearch.value = true
+}
+
+function hideManualSearch() {
+  showManualSearch.value = false
+  manualSearchTerm.value = ''
+  manualSearchResults.value = []
+}
+
+async function performManualSearch() {
+  if (!manualSearchTerm.value.trim()) {
+    return
+  }
+
+  manualSearchLoading.value = true
+  
+  try {
+    const response = await fetch(`/api/mapping/search-semantic-table?search_term=${encodeURIComponent(manualSearchTerm.value.trim())}`)
+    
+    if (!response.ok) {
+      throw new Error('Search failed')
+    }
+    
+    const results = await response.json()
+    manualSearchResults.value = results || []
+    
+    console.log('[AI Suggestions Dialog] Manual search returned', results.length, 'results')
+    
+    if (results.length === 0) {
+      toast.add({
+        severity: 'info',
+        summary: 'No Results',
+        detail: 'No matching target fields found. Try different keywords.',
+        life: 3000
+      })
+    }
+  } catch (error) {
+    console.error('[AI Suggestions Dialog] Manual search error:', error)
+    toast.add({
+      severity: 'error',
+      summary: 'Search Failed',
+      detail: 'Failed to search target fields. Please try again.',
+      life: 5000
+    })
+  } finally {
+    manualSearchLoading.value = false
+  }
+}
+
+function clearManualSearch() {
+  manualSearchTerm.value = ''
+  manualSearchResults.value = []
+}
+
+function handleManualSelect(targetField: any) {
+  // Convert manual search result to suggestion format
+  const manualSuggestion: AISuggestionV2 = {
+    semantic_field_id: targetField.semantic_field_id || 0,
+    tgt_table_name: targetField.tgt_table_name,
+    tgt_column_name: targetField.tgt_column_name,
+    tgt_table_physical_name: targetField.tgt_table_physical_name,
+    tgt_column_physical_name: targetField.tgt_column_physical_name,
+    tgt_comments: targetField.tgt_comments,
+    search_score: 0,
+    match_quality: 'Manual',
+    ai_reasoning: 'Manually selected by user',
+    rank: 0
+  }
+  
+  console.log('[AI Suggestions Dialog] Manual selection:', targetField)
+  
+  // Use the same accept flow as AI suggestions
+  handleAccept(manualSuggestion)
 }
 
 function handleClose() {
   isVisible.value = false
+  showManualSearch.value = false
+  manualSearchTerm.value = ''
+  manualSearchResults.value = []
 }
 </script>
 
@@ -757,6 +957,101 @@ function handleClose() {
 .rejection-feedback-dialog :deep(.p-dialog-content) {
   overflow-y: auto;
   max-height: 70vh;
+}
+
+/* Manual Search Section Styles */
+.manual-search-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1rem 0;
+}
+
+.manual-search-section h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--gainwell-dark);
+  font-size: 1.25rem;
+}
+
+.manual-search-section h3 i {
+  color: var(--gainwell-accent);
+}
+
+.search-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.search-input-group {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.search-input {
+  flex: 1;
+  font-size: 1rem;
+}
+
+.search-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-color-secondary);
+  font-size: 0.9rem;
+}
+
+.search-hint i {
+  color: var(--gainwell-secondary);
+}
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.results-count {
+  font-weight: 600;
+  color: var(--gainwell-primary);
+  margin: 0;
+}
+
+.manual-search-table {
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+}
+
+.manual-search-table .field-description {
+  font-size: 0.9rem;
+  color: var(--text-color-secondary);
+  line-height: 1.5;
+}
+
+.no-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  gap: 1rem;
+  text-align: center;
+  background: var(--surface-50);
+  border-radius: 8px;
+}
+
+.no-results h4 {
+  margin: 0;
+  color: var(--text-color);
+}
+
+.no-results p {
+  margin: 0;
+  color: var(--text-color-secondary);
 }
 </style>
 
