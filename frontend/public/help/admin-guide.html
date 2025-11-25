@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Guide - Source-to-Target Mapping Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4a5568, #38a169);
+            color: white;
+            padding: 2.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0, 51, 102, 0.2);
+        }
+
+        .header h1 {
+            font-size: 2.2rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .header p {
+            font-size: 1.15rem;
+            opacity: 0.95;
+        }
+
+        .section {
+            background: white;
+            margin: 2rem 0;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            border-left: 5px solid #4a5568;
+        }
+
+        .section h2 {
+            color: #4a5568;
+            margin-bottom: 1.5rem;
+            font-size: 1.8rem;
+            border-bottom: 2px solid #38a169;
+            padding-bottom: 0.5rem;
+        }
+
+        .section h3 {
+            color: #4a5568;
+            margin: 1.5rem 0 1rem 0;
+            font-size: 1.3rem;
+        }
+
+        .section h4 {
+            color: #4a5568;
+            margin: 1rem 0 0.5rem 0;
+            font-size: 1.1rem;
+        }
+
+        .section p {
+            margin-bottom: 1rem;
+            color: #555;
+        }
+
+        .section ul, .section ol {
+            margin-left: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .section ul li, .section ol li {
+            margin: 0.5rem 0;
+            color: #555;
+        }
+
+        .info-box {
+            background: linear-gradient(135deg, #e8f4fd, #d4edda);
+            padding: 1.25rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #38a169;
+        }
+
+        .info-box strong {
+            color: #4a5568;
+            font-size: 1.05rem;
+        }
+
+        .warning-box {
+            background: linear-gradient(135deg, #fff3cd, #ffe8a1);
+            padding: 1.25rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #ffc107;
+        }
+
+        .warning-box strong {
+            color: #856404;
+            font-size: 1.05rem;
+        }
+
+        code {
+            background: #f1f1f1;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #c7254e;
+            font-size: 0.9rem;
+        }
+
+        pre {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 1rem 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        table th {
+            background: #4a5568;
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        table tr:hover {
+            background: #f8f9fa;
+        }
+
+        strong {
+            color: #4a5568;
+        }
+
+        a {
+            color: #38a169;
+            text-decoration: underline;
+            font-weight: 600;
+        }
+
+        a:hover {
+            color: #2f855a;
+        }
+
+        .toc {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            margin-bottom: 2rem;
+        }
+
+        .toc h2 {
+            color: #4a5568;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .toc ul {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .toc ul li {
+            margin: 0.5rem 0;
+        }
+
+        .toc ul li a {
+            color: #38a169;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .toc ul li a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ Administrator Guide</h1>
+            <p>Configuration, management, and technical reference</p>
+        </div>
+
+        <div class="toc">
+            <h2>📑 Table of Contents</h2>
+            <ul>
+                <li><a href="#overview">1. Admin Overview</a></li>
+                <li><a href="#settings">2. Settings & Configuration</a></li>
+                <li><a href="#semantic">3. Semantic Management</a></li>
+                <li><a href="#transformation">4. Transformation Management</a></li>
+                <li><a href="#developer">5. Developer Reference</a></li>
+                <li><a href="#troubleshooting">6. Troubleshooting</a></li>
+            </ul>
+        </div>
+
+        <!-- SECTION 1: ADMIN OVERVIEW -->
+        <div class="section" id="overview">
+            <h2>1. Admin Overview</h2>
+            
+            <h3>Admin Capabilities</h3>
+            <p>As an administrator, you have access to:</p>
+            <ul>
+                <li><strong>⚙️ Configuration:</strong> Database, vector search, and AI model settings</li>
+                <li><strong>📊 Semantic Management:</strong> Manage target field definitions</li>
+                <li><strong>🛡️ Transformation Management:</strong> Create and manage SQL transformation templates</li>
+                <li><strong>All User Features:</strong> Field mapping, AI suggestions, templates</li>
+            </ul>
+
+            <h3>Checking Admin Status</h3>
+            <ul>
+                <li>Look at the badge next to your name in the header</li>
+                <li>If it says <strong>"Admin"</strong> (green badge), you have admin access</li>
+                <li>If it says <strong>"User"</strong> (grey badge), contact admin to be added to admin groups</li>
+            </ul>
+
+            <h3>Granting Admin Access</h3>
+            <p>To grant admin access to a user:</p>
+            <ol>
+                <li>Add the user to one of the admin groups in Databricks workspace</li>
+                <li>Admin groups are configured in <strong>Configuration → Admin Groups</strong></li>
+                <li>User will see admin badge and menu items on next login</li>
+            </ol>
+
+            <div class="info-box">
+                <strong>💡 Note:</strong> Admin features are only visible to users in designated admin groups. This is controlled via Databricks workspace group membership.
+            </div>
+        </div>
+
+        <!-- SECTION 2: SETTINGS & CONFIGURATION -->
+        <div class="section" id="settings">
+            <h2>2. Settings & Configuration</h2>
+            <p>Navigate to <strong>Configuration</strong> from the sidebar to manage system settings.</p>
+            <p style="margin: 1rem 0;"><a href="config_mockup.html" style="color: #38a169;">📸 View Configuration Demo →</a></p>
+
+            <h3>Database Configuration</h3>
+            <p>Configure connection to your Databricks SQL Warehouse:</p>
+
+            <table>
+                <tr>
+                    <th>Setting</th>
+                    <th>Description</th>
+                    <th>Example</th>
+                </tr>
+                <tr>
+                    <td><code>server_hostname</code></td>
+                    <td>Your Databricks workspace URL</td>
+                    <td>dbc-1234abcd-5678.cloud.databricks.com</td>
+                </tr>
+                <tr>
+                    <td><code>http_path</code></td>
+                    <td>SQL Warehouse HTTP path</td>
+                    <td>/sql/1.0/warehouses/abc123def456</td>
+                </tr>
+                <tr>
+                    <td><code>catalog</code></td>
+                    <td>Unity Catalog name</td>
+                    <td>healthcare_data</td>
+                </tr>
+                <tr>
+                    <td><code>schema</code></td>
+                    <td>Schema containing mapping tables</td>
+                    <td>mapping_metadata</td>
+                </tr>
+                <tr>
+                    <td><code>semantic_table</code></td>
+                    <td>Table with target field definitions</td>
+                    <td>target_semantic_layer</td>
+                </tr>
+            </table>
+
+            <h4>V2 Multi-Field Mapping Tables</h4>
+            <p>The V2 schema uses these normalized tables:</p>
+            <table>
+                <tr>
+                    <th>Table</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><code>mapped_fields</code></td>
+                    <td>Main mapping records (one per target field)</td>
+                </tr>
+                <tr>
+                    <td><code>mapping_details</code></td>
+                    <td>Individual source fields (multiple per mapping)</td>
+                </tr>
+                <tr>
+                    <td><code>mapping_joins</code></td>
+                    <td>Join conditions for multi-table mappings</td>
+                </tr>
+                <tr>
+                    <td><code>transformation_library</code></td>
+                    <td>SQL transformation templates</td>
+                </tr>
+                <tr>
+                    <td><code>semantic_fields</code></td>
+                    <td>Target field definitions for AI matching</td>
+                </tr>
+                <tr>
+                    <td><code>unmapped_fields</code></td>
+                    <td>Source fields awaiting mapping</td>
+                </tr>
+            </table>
+
+            <div class="warning-box">
+                <strong>⚠️ Important:</strong> Ensure the SQL Warehouse is running before saving database configuration. Incorrect settings will cause connection failures.
+            </div>
+
+            <h3>Vector Search Configuration</h3>
+            <p>Configure AI-powered semantic search:</p>
+
+            <table>
+                <tr>
+                    <th>Setting</th>
+                    <th>Description</th>
+                    <th>Notes</th>
+                </tr>
+                <tr>
+                    <td><code>endpoint_name</code></td>
+                    <td>Vector Search endpoint name</td>
+                    <td>Must be created in Databricks</td>
+                </tr>
+                <tr>
+                    <td><code>index_name</code></td>
+                    <td>Index containing embedded fields</td>
+                    <td>Must be synced with semantic table</td>
+                </tr>
+                <tr>
+                    <td><code>embedding_column</code></td>
+                    <td>Column used for semantic queries</td>
+                    <td>Usually "semantic_field"</td>
+                </tr>
+                <tr>
+                    <td><code>max_results</code></td>
+                    <td>Max candidate matches to return</td>
+                    <td>Default: 25 (recommended)</td>
+                </tr>
+            </table>
+
+            <h4>Vector Search Prerequisites</h4>
+            <ul>
+                <li><strong>Endpoint:</strong> Must be created and online in Databricks</li>
+                <li><strong>Index:</strong> Must be created from semantic table with embeddings</li>
+                <li><strong>Sync:</strong> Index must be synced when semantic table changes</li>
+                <li><strong>Status:</strong> Check "Vector Search: Available" on Introduction page</li>
+            </ul>
+
+            <h3>AI Model Configuration</h3>
+            <p>Configure the LLM endpoint for generating mapping suggestions:</p>
+
+            <table>
+                <tr>
+                    <th>Setting</th>
+                    <th>Description</th>
+                    <th>Recommended Value</th>
+                </tr>
+                <tr>
+                    <td><code>endpoint_name</code></td>
+                    <td>Model Serving endpoint name</td>
+                    <td>databricks-dbrx-instruct-serving</td>
+                </tr>
+                <tr>
+                    <td><code>max_ai_results</code></td>
+                    <td>Number of suggestions to generate</td>
+                    <td>10</td>
+                </tr>
+                <tr>
+                    <td><code>temperature</code></td>
+                    <td>Model creativity (0.0 - 1.0)</td>
+                    <td>0.1 (focused, not creative)</td>
+                </tr>
+                <tr>
+                    <td><code>max_tokens</code></td>
+                    <td>Maximum response length</td>
+                    <td>2000</td>
+                </tr>
+            </table>
+
+            <h4>Model Endpoint Requirements</h4>
+            <ul>
+                <li><strong>Status:</strong> Endpoint must be in "Ready" state</li>
+                <li><strong>Access:</strong> App must have permission to query endpoint</li>
+                <li><strong>Cold Start:</strong> First request may take 30-60 seconds</li>
+                <li><strong>Timeout:</strong> Requests timeout after 60 seconds</li>
+            </ul>
+
+            <div class="warning-box">
+                <strong>⚠️ Cost Warning:</strong> AI model calls consume compute resources. Monitor usage in Databricks to control costs.
+            </div>
+
+            <h3>Admin Groups</h3>
+            <p>Configure which Databricks workspace groups have admin access:</p>
+            <ul>
+                <li>Add one or more Databricks workspace group names</li>
+                <li>Group names are case-sensitive</li>
+                <li>Users must be members of at least one listed group to have admin access</li>
+                <li>Changes take effect on next user login</li>
+            </ul>
+
+            <h3>Configuration Validation</h3>
+            <p>Always validate configuration before saving:</p>
+            <ol>
+                <li>Click <strong>Save Configuration</strong></li>
+                <li>Wait for validation to complete</li>
+                <li>Go to Introduction page</li>
+                <li>Check all four system status indicators are green</li>
+                <li>If any show errors, review and fix configuration</li>
+            </ol>
+        </div>
+
+        <!-- SECTION 3: SEMANTIC MANAGEMENT -->
+        <div class="section" id="semantic">
+            <h2>3. Semantic Management</h2>
+            <p>Navigate to <strong>Semantic Management</strong> from the sidebar.</p>
+
+            <h3>About Semantic Fields</h3>
+            <p>The semantic table contains all target field definitions that AI uses for matching source fields. Each record represents one target column available for mapping.</p>
+
+            <h3>Semantic Table Operations</h3>
+            <ul>
+                <li><strong>View:</strong> Browse all target fields</li>
+                <li><strong>Search:</strong> Filter by table name, column name, or description</li>
+                <li><strong>Add:</strong> Create new target field definitions</li>
+                <li><strong>Edit:</strong> Update target field details</li>
+                <li><strong>Delete:</strong> Remove target fields (with confirmation)</li>
+                <li><strong>Vector Search Sync:</strong> Automatically triggered after changes</li>
+            </ul>
+
+            <h3>Semantic Table Schema</h3>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Purpose</th>
+                    <th>Example</th>
+                </tr>
+                <tr>
+                    <td><code>semantic_field_id</code></td>
+                    <td>Unique identifier (auto-generated)</td>
+                    <td>12345</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_table_name</code></td>
+                    <td>Target table logical name</td>
+                    <td>slv_member</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_column_name</code></td>
+                    <td>Target column logical name</td>
+                    <td>full_name</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_table_physical_name</code></td>
+                    <td>Actual table name in database</td>
+                    <td>healthcare_data.silver.member</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_column_physical_name</code></td>
+                    <td>Actual column name in database</td>
+                    <td>member_full_name</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_comments</code></td>
+                    <td>Description (critical for AI matching)</td>
+                    <td>Member full name from first and last</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_physical_datatype</code></td>
+                    <td>Column datatype</td>
+                    <td>STRING, INT, DATE, TIMESTAMP</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_nullable</code></td>
+                    <td>Null constraint</td>
+                    <td>"Null" or "Not Null"</td>
+                </tr>
+                <tr>
+                    <td><code>semantic_field</code></td>
+                    <td>Combined text for vector search</td>
+                    <td>Auto-generated from fields</td>
+                </tr>
+            </table>
+
+            <h3>Adding Target Fields</h3>
+            <ol>
+                <li>Click <strong>Add Target Field</strong></li>
+                <li>Fill in all required fields:
+                    <ul>
+                        <li><strong>Table Name:</strong> Logical name for reporting</li>
+                        <li><strong>Physical Table Name:</strong> Actual database table name</li>
+                        <li><strong>Column Name:</strong> Logical column name</li>
+                        <li><strong>Physical Column Name:</strong> Actual database column name</li>
+                        <li><strong>Comments:</strong> <em>Critical!</em> Good descriptions improve AI matching</li>
+                        <li><strong>Datatype:</strong> STRING, INT, DATE, etc.</li>
+                        <li><strong>Nullable:</strong> "Null" or "Not Null"</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Save</strong></li>
+                <li>Vector search index automatically syncs</li>
+                <li>Wait 1-2 minutes before field appears in AI suggestions</li>
+            </ol>
+
+            <div class="info-box">
+                <strong>💡 Description Best Practices:</strong> Write clear, detailed comments for target fields. Include business meaning, data source, format, and any special handling. Better descriptions = better AI matches!
+            </div>
+
+            <h3>Editing Target Fields</h3>
+            <ol>
+                <li>Find the field using search</li>
+                <li>Click edit icon (pencil)</li>
+                <li>Modify fields as needed</li>
+                <li>Click <strong>Save</strong></li>
+                <li>Vector search index automatically syncs</li>
+            </ol>
+
+            <h3>Deleting Target Fields</h3>
+            <ol>
+                <li>Find the field using search</li>
+                <li>Click delete icon (trash)</li>
+                <li>Confirm deletion</li>
+                <li>Vector search index automatically syncs</li>
+            </ol>
+
+            <div class="warning-box">
+                <strong>⚠️ Warning:</strong> Deleting a target field that is used in existing mappings may cause issues. Check the Mapped Fields tab first to see if the field is in use.
+            </div>
+
+            <h3>Vector Search Sync</h3>
+            <p>The vector search index must stay synchronized with the semantic table:</p>
+            <ul>
+                <li><strong>Automatic Sync:</strong> Triggered after add/edit/delete operations</li>
+                <li><strong>Sync Status:</strong> Look for success message after changes</li>
+                <li><strong>Sync Delay:</strong> Changes may take 1-2 minutes to appear in AI suggestions</li>
+                <li><strong>Manual Sync:</strong> If needed, contact Databricks admin to manually sync the index</li>
+            </ul>
+
+            <div class="info-box">
+                <strong>💡 Important:</strong> After adding/editing target fields, wait 1-2 minutes before expecting them to appear in AI suggestions. The vector search index syncs asynchronously.
+            </div>
+        </div>
+
+        <!-- SECTION 4: TRANSFORMATION MANAGEMENT -->
+        <div class="section" id="transformation">
+            <h2>4. Transformation Management</h2>
+            <p>Navigate to <strong>Transformation Management</strong> from the sidebar.</p>
+
+            <h3>About Transformation Library</h3>
+            <p>The transformation library contains reusable SQL expressions that can be applied to source fields during mapping. These standardize data during ETL processing.</p>
+
+            <h3>Built-in System Transformations</h3>
+            <p>These transformations are provided out-of-the-box and cannot be edited or deleted:</p>
+            <table>
+                <tr>
+                    <th>Code</th>
+                    <th>Description</th>
+                    <th>SQL Expression</th>
+                </tr>
+                <tr>
+                    <td><code>NONE</code></td>
+                    <td>No transformation</td>
+                    <td><code>{field}</code></td>
+                </tr>
+                <tr>
+                    <td><code>TRIM</code></td>
+                    <td>Remove whitespace</td>
+                    <td><code>TRIM({field})</code></td>
+                </tr>
+                <tr>
+                    <td><code>TRIM_UPPER</code></td>
+                    <td>Trim and uppercase</td>
+                    <td><code>UPPER(TRIM({field}))</code></td>
+                </tr>
+                <tr>
+                    <td><code>TRIM_LOWER</code></td>
+                    <td>Trim and lowercase</td>
+                    <td><code>LOWER(TRIM({field}))</code></td>
+                </tr>
+                <tr>
+                    <td><code>TRIM_INITCAP</code></td>
+                    <td>Trim and capitalize words</td>
+                    <td><code>INITCAP(TRIM({field}))</code></td>
+                </tr>
+                <tr>
+                    <td><code>TO_DATE</code></td>
+                    <td>Convert string to date</td>
+                    <td><code>TO_DATE({field}, 'yyyy-MM-dd')</code></td>
+                </tr>
+            </table>
+
+            <p>System transformations are marked with a shield icon 🛡️ in the UI.</p>
+
+            <h3>Creating Custom Transformations</h3>
+            <p>Add organization-specific transformations:</p>
+            <ol>
+                <li>Click <strong>Add Transformation</strong></li>
+                <li>Fill in the form:
+                    <ul>
+                        <li><strong>Code:</strong> Unique identifier (e.g., "PHONE_FORMAT")</li>
+                        <li><strong>Description:</strong> What this transformation does</li>
+                        <li><strong>SQL Expression:</strong> SQL using <code>{field}</code> as placeholder</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Save</strong></li>
+                <li>Transformation appears immediately in mapping dropdowns</li>
+            </ol>
+
+            <h4>Example Custom Transformations</h4>
+
+            <p><strong>Phone Number Formatting:</strong></p>
+            <ul>
+                <li><strong>Code:</strong> <code>PHONE_FORMAT</code></li>
+                <li><strong>Description:</strong> Extract digits from phone number</li>
+                <li><strong>SQL Expression:</strong> <code>REGEXP_REPLACE({field}, '[^0-9]', '')</code></li>
+            </ul>
+
+            <p><strong>SSN Masking:</strong></p>
+            <ul>
+                <li><strong>Code:</strong> <code>SSN_MASK</code></li>
+                <li><strong>Description:</strong> Mask SSN to last 4 digits</li>
+                <li><strong>SQL Expression:</strong> <code>CONCAT('XXX-XX-', RIGHT({field}, 4))</code></li>
+            </ul>
+
+            <p><strong>Date Formatting:</strong></p>
+            <ul>
+                <li><strong>Code:</strong> <code>DATE_ISO</code></li>
+                <li><strong>Description:</strong> Convert date to ISO format</li>
+                <li><strong>SQL Expression:</strong> <code>DATE_FORMAT({field}, 'yyyy-MM-dd')</code></li>
+            </ul>
+
+            <h3>The {field} Placeholder</h3>
+            <p>When creating SQL expressions, use <code>{field}</code> as the placeholder:</p>
+            <ul>
+                <li>During mapping, <code>{field}</code> is replaced with the actual table.column reference</li>
+                <li>Example: <code>TRIM({field})</code> becomes <code>TRIM(src_table.src_column)</code></li>
+                <li>Functions can be nested: <code>UPPER(TRIM({field}))</code></li>
+            </ul>
+
+            <h3>Managing Transformations</h3>
+            <table>
+                <tr>
+                    <th>Operation</th>
+                    <th>How To</th>
+                    <th>Notes</th>
+                </tr>
+                <tr>
+                    <td>Add</td>
+                    <td>Click "Add Transformation" button</td>
+                    <td>Code must be unique</td>
+                </tr>
+                <tr>
+                    <td>Edit</td>
+                    <td>Click edit icon on custom transformation</td>
+                    <td>System transformations cannot be edited</td>
+                </tr>
+                <tr>
+                    <td>Delete</td>
+                    <td>Click delete icon on custom transformation</td>
+                    <td>System transformations cannot be deleted</td>
+                </tr>
+                <tr>
+                    <td>Search</td>
+                    <td>Use search box to filter by code or description</td>
+                    <td>Searches both system and custom</td>
+                </tr>
+            </table>
+
+            <div class="warning-box">
+                <strong>⚠️ Important:</strong> 
+                <ul>
+                    <li>Test custom SQL expressions thoroughly before deploying</li>
+                    <li>Invalid SQL will cause mapping errors</li>
+                    <li>Check that functions work with your target database (Databricks SQL)</li>
+                    <li>Consider datatype compatibility (e.g., don't use string functions on dates)</li>
+                </ul>
+            </div>
+
+            <h3>Testing Transformations</h3>
+            <p>Best practices for testing new transformations:</p>
+            <ol>
+                <li>Create the transformation in Transformation Management</li>
+                <li>Create a test mapping using the transformation</li>
+                <li>Export the mapping and review the generated SQL</li>
+                <li>Test the SQL expression directly in Databricks SQL editor</li>
+                <li>Verify results match expectations</li>
+                <li>If issues found, edit the transformation and retest</li>
+            </ol>
+        </div>
+
+        <!-- SECTION 5: DEVELOPER REFERENCE -->
+        <div class="section" id="developer">
+            <h2>5. Developer Reference</h2>
+
+            <h3>Database Architecture</h3>
+            <p>The V2 multi-field mapping system uses a normalized database schema:</p>
+
+            <h4>Entity Relationship Diagram</h4>
+            <pre>
+┌─────────────────────┐
+│   mapped_fields     │ (Main mapping record)
+├─────────────────────┤
+│ mapped_field_id (PK)│
+│ semantic_field_id   │──┐
+│ tgt_table_name      │  │
+│ tgt_column_name     │  │
+│ concat_strategy     │  │
+│ concat_separator    │  │
+│ transformation_expr │  │    ┌──────────────────┐
+│ mapped_by           │  │    │ semantic_fields  │
+│ mapped_at           │  └───▶│──────────────────│
+│ confidence_score    │       │ semantic_field_id│
+│ mapping_source      │       │ tgt_table_name   │
+│ ai_reasoning        │       │ tgt_column_name  │
+│ mapping_status      │       │ tgt_comments     │
+└──────────┬──────────┘       │ semantic_field   │
+           │                  └──────────────────┘
+           │
+           ├──────────────────┐
+           │                  │
+           ▼                  ▼
+┌──────────────────┐  ┌──────────────────┐
+│ mapping_details  │  │  mapping_joins   │
+├──────────────────┤  ├──────────────────┤
+│ mapping_detail_id│  │ mapping_join_id  │
+│ mapped_field_id  │  │ mapped_field_id  │
+│ src_table_name   │  │ left_table_name  │
+│ src_column_name  │  │ left_join_column │
+│ field_order      │  │ join_type        │
+│ transformations  │  │ right_table_name │
+└──────────────────┘  │ right_join_column│
+                      │ join_order       │
+                      └──────────────────┘
+            </pre>
+
+            <h4>Table: mapped_fields</h4>
+            <p><strong>Purpose:</strong> Main record for each mapping (one per target field)</p>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><code>mapped_field_id</code></td>
+                    <td>BIGINT</td>
+                    <td>Primary key (auto-increment)</td>
+                </tr>
+                <tr>
+                    <td><code>semantic_field_id</code></td>
+                    <td>BIGINT</td>
+                    <td>Foreign key to semantic_fields</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_table_name</code></td>
+                    <td>STRING</td>
+                    <td>Target table logical name</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_column_name</code></td>
+                    <td>STRING</td>
+                    <td>Target column logical name</td>
+                </tr>
+                <tr>
+                    <td><code>concat_strategy</code></td>
+                    <td>STRING</td>
+                    <td>SPACE, COMMA, PIPE, CUSTOM, NONE</td>
+                </tr>
+                <tr>
+                    <td><code>concat_separator</code></td>
+                    <td>STRING</td>
+                    <td>Custom separator (if strategy=CUSTOM)</td>
+                </tr>
+                <tr>
+                    <td><code>transformation_expr</code></td>
+                    <td>STRING</td>
+                    <td>Complete generated SQL expression</td>
+                </tr>
+                <tr>
+                    <td><code>mapped_by</code></td>
+                    <td>STRING</td>
+                    <td>User email who created mapping</td>
+                </tr>
+                <tr>
+                    <td><code>mapped_at</code></td>
+                    <td>TIMESTAMP</td>
+                    <td>When mapping was created</td>
+                </tr>
+                <tr>
+                    <td><code>confidence_score</code></td>
+                    <td>DOUBLE</td>
+                    <td>AI confidence (0.0 to 1.0)</td>
+                </tr>
+                <tr>
+                    <td><code>mapping_source</code></td>
+                    <td>STRING</td>
+                    <td>AI, MANUAL, or UPLOAD</td>
+                </tr>
+                <tr>
+                    <td><code>ai_reasoning</code></td>
+                    <td>STRING</td>
+                    <td>Why AI suggested this (if AI source)</td>
+                </tr>
+                <tr>
+                    <td><code>mapping_status</code></td>
+                    <td>STRING</td>
+                    <td>ACTIVE, DEPRECATED, REVIEW</td>
+                </tr>
+            </table>
+
+            <h4>Table: mapping_details</h4>
+            <p><strong>Purpose:</strong> Individual source fields (multiple per mapping)</p>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><code>mapping_detail_id</code></td>
+                    <td>BIGINT</td>
+                    <td>Primary key (auto-increment)</td>
+                </tr>
+                <tr>
+                    <td><code>mapped_field_id</code></td>
+                    <td>BIGINT</td>
+                    <td>Foreign key to mapped_fields</td>
+                </tr>
+                <tr>
+                    <td><code>src_table_name</code></td>
+                    <td>STRING</td>
+                    <td>Source table logical name</td>
+                </tr>
+                <tr>
+                    <td><code>src_column_name</code></td>
+                    <td>STRING</td>
+                    <td>Source column logical name</td>
+                </tr>
+                <tr>
+                    <td><code>field_order</code></td>
+                    <td>INT</td>
+                    <td>Order for concatenation (1, 2, 3...)</td>
+                </tr>
+                <tr>
+                    <td><code>transformations</code></td>
+                    <td>STRING</td>
+                    <td>Transformation code applied (e.g., "TRIM")</td>
+                </tr>
+            </table>
+
+            <h4>Table: mapping_joins</h4>
+            <p><strong>Purpose:</strong> Join conditions for multi-table mappings</p>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><code>mapping_join_id</code></td>
+                    <td>BIGINT</td>
+                    <td>Primary key (auto-increment)</td>
+                </tr>
+                <tr>
+                    <td><code>mapped_field_id</code></td>
+                    <td>BIGINT</td>
+                    <td>Foreign key to mapped_fields</td>
+                </tr>
+                <tr>
+                    <td><code>left_table_name</code></td>
+                    <td>STRING</td>
+                    <td>Left table in join</td>
+                </tr>
+                <tr>
+                    <td><code>left_join_column</code></td>
+                    <td>STRING</td>
+                    <td>Left join key column</td>
+                </tr>
+                <tr>
+                    <td><code>join_type</code></td>
+                    <td>STRING</td>
+                    <td>INNER, LEFT, RIGHT, FULL OUTER</td>
+                </tr>
+                <tr>
+                    <td><code>right_table_name</code></td>
+                    <td>STRING</td>
+                    <td>Right table in join</td>
+                </tr>
+                <tr>
+                    <td><code>right_join_column</code></td>
+                    <td>STRING</td>
+                    <td>Right join key column</td>
+                </tr>
+                <tr>
+                    <td><code>join_order</code></td>
+                    <td>INT</td>
+                    <td>Join sequence (1, 2, 3...)</td>
+                </tr>
+            </table>
+
+            <h4>Table: transformation_library</h4>
+            <p><strong>Purpose:</strong> SQL transformation templates</p>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><code>transformation_id</code></td>
+                    <td>BIGINT</td>
+                    <td>Primary key (auto-increment)</td>
+                </tr>
+                <tr>
+                    <td><code>transformation_code</code></td>
+                    <td>STRING</td>
+                    <td>Unique code (e.g., "TRIM")</td>
+                </tr>
+                <tr>
+                    <td><code>description</code></td>
+                    <td>STRING</td>
+                    <td>What this transformation does</td>
+                </tr>
+                <tr>
+                    <td><code>sql_expression</code></td>
+                    <td>STRING</td>
+                    <td>SQL template with {field} placeholder</td>
+                </tr>
+                <tr>
+                    <td><code>is_system</code></td>
+                    <td>BOOLEAN</td>
+                    <td>TRUE = built-in, FALSE = custom</td>
+                </tr>
+            </table>
+
+            <h4>Table: semantic_fields</h4>
+            <p><strong>Purpose:</strong> Target field definitions for AI matching</p>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><code>semantic_field_id</code></td>
+                    <td>BIGINT</td>
+                    <td>Primary key (auto-increment)</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_table_name</code></td>
+                    <td>STRING</td>
+                    <td>Target table logical name</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_column_name</code></td>
+                    <td>STRING</td>
+                    <td>Target column logical name</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_table_physical_name</code></td>
+                    <td>STRING</td>
+                    <td>Actual database table name</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_column_physical_name</code></td>
+                    <td>STRING</td>
+                    <td>Actual database column name</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_comments</code></td>
+                    <td>STRING</td>
+                    <td>Description for AI matching</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_physical_datatype</code></td>
+                    <td>STRING</td>
+                    <td>Datatype (STRING, INT, DATE, etc.)</td>
+                </tr>
+                <tr>
+                    <td><code>tgt_nullable</code></td>
+                    <td>STRING</td>
+                    <td>"Null" or "Not Null"</td>
+                </tr>
+                <tr>
+                    <td><code>semantic_field</code></td>
+                    <td>STRING</td>
+                    <td>Combined text for vector search</td>
+                </tr>
+            </table>
+
+            <h4>Table: unmapped_fields</h4>
+            <p><strong>Purpose:</strong> Source fields awaiting mapping</p>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><code>src_table_name</code></td>
+                    <td>STRING</td>
+                    <td>Source table name</td>
+                </tr>
+                <tr>
+                    <td><code>src_column_name</code></td>
+                    <td>STRING</td>
+                    <td>Source column name</td>
+                </tr>
+                <tr>
+                    <td><code>src_column_physical_name</code></td>
+                    <td>STRING</td>
+                    <td>Actual database column name</td>
+                </tr>
+                <tr>
+                    <td><code>src_nullable</code></td>
+                    <td>STRING</td>
+                    <td>"Null" or "Not Null"</td>
+                </tr>
+                <tr>
+                    <td><code>src_physical_datatype</code></td>
+                    <td>STRING</td>
+                    <td>Column datatype</td>
+                </tr>
+                <tr>
+                    <td><code>src_comments</code></td>
+                    <td>STRING</td>
+                    <td>Column description</td>
+                </tr>
+            </table>
+
+            <h3>API Architecture</h3>
+
+            <h4>Technology Stack</h4>
+            <ul>
+                <li><strong>Backend:</strong> FastAPI (Python)</li>
+                <li><strong>Frontend:</strong> Vue 3 + TypeScript + PrimeVue</li>
+                <li><strong>Database:</strong> Databricks SQL Warehouse</li>
+                <li><strong>Vector Search:</strong> Databricks Vector Search</li>
+                <li><strong>AI Model:</strong> Databricks Foundation Models (DBRX)</li>
+                <li><strong>Authentication:</strong> Databricks OAuth</li>
+            </ul>
+
+            <h4>Key API Endpoints</h4>
+
+            <p><strong>Mapping V2 Endpoints:</strong></p>
+            <ul>
+                <li><code>GET /api/v2/mappings</code> - Get all mappings</li>
+                <li><code>POST /api/v2/mappings</code> - Create new mapping</li>
+                <li><code>PUT /api/v2/mappings/{id}</code> - Update existing mapping</li>
+                <li><code>DELETE /api/v2/mappings/{id}</code> - Delete mapping</li>
+                <li><code>GET /api/v2/mappings/export</code> - Export all mappings as CSV</li>
+            </ul>
+
+            <p><strong>AI Mapping Endpoints:</strong></p>
+            <ul>
+                <li><code>POST /api/v2/ai-mapping/suggestions</code> - Generate AI suggestions</li>
+            </ul>
+
+            <p><strong>Transformation Endpoints:</strong></p>
+            <ul>
+                <li><code>GET /api/transformations</code> - Get all transformations</li>
+                <li><code>POST /api/transformations</code> - Create custom transformation</li>
+                <li><code>PUT /api/transformations/{id}</code> - Update custom transformation</li>
+                <li><code>DELETE /api/transformations/{id}</code> - Delete custom transformation</li>
+            </ul>
+
+            <p><strong>Semantic Endpoints:</strong></p>
+            <ul>
+                <li><code>GET /api/semantic/records</code> - Get all semantic fields</li>
+                <li><code>POST /api/semantic/records</code> - Create semantic field</li>
+                <li><code>PUT /api/semantic/records/{id}</code> - Update semantic field</li>
+                <li><code>DELETE /api/semantic/records/{id}</code> - Delete semantic field</li>
+            </ul>
+
+            <h3>Deployment</h3>
+
+            <h4>Databricks Apps Deployment</h4>
+            <ol>
+                <li><strong>Build Frontend:</strong>
+                    <pre>cd frontend
+npm run build
+cd ..</pre>
+                </li>
+                <li><strong>Prepare app.yaml:</strong>
+                    <pre>command: ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]</pre>
+                </li>
+                <li><strong>Deploy via CLI:</strong>
+                    <pre>databricks apps deploy source2target</pre>
+                </li>
+                <li><strong>Verify:</strong> Check app status and logs in Databricks workspace</li>
+            </ol>
+
+            <h4>Configuration in Production</h4>
+            <ul>
+                <li>Store <code>app_config.json</code> securely</li>
+                <li>Use Databricks secrets for sensitive data</li>
+                <li>Enable application logging</li>
+                <li>Monitor performance and errors</li>
+                <li>Set up alerts for system status failures</li>
+            </ul>
+        </div>
+
+        <!-- SECTION 6: TROUBLESHOOTING -->
+        <div class="section" id="troubleshooting">
+            <h2>6. Troubleshooting</h2>
+
+            <h3>Database Connection Issues</h3>
+            <p><strong>Symptoms:</strong> "Database Connection: Error" on Introduction page</p>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Verify SQL Warehouse is running (not stopped or suspended)</li>
+                <li>Check server hostname and HTTP path are correct</li>
+                <li>Ensure app has OAuth access to workspace</li>
+                <li>Verify catalog and schema names exist</li>
+                <li>Confirm all V2 tables exist (mapped_fields, mapping_details, etc.)</li>
+                <li>Check Databricks workspace permissions</li>
+            </ul>
+
+            <h3>Vector Search Issues</h3>
+            <p><strong>Symptoms:</strong> "Vector Search: Not Available" or AI suggestions timeout</p>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Check endpoint is created and online in Databricks</li>
+                <li>Verify index name matches exactly (case-sensitive)</li>
+                <li>Ensure index is synced with semantic table</li>
+                <li>Check app has permission to query endpoint</li>
+                <li>Wait 1-2 minutes after semantic table changes for sync to complete</li>
+                <li>Manually trigger sync via Databricks console if needed</li>
+                <li>Review Databricks logs for vector search errors</li>
+            </ul>
+
+            <h3>AI Model Issues</h3>
+            <p><strong>Symptoms:</strong> "AI Model: Not Ready" or AI suggestions fail</p>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Verify model endpoint exists and is serving</li>
+                <li>Check endpoint status in Databricks (should be "Ready")</li>
+                <li>Wait for cold start if first request (30-60 seconds)</li>
+                <li>Ensure app has permission to query endpoint</li>
+                <li>Check model endpoint isn't rate-limited</li>
+                <li>Review Databricks logs for model errors</li>
+            </ul>
+
+            <h3>Admin Access Issues</h3>
+            <p><strong>Symptoms:</strong> User shows "User" badge instead of "Admin"</p>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Verify user is member of configured admin groups</li>
+                <li>Check group names in Configuration are correct (case-sensitive)</li>
+                <li>User must log out and back in after group membership changes</li>
+                <li>Check Databricks workspace for group membership</li>
+                <li>Verify admin_groups configuration is saved properly</li>
+            </ul>
+
+            <h3>Transformation Issues</h3>
+            <p><strong>Symptoms:</strong> Transformations don't appear in dropdowns</p>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Verify transformation was saved successfully (check for success message)</li>
+                <li>Refresh the mapping page</li>
+                <li>Check for duplicate transformation codes (must be unique)</li>
+                <li>Ensure transformation_library table exists in database</li>
+                <li>Verify SQL expression syntax is valid</li>
+            </ul>
+
+            <h3>Mapping Edit/Save Issues</h3>
+            <p><strong>Symptoms:</strong> Can't edit or save mappings</p>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Remember: Cannot edit target field - must delete and recreate</li>
+                <li>Cannot add/remove source fields - create new mapping</li>
+                <li>Check that transformation expressions are valid SQL</li>
+                <li>Verify join conditions reference existing tables and columns</li>
+                <li>Ensure custom separators are valid strings (not empty)</li>
+                <li>Check for proper permissions on database tables</li>
+            </ul>
+
+            <h3>Export/Import Issues</h3>
+            <p><strong>Symptoms:</strong> Export fails or import rejects file</p>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Export: Ensure at least one mapped field exists</li>
+                <li>Export: Check browser allows CSV downloads</li>
+                <li>Export: Verify database connection is active</li>
+                <li>Import: Ensure CSV has required columns</li>
+                <li>Import: Check target fields exist in semantic table</li>
+                <li>Import: Verify no special characters in data</li>
+                <li>Import: Save as CSV format (not Excel .xlsx)</li>
+            </ul>
+
+            <h3>Performance Issues</h3>
+            <p><strong>Symptoms:</strong> Slow loading, timeouts, or lag</p>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Check SQL Warehouse is properly sized for workload</li>
+                <li>Verify Vector Search endpoint isn't overloaded</li>
+                <li>Reduce "Vector Results" from 25 to 15 in AI config</li>
+                <li>Check for database query slow-downs</li>
+                <li>Review application logs for errors</li>
+                <li>Consider scaling SQL Warehouse if needed</li>
+            </ul>
+
+            <div class="info-box">
+                <strong>💡 Need More Help?</strong> 
+                <ul>
+                    <li>Check Databricks workspace logs for detailed errors</li>
+                    <li>Review application logs in Databricks Apps console</li>
+                    <li>Contact Databricks support for platform issues</li>
+                    <li>Consult your organization's Databricks admin</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section" style="background: linear-gradient(135deg, #e8f4fd, #f0f8ff); border-left-color: #38a169;">
+            <h2>📚 Additional Resources</h2>
+            <ul>
+                <li><strong>📖 User Guide:</strong> Complete mapping workflow documentation</li>
+                <li><strong>📸 Configuration Demo:</strong> <a href="config_mockup.html">Interactive configuration page demo</a></li>
+                <li><strong>📸 Multi-Field Mapping Demo:</strong> <a href="multi_field_mapping_mockup.html">Interactive V2 mapping workflow</a></li>
+                <li><strong>Databricks Documentation:</strong> <a href="https://docs.databricks.com">docs.databricks.com</a></li>
+                <li><strong>FastAPI Documentation:</strong> <a href="https://fastapi.tiangolo.com">fastapi.tiangolo.com</a></li>
+                <li><strong>Vue 3 Documentation:</strong> <a href="https://vuejs.org">vuejs.org</a></li>
+            </ul>
+
+            <h2 style="margin-top: 2rem;">🎯 Quick Reference: Admin Tasks</h2>
+            <table>
+                <tr>
+                    <th>Task</th>
+                    <th>Location</th>
+                    <th>Action</th>
+                </tr>
+                <tr>
+                    <td>Configure database</td>
+                    <td>Configuration</td>
+                    <td>Update database settings, save, validate</td>
+                </tr>
+                <tr>
+                    <td>Configure vector search</td>
+                    <td>Configuration</td>
+                    <td>Update endpoint and index names</td>
+                </tr>
+                <tr>
+                    <td>Configure AI model</td>
+                    <td>Configuration</td>
+                    <td>Update model endpoint and parameters</td>
+                </tr>
+                <tr>
+                    <td>Add target field</td>
+                    <td>Semantic Management</td>
+                    <td>Click "Add Target Field"</td>
+                </tr>
+                <tr>
+                    <td>Edit target field</td>
+                    <td>Semantic Management</td>
+                    <td>Click edit icon on field row</td>
+                </tr>
+                <tr>
+                    <td>Add SQL transformation</td>
+                    <td>Transformation Management</td>
+                    <td>Click "Add Transformation"</td>
+                </tr>
+                <tr>
+                    <td>Edit custom transformation</td>
+                    <td>Transformation Management</td>
+                    <td>Click edit icon on custom transformation</td>
+                </tr>
+                <tr>
+                    <td>Check system status</td>
+                    <td>Introduction page</td>
+                    <td>Review four status indicators</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
+

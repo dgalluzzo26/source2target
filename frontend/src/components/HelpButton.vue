@@ -90,7 +90,7 @@ import Dialog from 'primevue/dialog'
  */
 interface Props {
   /** Type of help content to display (maps to HTML file) */
-  helpType: 'quick-start' | 'user-guide' | 'ai-mapping' | 'manual-search' | 'templates' | 'admin-config' | 'system-status'
+  helpType: 'quick-start' | 'user-guide' | 'ai-mapping' | 'manual-search' | 'templates' | 'admin-config' | 'admin-guide' | 'system-status'
   /** Optional section anchor for deep linking (e.g., "#mapping-fields") */
   section?: string
   /** Button icon (PrimeIcon class name) */
@@ -156,6 +156,8 @@ const helpUrl = computed(() => {
       return `${baseUrl}/templates-help.html`
     case 'admin-config':
       return `${baseUrl}/admin-config-help.html`
+    case 'admin-guide':
+      return `${baseUrl}/admin-guide.html${props.section ? '#' + props.section : ''}`
     case 'system-status':
       return `${baseUrl}/system-status-help.html`
     default:
@@ -189,6 +191,8 @@ const getHeaderIcon = () => {
       return 'pi pi-file'
     case 'admin-config':
       return 'pi pi-cog'
+    case 'admin-guide':
+      return 'pi pi-shield'
     case 'system-status':
       return 'pi pi-heart'
     default:
@@ -218,6 +222,8 @@ const getHeaderTitle = () => {
       return 'Templates Help'
     case 'admin-config':
       return 'Administrator Configuration'
+    case 'admin-guide':
+      return 'Administrator Guide'
     case 'system-status':
       return 'System Status Help'
     default:

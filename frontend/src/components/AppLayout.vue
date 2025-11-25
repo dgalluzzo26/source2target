@@ -78,19 +78,6 @@
             <span class="menu-section-label">Help</span>
           </li>
           <li>
-            <div class="layout-menuitem-link help-button-wrapper" v-tooltip.right="sidebarCollapsed ? 'Quick Start' : ''">
-              <HelpButton 
-                help-type="quick-start" 
-                label="Quick Start" 
-                severity="secondary"
-                icon="pi pi-bolt"
-                tooltip=""
-                :outlined="true"
-                custom-class="sidebar-help-button"
-              />
-            </div>
-          </li>
-          <li>
             <div class="layout-menuitem-link help-button-wrapper" v-tooltip.right="sidebarCollapsed ? 'User Guide' : ''">
               <HelpButton 
                 help-type="user-guide" 
@@ -106,7 +93,7 @@
           <li v-if="userStore.isAdmin">
             <div class="layout-menuitem-link help-button-wrapper" v-tooltip.right="sidebarCollapsed ? 'Admin Guide' : ''">
               <HelpButton 
-                help-type="admin-config" 
+                help-type="admin-guide" 
                 label="Admin Guide" 
                 severity="secondary"
                 icon="pi pi-cog"
