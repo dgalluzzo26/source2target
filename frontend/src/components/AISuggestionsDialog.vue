@@ -73,15 +73,21 @@
           </Column>
 
           <!-- Target Field -->
-          <Column header="Target Field" style="min-width: 20rem">
+          <Column header="Target Field" style="min-width: 15rem">
             <template #body="{ data }">
               <div class="target-field">
                 <strong>{{ data.tgt_table_name }}.{{ data.tgt_column_name }}</strong>
                 <span class="physical-name">{{ data.tgt_column_physical_name }}</span>
-                <div v-if="data.tgt_comments" class="target-description">
-                  <i class="pi pi-info-circle"></i>
-                  <span>{{ data.tgt_comments }}</span>
-                </div>
+              </div>
+            </template>
+          </Column>
+
+          <!-- Description -->
+          <Column header="Description" style="min-width: 18rem">
+            <template #body="{ data }">
+              <div class="target-description">
+                <i v-if="data.tgt_comments" class="pi pi-info-circle"></i>
+                <span>{{ data.tgt_comments || 'No description available' }}</span>
               </div>
             </template>
           </Column>

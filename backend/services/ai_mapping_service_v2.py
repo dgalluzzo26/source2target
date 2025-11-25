@@ -433,6 +433,11 @@ Respond in JSON format:
                     quality_order = {'Excellent': 0, 'Strong': 1, 'Good': 2, 'Weak': 3, 'Unknown': 4}
                     enriched_results.sort(key=lambda x: (quality_order.get(x.get('match_quality', 'Unknown'), 4), -x.get('search_score', 0)))
                     
+                    # Debug: Check if tgt_comments is in the results
+                    if enriched_results:
+                        print(f"[AI Mapping Service V2] Sample result keys: {list(enriched_results[0].keys())}")
+                        print(f"[AI Mapping Service V2] Sample tgt_comments: {enriched_results[0].get('tgt_comments', 'NOT FOUND')}")
+                    
                     print(f"[AI Mapping Service V2] Enriched and sorted {len(enriched_results)} results by match quality")
                     return enriched_results
                     
