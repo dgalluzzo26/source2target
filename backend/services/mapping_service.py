@@ -665,6 +665,7 @@ class MappingService:
                 
                 query = f"""
                 SELECT 
+                    semantic_field_id,
                     tgt_table_name,
                     tgt_column_name,
                     tgt_table_physical_name,
@@ -720,7 +721,8 @@ class MappingService:
         
         try:
             config = self.config_service.get_config()
-            semantic_table = config.database.semantic_table
+            # Use V2 semantic_fields_table with fully qualified name
+            semantic_table = self.config_service.get_fully_qualified_table_name(config.database.semantic_fields_table)
             server_hostname = config.database.server_hostname
             http_path = config.database.http_path
             print(f"[Mapping Service] Config loaded: {semantic_table}")
