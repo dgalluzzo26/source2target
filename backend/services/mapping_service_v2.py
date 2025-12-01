@@ -416,12 +416,12 @@ class MappingServiceV2:
         Delete a mapping by primary key (synchronous).
         
         Transaction workflow:
-        1. Delete from mapping_joins (cascade delete for join conditions)
-        2. Delete from mapping_details (cascade delete for source fields)
-        3. Delete from mapped_fields (delete the main mapping record)
-        4. Commit transaction
-        
-        Only requires the PK (mapped_field_id) - no need to query source fields.
+        1. Query mapping_details to get source field information
+        2. Delete from mapping_joins (cascade delete for join conditions)
+        3. Delete from mapping_details (cascade delete for source fields)
+        4. Delete from mapped_fields (delete the main mapping record)
+        5. Restore source fields to unmapped_fields table
+        6. Commit transaction
         
         Args:
             server_hostname: Databricks workspace hostname
@@ -429,7 +429,7 @@ class MappingServiceV2:
             mapped_fields_table: Fully qualified mapped_fields table name
             mapping_details_table: Fully qualified mapping_details table name
             mapping_joins_table: Fully qualified mapping_joins table name
-            unmapped_fields_table: Fully qualified unmapped_fields table name (unused)
+            unmapped_fields_table: Fully qualified unmapped_fields table name
             mapped_field_id: ID of the mapping to delete (PK)
         
         Returns:
@@ -441,19 +441,36 @@ class MappingServiceV2:
         
         try:
             with connection.cursor() as cursor:
-                # Step 1: Delete from mapping_joins (if any)
+                # Step 1: Query source fields before deleting
+                query_details = f"""
+                    SELECT 
+                        src_table_name,
+                        src_table_physical_name,
+                        src_column_name,
+                        src_column_physical_name
+                    FROM {mapping_details_table}
+                    WHERE mapped_field_id = {mapped_field_id}
+                """
+                print(f"[Mapping Service V2] Querying source fields to restore...")
+                cursor.execute(query_details)
+                arrow_table = cursor.fetchall_arrow()
+                source_fields = arrow_table.to_pandas().to_dict('records')
+                
+                print(f"[Mapping Service V2] Found {len(source_fields)} source fields to restore")
+                
+                # Step 2: Delete from mapping_joins (if any)
                 delete_joins = f"DELETE FROM {mapping_joins_table} WHERE mapped_field_id = {mapped_field_id}"
                 print(f"[Mapping Service V2] Deleting join conditions...")
                 cursor.execute(delete_joins)
                 joins_deleted = cursor.rowcount
                 
-                # Step 2: Delete from mapping_details
+                # Step 3: Delete from mapping_details
                 delete_details = f"DELETE FROM {mapping_details_table} WHERE mapped_field_id = {mapped_field_id}"
                 print(f"[Mapping Service V2] Deleting source field details...")
                 cursor.execute(delete_details)
                 details_deleted = cursor.rowcount
                 
-                # Step 3: Delete from mapped_fields
+                # Step 4: Delete from mapped_fields
                 delete_mapped = f"DELETE FROM {mapped_fields_table} WHERE mapped_field_id = {mapped_field_id}"
                 print(f"[Mapping Service V2] Deleting main mapping record...")
                 cursor.execute(delete_mapped)
@@ -462,13 +479,62 @@ class MappingServiceV2:
                 if mapped_deleted == 0:
                     raise ValueError(f"Mapping ID {mapped_field_id} not found")
                 
+                # Step 5: Restore source fields to unmapped_fields
+                # Check for existing fields to avoid duplicates
+                restored_count = 0
+                for field in source_fields:
+                    # Check if this field already exists in unmapped_fields
+                    check_existing = f"""
+                        SELECT COUNT(*) as cnt
+                        FROM {unmapped_fields_table}
+                        WHERE src_table_physical_name = '{field['src_table_physical_name'].replace("'", "''")}'
+                          AND src_column_physical_name = '{field['src_column_physical_name'].replace("'", "''")}'
+                    """
+                    cursor.execute(check_existing)
+                    result = cursor.fetchall_arrow().to_pandas()
+                    exists = result['cnt'].iloc[0] > 0
+                    
+                    if not exists:
+                        # Insert back into unmapped_fields
+                        # Note: Some metadata (nullable, datatype, comments, domain) may be NULL
+                        # since mapping_details doesn't store all original metadata
+                        restore_insert = f"""
+                            INSERT INTO {unmapped_fields_table} (
+                                src_table_name,
+                                src_table_physical_name,
+                                src_column_name,
+                                src_column_physical_name,
+                                src_nullable,
+                                src_physical_datatype,
+                                src_comments,
+                                domain,
+                                uploaded_by
+                            ) VALUES (
+                                '{field['src_table_name'].replace("'", "''")}',
+                                '{field['src_table_physical_name'].replace("'", "''")}',
+                                '{field['src_column_name'].replace("'", "''")}',
+                                '{field['src_column_physical_name'].replace("'", "''")}',
+                                'UNKNOWN',
+                                'UNKNOWN',
+                                'Restored from deleted mapping',
+                                NULL,
+                                'system'
+                            )
+                        """
+                        cursor.execute(restore_insert)
+                        restored_count += 1
+                    else:
+                        print(f"[Mapping Service V2] Field {field['src_table_name']}.{field['src_column_name']} already exists in unmapped_fields, skipping")
+                
+                print(f"[Mapping Service V2] Restored {restored_count} source fields to unmapped_fields")
+                
                 connection.commit()
                 
-                print(f"[Mapping Service V2] Mapping deleted successfully: {details_deleted} source fields, {joins_deleted} joins")
+                print(f"[Mapping Service V2] Mapping deleted successfully: {details_deleted} source fields, {joins_deleted} joins, {restored_count} fields restored")
                 
                 return {
                     "status": "success",
-                    "message": f"Deleted mapping ID {mapped_field_id} ({details_deleted} source fields, {joins_deleted} joins)"
+                    "message": f"Deleted mapping ID {mapped_field_id} ({details_deleted} source fields deleted, {restored_count} restored to unmapped)"
                 }
                 
         except Exception as e:

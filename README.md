@@ -4,7 +4,9 @@ A full-stack AI-powered field mapping application for Databricks. This tool help
 
 ## 📚 Documentation
 
-Comprehensive documentation is available for different audiences:
+All documentation is organized in the [`docs/`](docs/) directory. See **[docs/README.md](docs/README.md)** for the complete documentation index.
+
+### User-Facing Guides
 
 - **[User Guide](docs/USER_GUIDE.md)** - For end users mapping fields
   - Getting started with the application
@@ -26,6 +28,15 @@ Comprehensive documentation is available for different audiences:
   - API documentation
   - Development workflow
   - Testing and deployment
+
+- **[Quick Start](docs/QUICK_START.md)** - Get up and running quickly
+
+### Technical Documentation
+
+- **[Architecture](docs/architecture/)** - System design and architecture diagrams
+- **[Implementation](docs/implementation/)** - Technical implementation details
+- **[Deployment](docs/deployment/)** - Production deployment guides
+- **[Changelog](docs/changelog/)** - Feature updates and bug fixes
 
 ## 🚀 Quick Start
 
@@ -211,10 +222,18 @@ source2target/
 │   │   ├── stores/               # State management
 │   │   └── views/                # Page components
 │   └── public/                   # Static assets
-├── docs/                         # Documentation
-│   ├── USER_GUIDE.md
-│   ├── ADMIN_GUIDE.md
-│   └── DEVELOPER_GUIDE.md
+├── docs/                         # 📚 Documentation (organized)
+│   ├── README.md                 # Documentation index
+│   ├── USER_GUIDE.md             # User guide
+│   ├── ADMIN_GUIDE.md            # Admin guide
+│   ├── DEVELOPER_GUIDE.md        # Developer guide
+│   ├── architecture/             # System architecture
+│   ├── implementation/           # Implementation details
+│   ├── deployment/               # Deployment guides
+│   └── changelog/                # Updates & fixes
+├── database/                     # Database files
+│   ├── migration_v2_schema.sql   # V2 schema migration
+│   └── V2_SCHEMA_DIAGRAM.md      # Schema documentation
 ├── dist/                         # Built frontend (generated)
 ├── app_config.json               # Local configuration
 ├── app.yaml                      # Databricks app config
