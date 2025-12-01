@@ -441,11 +441,12 @@ class MappingServiceV2:
         
         try:
             with connection.cursor() as cursor:
-                # Step 1: Query source fields before deleting
+                # Step 1: Query source fields with unmapped_field_id reference before deleting
+                # Note: mapping_details stores unmapped_field_id FK which we can use to restore
                 query_details = f"""
                     SELECT 
+                        unmapped_field_id,
                         src_table_name,
-                        src_table_physical_name,
                         src_column_name,
                         src_column_physical_name
                     FROM {mapping_details_table}
@@ -484,10 +485,11 @@ class MappingServiceV2:
                 restored_count = 0
                 for field in source_fields:
                     # Check if this field already exists in unmapped_fields
+                    # Use src_table_name for physical name lookup since mapping_details doesn't store physical table name
                     check_existing = f"""
                         SELECT COUNT(*) as cnt
                         FROM {unmapped_fields_table}
-                        WHERE src_table_physical_name = '{field['src_table_physical_name'].replace("'", "''")}'
+                        WHERE src_table_name = '{field['src_table_name'].replace("'", "''")}'
                           AND src_column_physical_name = '{field['src_column_physical_name'].replace("'", "''")}'
                     """
                     cursor.execute(check_existing)
@@ -496,8 +498,10 @@ class MappingServiceV2:
                     
                     if not exists:
                         # Insert back into unmapped_fields
-                        # Note: Some metadata (nullable, datatype, comments, domain) may be NULL
-                        # since mapping_details doesn't store all original metadata
+                        # Note: mapping_details doesn't store src_table_physical_name, 
+                        # so we use src_table_name for both logical and physical.
+                        # Other metadata (nullable, datatype, comments, domain) defaults to UNKNOWN
+                        # since mapping_details doesn't store the complete field metadata.
                         restore_insert = f"""
                             INSERT INTO {unmapped_fields_table} (
                                 src_table_name,
@@ -511,7 +515,7 @@ class MappingServiceV2:
                                 uploaded_by
                             ) VALUES (
                                 '{field['src_table_name'].replace("'", "''")}',
-                                '{field['src_table_physical_name'].replace("'", "''")}',
+                                '{field['src_table_name'].replace("'", "''")}',
                                 '{field['src_column_name'].replace("'", "''")}',
                                 '{field['src_column_physical_name'].replace("'", "''")}',
                                 'UNKNOWN',

@@ -67,7 +67,7 @@ Modified `MappingServiceV2._delete_mapping_sync()` to:
 | Field | Restored Value | Source |
 |-------|---------------|--------|
 | `src_table_name` | ✅ Original | From mapping_details |
-| `src_table_physical_name` | ✅ Original | From mapping_details |
+| `src_table_physical_name` | ⚠️ Same as logical | Not stored in mapping_details |
 | `src_column_name` | ✅ Original | From mapping_details |
 | `src_column_physical_name` | ✅ Original | From mapping_details |
 | `src_nullable` | ⚠️ 'UNKNOWN' | Not stored in mapping_details |
@@ -76,7 +76,9 @@ Modified `MappingServiceV2._delete_mapping_sync()` to:
 | `domain` | ⚠️ NULL | Not stored in mapping_details |
 | `uploaded_by` | ⚠️ 'system' | Original user not tracked |
 
-**Future Enhancement:** Consider storing additional metadata in `mapping_details` or linking to original `unmapped_fields` record to preserve full metadata on restore.
+**Limitation:** `mapping_details` table does not store `src_table_physical_name`, only the logical `src_table_name`. When restoring, we use the logical name for both fields. This works for most cases but may cause issues if logical and physical table names differ significantly.
+
+**Future Enhancement:** Consider storing `src_table_physical_name` in `mapping_details` schema or using the `unmapped_field_id` FK to query the original unmapped_fields record for complete metadata preservation.
 
 ---
 
