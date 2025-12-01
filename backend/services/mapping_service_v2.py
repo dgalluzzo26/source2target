@@ -12,6 +12,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import functools
 from typing import List, Dict, Any, Optional
+import pandas as pd
 from databricks import sql
 from databricks.sdk import WorkspaceClient
 from backend.models.mapping_v2 import (
@@ -163,11 +164,31 @@ class MappingServiceV2:
                 
                 print(f"[Mapping Service V2] Created mapped_field with mapped_field_id: {mapped_field_id}")
                 
-                # Step 2: Insert all mapping_details
+                # Step 2: Query unmapped_field_id for each detail (to preserve metadata for later restore)
+                # and insert mapping_details
+                unmapped_ids = {}
                 for detail in mapping_details:
+                    # Query unmapped_fields to get the ID and preserve the reference
+                    query_unmapped = f"""
+                    SELECT unmapped_field_id
+                    FROM {unmapped_fields_table}
+                    WHERE src_table_name = '{detail.src_table_name.replace("'", "''")}'
+                      AND src_column_physical_name = '{detail.src_column_physical_name.replace("'", "''")}'
+                    LIMIT 1
+                    """
+                    cursor.execute(query_unmapped)
+                    result = cursor.fetchall_arrow().to_pandas()
+                    
+                    unmapped_id = None
+                    if not result.empty and 'unmapped_field_id' in result.columns:
+                        unmapped_id = result['unmapped_field_id'].iloc[0]
+                        unmapped_ids[detail.src_column_physical_name] = unmapped_id
+                    
+                    # Insert mapping_details with unmapped_field_id reference
                     detail_insert = f"""
                     INSERT INTO {mapping_details_table} (
                         mapped_field_id,
+                        unmapped_field_id,
                         src_table_name,
                         src_column_name,
                         src_column_physical_name,
@@ -175,6 +196,7 @@ class MappingServiceV2:
                         transformations
                     ) VALUES (
                         {mapped_field_id},
+                        {int(unmapped_id) if unmapped_id is not None and not pd.isna(unmapped_id) else 'NULL'},
                         '{detail.src_table_name.replace("'", "''")}',
                         '{detail.src_column_name.replace("'", "''")}',
                         '{detail.src_column_physical_name.replace("'", "''")}',
@@ -185,7 +207,7 @@ class MappingServiceV2:
                     
                     cursor.execute(detail_insert)
                 
-                print(f"[Mapping Service V2] Inserted {len(mapping_details)} mapping details")
+                print(f"[Mapping Service V2] Inserted {len(mapping_details)} mapping details with unmapped_field_id references")
                 
                 # Step 3: Insert all mapping_joins (if any)
                 if mapping_joins:
@@ -218,17 +240,14 @@ class MappingServiceV2:
                     
                     print(f"[Mapping Service V2] Inserted {len(mapping_joins)} join conditions")
                 
-                # Step 4: Delete source fields from unmapped_fields
-                for detail in mapping_details:
-                    delete_unmapped = f"""
-                    DELETE FROM {unmapped_fields_table}
-                    WHERE src_table_physical_name = '{detail.src_table_physical_name.replace("'", "''")}'
-                      AND src_column_physical_name = '{detail.src_column_physical_name.replace("'", "''")}'
-                    """
-                    
-                    cursor.execute(delete_unmapped)
+                # Step 4: DON'T delete from unmapped_fields
+                # We now keep the unmapped_field records so we can restore them with full metadata
+                # if the mapping is deleted. The unmapped_field_id FK in mapping_details links them.
+                # 
+                # Note: To hide mapped fields from the unmapped list in the UI, filter by checking
+                # if they exist in mapping_details (via unmapped_field_id FK).
                 
-                print(f"[Mapping Service V2] Removed {len(mapping_details)} fields from unmapped_fields")
+                print(f"[Mapping Service V2] Keeping {len(mapping_details)} fields in unmapped_fields for potential restore")
                 
                 # Commit transaction
                 connection.commit()
@@ -481,27 +500,47 @@ class MappingServiceV2:
                     raise ValueError(f"Mapping ID {mapped_field_id} not found")
                 
                 # Step 5: Restore source fields to unmapped_fields
-                # Check for existing fields to avoid duplicates
+                # Since we now store unmapped_field_id in mapping_details, we DON'T actually delete
+                # the unmapped record during mapping creation anymore (see Step 4 in create).
+                # So the fields should already exist - we just need to verify they're there.
                 restored_count = 0
+                already_exists_count = 0
+                
                 for field in source_fields:
-                    # Check if this field already exists in unmapped_fields
-                    # Use src_table_name for physical name lookup since mapping_details doesn't store physical table name
-                    check_existing = f"""
+                    unmapped_id = field.get('unmapped_field_id')
+                    
+                    # Check if the field already exists in unmapped_fields
+                    if unmapped_id and not pd.isna(unmapped_id):
+                        # We have the ID - check if it still exists
+                        check_by_id = f"""
+                            SELECT COUNT(*) as cnt
+                            FROM {unmapped_fields_table}
+                            WHERE unmapped_field_id = {int(unmapped_id)}
+                        """
+                        cursor.execute(check_by_id)
+                        result = cursor.fetchall_arrow().to_pandas()
+                        exists = result['cnt'].iloc[0] > 0
+                        
+                        if exists:
+                            # Perfect! The original field is still there with all its metadata
+                            print(f"[Mapping Service V2] Unmapped field ID {int(unmapped_id)} still exists - no restore needed")
+                            already_exists_count += 1
+                            continue
+                    
+                    # Check if field exists by name (in case unmapped_field_id was NULL or record was deleted)
+                    check_by_name = f"""
                         SELECT COUNT(*) as cnt
                         FROM {unmapped_fields_table}
                         WHERE src_table_name = '{field['src_table_name'].replace("'", "''")}'
                           AND src_column_physical_name = '{field['src_column_physical_name'].replace("'", "''")}'
                     """
-                    cursor.execute(check_existing)
+                    cursor.execute(check_by_name)
                     result = cursor.fetchall_arrow().to_pandas()
-                    exists = result['cnt'].iloc[0] > 0
+                    exists_by_name = result['cnt'].iloc[0] > 0
                     
-                    if not exists:
-                        # Insert back into unmapped_fields
-                        # Note: mapping_details doesn't store src_table_physical_name, 
-                        # so we use src_table_name for both logical and physical.
-                        # Other metadata (nullable, datatype, comments, domain) defaults to UNKNOWN
-                        # since mapping_details doesn't store the complete field metadata.
+                    if not exists_by_name:
+                        # Field doesn't exist - need to recreate with limited metadata
+                        # (This shouldn't happen with new code, but handle legacy data)
                         restore_insert = f"""
                             INSERT INTO {unmapped_fields_table} (
                                 src_table_name,
@@ -520,7 +559,7 @@ class MappingServiceV2:
                                 '{field['src_column_physical_name'].replace("'", "''")}',
                                 'UNKNOWN',
                                 'UNKNOWN',
-                                'Restored from deleted mapping',
+                                'Restored from deleted mapping - original metadata not available',
                                 NULL,
                                 'system'
                             )
@@ -528,9 +567,10 @@ class MappingServiceV2:
                         cursor.execute(restore_insert)
                         restored_count += 1
                     else:
-                        print(f"[Mapping Service V2] Field {field['src_table_name']}.{field['src_column_name']} already exists in unmapped_fields, skipping")
+                        print(f"[Mapping Service V2] Field {field['src_table_name']}.{field['src_column_name']} already exists")
+                        already_exists_count += 1
                 
-                print(f"[Mapping Service V2] Restored {restored_count} source fields to unmapped_fields")
+                print(f"[Mapping Service V2] Restore complete: {already_exists_count} fields already exist, {restored_count} new records created")
                 
                 connection.commit()
                 
