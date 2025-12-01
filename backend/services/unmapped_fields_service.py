@@ -272,9 +272,13 @@ class UnmappedFieldsService:
         
         try:
             with connection.cursor() as cursor:
-                query = f"DELETE FROM {unmapped_fields_table} WHERE id = {field_id}"
+                query = f"DELETE FROM {unmapped_fields_table} WHERE unmapped_field_id = {field_id}"
                 cursor.execute(query)
+                rows_deleted = cursor.rowcount
                 connection.commit()
+                
+                if rows_deleted == 0:
+                    raise ValueError(f"Unmapped field ID {field_id} not found")
                 
                 print(f"[Unmapped Fields Service] Unmapped field deleted successfully")
                 return {"status": "success", "message": f"Deleted unmapped field ID {field_id}"}
