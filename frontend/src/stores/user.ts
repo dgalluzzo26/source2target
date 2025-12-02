@@ -79,6 +79,9 @@ export const useUserStore = defineStore('user', () => {
   
   /** Whether current user can access the platform */
   const isPlatformUser = computed(() => currentUser.value?.is_platform_user || false)
+  
+  /** Current user's email address */
+  const userEmail = computed(() => currentUser.value?.email || null)
 
   // ========================================================================
   // Actions
@@ -186,6 +189,7 @@ export const useUserStore = defineStore('user', () => {
     isAuthenticated,
     isAdmin,
     isPlatformUser,
+    userEmail,
     
     // Actions
     getCurrentUser,

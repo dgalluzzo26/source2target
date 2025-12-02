@@ -340,7 +340,12 @@ const hasMultipleTables = computed(() => {
 
 onMounted(() => {
   // Load data from AI suggestions store
-  if (aiStore.selectedSuggestion && aiStore.sourceFieldsUsed.length > 0) {
+  console.log('[Mapping Config] onMounted - checking AI store state:')
+  console.log('[Mapping Config] - selectedSuggestion:', aiStore.selectedSuggestion)
+  console.log('[Mapping Config] - sourceFieldsUsed:', aiStore.sourceFieldsUsed)
+  console.log('[Mapping Config] - sourceFieldsUsed.length:', aiStore.sourceFieldsUsed?.length)
+  
+  if (aiStore.selectedSuggestion && aiStore.sourceFieldsUsed && aiStore.sourceFieldsUsed.length > 0) {
     sourceFields.value = aiStore.sourceFieldsUsed
     targetField.value = aiStore.selectedSuggestion
     
@@ -364,6 +369,8 @@ onMounted(() => {
   } else {
     // No data in store - redirect back to field selection
     console.warn('[Mapping Config] No data in AI store, redirecting to unmapped fields')
+    console.warn('[Mapping Config] - selectedSuggestion is:', aiStore.selectedSuggestion ? 'set' : 'null/undefined')
+    console.warn('[Mapping Config] - sourceFieldsUsed length:', aiStore.sourceFieldsUsed?.length || 0)
     toast.add({
       severity: 'warn',
       summary: 'No Selection',
