@@ -276,6 +276,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMappingsStoreV2 } from '@/stores/mappingsStoreV2'
 import { useUnmappedFieldsStore } from '@/stores/unmappedFieldsStore'
 import { useAISuggestionsStoreV2 } from '@/stores/aiSuggestionsStoreV2'
+import { useUserStore } from '@/stores/user'
 import { useToast } from 'primevue/usetoast'
 import Steps from 'primevue/steps'
 import Card from 'primevue/card'
@@ -297,6 +298,7 @@ const router = useRouter()
 const mappingsStore = useMappingsStoreV2()
 const unmappedStore = useUnmappedFieldsStore()
 const aiStore = useAISuggestionsStoreV2()
+const userStore = useUserStore()
 const toast = useToast()
 
 // State
@@ -478,6 +480,7 @@ async function handleSave() {
       mapping_source: 'AI',
       ai_reasoning: targetField.value.ai_reasoning,
       mapping_status: 'ACTIVE',
+      mapped_by: userStore.userEmail || 'unknown',
       source_fields: orderedFields.value,
       mapping_joins: joinDefinitions.value
     })

@@ -185,6 +185,9 @@ class MappingServiceV2:
                         unmapped_ids[detail.src_column_physical_name] = unmapped_id
                     
                     # Insert mapping_details with unmapped_field_id reference
+                    # Use mapped_by from mapped_field_data as created_by for details
+                    created_by_value = mapped_field_data.mapped_by.replace("'", "''") if mapped_field_data.mapped_by else None
+                    
                     detail_insert = f"""
                     INSERT INTO {mapping_details_table} (
                         mapped_field_id,
@@ -193,7 +196,8 @@ class MappingServiceV2:
                         src_column_name,
                         src_column_physical_name,
                         field_order,
-                        transformations
+                        transformations,
+                        created_by
                     ) VALUES (
                         {mapped_field_id},
                         {int(unmapped_id) if unmapped_id is not None and not pd.isna(unmapped_id) else 'NULL'},
@@ -201,7 +205,8 @@ class MappingServiceV2:
                         '{detail.src_column_name.replace("'", "''")}',
                         '{detail.src_column_physical_name.replace("'", "''")}',
                         {detail.field_order},
-                        {'NULL' if not detail.transformation_expr else "'" + detail.transformation_expr.replace("'", "''") + "'"}
+                        {'NULL' if not detail.transformation_expr else "'" + detail.transformation_expr.replace("'", "''") + "'"},
+                        {'NULL' if not created_by_value else "'" + created_by_value + "'"}
                     )
                     """
                     
@@ -210,7 +215,10 @@ class MappingServiceV2:
                 print(f"[Mapping Service V2] Inserted {len(mapping_details)} mapping details with unmapped_field_id references")
                 
                 # Step 3: Insert all mapping_joins (if any)
+                # Use mapped_by from mapped_field_data as created_by for joins
                 if mapping_joins:
+                    join_created_by = mapped_field_data.mapped_by.replace("'", "''") if mapped_field_data.mapped_by else None
+                    
                     for join in mapping_joins:
                         join_insert = f"""
                         INSERT INTO {mapping_joins_table} (
@@ -222,7 +230,8 @@ class MappingServiceV2:
                             right_table_physical_name,
                             right_join_column,
                             join_type,
-                            join_order
+                            join_order,
+                            created_by
                         ) VALUES (
                             {mapped_field_id},
                             '{join.left_table_name.replace("'", "''")}',
@@ -232,7 +241,8 @@ class MappingServiceV2:
                             '{join.right_table_physical_name.replace("'", "''")}',
                             '{join.right_join_column.replace("'", "''")}',
                             '{join.join_type}',
-                            {join.join_order}
+                            {join.join_order},
+                            {'NULL' if not join_created_by else "'" + join_created_by + "'"}
                         )
                         """
                         
