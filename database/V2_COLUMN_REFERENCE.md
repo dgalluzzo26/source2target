@@ -68,7 +68,7 @@
   - `src_column_name` (STRING) - Denormalized
   - `src_column_physical_name` (STRING) - Denormalized
   - `field_order` (INT)
-  - `transformation_expr` (STRING)
+  - `transformations` (STRING) - ⚠️ NOT transformation_expr
   - `created_ts` (TIMESTAMP) - ⚠️ NOT added_at
   - `updated_ts` (TIMESTAMP)
 

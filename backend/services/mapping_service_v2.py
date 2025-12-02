@@ -755,7 +755,7 @@ class MappingServiceV2:
                     expr_escaped = transformation_expr.replace("'", "''") if transformation_expr else ""
                     update_detail_query = f"""
                     UPDATE {mapping_details_table}
-                    SET transformation_expr = '{expr_escaped}'
+                    SET transformations = '{expr_escaped}'
                     WHERE mapping_detail_id = {detail_id} AND mapped_field_id = {mapping_id}
                     """
                     print(f"[Mapping Service V2] Updating transformation for mapping_detail_id {detail_id}")
