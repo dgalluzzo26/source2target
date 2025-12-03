@@ -443,10 +443,10 @@ class AIMappingServiceV2:
                 for field in source_fields
             ]
             
-            # Build historical context
+            # Build historical context (only for manual mappings not already in feedback)
             historical_context = ""
             if historical_patterns:
-                historical_context = "\n\nHistorical Mapping Patterns (from completed mappings):\n"
+                historical_context = "\n\nOther Historical Mappings (manual mappings without explicit feedback):\n"
                 for pattern in historical_patterns[:3]:  # Top 3 patterns
                     historical_context += (
                         f"- Previously mapped to: {pattern['tgt_table_name']}.{pattern['tgt_column_name']} "
@@ -674,12 +674,14 @@ Respond in JSON format:
         2. Fetch historical patterns from mapped_fields (parallel)
         3. Perform vector search for semantic similarity (parallel)
         4. Fetch user feedback history - accepted & rejected (parallel)
-        5. Call LLM for intelligent reasoning with all context
-        6. Return ranked suggestions with reasoning
+        5. Deduplicate: Remove historical patterns already in accepted feedback
+        6. Call LLM for intelligent reasoning with all context
+        7. Return ranked suggestions with reasoning
         
-        The LLM uses feedback to:
-        - Boost confidence for previously accepted mappings
-        - Warn about or deprioritize previously rejected mappings
+        The LLM uses:
+        - Feedback (ACCEPTED) = confirmed good mappings with user reasoning
+        - Feedback (REJECTED) = confirmed bad mappings to avoid
+        - Historical patterns = manual mappings without feedback (fallback)
         
         Args:
             source_fields: List of source field dictionaries with keys:
@@ -757,8 +759,25 @@ Respond in JSON format:
         )
         
         print(f"[AI Mapping Service V2] Feedback history: {len(feedback_history.get('accepted', []))} accepted, {len(feedback_history.get('rejected', []))} rejected")
+        print(f"[AI Mapping Service V2] Historical patterns before dedup: {len(historical_patterns)}")
         
-        # Step 4: Call LLM for reasoning (with feedback)
+        # Step 4: Deduplicate - remove historical patterns already in accepted feedback
+        # Build set of (tgt_table, tgt_column) from accepted feedback
+        accepted_targets = set()
+        for fb in feedback_history.get('accepted', []):
+            key = (fb.get('suggested_tgt_table', '').lower(), fb.get('suggested_tgt_column', '').lower())
+            accepted_targets.add(key)
+        
+        # Filter historical patterns to only keep those NOT in accepted feedback
+        deduplicated_patterns = []
+        for pattern in historical_patterns:
+            key = (pattern.get('tgt_table_name', '').lower(), pattern.get('tgt_column_name', '').lower())
+            if key not in accepted_targets:
+                deduplicated_patterns.append(pattern)
+        
+        print(f"[AI Mapping Service V2] Historical patterns after dedup: {len(deduplicated_patterns)} (removed {len(historical_patterns) - len(deduplicated_patterns)} duplicates)")
+        
+        # Step 5: Call LLM for reasoning (with feedback + deduplicated historical patterns)
         enriched_results = await loop.run_in_executor(
             executor,
             functools.partial(
@@ -766,7 +785,7 @@ Respond in JSON format:
                 ai_config['foundation_model_endpoint'],
                 source_fields,
                 vector_results,
-                historical_patterns,
+                deduplicated_patterns,  # Only patterns NOT already in accepted feedback
                 feedback_history
             )
         )

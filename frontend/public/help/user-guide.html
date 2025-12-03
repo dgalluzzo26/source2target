@@ -644,9 +644,22 @@
                 </ol>
             </div>
 
+            <div class="workflow-box" style="border-color: #38a169; background: linear-gradient(135deg, #e8f5e9, #c8e6c9);">
+                <h4>📝 Step 2: Feedback Learning (NEW!)</h4>
+                <p>The system learns from your previous accept/reject decisions:</p>
+                <ol>
+                    <li><strong>Accepted feedback:</strong> Previous mappings you confirmed as correct are retrieved</li>
+                    <li><strong>Rejected feedback:</strong> Previous suggestions you rejected (with your reasons) are retrieved</li>
+                    <li>This creates a <strong>feedback loop</strong> - the more you use the system, the smarter it gets!</li>
+                </ol>
+                <div class="tip-box" style="margin-top: 1rem;">
+                    <strong>💡 Pro Tip:</strong> When rejecting suggestions, always provide a reason! This helps the AI learn what NOT to suggest in the future.
+                </div>
+            </div>
+
             <div class="workflow-box">
-                <h4>🤖 Step 2: LLM Analysis</h4>
-                <p>The vector search results are sent to the AI model (LLM):</p>
+                <h4>🤖 Step 3: LLM Analysis</h4>
+                <p>All information is sent to the AI model (LLM):</p>
                 <ol>
                     <li>The LLM reviews each candidate match</li>
                     <li>It considers:
@@ -654,17 +667,18 @@
                             <li>Semantic similarity between source and target</li>
                             <li>Field names and descriptions</li>
                             <li>Datatypes compatibility</li>
-                            <li>Your optional user feedback context</li>
-                            <li>Historical mapping patterns (if available)</li>
+                            <li><strong>Your previous accepted suggestions (positive examples)</strong></li>
+                            <li><strong>Your previous rejected suggestions (negative examples to avoid)</strong></li>
+                            <li>Historical mapping patterns from manual mappings</li>
                         </ul>
                     </li>
                     <li>The LLM assigns a match quality (Excellent/Strong/Good/Weak)</li>
-                    <li>It generates reasoning explaining why each match was suggested</li>
+                    <li>It generates reasoning explaining why each match was suggested, referencing your feedback when relevant</li>
                 </ol>
             </div>
 
             <div class="workflow-box">
-                <h4>📊 Step 3: Ranking & Presentation</h4>
+                <h4>📊 Step 4: Ranking & Presentation</h4>
                 <p>Results are ranked and presented:</p>
                 <ol>
                     <li>Matches are sorted by match quality first, then by search score</li>
@@ -675,18 +689,30 @@
                             <li>Target field details</li>
                             <li>Match quality indicator</li>
                             <li>Target description</li>
-                            <li>AI reasoning</li>
+                            <li>AI reasoning (may reference your past feedback)</li>
                         </ul>
                     </li>
                     <li>You review and select the most appropriate match</li>
                 </ol>
             </div>
 
+            <div class="workflow-box" style="border-color: #ffc107; background: linear-gradient(135deg, #fff8e1, #ffecb3);">
+                <h4>🔄 The Feedback Loop</h4>
+                <p>Your actions improve future suggestions:</p>
+                <pre style="background: #f5f5f5; padding: 1rem; border-radius: 4px; font-family: monospace; font-size: 0.9rem; overflow-x: auto;">
+You select fields → AI suggests → You accept/reject → Feedback saved
+                                         ↓
+  Next search ← AI learns from feedback ← Feedback queried
+                </pre>
+                <p style="margin-top: 1rem;"><strong>Every time you accept or reject a suggestion, you're training the AI to be better!</strong></p>
+            </div>
+
             <h3>Factors That Improve AI Accuracy</h3>
             <ul>
+                <li><strong>Your Feedback:</strong> Accept good matches, reject bad ones with reasons - this trains the AI!</li>
                 <li><strong>Source Field Descriptions:</strong> Better descriptions = better matches</li>
                 <li><strong>Target Field Descriptions:</strong> Admin should maintain quality semantic table</li>
-                <li><strong>User Feedback:</strong> Add context like "healthcare claims" or "financial data"</li>
+                <li><strong>User Context:</strong> Add context like "healthcare claims" or "financial data"</li>
                 <li><strong>Historical Patterns:</strong> AI learns from previous mappings in your organization</li>
                 <li><strong>Consistent Naming:</strong> Tables/columns with clear, consistent names get better results</li>
             </ul>
@@ -694,11 +720,16 @@
             <h3>When AI Suggestions Don't Work</h3>
             <p>If AI doesn't return good suggestions:</p>
             <ul>
+                <li><strong>Reject with reason:</strong> If suggestions are wrong, reject them and explain why - this trains the AI!</li>
                 <li><strong>Check source field description:</strong> Is it missing or unclear?</li>
-                <li><strong>Try user feedback:</strong> Add domain context to guide the AI</li>
+                <li><strong>Try user context:</strong> Add domain context to guide the AI</li>
                 <li><strong>Use manual search:</strong> Browse the semantic table directly by keyword</li>
                 <li><strong>Contact admin:</strong> Target field may be missing from semantic table</li>
             </ul>
+
+            <div class="tip-box">
+                <strong>💡 Remember:</strong> The AI learns from your feedback! Even when suggestions are wrong, rejecting them with a reason helps improve future suggestions for you and other users.
+            </div>
 
             <div class="warning-box">
                 <strong>⚠️ Performance Note:</strong> AI suggestions typically take 15-25 seconds. First request after a cold start may take 30-60 seconds. This is normal - the AI model is initializing.

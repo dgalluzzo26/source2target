@@ -88,24 +88,35 @@ The backend API was already implemented and registered:
    - Single field: `"Table: T_MEMBER, Column: FIRST_NAME, Type: STRING, Comment: First name"`
    - Multi-field: `"Combination of: FIRST_NAME (First name) + LAST_NAME (Last name) from T_MEMBER"`
 
-2. **Historical Pattern Learning**
+2. **User Feedback Learning** ⭐ NEW (parallel)
+   - Queries `mapping_feedback` table for ACCEPTED suggestions (good matches)
+   - Queries `mapping_feedback` table for REJECTED suggestions (bad matches)
+   - Includes user comments explaining WHY they accepted/rejected
+   - Creates feedback loop for continuous improvement
+
+3. **Historical Pattern Learning** (parallel, deduplicated)
    - Queries `mapped_fields` and `mapping_details` tables
    - Finds previous mappings with similar source field combinations
-   - Boosts confidence for patterns seen before
+   - **Deduplicated**: Removes patterns already in accepted feedback
+   - Captures manual mappings that don't have feedback records
 
-3. **Vector Search**
+4. **Vector Search** (parallel)
    - Uses Databricks Vector Search Index
    - Queries semantic embeddings
    - Returns top N candidates with similarity scores
 
-4. **LLM Reasoning**
+5. **LLM Reasoning**
    - Calls Databricks Foundation Model endpoint
-   - Provides source fields and vector search candidates
+   - Provides:
+     - Source fields
+     - User feedback (accepted/rejected with reasons)
+     - Historical patterns (deduplicated)
+     - Vector search candidates
    - LLM generates:
      - Match quality rating (Excellent, Strong, Good, Weak)
-     - Human-readable reasoning for each suggestion
+     - Human-readable reasoning referencing feedback if applicable
 
-5. **Response Ranking**
+6. **Response Ranking**
    - Combines vector search scores with LLM analysis
    - Returns ranked list of suggestions with reasoning
 
@@ -129,6 +140,7 @@ The backend API was already implemented and registered:
 ### ✅ Real AI Intelligence:
 - **Vector Search**: Semantic similarity using Databricks embeddings
 - **LLM Reasoning**: Foundation model provides intelligent explanations
+- **Feedback Learning**: Learns from accepted/rejected suggestions ⭐ NEW
 - **Pattern Learning**: Learns from historical mapping decisions
 - **Multi-Field Support**: Intelligently combines multiple source fields
 
@@ -152,9 +164,10 @@ The backend API was already implemented and registered:
 | **Accuracy** | Hardcoded patterns only | Learns from actual semantic table |
 | **Coverage** | Limited to SSN, NPI, NAME | All fields in semantic table |
 | **Intelligence** | Static rules | LLM-powered reasoning |
-| **Adaptability** | Fixed responses | Learns from historical mappings |
-| **Reasoning** | Generic templates | Context-specific explanations |
-| **Scalability** | Manual updates needed | Automatic with new data |
+| **Adaptability** | Fixed responses | Learns from user feedback + historical mappings |
+| **Feedback Loop** | None | Accepted/rejected suggestions improve future results |
+| **Reasoning** | Generic templates | Context-specific explanations referencing feedback |
+| **Scalability** | Manual updates needed | Automatic with new data and feedback |
 
 ## Error Handling
 

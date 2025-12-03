@@ -57,9 +57,45 @@ ORDER BY search_score DESC
 - The embedding model was trained on patterns like this
 - Returns fields like: `full_name`, `member_name`, `complete_name`, etc.
 
-### 3. Historical Pattern Matching (Parallel)
+### 3. User Feedback Learning (Parallel) ⭐ NEW
 
-While vector search runs, also query `mapped_fields` + `mapping_details`:
+While vector search runs, query `mapping_feedback` for previous user feedback:
+
+```sql
+-- Get ACCEPTED feedback (positive examples)
+SELECT 
+    suggested_src_column,
+    suggested_tgt_table,
+    suggested_tgt_column,
+    ai_confidence_score,
+    user_comments
+FROM mapping_feedback
+WHERE feedback_action = 'ACCEPTED'
+AND suggested_src_column IN ('first_name', 'last_name')
+ORDER BY feedback_ts DESC
+LIMIT 10
+
+-- Get REJECTED feedback (negative examples)  
+SELECT 
+    suggested_src_column,
+    suggested_tgt_table,
+    suggested_tgt_column,
+    user_comments  -- WHY it was rejected
+FROM mapping_feedback
+WHERE feedback_action = 'REJECTED'
+AND suggested_src_column IN ('first_name', 'last_name')
+ORDER BY feedback_ts DESC
+LIMIT 10
+```
+
+This provides:
+- **Accepted mappings**: Confirmed good matches to boost
+- **Rejected mappings**: Bad matches to avoid/deprioritize
+- **User reasoning**: WHY users accepted or rejected suggestions
+
+### 4. Historical Pattern Matching (Parallel, Deduplicated)
+
+Also query `mapped_fields` + `mapping_details` for manual mappings:
 
 ```sql
 -- Find previous mappings with same source field combination
@@ -70,23 +106,26 @@ SELECT
     COUNT(DISTINCT md.detail_id) as source_field_count
 FROM mapped_fields mf
 JOIN mapping_details md ON mf.mapping_id = md.mapping_id
-WHERE (md.src_table_physical_name = 't_member' AND md.src_column_physical_name = 'first_name')
-   OR (md.src_table_physical_name = 't_member' AND md.src_column_physical_name = 'last_name')
+WHERE (md.src_column_physical_name = 'first_name')
+   OR (md.src_column_physical_name = 'last_name')
 GROUP BY ...
 HAVING COUNT(DISTINCT md.detail_id) >= 2  -- Must have all source fields
 ```
 
-This finds:
+**Important**: Historical patterns are **deduplicated** - any patterns already in accepted feedback are removed to avoid sending duplicate info to the LLM.
+
+This finds (only for manual mappings without feedback):
 - **Exact matches**: Has this exact combination been mapped before?
 - **Pattern learning**: Common patterns like name fields → full_name
 - **Concat strategy**: How were they concatenated (SPACE, COMMA, etc.)
 
-### 4. LLM Reasoning (Foundation Model)
+### 5. LLM Reasoning (Foundation Model)
 
 Pass to Databricks Foundation Model:
 - **Source fields**: List of fields being combined
+- **User feedback**: Accepted + rejected mappings with user reasoning ⭐ NEW
+- **Historical patterns**: Manual mappings without feedback (deduplicated)
 - **Vector results**: Top 5 candidates with scores
-- **Historical patterns**: Previous mappings (if any)
 
 **LLM Prompt:**
 ```
@@ -99,17 +138,30 @@ Source Fields (3):
 
 Task: These source fields will be combined to map to a single target field.
 
-Historical Patterns:
-- Previously mapped to: TGT_MEMBER.full_name (Concat: SPACE)
+User Feedback History (IMPORTANT - learn from this):
+
+PREVIOUSLY ACCEPTED mappings (these are GOOD matches):
+  ✓ FIRST_NAME → TGT_MEMBER.full_name - User reason: Perfect match for name concatenation
+
+PREVIOUSLY REJECTED mappings (AVOID these - users said they are wrong):
+  ✗ FIRST_NAME → TGT_MEMBER.member_id - User reason: IDs should not contain names
+
+Other Historical Mappings (manual mappings without explicit feedback):
+- Previously mapped to: TGT_MEMBER.member_name (Concat: SPACE)
 
 Vector Search Results:
 1. TGT_MEMBER.full_name (Score: 0.0452)
 2. TGT_MEMBER.member_name (Score: 0.0321)
 3. TGT_PERSON.complete_name (Score: 0.0287)
 
+IMPORTANT: 
+- If a mapping was PREVIOUSLY ACCEPTED, this is strong evidence it's a good match
+- If a mapping was PREVIOUSLY REJECTED, avoid recommending it
+- User feedback should heavily influence your reasoning
+
 For each, provide:
 1. Match Quality: "Excellent", "Strong", "Good", or "Weak"
-2. Reasoning: Why this is a good or poor match
+2. Reasoning: Why this is a good or poor match. Reference user feedback if applicable.
 ```
 
 **LLM Response:**
@@ -120,24 +172,25 @@ For each, provide:
       "tgt_table_name": "TGT_MEMBER",
       "tgt_column_name": "full_name",
       "match_quality": "Excellent",
-      "reasoning": "Combining first, last, and middle name logically maps to full_name field which stores complete member names. Historical data confirms this pattern."
+      "reasoning": "Combining first, last, and middle name logically maps to full_name field. User feedback confirms this is the preferred mapping for name fields."
     },
     {
       "tgt_table_name": "TGT_MEMBER",
       "tgt_column_name": "member_name",
       "match_quality": "Strong",
-      "reasoning": "Similar to full_name but may have different formatting or business meaning. Check target schema for differences."
+      "reasoning": "Good alternative to full_name. Historical patterns show this has been used successfully for similar combinations."
     }
   ]
 }
 ```
 
-### 5. Merge and Return
+### 6. Merge and Return
 
 Combine:
 - Vector scores (numerical similarity)
 - LLM reasoning (semantic understanding)
-- Historical patterns (organizational knowledge)
+- User feedback (quality signal - accepted/rejected)
+- Historical patterns (organizational knowledge for manual mappings)
 
 Return ranked list with all context.
 
@@ -225,19 +278,28 @@ Return ranked list with all context.
   - street + city + state → full_address
   - date + time → timestamp
 
+### ✅ User Feedback Learning ⭐ NEW
+- Learns from ACCEPTED suggestions (positive examples)
+- Avoids REJECTED suggestions (negative examples)
+- Uses user comments to understand WHY matches are good/bad
+- Creates a feedback loop for continuous improvement
+
 ### ✅ Historical Learning
 - Learns from organization's previous mappings
 - Recognizes company-specific patterns
-- Improves over time
+- Captures manual mappings (without feedback)
+- Deduplicated to avoid overlap with feedback
 
 ### ✅ Intelligent Reasoning
 - LLM provides human-readable explanations
+- References user feedback in reasoning
 - Helps users understand WHY a match is suggested
 - Can identify potential issues
 
 ### ✅ Confidence Scoring
 - Combines multiple signals:
   - Vector similarity score
+  - User feedback (accepted/rejected)
   - Historical pattern matches
   - LLM assessment
 - More accurate than vector alone
@@ -368,10 +430,27 @@ async function generateSuggestions(sourceFields: UnmappedField[]) {
   "database": {
     "semantic_fields_table": "oztest_dev.source2target.semantic_fields",
     "mapped_fields_table": "oztest_dev.source2target.mapped_fields",
-    "mapping_details_table": "oztest_dev.source2target.mapping_details"
+    "mapping_details_table": "oztest_dev.source2target.mapping_details",
+    "mapping_feedback_table": "oztest_dev.source2target.mapping_feedback"
   }
 }
 ```
+
+### Feedback Table (mapping_feedback)
+
+The feedback table stores user responses to AI suggestions:
+
+| Column | Description |
+|--------|-------------|
+| `feedback_action` | ACCEPTED, REJECTED, or MODIFIED |
+| `suggested_src_table` | Source table in suggestion |
+| `suggested_src_column` | Source column in suggestion |
+| `suggested_tgt_table` | Target table in suggestion |
+| `suggested_tgt_column` | Target column in suggestion |
+| `user_comments` | Why user accepted/rejected |
+| `ai_confidence_score` | Original AI confidence |
+| `feedback_by` | User who provided feedback |
+| `feedback_ts` | Timestamp |
 
 ---
 
@@ -415,13 +494,22 @@ results = await service.generate_multi_field_suggestions(source_fields, num_resu
 
 ## Summary
 
-The V2 multi-field vector search is already fully implemented and working! Key points:
+The V2 multi-field vector search is fully implemented with feedback learning! Key points:
 
 1. **Single Query**: Combines all source fields into one semantic query
-2. **Intelligent**: Uses vector search + historical patterns + LLM reasoning
-3. **Fast**: Parallel execution, ~2-4 seconds total
-4. **Scalable**: Works for 1-10+ fields without performance degradation
-5. **Smart**: Learns from organizational patterns over time
+2. **Feedback Learning**: Uses accepted/rejected suggestions to improve over time
+3. **Intelligent**: Uses vector search + feedback + historical patterns + LLM reasoning
+4. **Fast**: Parallel execution, ~2-4 seconds total
+5. **Scalable**: Works for 1-10+ fields without performance degradation
+6. **Smart**: Creates a feedback loop - more usage = better suggestions
 
-The backend is ready - just needs frontend integration and testing!
+### Feedback Loop
+
+```
+User selects fields → AI suggests → User accepts/rejects → Feedback saved
+                                           ↓
+Next search ← AI learns from feedback ← Feedback queried
+```
+
+The system gets smarter with every user interaction!
 
