@@ -251,10 +251,10 @@
               <InputText 
                 id="previous_mappings_table"
                 v-model="config.ai_model.previous_mappings_table_name"
-                placeholder="catalog.schema.train_with_comments"
+                placeholder="mapped_fields"
                 class="w-full"
               />
-              <small>Table containing historical mappings for training context</small>
+              <small>Table containing historical mappings for training context (table name only)</small>
             </div>
 
             <div class="field">
@@ -288,10 +288,10 @@
               <InputText 
                 id="vector_index_name"
                 v-model="config.vector_search.index_name"
-                placeholder="catalog.schema.vector_search_index"
+                placeholder="catalog.schema.semantic_fields_vs"
                 class="w-full"
               />
-              <small>Name of the Databricks Vector Search index</small>
+              <small>Fully qualified name of the Vector Search index (catalog.schema.index_name required)</small>
             </div>
 
             <div class="field-group">
@@ -528,41 +528,28 @@ const userStore = useUserStore()
 const isAuthenticated = computed(() => true) // userStore.isAdmin
 
 // Configuration data structure based on original app
+// NOTE: Table names should be just the table name, catalog.schema is prepended automatically
 const config = ref({
   database: {
     warehouse_name: 'gia-oztest-dev-data-warehouse',
     catalog: 'oztest_dev',
     schema: 'source2target',
-    semantic_fields_table: 'oztest_dev.source2target.semantic_fields',
-    unmapped_fields_table: 'oztest_dev.source2target.unmapped_fields',
-    mapped_fields_table: 'oztest_dev.source2target.mapped_fields',
-    mapping_details_table: 'oztest_dev.source2target.mapping_details',
-    mapping_joins_table: 'oztest_dev.source2target.mapping_joins',
-    mapping_feedback_table: 'oztest_dev.source2target.mapping_feedback',
-    transformation_library_table: 'oztest_dev.source2target.transformation_library',
+    semantic_fields_table: 'semantic_fields',
+    unmapped_fields_table: 'unmapped_fields',
+    mapped_fields_table: 'mapped_fields',
+    mapping_details_table: 'mapping_details',
+    mapping_joins_table: 'mapping_joins',
+    mapping_feedback_table: 'mapping_feedback',
+    transformation_library_table: 'transformation_library',
     server_hostname: 'Acuity-oz-test-ue1.cloud.databricks.com',
     http_path: '/sql/1.0/warehouses/173ea239ed13be7d',
     mapping_table: undefined,
     semantic_table: undefined
   },
   ai_model: {
-    previous_mappings_table_name: 'oztest_dev.source_to_target.train_with_comments',
+    previous_mappings_table_name: 'mapped_fields',
     foundation_model_endpoint: 'databricks-meta-llama-3-3-70b-instruct',
-    default_prompt: `You are a ETL engineer and your job is to take in information on an incoming field from a source database and map it to an existing target table in your database.{feedback_section}{previous_section}
-
-The incoming field can be described by its table name, column name, natural language desription, whether or not it is nullable, and its datatype. The same information from semantically similar fields in your target database table field are provided in this prompt, and it is likely that one of these provided columns is the correct match for mapping. As an additional hint, each target field may contain source fields that have been previously mapped to that target field. The semantically similar target fields (and their corresponding previous source field mappings) can be found in this structure:
-
-{retrieved_context_structure}
-
-If no previous data has been mapped to the target_table_field, you will see an [NaN]. Here is the information about the target table and its columns:
-
-{retrieved_context}
-
-Here is the source field you want to map to one of those target columns: {query_text}{no_mapping_guidance}
-
-Please return your top {num_results} guesses for the correct target column mapping, in order. IMPORTANT: Your suggestions must comply with any constraints specified above. Do not include any mappings that violate the user requirements or include excluded columns. Format your response in a json format with a "results" key containing array of the results (i.e. 
-\`\`\`{results_structure}\`\`\`
-). The "reasoning" field should contain a brief description of why you think this mapping is correct and confirm it meets the specified constraints. You can include references to previously mapped columns or semantic or datatype similiarities.`
+    default_prompt: ''
   },
   ui: {
     app_title: 'Source-to-Target Mapping Platform',
@@ -573,7 +560,7 @@ Please return your top {num_results} guesses for the correct target column mappi
     support_url: 'https://mygainwell.sharepoint.com'
   },
   vector_search: {
-    index_name: 'oztest_dev.source_to_target.silver_semantic_full_vs',
+    index_name: 'oztest_dev.source2target.semantic_fields_vs',
     endpoint_name: 's2t_vsendpoint'
   },
   security: {
@@ -662,19 +649,28 @@ const importConfiguration = (event: any) => {
 const resetConfiguration = async () => {
   loading.value.reset = true
   setTimeout(() => {
-    // Reset to default values
+    // Reset to default values (table names only, catalog.schema prepended automatically)
     config.value = {
       database: {
         warehouse_name: 'gia-oztest-dev-data-warehouse',
-        mapping_table: 'oztest_dev.source_to_target.mappings',
-        semantic_table: 'oztest_dev.source_to_target.silver_semantic_full',
+        catalog: 'oztest_dev',
+        schema: 'source2target',
+        semantic_fields_table: 'semantic_fields',
+        unmapped_fields_table: 'unmapped_fields',
+        mapped_fields_table: 'mapped_fields',
+        mapping_details_table: 'mapping_details',
+        mapping_joins_table: 'mapping_joins',
+        mapping_feedback_table: 'mapping_feedback',
+        transformation_library_table: 'transformation_library',
         server_hostname: 'Acuity-oz-test-ue1.cloud.databricks.com',
-        http_path: '/sql/1.0/warehouses/173ea239ed13be7d'
+        http_path: '/sql/1.0/warehouses/173ea239ed13be7d',
+        mapping_table: undefined,
+        semantic_table: undefined
       },
       ai_model: {
-        previous_mappings_table_name: 'oztest_dev.source_to_target.train_with_comments',
+        previous_mappings_table_name: 'mapped_fields',
         foundation_model_endpoint: 'databricks-meta-llama-3-3-70b-instruct',
-        default_prompt: config.value.ai_model.default_prompt
+        default_prompt: ''
       },
       ui: {
         app_title: 'Source-to-Target Mapping Platform',
@@ -685,7 +681,7 @@ const resetConfiguration = async () => {
         support_url: 'https://mygainwell.sharepoint.com'
       },
       vector_search: {
-        index_name: 'oztest_dev.source_to_target.silver_semantic_full_vs',
+        index_name: 'oztest_dev.source2target.semantic_fields_vs',
         endpoint_name: 's2t_vsendpoint'
       },
       security: {
