@@ -4,6 +4,9 @@ AI Mapping service V2 for multi-field mapping suggestions.
 V2 Changes:
 - Supports multiple source fields → single target field suggestions
 - Uses mapping history from mapped_fields table for pattern learning
+- Uses user feedback from mapping_feedback table for learning:
+  - ACCEPTED feedback = good matches (boost these)
+  - REJECTED feedback = bad matches (deprioritize/warn)
 - LLM recognizes common patterns (e.g., first_name + last_name → full_name)
 - Generates intelligent reasoning for multi-field suggestions
 """
@@ -51,7 +54,8 @@ class AIMappingServiceV2:
             "http_path": config.database.http_path,
             "semantic_fields_table": self.config_service.get_fully_qualified_table_name(config.database.semantic_fields_table),
             "mapped_fields_table": self.config_service.get_fully_qualified_table_name(config.database.mapped_fields_table),
-            "mapping_details_table": self.config_service.get_fully_qualified_table_name(config.database.mapping_details_table)
+            "mapping_details_table": self.config_service.get_fully_qualified_table_name(config.database.mapping_details_table),
+            "mapping_feedback_table": self.config_service.get_fully_qualified_table_name(config.database.mapping_feedback_table)
         }
     
     def _get_vector_search_config(self) -> Dict[str, str]:
@@ -226,6 +230,118 @@ class AIMappingServiceV2:
         finally:
             connection.close()
     
+    def _fetch_feedback_history_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        mapping_feedback_table: str,
+        source_fields: List[Dict[str, Any]]
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Fetch user feedback on previous AI suggestions for similar source fields.
+        
+        This retrieves both ACCEPTED and REJECTED feedback to help the AI:
+        - Boost confidence for previously accepted mappings
+        - Warn about or deprioritize previously rejected mappings
+        
+        Args:
+            server_hostname: Databricks workspace hostname
+            http_path: SQL warehouse HTTP path
+            mapping_feedback_table: Fully qualified mapping_feedback table name
+            source_fields: List of source field dictionaries
+        
+        Returns:
+            Dict with 'accepted' and 'rejected' lists of feedback records
+        """
+        print(f"[AI Mapping Service V2] Fetching feedback history for {len(source_fields)} source fields")
+        
+        connection = self._get_sql_connection(server_hostname, http_path)
+        
+        try:
+            with connection.cursor() as cursor:
+                # Build WHERE clause to match source fields
+                column_conditions = []
+                for field in source_fields:
+                    column_name = field['src_column_physical_name'].replace("'", "''")
+                    table_name = field['src_table_physical_name'].replace("'", "''")
+                    column_conditions.append(
+                        f"(suggested_src_column = '{column_name}' AND suggested_src_table = '{table_name}')"
+                    )
+                
+                where_clause = " OR ".join(column_conditions)
+                
+                # Query feedback for ACCEPTED suggestions
+                accepted_query = f"""
+                SELECT 
+                    suggested_src_table,
+                    suggested_src_column,
+                    suggested_tgt_table,
+                    suggested_tgt_column,
+                    ai_confidence_score,
+                    ai_reasoning,
+                    user_comments,
+                    feedback_ts
+                FROM {mapping_feedback_table}
+                WHERE feedback_action = 'ACCEPTED'
+                AND ({where_clause})
+                ORDER BY feedback_ts DESC
+                LIMIT 10
+                """
+                
+                print(f"[AI Mapping Service V2] Fetching accepted feedback...")
+                cursor.execute(accepted_query)
+                
+                accepted_rows = cursor.fetchall()
+                accepted_columns = [desc[0] for desc in cursor.description]
+                
+                accepted_results = []
+                for row in accepted_rows:
+                    record = dict(zip(accepted_columns, row))
+                    accepted_results.append(record)
+                
+                # Query feedback for REJECTED suggestions
+                rejected_query = f"""
+                SELECT 
+                    suggested_src_table,
+                    suggested_src_column,
+                    suggested_tgt_table,
+                    suggested_tgt_column,
+                    ai_confidence_score,
+                    ai_reasoning,
+                    user_comments,
+                    feedback_ts
+                FROM {mapping_feedback_table}
+                WHERE feedback_action = 'REJECTED'
+                AND ({where_clause})
+                ORDER BY feedback_ts DESC
+                LIMIT 10
+                """
+                
+                print(f"[AI Mapping Service V2] Fetching rejected feedback...")
+                cursor.execute(rejected_query)
+                
+                rejected_rows = cursor.fetchall()
+                rejected_columns = [desc[0] for desc in cursor.description]
+                
+                rejected_results = []
+                for row in rejected_rows:
+                    record = dict(zip(rejected_columns, row))
+                    rejected_results.append(record)
+                
+                print(f"[AI Mapping Service V2] Found {len(accepted_results)} accepted and {len(rejected_results)} rejected feedback records")
+                
+                return {
+                    'accepted': accepted_results,
+                    'rejected': rejected_results
+                }
+                
+        except Exception as e:
+            print(f"[AI Mapping Service V2] Error fetching feedback history: {str(e)}")
+            # Don't fail the entire operation if feedback can't be fetched
+            return {'accepted': [], 'rejected': []}
+        finally:
+            connection.close()
+    
     def _vector_search_multi_field_sync(
         self,
         server_hostname: str,
@@ -297,7 +413,8 @@ class AIMappingServiceV2:
         endpoint_name: str,
         source_fields: List[Dict[str, Any]],
         vector_results: List[Dict[str, Any]],
-        historical_patterns: List[Dict[str, Any]]
+        historical_patterns: List[Dict[str, Any]],
+        feedback_history: Dict[str, List[Dict[str, Any]]] = None
     ) -> List[Dict[str, Any]]:
         """
         Call Databricks Foundation Model API to generate reasoning for multi-field suggestions (synchronous).
@@ -307,12 +424,16 @@ class AIMappingServiceV2:
             source_fields: List of source field dictionaries
             vector_results: Vector search results
             historical_patterns: Historical mapping patterns
+            feedback_history: Dict with 'accepted' and 'rejected' lists of feedback
         
         Returns:
             List of enriched suggestions with AI reasoning
         """
         print(f"[AI Mapping Service V2] Calling foundation model: {endpoint_name}")
         print(f"[AI Mapping Service V2] Source fields: {len(source_fields)}, Vector results: {len(vector_results)}")
+        
+        if feedback_history is None:
+            feedback_history = {'accepted': [], 'rejected': []}
         
         try:
             # Build prompt for multi-field reasoning
@@ -325,12 +446,38 @@ class AIMappingServiceV2:
             # Build historical context
             historical_context = ""
             if historical_patterns:
-                historical_context = "\n\nHistorical Patterns:\n"
+                historical_context = "\n\nHistorical Mapping Patterns (from completed mappings):\n"
                 for pattern in historical_patterns[:3]:  # Top 3 patterns
                     historical_context += (
                         f"- Previously mapped to: {pattern['tgt_table_name']}.{pattern['tgt_column_name']} "
                         f"(Concat: {pattern.get('concat_strategy', 'UNKNOWN')})\n"
                     )
+            
+            # Build user feedback context (NEW)
+            feedback_context = ""
+            accepted_feedback = feedback_history.get('accepted', [])
+            rejected_feedback = feedback_history.get('rejected', [])
+            
+            if accepted_feedback or rejected_feedback:
+                feedback_context = "\n\nUser Feedback History (IMPORTANT - learn from this):\n"
+                
+                if accepted_feedback:
+                    feedback_context += "\nPREVIOUSLY ACCEPTED mappings (these are GOOD matches):\n"
+                    for fb in accepted_feedback[:5]:  # Top 5 accepted
+                        user_reason = fb.get('user_comments', '')
+                        reason_text = f" - User reason: {user_reason}" if user_reason else ""
+                        feedback_context += (
+                            f"  ✓ {fb['suggested_src_column']} → {fb['suggested_tgt_table']}.{fb['suggested_tgt_column']}{reason_text}\n"
+                        )
+                
+                if rejected_feedback:
+                    feedback_context += "\nPREVIOUSLY REJECTED mappings (AVOID these - users said they are wrong):\n"
+                    for fb in rejected_feedback[:5]:  # Top 5 rejected
+                        user_reason = fb.get('user_comments', '')
+                        reason_text = f" - User reason: {user_reason}" if user_reason else ""
+                        feedback_context += (
+                            f"  ✗ {fb['suggested_src_column']} → {fb['suggested_tgt_table']}.{fb['suggested_tgt_column']}{reason_text}\n"
+                        )
             
             # Build vector search context (top 5)
             vector_context = "\n\nVector Search Results (Top 5):\n"
@@ -345,11 +492,16 @@ class AIMappingServiceV2:
 Source Fields ({len(source_fields)}):
 {chr(10).join(source_field_descriptions)}
 
-Task: These source fields will be combined (concatenated) to map to a single target field.{historical_context}{vector_context}
+Task: These source fields will be combined (concatenated) to map to a single target field.{historical_context}{feedback_context}{vector_context}
+
+IMPORTANT: 
+- If a mapping was PREVIOUSLY ACCEPTED by users, this is strong evidence it's a good match
+- If a mapping was PREVIOUSLY REJECTED by users, avoid recommending it unless there's strong justification
+- User feedback should heavily influence your reasoning
 
 For the TOP 3 vector search results, provide:
 1. Match Quality: Rate as "Excellent" (>95%), "Strong" (85-95%), "Good" (70-85%), or "Weak" (<70%)
-2. Reasoning: Brief explanation (1-2 sentences) of why this is a good or poor match
+2. Reasoning: Brief explanation (1-2 sentences) of why this is a good or poor match. Reference user feedback if applicable.
 
 Respond in JSON format:
 {{
@@ -519,10 +671,15 @@ Respond in JSON format:
         
         Workflow:
         1. Build combined query from source fields
-        2. Fetch historical patterns (if available)
-        3. Perform vector search
-        4. Call LLM for intelligent reasoning
-        5. Return ranked suggestions with reasoning
+        2. Fetch historical patterns from mapped_fields (parallel)
+        3. Perform vector search for semantic similarity (parallel)
+        4. Fetch user feedback history - accepted & rejected (parallel)
+        5. Call LLM for intelligent reasoning with all context
+        6. Return ranked suggestions with reasoning
+        
+        The LLM uses feedback to:
+        - Boost confidence for previously accepted mappings
+        - Warn about or deprioritize previously rejected mappings
         
         Args:
             source_fields: List of source field dictionaries with keys:
@@ -554,7 +711,7 @@ Respond in JSON format:
         
         loop = asyncio.get_event_loop()
         
-        # Step 1: Fetch historical patterns (parallel with vector search)
+        # Step 1: Fetch historical patterns (parallel with vector search and feedback)
         historical_patterns_task = loop.run_in_executor(
             executor,
             functools.partial(
@@ -567,7 +724,7 @@ Respond in JSON format:
             )
         )
         
-        # Step 2: Perform vector search
+        # Step 2: Perform vector search (parallel)
         vector_results_task = loop.run_in_executor(
             executor,
             functools.partial(
@@ -580,13 +737,28 @@ Respond in JSON format:
             )
         )
         
-        # Wait for both tasks
-        historical_patterns, vector_results = await asyncio.gather(
-            historical_patterns_task,
-            vector_results_task
+        # Step 3: Fetch user feedback history (parallel)
+        feedback_history_task = loop.run_in_executor(
+            executor,
+            functools.partial(
+                self._fetch_feedback_history_sync,
+                db_config['server_hostname'],
+                db_config['http_path'],
+                db_config['mapping_feedback_table'],
+                source_fields
+            )
         )
         
-        # Step 3: Call LLM for reasoning
+        # Wait for all three parallel tasks
+        historical_patterns, vector_results, feedback_history = await asyncio.gather(
+            historical_patterns_task,
+            vector_results_task,
+            feedback_history_task
+        )
+        
+        print(f"[AI Mapping Service V2] Feedback history: {len(feedback_history.get('accepted', []))} accepted, {len(feedback_history.get('rejected', []))} rejected")
+        
+        # Step 4: Call LLM for reasoning (with feedback)
         enriched_results = await loop.run_in_executor(
             executor,
             functools.partial(
@@ -594,7 +766,8 @@ Respond in JSON format:
                 ai_config['foundation_model_endpoint'],
                 source_fields,
                 vector_results,
-                historical_patterns
+                historical_patterns,
+                feedback_history
             )
         )
         
