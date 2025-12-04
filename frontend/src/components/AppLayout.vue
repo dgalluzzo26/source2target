@@ -49,6 +49,13 @@
               <span class="layout-menuitem-text" v-if="!sidebarCollapsed">View Mappings</span>
             </router-link>
           </li>
+          <li>
+            <a href="/help/auto-mapper-mockup.html" target="_blank" class="layout-menuitem-link mockup-link" v-tooltip.right="sidebarCollapsed ? 'Auto Mapper Mock-up' : ''">
+              <i class="layout-menuitem-icon pi pi-bolt"></i>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Auto Mapper Mock-up</span>
+              <span class="mockup-badge" v-if="!sidebarCollapsed">NEW</span>
+            </a>
+          </li>
           
           <!-- Admin Section -->
           <li class="menu-section" v-if="!sidebarCollapsed && userStore.isAdmin">
