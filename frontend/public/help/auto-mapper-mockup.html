@@ -1,0 +1,1642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Mapper - Concept Mockup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --gainwell-primary: #4a5568;
+            --gainwell-secondary: #38a169;
+            --gainwell-light: #f8f9fa;
+            --gainwell-border: #dee2e6;
+            --gainwell-muted: #6c757d;
+            --gainwell-text-primary: #4a5568;
+            --gainwell-text-secondary: #6c757d;
+            --gainwell-bg-primary: #ffffff;
+            --gainwell-bg-secondary: #f8f9fa;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            color: var(--gainwell-text-primary);
+            background-color: var(--gainwell-bg-secondary);
+            line-height: 1.6;
+        }
+
+        /* Layout */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: linear-gradient(180deg, #2d3748 0%, #1a202c 100%);
+            color: white;
+            padding: 0;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo-section {
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--gainwell-secondary), #00d49a);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+        }
+
+        .logo-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .logo-text span {
+            color: var(--gainwell-secondary);
+        }
+
+        .nav-section {
+            padding: 1rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .nav-section-title {
+            padding: 0.5rem 1.5rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(255,255,255,0.5);
+        }
+
+        .nav-item {
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+        }
+
+        .nav-item:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(90deg, rgba(56, 161, 105, 0.3), transparent);
+            border-left: 3px solid var(--gainwell-secondary);
+        }
+
+        .nav-item.new-feature {
+            background: linear-gradient(90deg, rgba(56, 161, 105, 0.2), transparent);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .new-badge {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+            margin-left: auto;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .page-header {
+            background: linear-gradient(135deg, var(--gainwell-primary), var(--gainwell-secondary));
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 20px rgba(0, 51, 102, 0.2);
+        }
+
+        .page-header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .page-header p {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(56, 161, 105, 0.1);
+            margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: var(--gainwell-secondary);
+            box-shadow: 0 4px 20px rgba(0, 240, 176, 0.15);
+        }
+
+        .card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--gainwell-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-header h2 {
+            font-size: 1.2rem;
+            color: var(--gainwell-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        /* Step 1: Table Selection */
+        .table-selector {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 1rem;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            color: var(--gainwell-text-primary);
+            font-size: 0.9rem;
+        }
+
+        .form-select {
+            padding: 0.75rem 1rem;
+            border: 2px solid var(--gainwell-border);
+            border-radius: 8px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 300px;
+        }
+
+        .form-select:focus {
+            outline: none;
+            border-color: var(--gainwell-secondary);
+            box-shadow: 0 0 0 3px rgba(56, 161, 105, 0.15);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--gainwell-primary), var(--gainwell-secondary));
+            color: white;
+            box-shadow: 0 2px 8px rgba(74, 85, 104, 0.15);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(56, 161, 105, 0.25);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--gainwell-secondary), #28a745);
+            color: white;
+        }
+
+        .btn-outline {
+            background: white;
+            border: 2px solid var(--gainwell-border);
+            color: var(--gainwell-text-primary);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--gainwell-secondary);
+            background: rgba(56, 161, 105, 0.05);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .btn-accept {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+
+        .btn-edit {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+        }
+
+        .btn-reject {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+
+        .btn-ai {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: white;
+        }
+
+        /* Table Info Banner */
+        .table-info-banner {
+            background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+            border: 2px solid var(--gainwell-secondary);
+            border-radius: 10px;
+            padding: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+
+        .table-info-content {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .table-info-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--gainwell-secondary), #00d49a);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .table-info-details h3 {
+            font-size: 1.1rem;
+            color: var(--gainwell-primary);
+        }
+
+        .table-info-details p {
+            color: var(--gainwell-text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .stat-badges {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .stat-badge {
+            background: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .stat-badge.columns {
+            color: var(--gainwell-primary);
+        }
+
+        .stat-badge.matched {
+            color: var(--gainwell-secondary);
+        }
+
+        /* Progress Steps */
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        .progress-steps::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 50px;
+            right: 50px;
+            height: 4px;
+            background: var(--gainwell-border);
+            z-index: 0;
+        }
+
+        .step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: white;
+            border: 3px solid var(--gainwell-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: var(--gainwell-text-secondary);
+            transition: all 0.3s ease;
+        }
+
+        .step.active .step-circle {
+            background: linear-gradient(135deg, var(--gainwell-primary), var(--gainwell-secondary));
+            border-color: var(--gainwell-secondary);
+            color: white;
+        }
+
+        .step.completed .step-circle {
+            background: var(--gainwell-secondary);
+            border-color: var(--gainwell-secondary);
+            color: white;
+        }
+
+        .step-label {
+            font-size: 0.8rem;
+            color: var(--gainwell-text-secondary);
+            font-weight: 500;
+            text-align: center;
+        }
+
+        .step.active .step-label,
+        .step.completed .step-label {
+            color: var(--gainwell-primary);
+            font-weight: 600;
+        }
+
+        /* Recommendations Table */
+        .recommendations-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .recommendations-table th {
+            background: var(--gainwell-light);
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--gainwell-primary);
+            border-bottom: 2px solid var(--gainwell-border);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .recommendations-table td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--gainwell-border);
+            vertical-align: middle;
+        }
+
+        .recommendations-table tr:hover {
+            background: rgba(56, 161, 105, 0.03);
+        }
+
+        /* Source Field Cell */
+        .source-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .source-field .field-name {
+            font-weight: 600;
+            color: var(--gainwell-primary);
+        }
+
+        .source-field .field-type {
+            font-size: 0.8rem;
+            color: var(--gainwell-text-secondary);
+        }
+
+        /* Multi-field indicator */
+        .multi-field-group {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border: 2px solid #f59e0b;
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+
+        .multi-field-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .multi-field-sources {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .multi-field-sources .field-name {
+            font-size: 0.9rem;
+        }
+
+        /* Target Field Cell */
+        .target-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .target-field .field-name {
+            font-weight: 600;
+            color: var(--gainwell-secondary);
+        }
+
+        .target-field .field-desc {
+            font-size: 0.8rem;
+            color: var(--gainwell-text-secondary);
+        }
+
+        /* Transformation Badge */
+        .transformation-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+            color: #4338ca;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Confidence Indicators */
+        .confidence-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .confidence-bar {
+            width: 80px;
+            height: 8px;
+            background: var(--gainwell-light);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .confidence-fill.excellent {
+            background: linear-gradient(90deg, #10b981, #059669);
+            width: 95%;
+        }
+
+        .confidence-fill.strong {
+            background: linear-gradient(90deg, #3b82f6, #2563eb);
+            width: 80%;
+        }
+
+        .confidence-fill.good {
+            background: linear-gradient(90deg, #f59e0b, #d97706);
+            width: 65%;
+        }
+
+        .confidence-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .confidence-label.excellent { color: #059669; }
+        .confidence-label.strong { color: #2563eb; }
+        .confidence-label.good { color: #d97706; }
+
+        /* Reason tooltip */
+        .reason-text {
+            font-size: 0.8rem;
+            color: var(--gainwell-text-secondary);
+            font-style: italic;
+        }
+
+        /* Action Buttons Cell */
+        .action-buttons {
+            display: flex;
+            gap: 6px;
+        }
+
+        /* Summary Stats */
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .summary-stat {
+            background: white;
+            border-radius: 10px;
+            padding: 1.25rem;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .summary-stat:hover {
+            border-color: var(--gainwell-secondary);
+        }
+
+        .summary-stat .value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .summary-stat .label {
+            font-size: 0.85rem;
+            color: var(--gainwell-text-secondary);
+        }
+
+        .summary-stat.excellent .value { color: #059669; }
+        .summary-stat.strong .value { color: #2563eb; }
+        .summary-stat.good .value { color: #d97706; }
+        .summary-stat.multi .value { color: #7c3aed; }
+
+        /* Bulk Actions Bar */
+        .bulk-actions {
+            background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+            border: 2px solid #3b82f6;
+            border-radius: 10px;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+
+        .bulk-actions-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .selected-count {
+            font-weight: 600;
+            color: #1e40af;
+        }
+
+        .bulk-actions-right {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        /* Info Banner */
+        .info-banner {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border-left: 4px solid #f59e0b;
+            padding: 1rem 1.25rem;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .info-banner .icon {
+            font-size: 1.2rem;
+        }
+
+        .info-banner .content {
+            flex: 1;
+        }
+
+        .info-banner .title {
+            font-weight: 600;
+            color: #92400e;
+            margin-bottom: 4px;
+        }
+
+        .info-banner .text {
+            font-size: 0.9rem;
+            color: #78350f;
+        }
+
+        /* Checkbox styling */
+        .checkbox-cell {
+            width: 40px;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--gainwell-secondary);
+        }
+
+        /* Row status indicators */
+        tr.accepted {
+            background: rgba(16, 185, 129, 0.08) !important;
+        }
+
+        tr.accepted td:first-child {
+            border-left: 4px solid #10b981;
+        }
+
+        tr.rejected {
+            background: rgba(239, 68, 68, 0.08) !important;
+            opacity: 0.6;
+        }
+
+        tr.rejected td:first-child {
+            border-left: 4px solid #ef4444;
+        }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, var(--gainwell-primary), var(--gainwell-secondary));
+            color: white;
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-header h3 {
+            font-size: 1.2rem;
+        }
+
+        .modal-close {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            max-height: calc(80vh - 140px);
+        }
+
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--gainwell-border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+
+        /* Edit Form */
+        .edit-form .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .edit-form .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .edit-form input,
+        .edit-form select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--gainwell-border);
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+
+        .edit-form input:focus,
+        .edit-form select:focus {
+            outline: none;
+            border-color: var(--gainwell-secondary);
+        }
+
+        /* Loading State */
+        .loading-overlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--gainwell-light);
+            border-top-color: var(--gainwell-secondary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* AI Processing Animation */
+        .ai-processing {
+            background: linear-gradient(135deg, #f5f3ff, #ede9fe);
+            border: 2px solid #8b5cf6;
+            border-radius: 10px;
+            padding: 2rem;
+            text-align: center;
+            margin: 2rem 0;
+        }
+
+        .ai-processing .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: bounce 1s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .ai-processing h3 {
+            color: #6d28d9;
+            margin-bottom: 0.5rem;
+        }
+
+        .ai-processing p {
+            color: #7c3aed;
+            font-size: 0.9rem;
+        }
+
+        /* Concept Badge */
+        .concept-badge {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            z-index: 1001;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+        }
+
+        /* Feature Highlight */
+        .feature-highlight {
+            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+            border: 2px solid var(--gainwell-secondary);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .feature-highlight h4 {
+            color: var(--gainwell-primary);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .feature-highlight ul {
+            margin-left: 1.5rem;
+            color: var(--gainwell-text-secondary);
+        }
+
+        .feature-highlight li {
+            margin: 0.5rem 0;
+        }
+
+        /* Transformation Preview */
+        .transformation-preview {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            overflow-x: auto;
+        }
+
+        .transformation-preview .keyword {
+            color: #f472b6;
+        }
+
+        .transformation-preview .function {
+            color: #22d3ee;
+        }
+
+        .transformation-preview .string {
+            color: #a5f3fc;
+        }
+    </style>
+</head>
+<body>
+    <div class="concept-badge">📐 CONCEPT MOCKUP</div>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo-section">
+                <div class="logo-icon">🗺️</div>
+                <div class="logo-text">Smart <span>Mapper</span></div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Navigation</div>
+                <div class="nav-item">
+                    <span>🏠</span>
+                    <span>Introduction</span>
+                </div>
+                <div class="nav-item">
+                    <span>📋</span>
+                    <span>Field Mapping</span>
+                </div>
+                <div class="nav-item active new-feature">
+                    <span>⚡</span>
+                    <span>Auto Mapper</span>
+                    <span class="new-badge">NEW</span>
+                </div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Administration</div>
+                <div class="nav-item">
+                    <span>📊</span>
+                    <span>Semantic Management</span>
+                </div>
+                <div class="nav-item">
+                    <span>🛡️</span>
+                    <span>Transformations</span>
+                </div>
+                <div class="nav-item">
+                    <span>⚙️</span>
+                    <span>Settings</span>
+                </div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Help</div>
+                <div class="nav-item">
+                    <span>📖</span>
+                    <span>User Guide</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="page-header">
+                <h1>⚡ Auto Mapper</h1>
+                <p>Intelligent table-level mapping with AI-powered recommendations</p>
+            </div>
+
+            <!-- Feature Highlight -->
+            <div class="feature-highlight">
+                <h4>✨ What's New with Auto Mapper</h4>
+                <ul>
+                    <li><strong>Table-Level Selection:</strong> Select an entire unmapped table instead of individual columns</li>
+                    <li><strong>Intelligent Recommendations:</strong> AI analyzes all columns and suggests optimal mappings based on past patterns</li>
+                    <li><strong>Multi-Field Detection:</strong> Automatically identifies columns that should be combined (e.g., first_name + last_name → full_name)</li>
+                    <li><strong>Transformation Suggestions:</strong> Recommends transformations based on historical usage patterns</li>
+                    <li><strong>Bulk Review & Accept:</strong> Review all recommendations at once, accept good matches, edit or reject others</li>
+                </ul>
+            </div>
+
+            <!-- Progress Steps -->
+            <div class="progress-steps">
+                <div class="step completed">
+                    <div class="step-circle">✓</div>
+                    <div class="step-label">Select Table</div>
+                </div>
+                <div class="step completed">
+                    <div class="step-circle">✓</div>
+                    <div class="step-label">Analyze</div>
+                </div>
+                <div class="step active">
+                    <div class="step-circle">3</div>
+                    <div class="step-label">Review</div>
+                </div>
+                <div class="step">
+                    <div class="step-circle">4</div>
+                    <div class="step-label">Confirm</div>
+                </div>
+            </div>
+
+            <!-- Step 1: Table Selection -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>📁 Step 1: Select Unmapped Table</h2>
+                </div>
+                <div class="card-body">
+                    <div class="table-selector">
+                        <div class="form-group">
+                            <label>Unmapped Source Table</label>
+                            <select class="form-select" id="tableSelect">
+                                <option value="">-- Select a table --</option>
+                                <option value="member_demographics" selected>MEMBER_DEMOGRAPHICS (12 columns)</option>
+                                <option value="claim_header">CLAIM_HEADER (24 columns)</option>
+                                <option value="provider_info">PROVIDER_INFO (18 columns)</option>
+                                <option value="eligibility">ELIGIBILITY (15 columns)</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="analyzeTable()">
+                            🔍 Analyze Table
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table Info Banner -->
+            <div class="table-info-banner">
+                <div class="table-info-content">
+                    <div class="table-info-icon">📊</div>
+                    <div class="table-info-details">
+                        <h3>MEMBER_DEMOGRAPHICS</h3>
+                        <p>Analysis complete • 12 columns analyzed • Recommendations ready</p>
+                    </div>
+                </div>
+                <div class="stat-badges">
+                    <div class="stat-badge columns">📋 12 Columns</div>
+                    <div class="stat-badge matched">✅ 10 Matched</div>
+                </div>
+            </div>
+
+            <!-- Summary Stats -->
+            <div class="summary-stats">
+                <div class="summary-stat excellent">
+                    <div class="value">5</div>
+                    <div class="label">Excellent Matches</div>
+                </div>
+                <div class="summary-stat strong">
+                    <div class="value">3</div>
+                    <div class="label">Strong Matches</div>
+                </div>
+                <div class="summary-stat good">
+                    <div class="value">2</div>
+                    <div class="label">Good Matches</div>
+                </div>
+                <div class="summary-stat multi">
+                    <div class="value">2</div>
+                    <div class="label">Multi-Field Groups</div>
+                </div>
+            </div>
+
+            <!-- Info Banner for Multi-Field -->
+            <div class="info-banner">
+                <div class="icon">💡</div>
+                <div class="content">
+                    <div class="title">Multi-Field Patterns Detected</div>
+                    <div class="text">Based on historical mappings, the system detected 2 column groups that are commonly combined. 
+                        Review these carefully - they may produce better results than individual mappings.</div>
+                </div>
+            </div>
+
+            <!-- Bulk Actions Bar -->
+            <div class="bulk-actions">
+                <div class="bulk-actions-left">
+                    <input type="checkbox" id="selectAll" checked>
+                    <span class="selected-count">8 of 10 recommendations selected</span>
+                </div>
+                <div class="bulk-actions-right">
+                    <button class="btn btn-accept btn-sm">
+                        ✅ Accept Selected (8)
+                    </button>
+                    <button class="btn btn-ai btn-sm">
+                        🤖 Run Full AI Search
+                    </button>
+                    <button class="btn btn-outline btn-sm">
+                        ↻ Regenerate All
+                    </button>
+                </div>
+            </div>
+
+            <!-- Recommendations Table -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>🎯 Mapping Recommendations</h2>
+                    <span style="color: var(--gainwell-text-secondary); font-size: 0.9rem;">
+                        Review and accept/edit/reject each recommendation
+                    </span>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <table class="recommendations-table">
+                        <thead>
+                            <tr>
+                                <th class="checkbox-cell"><input type="checkbox" checked></th>
+                                <th>Source Field(s)</th>
+                                <th>Target Field</th>
+                                <th>Transformation</th>
+                                <th>Confidence</th>
+                                <th>Reason</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Multi-Field Mapping Row -->
+                            <tr>
+                                <td class="checkbox-cell"><input type="checkbox" checked></td>
+                                <td>
+                                    <div class="multi-field-group">
+                                        <div class="multi-field-badge">🔗 MULTI-FIELD</div>
+                                        <div class="multi-field-sources">
+                                            <div class="source-field">
+                                                <span class="field-name">FIRST_NAME</span>
+                                                <span class="field-type">VARCHAR(50)</span>
+                                            </div>
+                                            <div class="source-field">
+                                                <span class="field-name">LAST_NAME</span>
+                                                <span class="field-type">VARCHAR(50)</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="target-field">
+                                        <span class="field-name">member.full_name</span>
+                                        <span class="field-desc">Complete member name</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="transformation-badge">CONCAT(' ')</span>
+                                    <div class="transformation-preview">
+                                        <span class="function">CONCAT</span>(<span class="function">TRIM</span>(<span class="function">INITCAP</span>(FIRST_NAME)), <span class="string">' '</span>, <span class="function">TRIM</span>(<span class="function">INITCAP</span>(LAST_NAME)))
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="confidence-cell">
+                                        <div class="confidence-bar">
+                                            <div class="confidence-fill excellent"></div>
+                                        </div>
+                                        <span class="confidence-label excellent">Excellent (95%)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="reason-text">Pattern matched: 47 previous mappings combined first+last name with INITCAP</span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-accept btn-sm">✓</button>
+                                        <button class="btn btn-edit btn-sm" onclick="showEditModal()">✎</button>
+                                        <button class="btn btn-reject btn-sm">✗</button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- Single Field - Excellent Match -->
+                            <tr>
+                                <td class="checkbox-cell"><input type="checkbox" checked></td>
+                                <td>
+                                    <div class="source-field">
+                                        <span class="field-name">MEMBER_ID</span>
+                                        <span class="field-type">VARCHAR(20)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="target-field">
+                                        <span class="field-name">member.member_id</span>
+                                        <span class="field-desc">Unique member identifier</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="transformation-badge">TRIM + UPPER</span>
+                                </td>
+                                <td>
+                                    <div class="confidence-cell">
+                                        <div class="confidence-bar">
+                                            <div class="confidence-fill excellent"></div>
+                                        </div>
+                                        <span class="confidence-label excellent">Excellent (98%)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="reason-text">Exact semantic match; 124 identical mappings in history</span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-accept btn-sm">✓</button>
+                                        <button class="btn btn-edit btn-sm">✎</button>
+                                        <button class="btn btn-reject btn-sm">✗</button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- Single Field - Excellent Match -->
+                            <tr>
+                                <td class="checkbox-cell"><input type="checkbox" checked></td>
+                                <td>
+                                    <div class="source-field">
+                                        <span class="field-name">DATE_OF_BIRTH</span>
+                                        <span class="field-type">DATE</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="target-field">
+                                        <span class="field-name">member.birth_date</span>
+                                        <span class="field-desc">Member date of birth</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="transformation-badge">TO_DATE</span>
+                                </td>
+                                <td>
+                                    <div class="confidence-cell">
+                                        <div class="confidence-bar">
+                                            <div class="confidence-fill excellent"></div>
+                                        </div>
+                                        <span class="confidence-label excellent">Excellent (96%)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="reason-text">Strong semantic alignment; date format transformation applied</span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-accept btn-sm">✓</button>
+                                        <button class="btn btn-edit btn-sm">✎</button>
+                                        <button class="btn btn-reject btn-sm">✗</button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- Multi-Field - Address -->
+                            <tr>
+                                <td class="checkbox-cell"><input type="checkbox" checked></td>
+                                <td>
+                                    <div class="multi-field-group">
+                                        <div class="multi-field-badge">🔗 MULTI-FIELD</div>
+                                        <div class="multi-field-sources">
+                                            <div class="source-field">
+                                                <span class="field-name">ADDR_LINE_1</span>
+                                                <span class="field-type">VARCHAR(100)</span>
+                                            </div>
+                                            <div class="source-field">
+                                                <span class="field-name">ADDR_LINE_2</span>
+                                                <span class="field-type">VARCHAR(100)</span>
+                                            </div>
+                                            <div class="source-field">
+                                                <span class="field-name">CITY</span>
+                                                <span class="field-type">VARCHAR(50)</span>
+                                            </div>
+                                            <div class="source-field">
+                                                <span class="field-name">STATE</span>
+                                                <span class="field-type">VARCHAR(2)</span>
+                                            </div>
+                                            <div class="source-field">
+                                                <span class="field-name">ZIP_CODE</span>
+                                                <span class="field-type">VARCHAR(10)</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="target-field">
+                                        <span class="field-name">member.full_address</span>
+                                        <span class="field-desc">Complete formatted address</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="transformation-badge">CONCAT_WS</span>
+                                    <div class="transformation-preview">
+                                        <span class="function">CONCAT_WS</span>(<span class="string">', '</span>, ADDR_LINE_1, ADDR_LINE_2, CITY, STATE, ZIP_CODE)
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="confidence-cell">
+                                        <div class="confidence-bar">
+                                            <div class="confidence-fill strong"></div>
+                                        </div>
+                                        <span class="confidence-label strong">Strong (85%)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="reason-text">Address concatenation pattern detected; 23 similar mappings found</span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-accept btn-sm">✓</button>
+                                        <button class="btn btn-edit btn-sm">✎</button>
+                                        <button class="btn btn-reject btn-sm">✗</button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- Single Field - Strong Match -->
+                            <tr>
+                                <td class="checkbox-cell"><input type="checkbox" checked></td>
+                                <td>
+                                    <div class="source-field">
+                                        <span class="field-name">SSN</span>
+                                        <span class="field-type">VARCHAR(11)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="target-field">
+                                        <span class="field-name">member.ssn_hash</span>
+                                        <span class="field-desc">Hashed SSN for security</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="transformation-badge">SHA256</span>
+                                </td>
+                                <td>
+                                    <div class="confidence-cell">
+                                        <div class="confidence-bar">
+                                            <div class="confidence-fill strong"></div>
+                                        </div>
+                                        <span class="confidence-label strong">Strong (82%)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="reason-text">SSN fields typically hashed; transformation suggested based on security policy</span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-accept btn-sm">✓</button>
+                                        <button class="btn btn-edit btn-sm">✎</button>
+                                        <button class="btn btn-reject btn-sm">✗</button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- Single Field - Strong Match -->
+                            <tr>
+                                <td class="checkbox-cell"><input type="checkbox" checked></td>
+                                <td>
+                                    <div class="source-field">
+                                        <span class="field-name">PHONE_NUMBER</span>
+                                        <span class="field-type">VARCHAR(15)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="target-field">
+                                        <span class="field-name">member.primary_phone</span>
+                                        <span class="field-desc">Primary contact phone</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="transformation-badge">FORMAT_PHONE</span>
+                                </td>
+                                <td>
+                                    <div class="confidence-cell">
+                                        <div class="confidence-bar">
+                                            <div class="confidence-fill strong"></div>
+                                        </div>
+                                        <span class="confidence-label strong">Strong (79%)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="reason-text">Phone format standardization applied based on target requirements</span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-accept btn-sm">✓</button>
+                                        <button class="btn btn-edit btn-sm">✎</button>
+                                        <button class="btn btn-reject btn-sm">✗</button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- Single Field - Good Match -->
+                            <tr>
+                                <td class="checkbox-cell"><input type="checkbox" checked></td>
+                                <td>
+                                    <div class="source-field">
+                                        <span class="field-name">GENDER_CD</span>
+                                        <span class="field-type">CHAR(1)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="target-field">
+                                        <span class="field-name">member.gender</span>
+                                        <span class="field-desc">Member gender code</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="transformation-badge">CASE_MAP</span>
+                                </td>
+                                <td>
+                                    <div class="confidence-cell">
+                                        <div class="confidence-bar">
+                                            <div class="confidence-fill good"></div>
+                                        </div>
+                                        <span class="confidence-label good">Good (68%)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="reason-text">Gender code mapping may need review for value translation</span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-accept btn-sm">✓</button>
+                                        <button class="btn btn-edit btn-sm">✎</button>
+                                        <button class="btn btn-reject btn-sm">✗</button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- Accepted Row Example -->
+                            <tr class="accepted">
+                                <td class="checkbox-cell"><input type="checkbox" checked disabled></td>
+                                <td>
+                                    <div class="source-field">
+                                        <span class="field-name">EMAIL_ADDR</span>
+                                        <span class="field-type">VARCHAR(100)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="target-field">
+                                        <span class="field-name">member.email</span>
+                                        <span class="field-desc">Member email address</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="transformation-badge">TRIM + LOWER</span>
+                                </td>
+                                <td>
+                                    <div class="confidence-cell">
+                                        <div class="confidence-bar">
+                                            <div class="confidence-fill excellent"></div>
+                                        </div>
+                                        <span class="confidence-label excellent">Excellent (94%)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="reason-text">✅ Accepted - Exact match with standard email transformation</span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-outline btn-sm" disabled>Accepted</button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- Rejected Row Example -->
+                            <tr class="rejected">
+                                <td class="checkbox-cell"><input type="checkbox" disabled></td>
+                                <td>
+                                    <div class="source-field">
+                                        <span class="field-name">MARITAL_STATUS</span>
+                                        <span class="field-type">VARCHAR(20)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="target-field">
+                                        <span class="field-name">member.relationship_status</span>
+                                        <span class="field-desc">Family relationship indicator</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="transformation-badge">NONE</span>
+                                </td>
+                                <td>
+                                    <div class="confidence-cell">
+                                        <div class="confidence-bar">
+                                            <div class="confidence-fill good" style="width: 45%;"></div>
+                                        </div>
+                                        <span class="confidence-label" style="color: #9ca3af;">Rejected</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="reason-text">❌ Rejected - Wrong semantic meaning (marital ≠ family relationship)</span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-ai btn-sm">🤖 AI Search</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Final Actions -->
+            <div class="card">
+                <div class="card-body" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>Ready to finalize?</strong>
+                        <p style="color: var(--gainwell-text-secondary); font-size: 0.9rem; margin: 0;">
+                            8 mappings will be created • 1 rejected (needs manual search) • 1 already accepted
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 1rem;">
+                        <button class="btn btn-outline">
+                            💾 Save as Draft
+                        </button>
+                        <button class="btn btn-success">
+                            ✅ Confirm All Mappings
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>✎ Edit Mapping Configuration</h3>
+                <button class="modal-close" onclick="hideEditModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="edit-form">
+                    <div class="form-group">
+                        <label>Source Fields</label>
+                        <div style="background: var(--gainwell-light); padding: 1rem; border-radius: 8px;">
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                <span style="background: white; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; border: 1px solid var(--gainwell-border);">FIRST_NAME</span>
+                                <span style="background: white; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; border: 1px solid var(--gainwell-border);">LAST_NAME</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Target Table</label>
+                            <input type="text" value="member" readonly style="background: var(--gainwell-light);">
+                        </div>
+                        <div class="form-group">
+                            <label>Target Column</label>
+                            <input type="text" value="full_name" readonly style="background: var(--gainwell-light);">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Transformation for FIRST_NAME</label>
+                        <select>
+                            <option value="none">None</option>
+                            <option value="trim">TRIM</option>
+                            <option value="trim_upper">TRIM + UPPER</option>
+                            <option value="trim_lower">TRIM + LOWER</option>
+                            <option value="trim_initcap" selected>TRIM + INITCAP</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Transformation for LAST_NAME</label>
+                        <select>
+                            <option value="none">None</option>
+                            <option value="trim">TRIM</option>
+                            <option value="trim_upper">TRIM + UPPER</option>
+                            <option value="trim_lower">TRIM + LOWER</option>
+                            <option value="trim_initcap" selected>TRIM + INITCAP</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Concatenation Strategy</label>
+                        <select>
+                            <option value="space" selected>SPACE (John Doe)</option>
+                            <option value="comma">COMMA (Doe, John)</option>
+                            <option value="pipe">PIPE (John|Doe)</option>
+                            <option value="none">NONE (JohnDoe)</option>
+                            <option value="custom">CUSTOM</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Generated SQL Preview</label>
+                        <div class="transformation-preview">
+                            <span class="function">CONCAT</span>(<span class="function">TRIM</span>(<span class="function">INITCAP</span>(FIRST_NAME)), <span class="string">' '</span>, <span class="function">TRIM</span>(<span class="function">INITCAP</span>(LAST_NAME)))
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="hideEditModal()">Cancel</button>
+                <button class="btn btn-success" onclick="hideEditModal()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function analyzeTable() {
+            // This would trigger the AI analysis in the real app
+            alert('🔍 Analyzing table...\n\nIn the real implementation, this would:\n1. Fetch all columns from the selected table\n2. Run vector search for each column\n3. Query historical patterns\n4. Use LLM to generate recommendations\n5. Detect multi-field groupings');
+        }
+
+        function showEditModal() {
+            document.getElementById('editModal').classList.add('show');
+        }
+
+        function hideEditModal() {
+            document.getElementById('editModal').classList.remove('show');
+        }
+
+        // Close modal on outside click
+        document.getElementById('editModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                hideEditModal();
+            }
+        });
+    </script>
+</body>
+</html>
+

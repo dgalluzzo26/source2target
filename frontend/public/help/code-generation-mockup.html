@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Generation - Concept Mockup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --gainwell-primary: #4a5568;
+            --gainwell-secondary: #38a169;
+            --gainwell-light: #f8f9fa;
+            --gainwell-border: #dee2e6;
+            --gainwell-muted: #6c757d;
+            --gainwell-text-primary: #4a5568;
+            --gainwell-text-secondary: #6c757d;
+            --gainwell-bg-primary: #ffffff;
+            --gainwell-bg-secondary: #f8f9fa;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            color: var(--gainwell-text-primary);
+            background-color: var(--gainwell-bg-secondary);
+            line-height: 1.6;
+        }
+
+        /* Layout */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: linear-gradient(180deg, #2d3748 0%, #1a202c 100%);
+            color: white;
+            padding: 0;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo-section {
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--gainwell-secondary), #00d49a);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+        }
+
+        .logo-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .logo-text span {
+            color: var(--gainwell-secondary);
+        }
+
+        .nav-section {
+            padding: 1rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .nav-section-title {
+            padding: 0.5rem 1.5rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(255,255,255,0.5);
+        }
+
+        .nav-item {
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+        }
+
+        .nav-item:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(90deg, rgba(56, 161, 105, 0.3), transparent);
+            border-left: 3px solid var(--gainwell-secondary);
+        }
+
+        .nav-item.new-feature {
+            background: linear-gradient(90deg, rgba(56, 161, 105, 0.2), transparent);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .new-badge {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+            margin-left: auto;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .page-header {
+            background: linear-gradient(135deg, var(--gainwell-primary), #6366f1);
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 20px rgba(0, 51, 102, 0.2);
+        }
+
+        .page-header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .page-header p {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(56, 161, 105, 0.1);
+            margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: var(--gainwell-secondary);
+            box-shadow: 0 4px 20px rgba(0, 240, 176, 0.15);
+        }
+
+        .card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--gainwell-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-header h2 {
+            font-size: 1.2rem;
+            color: var(--gainwell-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--gainwell-primary), var(--gainwell-secondary));
+            color: white;
+            box-shadow: 0 2px 8px rgba(74, 85, 104, 0.15);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(56, 161, 105, 0.25);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--gainwell-secondary), #28a745);
+            color: white;
+        }
+
+        .btn-outline {
+            background: white;
+            border: 2px solid var(--gainwell-border);
+            color: var(--gainwell-text-primary);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--gainwell-secondary);
+            background: rgba(56, 161, 105, 0.05);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .btn-code {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+        }
+
+        .btn-copy {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: white;
+        }
+
+        .btn-download {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+
+        /* Form elements */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            color: var(--gainwell-text-primary);
+            font-size: 0.9rem;
+        }
+
+        .form-select, .form-input {
+            padding: 0.75rem 1rem;
+            border: 2px solid var(--gainwell-border);
+            border-radius: 8px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .form-select:focus, .form-input:focus {
+            outline: none;
+            border-color: var(--gainwell-secondary);
+            box-shadow: 0 0 0 3px rgba(56, 161, 105, 0.15);
+        }
+
+        /* Feature Highlight */
+        .feature-highlight {
+            background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+            border: 2px solid #6366f1;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .feature-highlight h4 {
+            color: #4338ca;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .feature-highlight ul {
+            margin-left: 1.5rem;
+            color: var(--gainwell-text-secondary);
+        }
+
+        .feature-highlight li {
+            margin: 0.5rem 0;
+        }
+
+        /* Configuration Panel */
+        .config-panel {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .config-section {
+            background: var(--gainwell-light);
+            padding: 1.25rem;
+            border-radius: 10px;
+            border: 1px solid var(--gainwell-border);
+        }
+
+        .config-section h4 {
+            color: var(--gainwell-primary);
+            margin-bottom: 1rem;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Checkbox and Radio styles */
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .checkbox-item, .radio-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+
+        .checkbox-item input, .radio-item input {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--gainwell-secondary);
+        }
+
+        .checkbox-item label, .radio-item label {
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.25rem;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            border-color: var(--gainwell-secondary);
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .stat-card .label {
+            font-size: 0.85rem;
+            color: var(--gainwell-text-secondary);
+        }
+
+        .stat-card.tables .value { color: #6366f1; }
+        .stat-card.mappings .value { color: var(--gainwell-secondary); }
+        .stat-card.joins .value { color: #f59e0b; }
+        .stat-card.transforms .value { color: #ec4899; }
+
+        /* Code Editor Section */
+        .code-editor-container {
+            background: #1e293b;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .code-editor-header {
+            background: #0f172a;
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #334155;
+        }
+
+        .code-editor-tabs {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .code-tab {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 0.85rem;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .code-tab:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .code-tab.active {
+            background: #334155;
+            color: white;
+        }
+
+        .code-editor-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .code-editor-body {
+            padding: 1.5rem;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .code-content {
+            font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.7;
+            color: #e2e8f0;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        .code-content .comment {
+            color: #64748b;
+            font-style: italic;
+        }
+
+        .code-content .keyword {
+            color: #f472b6;
+            font-weight: 600;
+        }
+
+        .code-content .function {
+            color: #22d3ee;
+        }
+
+        .code-content .string {
+            color: #a5f3fc;
+        }
+
+        .code-content .number {
+            color: #fbbf24;
+        }
+
+        .code-content .table-name {
+            color: #4ade80;
+        }
+
+        .code-content .column-name {
+            color: #60a5fa;
+        }
+
+        .code-content .operator {
+            color: #f97316;
+        }
+
+        /* Line numbers */
+        .code-with-lines {
+            display: flex;
+        }
+
+        .line-numbers {
+            padding-right: 1rem;
+            border-right: 1px solid #334155;
+            margin-right: 1rem;
+            color: #475569;
+            text-align: right;
+            user-select: none;
+        }
+
+        /* Table selector */
+        .table-selector {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .table-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0.5rem 1rem;
+            background: white;
+            border: 2px solid var(--gainwell-border);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+        }
+
+        .table-chip:hover {
+            border-color: var(--gainwell-secondary);
+        }
+
+        .table-chip.selected {
+            background: linear-gradient(135deg, var(--gainwell-secondary), #28a745);
+            border-color: var(--gainwell-secondary);
+            color: white;
+        }
+
+        .table-chip .count {
+            background: rgba(0,0,0,0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .table-chip.selected .count {
+            background: rgba(255,255,255,0.2);
+        }
+
+        /* Progress indicator */
+        .generation-progress {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border: 2px solid #f59e0b;
+            border-radius: 10px;
+            padding: 1.5rem;
+            display: none;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .generation-progress.show {
+            display: flex;
+        }
+
+        .progress-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #fde68a;
+            border-top-color: #f59e0b;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .progress-text h4 {
+            color: #92400e;
+            margin-bottom: 4px;
+        }
+
+        .progress-text p {
+            color: #b45309;
+            font-size: 0.9rem;
+        }
+
+        /* Info banner */
+        .info-banner {
+            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+            border-left: 4px solid var(--gainwell-secondary);
+            padding: 1rem 1.25rem;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .info-banner .icon {
+            font-size: 1.2rem;
+        }
+
+        .info-banner .content {
+            flex: 1;
+        }
+
+        .info-banner .title {
+            font-weight: 600;
+            color: #065f46;
+            margin-bottom: 4px;
+        }
+
+        .info-banner .text {
+            font-size: 0.9rem;
+            color: #047857;
+        }
+
+        /* Concept Badge */
+        .concept-badge {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            z-index: 1001;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        /* Scrollbar for code */
+        .code-editor-body::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .code-editor-body::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+
+        .code-editor-body::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        .code-editor-body::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* Output Options */
+        .output-options {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        /* Mapping Preview Table */
+        .mapping-preview {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 1rem;
+        }
+
+        .mapping-preview table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .mapping-preview th {
+            background: var(--gainwell-light);
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--gainwell-primary);
+            border-bottom: 2px solid var(--gainwell-border);
+            position: sticky;
+            top: 0;
+        }
+
+        .mapping-preview td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--gainwell-border);
+        }
+
+        .mapping-preview tr:hover {
+            background: rgba(56, 161, 105, 0.03);
+        }
+
+        .transform-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+            color: #4338ca;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-family: monospace;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="concept-badge">📐 CONCEPT MOCKUP</div>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo-section">
+                <div class="logo-icon">🗺️</div>
+                <div class="logo-text">Smart <span>Mapper</span></div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Navigation</div>
+                <div class="nav-item">
+                    <span>🏠</span>
+                    <span>Introduction</span>
+                </div>
+                <div class="nav-item">
+                    <span>📋</span>
+                    <span>Field Mapping</span>
+                </div>
+                <div class="nav-item">
+                    <span>⚡</span>
+                    <span>Auto Mapper</span>
+                </div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Administration</div>
+                <div class="nav-item">
+                    <span>📊</span>
+                    <span>Semantic Management</span>
+                </div>
+                <div class="nav-item">
+                    <span>🛡️</span>
+                    <span>Transformations</span>
+                </div>
+                <div class="nav-item active new-feature">
+                    <span>💻</span>
+                    <span>Code Generation</span>
+                    <span class="new-badge">NEW</span>
+                </div>
+                <div class="nav-item">
+                    <span>⚙️</span>
+                    <span>Settings</span>
+                </div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Help</div>
+                <div class="nav-item">
+                    <span>📖</span>
+                    <span>User Guide</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="page-header">
+                <h1>💻 Code Generation</h1>
+                <p>Generate production-ready Databricks SQL from your field mappings</p>
+            </div>
+
+            <!-- Feature Highlight -->
+            <div class="feature-highlight">
+                <h4>✨ What Code Generation Does</h4>
+                <ul>
+                    <li><strong>Full SQL Generation:</strong> Creates complete Databricks SQL statements from your mappings</li>
+                    <li><strong>Multi-Table Support:</strong> Automatically handles JOINs when mappings span multiple source tables</li>
+                    <li><strong>Transformation Integration:</strong> Includes all configured transformations (TRIM, UPPER, CONCAT, etc.)</li>
+                    <li><strong>Flexible Output:</strong> Generate CREATE TABLE, INSERT, or MERGE statements</li>
+                    <li><strong>Production Ready:</strong> Includes schema prefixes, NULL handling, and error-safe expressions</li>
+                </ul>
+            </div>
+
+            <!-- Stats Row -->
+            <div class="stats-row">
+                <div class="stat-card tables">
+                    <div class="value">3</div>
+                    <div class="label">Target Tables</div>
+                </div>
+                <div class="stat-card mappings">
+                    <div class="value">47</div>
+                    <div class="label">Field Mappings</div>
+                </div>
+                <div class="stat-card joins">
+                    <div class="value">5</div>
+                    <div class="label">Join Conditions</div>
+                </div>
+                <div class="stat-card transforms">
+                    <div class="value">32</div>
+                    <div class="label">Transformations</div>
+                </div>
+            </div>
+
+            <!-- Configuration Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>⚙️ Generation Settings</h2>
+                </div>
+                <div class="card-body">
+                    <!-- Target Table Selection -->
+                    <div class="form-group">
+                        <label>Select Target Tables to Generate</label>
+                        <div class="table-selector">
+                            <div class="table-chip selected" onclick="this.classList.toggle('selected')">
+                                <span>📊</span>
+                                <span>member</span>
+                                <span class="count">18 fields</span>
+                            </div>
+                            <div class="table-chip selected" onclick="this.classList.toggle('selected')">
+                                <span>📊</span>
+                                <span>claim_header</span>
+                                <span class="count">15 fields</span>
+                            </div>
+                            <div class="table-chip" onclick="this.classList.toggle('selected')">
+                                <span>📊</span>
+                                <span>claim_line</span>
+                                <span class="count">24 fields</span>
+                            </div>
+                            <div class="table-chip selected" onclick="this.classList.toggle('selected')">
+                                <span>📊</span>
+                                <span>provider</span>
+                                <span class="count">14 fields</span>
+                            </div>
+                            <div class="table-chip" onclick="this.classList.toggle('selected')">
+                                <span>📊</span>
+                                <span>eligibility</span>
+                                <span class="count">12 fields</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="config-panel">
+                        <!-- Output Type -->
+                        <div class="config-section">
+                            <h4>📝 Output Type</h4>
+                            <div class="checkbox-group">
+                                <div class="radio-item">
+                                    <input type="radio" name="outputType" id="createTable" checked>
+                                    <label for="createTable">CREATE TABLE AS SELECT</label>
+                                </div>
+                                <div class="radio-item">
+                                    <input type="radio" name="outputType" id="insertInto">
+                                    <label for="insertInto">INSERT INTO ... SELECT</label>
+                                </div>
+                                <div class="radio-item">
+                                    <input type="radio" name="outputType" id="mergeInto">
+                                    <label for="mergeInto">MERGE INTO (Upsert)</label>
+                                </div>
+                                <div class="radio-item">
+                                    <input type="radio" name="outputType" id="selectOnly">
+                                    <label for="selectOnly">SELECT Only (Preview)</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SQL Options -->
+                        <div class="config-section">
+                            <h4>🔧 SQL Options</h4>
+                            <div class="checkbox-group">
+                                <div class="checkbox-item">
+                                    <input type="checkbox" id="includeSchema" checked>
+                                    <label for="includeSchema">Include schema prefix</label>
+                                </div>
+                                <div class="checkbox-item">
+                                    <input type="checkbox" id="nullHandling" checked>
+                                    <label for="nullHandling">Add NULL handling (COALESCE)</label>
+                                </div>
+                                <div class="checkbox-item">
+                                    <input type="checkbox" id="addComments" checked>
+                                    <label for="addComments">Add column comments</label>
+                                </div>
+                                <div class="checkbox-item">
+                                    <input type="checkbox" id="formatSQL" checked>
+                                    <label for="formatSQL">Pretty format SQL</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Target Schema -->
+                        <div class="config-section">
+                            <h4>🗄️ Target Configuration</h4>
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <label style="font-size: 0.8rem;">Target Catalog</label>
+                                <input type="text" class="form-input" value="unified_dw" style="padding: 0.5rem;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <label style="font-size: 0.8rem;">Target Schema</label>
+                                <input type="text" class="form-input" value="gold" style="padding: 0.5rem;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="font-size: 0.8rem;">Source Schema</label>
+                                <input type="text" class="form-input" value="bronze.raw_claims" style="padding: 0.5rem;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                        <button class="btn btn-outline" onclick="showPreview()">
+                            👁️ Preview Mappings
+                        </button>
+                        <button class="btn btn-code" onclick="generateCode()">
+                            🚀 Generate SQL Code
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generation Progress -->
+            <div class="generation-progress" id="progressBar">
+                <div class="progress-spinner"></div>
+                <div class="progress-text">
+                    <h4>Generating SQL Code...</h4>
+                    <p>Processing 47 field mappings across 3 target tables</p>
+                </div>
+            </div>
+
+            <!-- Mapping Preview (hidden by default) -->
+            <div class="card" id="mappingPreview" style="display: none;">
+                <div class="card-header">
+                    <h2>📋 Mapping Preview - member table</h2>
+                    <span style="color: var(--gainwell-text-secondary);">18 fields from 2 source tables</span>
+                </div>
+                <div class="card-body">
+                    <div class="mapping-preview">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th>Target</th>
+                                    <th>Transformation</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>MEMBER_DEMOGRAPHICS.MEMBER_ID</td>
+                                    <td>member.member_id</td>
+                                    <td><span class="transform-badge">TRIM + UPPER</span></td>
+                                </tr>
+                                <tr>
+                                    <td>MEMBER_DEMOGRAPHICS.FIRST_NAME + LAST_NAME</td>
+                                    <td>member.full_name</td>
+                                    <td><span class="transform-badge">CONCAT(' ') + INITCAP</span></td>
+                                </tr>
+                                <tr>
+                                    <td>MEMBER_DEMOGRAPHICS.DATE_OF_BIRTH</td>
+                                    <td>member.birth_date</td>
+                                    <td><span class="transform-badge">TO_DATE</span></td>
+                                </tr>
+                                <tr>
+                                    <td>MEMBER_DEMOGRAPHICS.SSN</td>
+                                    <td>member.ssn_hash</td>
+                                    <td><span class="transform-badge">SHA2(256)</span></td>
+                                </tr>
+                                <tr>
+                                    <td>MEMBER_DEMOGRAPHICS.GENDER_CD</td>
+                                    <td>member.gender</td>
+                                    <td><span class="transform-badge">CASE MAPPING</span></td>
+                                </tr>
+                                <tr>
+                                    <td>MEMBER_ADDRESS.ADDR_LINE_1 + ADDR_LINE_2 + CITY + STATE + ZIP</td>
+                                    <td>member.full_address</td>
+                                    <td><span class="transform-badge">CONCAT_WS(', ')</span></td>
+                                </tr>
+                                <tr>
+                                    <td>MEMBER_DEMOGRAPHICS.EMAIL_ADDR</td>
+                                    <td>member.email</td>
+                                    <td><span class="transform-badge">TRIM + LOWER</span></td>
+                                </tr>
+                                <tr>
+                                    <td>MEMBER_DEMOGRAPHICS.PHONE_NUMBER</td>
+                                    <td>member.primary_phone</td>
+                                    <td><span class="transform-badge">FORMAT_PHONE</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info Banner -->
+            <div class="info-banner" id="successBanner" style="display: none;">
+                <div class="icon">✅</div>
+                <div class="content">
+                    <div class="title">SQL Generated Successfully!</div>
+                    <div class="text">Generated 3 SQL statements for 47 field mappings. Review the code below and download when ready.</div>
+                </div>
+            </div>
+
+            <!-- Generated Code Card -->
+            <div class="card" id="codeCard">
+                <div class="card-header">
+                    <h2>📄 Generated SQL Code</h2>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <div class="code-editor-container">
+                        <div class="code-editor-header">
+                            <div class="code-editor-tabs">
+                                <button class="code-tab active" onclick="showTab('member')">member.sql</button>
+                                <button class="code-tab" onclick="showTab('claim')">claim_header.sql</button>
+                                <button class="code-tab" onclick="showTab('provider')">provider.sql</button>
+                                <button class="code-tab" onclick="showTab('all')">all_tables.sql</button>
+                            </div>
+                            <div class="code-editor-actions">
+                                <button class="btn btn-copy btn-sm" onclick="copyCode()">
+                                    📋 Copy
+                                </button>
+                                <button class="btn btn-download btn-sm" onclick="downloadCode()">
+                                    ⬇️ Download
+                                </button>
+                            </div>
+                        </div>
+                        <div class="code-editor-body">
+                            <div class="code-with-lines">
+                                <div class="line-numbers">
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+                                </div>
+                                <div class="code-content"><span class="comment">-- ============================================</span>
+<span class="comment">-- Generated by Smart Mapper Code Generation</span>
+<span class="comment">-- Target Table: unified_dw.gold.member</span>
+<span class="comment">-- Source Tables: MEMBER_DEMOGRAPHICS, MEMBER_ADDRESS</span>
+<span class="comment">-- Generated: 2025-01-15 14:32:00</span>
+<span class="comment">-- Total Mappings: 18 fields</span>
+<span class="comment">-- ============================================</span>
+
+<span class="keyword">CREATE OR REPLACE TABLE</span> <span class="table-name">unified_dw.gold.member</span> <span class="keyword">AS</span>
+<span class="keyword">SELECT</span>
+    <span class="comment">-- Primary Identifier</span>
+    <span class="function">TRIM</span>(<span class="function">UPPER</span>(<span class="column-name">md.MEMBER_ID</span>)) <span class="keyword">AS</span> <span class="column-name">member_id</span>,
+    
+    <span class="comment">-- Full Name (concatenated from first + last)</span>
+    <span class="function">CONCAT</span>(
+        <span class="function">TRIM</span>(<span class="function">INITCAP</span>(<span class="column-name">md.FIRST_NAME</span>)),
+        <span class="string">' '</span>,
+        <span class="function">TRIM</span>(<span class="function">INITCAP</span>(<span class="column-name">md.LAST_NAME</span>))
+    ) <span class="keyword">AS</span> <span class="column-name">full_name</span>,
+    
+    <span class="comment">-- Date of Birth</span>
+    <span class="function">TO_DATE</span>(<span class="column-name">md.DATE_OF_BIRTH</span>, <span class="string">'yyyy-MM-dd'</span>) <span class="keyword">AS</span> <span class="column-name">birth_date</span>,
+    
+    <span class="comment">-- SSN (hashed for security)</span>
+    <span class="function">SHA2</span>(<span class="column-name">md.SSN</span>, <span class="number">256</span>) <span class="keyword">AS</span> <span class="column-name">ssn_hash</span>,
+    
+    <span class="comment">-- Gender Code Mapping</span>
+    <span class="keyword">CASE</span> <span class="function">UPPER</span>(<span class="function">TRIM</span>(<span class="column-name">md.GENDER_CD</span>))
+        <span class="keyword">WHEN</span> <span class="string">'M'</span> <span class="keyword">THEN</span> <span class="string">'Male'</span>
+        <span class="keyword">WHEN</span> <span class="string">'F'</span> <span class="keyword">THEN</span> <span class="string">'Female'</span>
+        <span class="keyword">WHEN</span> <span class="string">'U'</span> <span class="keyword">THEN</span> <span class="string">'Unknown'</span>
+        <span class="keyword">ELSE</span> <span class="function">COALESCE</span>(<span class="column-name">md.GENDER_CD</span>, <span class="string">'Unknown'</span>)
+    <span class="keyword">END</span> <span class="keyword">AS</span> <span class="column-name">gender</span>,
+    
+    <span class="comment">-- Full Address (concatenated from multiple fields)</span>
+    <span class="function">CONCAT_WS</span>(
+        <span class="string">', '</span>,
+        <span class="function">NULLIF</span>(<span class="function">TRIM</span>(<span class="column-name">ma.ADDR_LINE_1</span>), <span class="string">''</span>),
+        <span class="function">NULLIF</span>(<span class="function">TRIM</span>(<span class="column-name">ma.ADDR_LINE_2</span>), <span class="string">''</span>),
+        <span class="function">TRIM</span>(<span class="column-name">ma.CITY</span>),
+        <span class="function">TRIM</span>(<span class="column-name">ma.STATE</span>),
+        <span class="function">TRIM</span>(<span class="column-name">ma.ZIP_CODE</span>)
+    ) <span class="keyword">AS</span> <span class="column-name">full_address</span>,
+    
+    <span class="comment">-- Email (lowercase for consistency)</span>
+    <span class="function">LOWER</span>(<span class="function">TRIM</span>(<span class="column-name">md.EMAIL_ADDR</span>)) <span class="keyword">AS</span> <span class="column-name">email</span>,
+    
+    <span class="comment">-- Phone (formatted)</span>
+    <span class="function">REGEXP_REPLACE</span>(
+        <span class="column-name">md.PHONE_NUMBER</span>,
+        <span class="string">'(\\d{3})(\\d{3})(\\d{4})'</span>,
+        <span class="string">'($1) $2-$3'</span>
+    ) <span class="keyword">AS</span> <span class="column-name">primary_phone</span>,
+    
+    <span class="comment">-- Audit columns</span>
+    <span class="function">CURRENT_TIMESTAMP</span>() <span class="keyword">AS</span> <span class="column-name">etl_load_ts</span>,
+    <span class="string">'SMART_MAPPER'</span> <span class="keyword">AS</span> <span class="column-name">etl_source</span>
+
+<span class="keyword">FROM</span> <span class="table-name">bronze.raw_claims.MEMBER_DEMOGRAPHICS</span> <span class="column-name">md</span>
+<span class="keyword">LEFT JOIN</span> <span class="table-name">bronze.raw_claims.MEMBER_ADDRESS</span> <span class="column-name">ma</span>
+    <span class="keyword">ON</span> <span class="column-name">md.MEMBER_ID</span> <span class="operator">=</span> <span class="column-name">ma.MEMBER_ID</span>;
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Output Options -->
+            <div class="output-options">
+                <button class="btn btn-download">
+                    ⬇️ Download All SQL Files (.zip)
+                </button>
+                <button class="btn btn-outline">
+                    📋 Copy All to Clipboard
+                </button>
+                <button class="btn btn-outline">
+                    📤 Export to Databricks Notebook
+                </button>
+                <button class="btn btn-outline">
+                    🔗 Generate DBT Model
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function generateCode() {
+            const progress = document.getElementById('progressBar');
+            const success = document.getElementById('successBanner');
+            
+            progress.classList.add('show');
+            success.style.display = 'none';
+            
+            // Simulate generation
+            setTimeout(() => {
+                progress.classList.remove('show');
+                success.style.display = 'flex';
+                
+                // Scroll to code
+                document.getElementById('codeCard').scrollIntoView({ behavior: 'smooth' });
+            }, 2000);
+        }
+
+        function showPreview() {
+            const preview = document.getElementById('mappingPreview');
+            preview.style.display = preview.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function showTab(tabName) {
+            // Update active tab
+            document.querySelectorAll('.code-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // In real app, this would switch the code content
+            alert(`Switching to ${tabName}.sql - In the real app, this would show the SQL for the ${tabName} table`);
+        }
+
+        function copyCode() {
+            alert('📋 Code copied to clipboard!');
+        }
+
+        function downloadCode() {
+            alert('⬇️ Downloading member.sql...');
+        }
+    </script>
+</body>
+</html>
+

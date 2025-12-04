@@ -10,6 +10,13 @@
           <p>Map source database fields to target database fields using AI-powered semantic matching</p>
         </div>
         <div style="display: flex; gap: 0.5rem;">
+          <Button
+            label="Auto Mapper Mock-up"
+            icon="pi pi-bolt"
+            severity="warning"
+            @click="openAutoMapperMockup"
+            v-tooltip.bottom="'Preview the upcoming Auto Mapper feature'"
+          />
           <HelpButton 
             help-type="quick-start" 
             label="Quick Start" 
@@ -1325,6 +1332,10 @@ const handleFileUpload = async (event: any) => {
 
 const closeUploadDialog = () => {
   showTemplateUpload.value = false
+}
+
+const openAutoMapperMockup = () => {
+  window.open('/help/auto-mapper-mockup.html', '_blank')
 }
 
 onMounted(() => {
