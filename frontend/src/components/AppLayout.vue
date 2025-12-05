@@ -117,6 +117,12 @@
               />
             </div>
           </li>
+          <li>
+            <a href="/help/ai-architecture.html" target="_blank" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'AI Architecture' : ''">
+              <i class="layout-menuitem-icon pi pi-sitemap"></i>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">AI Architecture</span>
+            </a>
+          </li>
         </ul>
       </div>
     </div>

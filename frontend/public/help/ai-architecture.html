@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Mapper - AI Architecture</title>
+    <style>
+        :root {
+            --primary: #10b981;
+            --primary-dark: #059669;
+            --secondary: #6366f1;
+            --accent: #f59e0b;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --bg-card-hover: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, #1a1a2e 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        header {
+            text-align: center;
+            padding: 3rem 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 3rem;
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+        
+        header p {
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+        }
+        
+        .section {
+            margin-bottom: 4rem;
+        }
+        
+        .section-title {
+            font-size: 1.8rem;
+            color: var(--primary);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--primary);
+            display: inline-block;
+        }
+        
+        /* Three Pillars */
+        .pillars {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .pillar {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            border: 1px solid var(--border);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .pillar:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .pillar-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        
+        .pillar h3 {
+            font-size: 1.3rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .pillar-subtitle {
+            color: var(--accent);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 1rem;
+        }
+        
+        .pillar p {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+        
+        .pillar ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .pillar ul li {
+            padding: 0.3rem 0;
+            color: var(--text-secondary);
+        }
+        
+        .pillar ul li::before {
+            content: "→ ";
+            color: var(--primary);
+        }
+        
+        .pillar.primary { border-top: 4px solid var(--primary); }
+        .pillar.learning { border-top: 4px solid var(--secondary); }
+        .pillar.avoid { border-top: 4px solid #ef4444; }
+        
+        /* Flow Diagram */
+        .flow-container {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            border: 1px solid var(--border);
+            overflow-x: auto;
+        }
+        
+        .flow-step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 2rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .flow-step:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .step-number {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+            margin-right: 1.5rem;
+        }
+        
+        .step-content h4 {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .step-content p {
+            color: var(--text-secondary);
+        }
+        
+        .step-visual {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            border: 1px solid var(--border);
+        }
+        
+        /* Parallel Searches Visual */
+        .parallel-searches {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .search-box {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            border: 2px solid var(--border);
+        }
+        
+        .search-box.semantic { border-color: var(--primary); }
+        .search-box.patterns { border-color: var(--secondary); }
+        .search-box.rejections { border-color: #ef4444; }
+        
+        .search-box h5 {
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .search-box ul {
+            list-style: none;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        
+        /* Data Structure Tables */
+        .table-container {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border);
+            overflow-x: auto;
+        }
+        
+        .table-container h4 {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .table-container h4 .badge {
+            background: var(--accent);
+            color: var(--bg-dark);
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        th {
+            background: var(--bg-dark);
+            color: var(--primary);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+        }
+        
+        td {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        td code {
+            background: var(--bg-dark);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            color: var(--accent);
+        }
+        
+        /* Benefits Grid */
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        
+        .benefit {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+        }
+        
+        .benefit-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .benefit h4 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .benefit p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        /* Comparison */
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        
+        .comparison-box {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+        }
+        
+        .comparison-box.before {
+            border-top: 4px solid #ef4444;
+        }
+        
+        .comparison-box.after {
+            border-top: 4px solid var(--primary);
+        }
+        
+        .comparison-box h4 {
+            margin-bottom: 1rem;
+        }
+        
+        .comparison-box pre {
+            background: var(--bg-dark);
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+        }
+        
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 2rem;
+            border-top: 1px solid var(--border);
+            margin-top: 3rem;
+            color: var(--text-secondary);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .parallel-searches {
+                grid-template-columns: 1fr;
+            }
+            
+            .comparison {
+                grid-template-columns: 1fr;
+            }
+            
+            header h1 {
+                font-size: 1.8rem;
+            }
+        }
+        
+        /* Arrow Animation */
+        .arrow-down {
+            text-align: center;
+            font-size: 2rem;
+            color: var(--primary);
+            margin: 1rem 0;
+            animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(10px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧠 Smart Mapper AI Architecture</h1>
+            <p>Intelligent Data Field Mapping powered by Vector Search & LLM</p>
+        </header>
+        
+        <!-- Executive Summary -->
+        <section class="section">
+            <h2 class="section-title">Executive Summary</h2>
+            <p style="font-size: 1.1rem; max-width: 900px;">
+                Smart Mapper uses <strong>AI and vector search</strong> to intelligently suggest data field mappings 
+                from source systems to target schemas. The system learns from historical patterns and user feedback 
+                to continuously improve suggestions, including multi-field mappings and transformations.
+            </p>
+        </section>
+        
+        <!-- Three Pillars -->
+        <section class="section">
+            <h2 class="section-title">The Three Pillars of AI Mapping</h2>
+            <div class="pillars">
+                <div class="pillar primary">
+                    <div class="pillar-icon">🎯</div>
+                    <h3>Semantic Fields</h3>
+                    <div class="pillar-subtitle">Primary Search</div>
+                    <p>"What target fields match these source fields?"</p>
+                    <ul>
+                        <li>Target field candidates</li>
+                        <li>Data type matching</li>
+                        <li>Description similarity</li>
+                        <li>Always executed</li>
+                    </ul>
+                </div>
+                
+                <div class="pillar learning">
+                    <div class="pillar-icon">📚</div>
+                    <h3>Mapping Patterns</h3>
+                    <div class="pillar-subtitle">Learning Search</div>
+                    <p>"How did we map similar fields before?"</p>
+                    <ul>
+                        <li>Multi-field combinations</li>
+                        <li>Transformations used</li>
+                        <li>Join patterns</li>
+                        <li>Complete context</li>
+                    </ul>
+                </div>
+                
+                <div class="pillar avoid">
+                    <div class="pillar-icon">🚫</div>
+                    <h3>Rejection History</h3>
+                    <div class="pillar-subtitle">Avoidance Search</div>
+                    <p>"What should we avoid suggesting?"</p>
+                    <ul>
+                        <li>Previously rejected mappings</li>
+                        <li>User feedback reasoning</li>
+                        <li>Prevents repeat mistakes</li>
+                        <li>Semantic matching</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Flow Diagram -->
+        <section class="section">
+            <h2 class="section-title">Complete AI Mapping Flow</h2>
+            <div class="flow-container">
+                
+                <div class="flow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>User Selects Source Fields</h4>
+                        <p>User selects one or more source fields to map to a target</p>
+                        <div class="step-visual">
+                            ☑ first_name (STRING) - "Member's legal first name"<br>
+                            ☑ last_name (STRING) - "Member's legal last name"
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="arrow-down">↓</div>
+                
+                <div class="flow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>Build Semantic Query</h4>
+                        <p>Combine source field information into a searchable query</p>
+                        <div class="step-visual">
+                            "SOURCE TABLES: member | SOURCE COLUMNS: first_name, last_name | 
+                            DESCRIPTIONS: Member's legal first name, Member's legal last name | 
+                            TYPES: STRING, STRING"
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="arrow-down">↓</div>
+                
+                <div class="flow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>Parallel Vector Searches</h4>
+                        <p>Search three indexes simultaneously for comprehensive context</p>
+                        <div class="parallel-searches">
+                            <div class="search-box semantic">
+                                <h5>🎯 Semantic Fields</h5>
+                                <ul>
+                                    <li>full_name</li>
+                                    <li>member_name</li>
+                                    <li>display_name</li>
+                                </ul>
+                            </div>
+                            <div class="search-box patterns">
+                                <h5>📚 Mapping Patterns</h5>
+                                <ul>
+                                    <li>2 fields → name</li>
+                                    <li>TRIM + UPPER</li>
+                                    <li>SPACE concat</li>
+                                </ul>
+                            </div>
+                            <div class="search-box rejections">
+                                <h5>🚫 Rejections</h5>
+                                <ul>
+                                    <li>ssn → full_name</li>
+                                    <li>(wrong match!)</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="arrow-down">↓</div>
+                
+                <div class="flow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>LLM Reasoning</h4>
+                        <p>Foundation Model analyzes all inputs and generates intelligent suggestions</p>
+                        <div class="step-visual">
+                            <strong>Inputs:</strong> Source fields, target candidates, historical patterns, rejections<br><br>
+                            <strong>Outputs:</strong> Ranked suggestions with confidence scores, recommended transformations, 
+                            multi-field combination suggestions, human-readable reasoning
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="arrow-down">↓</div>
+                
+                <div class="flow-step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <h4>Present Suggestions</h4>
+                        <p>Display ranked suggestions with explanations to the user</p>
+                        <div class="step-visual">
+                            <strong>🎯 TOP SUGGESTION (95% confidence)</strong><br>
+                            Target: full_name<br>
+                            Transformations: TRIM, UPPER<br>
+                            Concatenation: SPACE<br><br>
+                            "Combine first_name and last_name with space separator. 
+                            Apply TRIM and UPPER based on 15 similar past mappings."
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="arrow-down">↓</div>
+                
+                <div class="flow-step">
+                    <div class="step-number">6</div>
+                    <div class="step-content">
+                        <h4>Learning Loop</h4>
+                        <p>User feedback improves future suggestions</p>
+                        <div class="parallel-searches" style="grid-template-columns: 1fr 1fr;">
+                            <div class="search-box" style="border-color: var(--primary);">
+                                <h5>✓ Accept</h5>
+                                <ul>
+                                    <li>Create mapping</li>
+                                    <li>Save to mapping_patterns</li>
+                                    <li>Available for future learning</li>
+                                </ul>
+                            </div>
+                            <div class="search-box" style="border-color: #ef4444;">
+                                <h5>✗ Reject</h5>
+                                <ul>
+                                    <li>Record rejection with reason</li>
+                                    <li>Vector-indexed</li>
+                                    <li>Avoided in future</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+        </section>
+        
+        <!-- Data Structures -->
+        <section class="section">
+            <h2 class="section-title">Data Structures</h2>
+            
+            <div class="table-container">
+                <h4>📎 semantic_fields (Target Definitions)</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Description</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>semantic_field_id</code></td>
+                            <td>Primary key</td>
+                            <td>42</td>
+                        </tr>
+                        <tr>
+                            <td><code>tgt_table_name</code></td>
+                            <td>Target table name</td>
+                            <td>Member</td>
+                        </tr>
+                        <tr>
+                            <td><code>tgt_column_name</code></td>
+                            <td>Target column name</td>
+                            <td>Full Name</td>
+                        </tr>
+                        <tr>
+                            <td><code>tgt_comments</code></td>
+                            <td>Description</td>
+                            <td>Complete member name</td>
+                        </tr>
+                        <tr>
+                            <td><code>semantic_field</code></td>
+                            <td>Vector-searchable (computed)</td>
+                            <td>TABLE: Member | COLUMN: Full Name | ...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="table-container">
+                <h4>📚 mapping_patterns (Complete Mapping History) <span class="badge">NEW</span></h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Description</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>source_fields_json</code></td>
+                            <td>Complete source details</td>
+                            <td>[{table, column, transform...}]</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_columns</code></td>
+                            <td>Source columns used</td>
+                            <td>first_name, last_name</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_descriptions</code></td>
+                            <td>Source descriptions</td>
+                            <td>Member's first name, Member's last name</td>
+                        </tr>
+                        <tr>
+                            <td><code>tgt_column_name</code></td>
+                            <td>Target column</td>
+                            <td>Full Name</td>
+                        </tr>
+                        <tr>
+                            <td><code>transformation_expression</code></td>
+                            <td>Full SQL expression</td>
+                            <td>CONCAT(TRIM(UPPER(first_name)), ' ', ...)</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_semantic_field</code></td>
+                            <td>Vector-searchable (computed)</td>
+                            <td>SOURCE TABLES: member | SOURCE COLUMNS: ...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="table-container">
+                <h4>🔗 mapping_unions (Union Relationships) <span class="badge">NEW</span></h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Description</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>mapped_field_id</code></td>
+                            <td>FK to mapped_fields</td>
+                            <td>42</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_table_name</code></td>
+                            <td>Table being unioned</td>
+                            <td>claims_2023</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_column_name</code></td>
+                            <td>Column from table</td>
+                            <td>claim_amount</td>
+                        </tr>
+                        <tr>
+                            <td><code>union_type</code></td>
+                            <td>UNION or UNION ALL</td>
+                            <td>UNION ALL</td>
+                        </tr>
+                        <tr>
+                            <td><code>union_order</code></td>
+                            <td>Order in union</td>
+                            <td>1, 2, 3...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        
+        <!-- Why This Architecture -->
+        <section class="section">
+            <h2 class="section-title">Why This Architecture?</h2>
+            <div class="comparison">
+                <div class="comparison-box before">
+                    <h4>❌ Previous Limitation</h4>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                        Only captured column pairs, missing context
+                    </p>
+                    <pre>first_name → full_name
+
+Missing:
+• Multi-field combinations
+• Transformations applied
+• Join conditions
+• The complete "recipe"</pre>
+                </div>
+                <div class="comparison-box after">
+                    <h4>✅ New Approach</h4>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                        Captures complete patterns
+                    </p>
+                    <pre>{
+  "sources": ["first_name", "last_name"],
+  "target": "full_name",
+  "transformations": ["TRIM", "UPPER"],
+  "concat": "SPACE",
+  "expression": "CONCAT(...)"
+}</pre>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Benefits -->
+        <section class="section">
+            <h2 class="section-title">Benefits</h2>
+            <div class="benefits-grid">
+                <div class="benefit">
+                    <div class="benefit-icon">🎯</div>
+                    <h4>Accurate Suggestions</h4>
+                    <p>Vector search finds semantically similar fields, not just name matches</p>
+                </div>
+                <div class="benefit">
+                    <div class="benefit-icon">📚</div>
+                    <h4>Historical Learning</h4>
+                    <p>AI learns from complete past mappings, not just column pairs</p>
+                </div>
+                <div class="benefit">
+                    <div class="benefit-icon">🔄</div>
+                    <h4>Multi-Field Support</h4>
+                    <p>Recognizes when fields should be combined (joins or unions)</p>
+                </div>
+                <div class="benefit">
+                    <div class="benefit-icon">⚡</div>
+                    <h4>Transformation Hints</h4>
+                    <p>Suggests TRIM, UPPER, etc. based on history</p>
+                </div>
+                <div class="benefit">
+                    <div class="benefit-icon">🚫</div>
+                    <h4>Mistake Avoidance</h4>
+                    <p>Won't repeat previously rejected suggestions</p>
+                </div>
+                <div class="benefit">
+                    <div class="benefit-icon">🔍</div>
+                    <h4>Cross-System Matching</h4>
+                    <p>Works even when source systems have different naming conventions</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Tech Stack -->
+        <section class="section">
+            <h2 class="section-title">Technology Stack</h2>
+            <div class="benefits-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                <div class="benefit" style="text-align: center;">
+                    <div class="benefit-icon">🔎</div>
+                    <h4>Vector Search</h4>
+                    <p>Databricks Vector Search</p>
+                </div>
+                <div class="benefit" style="text-align: center;">
+                    <div class="benefit-icon">🤖</div>
+                    <h4>LLM</h4>
+                    <p>Databricks Foundation Model</p>
+                </div>
+                <div class="benefit" style="text-align: center;">
+                    <div class="benefit-icon">💾</div>
+                    <h4>Database</h4>
+                    <p>Delta Lake</p>
+                </div>
+                <div class="benefit" style="text-align: center;">
+                    <div class="benefit-icon">⚙️</div>
+                    <h4>Backend</h4>
+                    <p>FastAPI (Python)</p>
+                </div>
+                <div class="benefit" style="text-align: center;">
+                    <div class="benefit-icon">🖥️</div>
+                    <h4>Frontend</h4>
+                    <p>Vue 3 + PrimeVue</p>
+                </div>
+            </div>
+        </section>
+        
+        <footer>
+            <p>Smart Mapper - Intelligent Data Field Mapping</p>
+            <p style="font-size: 0.9rem; margin-top: 0.5rem;">Powered by Databricks AI</p>
+        </footer>
+    </div>
+</body>
+</html>
+
