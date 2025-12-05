@@ -579,131 +579,647 @@
         
         <!-- Data Structures -->
         <section class="section">
-            <h2 class="section-title">Data Structures</h2>
+            <h2 class="section-title">Complete Data Model</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                The Smart Mapper platform uses the following tables to manage source fields, target definitions, mappings, and AI learning.
+            </p>
             
+            <!-- Table 1: semantic_fields -->
             <div class="table-container">
-                <h4>📎 semantic_fields (Target Definitions)</h4>
+                <h4>🎯 semantic_fields (Target Field Definitions)</h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+                    Defines available target fields for mapping. Vector-indexed for AI search.
+                </p>
                 <table>
                     <thead>
                         <tr>
                             <th>Column</th>
+                            <th>Type</th>
                             <th>Description</th>
-                            <th>Example</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
                             <td><code>semantic_field_id</code></td>
-                            <td>Primary key</td>
-                            <td>42</td>
+                            <td>BIGINT (PK)</td>
+                            <td>Auto-generated primary key</td>
                         </tr>
                         <tr>
                             <td><code>tgt_table_name</code></td>
-                            <td>Target table name</td>
-                            <td>Member</td>
+                            <td>STRING</td>
+                            <td>Target table logical name (e.g., "Member Table")</td>
+                        </tr>
+                        <tr>
+                            <td><code>tgt_table_physical_name</code></td>
+                            <td>STRING</td>
+                            <td>Target table physical name (e.g., "slv_member")</td>
                         </tr>
                         <tr>
                             <td><code>tgt_column_name</code></td>
-                            <td>Target column name</td>
-                            <td>Full Name</td>
+                            <td>STRING</td>
+                            <td>Target column logical name (e.g., "Full Name")</td>
+                        </tr>
+                        <tr>
+                            <td><code>tgt_column_physical_name</code></td>
+                            <td>STRING</td>
+                            <td>Target column physical name (e.g., "full_name")</td>
+                        </tr>
+                        <tr>
+                            <td><code>tgt_physical_datatype</code></td>
+                            <td>STRING</td>
+                            <td>Data type (STRING, INT, DATE, etc.)</td>
                         </tr>
                         <tr>
                             <td><code>tgt_comments</code></td>
-                            <td>Description</td>
-                            <td>Complete member name</td>
+                            <td>STRING</td>
+                            <td>Description of the target field</td>
+                        </tr>
+                        <tr>
+                            <td><code>domain</code></td>
+                            <td>STRING</td>
+                            <td>Domain category (claims, member, provider, etc.)</td>
                         </tr>
                         <tr>
                             <td><code>semantic_field</code></td>
-                            <td>Vector-searchable (computed)</td>
-                            <td>TABLE: Member | COLUMN: Full Name | ...</td>
+                            <td>STRING (computed)</td>
+                            <td>🔍 Vector-searchable concatenated field</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
             
+            <!-- Table 2: unmapped_fields -->
             <div class="table-container">
-                <h4>📚 mapping_patterns (Complete Mapping History) <span class="badge">NEW</span></h4>
+                <h4>📥 unmapped_fields (Source Fields Awaiting Mapping)</h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+                    Source fields uploaded by users that need to be mapped to target fields.
+                </p>
                 <table>
                     <thead>
                         <tr>
                             <th>Column</th>
+                            <th>Type</th>
                             <th>Description</th>
-                            <th>Example</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td><code>source_fields_json</code></td>
-                            <td>Complete source details</td>
-                            <td>[{table, column, transform...}]</td>
+                            <td><code>unmapped_field_id</code></td>
+                            <td>BIGINT (PK)</td>
+                            <td>Auto-generated primary key</td>
                         </tr>
                         <tr>
-                            <td><code>source_columns</code></td>
-                            <td>Source columns used</td>
-                            <td>first_name, last_name</td>
+                            <td><code>src_table_name</code></td>
+                            <td>STRING</td>
+                            <td>Source table logical name</td>
                         </tr>
                         <tr>
-                            <td><code>source_descriptions</code></td>
-                            <td>Source descriptions</td>
-                            <td>Member's first name, Member's last name</td>
+                            <td><code>src_table_physical_name</code></td>
+                            <td>STRING</td>
+                            <td>Source table physical name</td>
                         </tr>
                         <tr>
-                            <td><code>tgt_column_name</code></td>
-                            <td>Target column</td>
-                            <td>Full Name</td>
+                            <td><code>src_column_name</code></td>
+                            <td>STRING</td>
+                            <td>Source column logical name</td>
                         </tr>
                         <tr>
-                            <td><code>transformation_expression</code></td>
-                            <td>Full SQL expression</td>
-                            <td>CONCAT(TRIM(UPPER(first_name)), ' ', ...)</td>
+                            <td><code>src_column_physical_name</code></td>
+                            <td>STRING</td>
+                            <td>Source column physical name</td>
                         </tr>
                         <tr>
-                            <td><code>source_semantic_field</code></td>
-                            <td>Vector-searchable (computed)</td>
-                            <td>SOURCE TABLES: member | SOURCE COLUMNS: ...</td>
+                            <td><code>src_physical_datatype</code></td>
+                            <td>STRING</td>
+                            <td>Data type (STRING, INT, DATE, etc.)</td>
+                        </tr>
+                        <tr>
+                            <td><code>src_nullable</code></td>
+                            <td>STRING</td>
+                            <td>Whether nullable (YES/NO)</td>
+                        </tr>
+                        <tr>
+                            <td><code>src_comments</code></td>
+                            <td>STRING</td>
+                            <td>Description of the source field</td>
+                        </tr>
+                        <tr>
+                            <td><code>domain</code></td>
+                            <td>STRING</td>
+                            <td>Domain category</td>
+                        </tr>
+                        <tr>
+                            <td><code>uploaded_by</code></td>
+                            <td>STRING</td>
+                            <td>User who uploaded this field</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
             
+            <!-- Table 3: mapped_fields -->
             <div class="table-container">
-                <h4>🔗 mapping_unions (Union Relationships) <span class="badge">NEW</span></h4>
+                <h4>✅ mapped_fields (Completed Mappings - Target Side)</h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+                    One record per target field with completed mapping. Links to source fields via mapping_details.
+                </p>
                 <table>
                     <thead>
                         <tr>
                             <th>Column</th>
+                            <th>Type</th>
                             <th>Description</th>
-                            <th>Example</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
                             <td><code>mapped_field_id</code></td>
-                            <td>FK to mapped_fields</td>
-                            <td>42</td>
+                            <td>BIGINT (PK)</td>
+                            <td>Auto-generated primary key</td>
                         </tr>
                         <tr>
-                            <td><code>source_table_name</code></td>
-                            <td>Table being unioned</td>
-                            <td>claims_2023</td>
+                            <td><code>semantic_field_id</code></td>
+                            <td>BIGINT (FK)</td>
+                            <td>Reference to semantic_fields</td>
                         </tr>
                         <tr>
-                            <td><code>source_column_name</code></td>
-                            <td>Column from table</td>
-                            <td>claim_amount</td>
+                            <td><code>tgt_table_name</code></td>
+                            <td>STRING</td>
+                            <td>Target table name (denormalized)</td>
                         </tr>
                         <tr>
-                            <td><code>union_type</code></td>
-                            <td>UNION or UNION ALL</td>
-                            <td>UNION ALL</td>
+                            <td><code>tgt_column_name</code></td>
+                            <td>STRING</td>
+                            <td>Target column name (denormalized)</td>
                         </tr>
                         <tr>
-                            <td><code>union_order</code></td>
-                            <td>Order in union</td>
-                            <td>1, 2, 3...</td>
+                            <td><code>concat_strategy</code></td>
+                            <td>STRING</td>
+                            <td>How to combine sources: NONE, SPACE, COMMA, PIPE, CUSTOM</td>
+                        </tr>
+                        <tr>
+                            <td><code>concat_separator</code></td>
+                            <td>STRING</td>
+                            <td>Custom separator if strategy is CUSTOM</td>
+                        </tr>
+                        <tr>
+                            <td><code>transformation_expression</code></td>
+                            <td>STRING</td>
+                            <td>Full SQL transformation expression</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_relationship_type</code></td>
+                            <td>STRING</td>
+                            <td>SINGLE, JOIN, or UNION <span class="badge">NEW</span></td>
+                        </tr>
+                        <tr>
+                            <td><code>confidence_score</code></td>
+                            <td>DOUBLE</td>
+                            <td>AI confidence (0.0 - 1.0)</td>
+                        </tr>
+                        <tr>
+                            <td><code>mapping_source</code></td>
+                            <td>STRING</td>
+                            <td>AI, MANUAL, BULK_UPLOAD</td>
+                        </tr>
+                        <tr>
+                            <td><code>ai_reasoning</code></td>
+                            <td>STRING</td>
+                            <td>AI explanation for suggestion</td>
+                        </tr>
+                        <tr>
+                            <td><code>mapped_by</code></td>
+                            <td>STRING</td>
+                            <td>User who created/approved mapping</td>
                         </tr>
                     </tbody>
                 </table>
+            </div>
+            
+            <!-- Table 4: mapping_details -->
+            <div class="table-container">
+                <h4>📋 mapping_details (Source Fields in Each Mapping)</h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+                    Individual source fields that contribute to a target mapping. Supports multi-field mappings.
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>mapping_detail_id</code></td>
+                            <td>BIGINT (PK)</td>
+                            <td>Auto-generated primary key</td>
+                        </tr>
+                        <tr>
+                            <td><code>mapped_field_id</code></td>
+                            <td>BIGINT (FK)</td>
+                            <td>Reference to mapped_fields</td>
+                        </tr>
+                        <tr>
+                            <td><code>unmapped_field_id</code></td>
+                            <td>BIGINT (FK)</td>
+                            <td>Reference to unmapped_fields</td>
+                        </tr>
+                        <tr>
+                            <td><code>src_table_name</code></td>
+                            <td>STRING</td>
+                            <td>Source table name (denormalized)</td>
+                        </tr>
+                        <tr>
+                            <td><code>src_column_name</code></td>
+                            <td>STRING</td>
+                            <td>Source column name (denormalized)</td>
+                        </tr>
+                        <tr>
+                            <td><code>field_order</code></td>
+                            <td>INT</td>
+                            <td>Order in concatenation (1, 2, 3...)</td>
+                        </tr>
+                        <tr>
+                            <td><code>transformations</code></td>
+                            <td>STRING</td>
+                            <td>Comma-separated transformations (TRIM, UPPER, etc.)</td>
+                        </tr>
+                        <tr>
+                            <td><code>default_value</code></td>
+                            <td>STRING</td>
+                            <td>Default if source is NULL</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Table 5: mapping_joins -->
+            <div class="table-container">
+                <h4>🔗 mapping_joins (Join Relationships for Multi-Table Mappings)</h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+                    Defines JOIN conditions when source fields come from multiple tables (horizontal combination).
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>mapping_join_id</code></td>
+                            <td>BIGINT (PK)</td>
+                            <td>Auto-generated primary key</td>
+                        </tr>
+                        <tr>
+                            <td><code>mapped_field_id</code></td>
+                            <td>BIGINT (FK)</td>
+                            <td>Reference to mapped_fields</td>
+                        </tr>
+                        <tr>
+                            <td><code>left_table_name</code></td>
+                            <td>STRING</td>
+                            <td>Left table in join</td>
+                        </tr>
+                        <tr>
+                            <td><code>left_join_column</code></td>
+                            <td>STRING</td>
+                            <td>Left table join column</td>
+                        </tr>
+                        <tr>
+                            <td><code>right_table_name</code></td>
+                            <td>STRING</td>
+                            <td>Right table in join</td>
+                        </tr>
+                        <tr>
+                            <td><code>right_join_column</code></td>
+                            <td>STRING</td>
+                            <td>Right table join column</td>
+                        </tr>
+                        <tr>
+                            <td><code>join_type</code></td>
+                            <td>STRING</td>
+                            <td>INNER, LEFT, RIGHT, or FULL</td>
+                        </tr>
+                        <tr>
+                            <td><code>join_order</code></td>
+                            <td>INT</td>
+                            <td>Order of joins (1, 2, 3...)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Table 6: mapping_unions (NEW) -->
+            <div class="table-container">
+                <h4>⚡ mapping_unions (Union Relationships for Multi-Table Mappings) <span class="badge">NEW</span></h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+                    Defines UNION conditions when stacking rows from multiple tables (vertical combination).
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>mapping_union_id</code></td>
+                            <td>BIGINT (PK)</td>
+                            <td>Auto-generated primary key</td>
+                        </tr>
+                        <tr>
+                            <td><code>mapped_field_id</code></td>
+                            <td>BIGINT (FK)</td>
+                            <td>Reference to mapped_fields</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_table_name</code></td>
+                            <td>STRING</td>
+                            <td>Table being unioned</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_column_name</code></td>
+                            <td>STRING</td>
+                            <td>Column from this table</td>
+                        </tr>
+                        <tr>
+                            <td><code>union_type</code></td>
+                            <td>STRING</td>
+                            <td>UNION or UNION ALL</td>
+                        </tr>
+                        <tr>
+                            <td><code>union_order</code></td>
+                            <td>INT</td>
+                            <td>Order in union (1, 2, 3...)</td>
+                        </tr>
+                        <tr>
+                            <td><code>where_clause</code></td>
+                            <td>STRING</td>
+                            <td>Optional filter (e.g., "year = 2023")</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Table 7: mapping_patterns (NEW) -->
+            <div class="table-container">
+                <h4>📚 mapping_patterns (Complete Mapping History for AI Learning) <span class="badge">NEW</span></h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+                    Complete mappings as single rows for vector search. Enables AI to learn from full context.
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>pattern_id</code></td>
+                            <td>BIGINT (PK)</td>
+                            <td>Auto-generated primary key</td>
+                        </tr>
+                        <tr>
+                            <td><code>mapped_field_id</code></td>
+                            <td>BIGINT (FK)</td>
+                            <td>Reference to mapped_fields</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_fields_json</code></td>
+                            <td>STRING</td>
+                            <td>JSON array of all source fields with details</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_tables</code></td>
+                            <td>STRING</td>
+                            <td>Comma-separated source tables</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_columns</code></td>
+                            <td>STRING</td>
+                            <td>Comma-separated source columns</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_descriptions</code></td>
+                            <td>STRING</td>
+                            <td>Combined source descriptions</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_field_count</code></td>
+                            <td>INT</td>
+                            <td>Number of source fields</td>
+                        </tr>
+                        <tr>
+                            <td><code>tgt_column_name</code></td>
+                            <td>STRING</td>
+                            <td>Target column name</td>
+                        </tr>
+                        <tr>
+                            <td><code>transformation_expression</code></td>
+                            <td>STRING</td>
+                            <td>Full SQL transformation</td>
+                        </tr>
+                        <tr>
+                            <td><code>transformations_applied</code></td>
+                            <td>STRING</td>
+                            <td>Transformations used (TRIM, UPPER, etc.)</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_relationship_type</code></td>
+                            <td>STRING</td>
+                            <td>SINGLE, JOIN, or UNION</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_semantic_field</code></td>
+                            <td>STRING (computed)</td>
+                            <td>🔍 Vector-searchable concatenated field</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Table 8: mapping_feedback -->
+            <div class="table-container">
+                <h4>💬 mapping_feedback (User Feedback on AI Suggestions)</h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+                    Captures user acceptance/rejection of AI suggestions for model improvement.
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>feedback_id</code></td>
+                            <td>BIGINT (PK)</td>
+                            <td>Auto-generated primary key</td>
+                        </tr>
+                        <tr>
+                            <td><code>suggested_src_table</code></td>
+                            <td>STRING</td>
+                            <td>Source table in AI suggestion</td>
+                        </tr>
+                        <tr>
+                            <td><code>suggested_src_column</code></td>
+                            <td>STRING</td>
+                            <td>Source column in AI suggestion</td>
+                        </tr>
+                        <tr>
+                            <td><code>suggested_tgt_table</code></td>
+                            <td>STRING</td>
+                            <td>Target table in AI suggestion</td>
+                        </tr>
+                        <tr>
+                            <td><code>suggested_tgt_column</code></td>
+                            <td>STRING</td>
+                            <td>Target column in AI suggestion</td>
+                        </tr>
+                        <tr>
+                            <td><code>feedback_action</code></td>
+                            <td>STRING</td>
+                            <td>ACCEPTED, REJECTED, or MODIFIED</td>
+                        </tr>
+                        <tr>
+                            <td><code>user_comments</code></td>
+                            <td>STRING</td>
+                            <td>User explanation for decision</td>
+                        </tr>
+                        <tr>
+                            <td><code>ai_confidence_score</code></td>
+                            <td>DOUBLE</td>
+                            <td>AI confidence at time of suggestion</td>
+                        </tr>
+                        <tr>
+                            <td><code>src_comments</code></td>
+                            <td>STRING</td>
+                            <td>Source description (for vector search) <span class="badge">NEW</span></td>
+                        </tr>
+                        <tr>
+                            <td><code>feedback_by</code></td>
+                            <td>STRING</td>
+                            <td>User who provided feedback</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Table 9: transformation_library -->
+            <div class="table-container">
+                <h4>⚙️ transformation_library (Reusable Transformation Templates)</h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+                    Predefined SQL transformations that can be applied to source fields.
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>transformation_id</code></td>
+                            <td>BIGINT (PK)</td>
+                            <td>Auto-generated primary key</td>
+                        </tr>
+                        <tr>
+                            <td><code>transformation_name</code></td>
+                            <td>STRING</td>
+                            <td>Display name (e.g., "Trim Whitespace")</td>
+                        </tr>
+                        <tr>
+                            <td><code>transformation_code</code></td>
+                            <td>STRING</td>
+                            <td>Short code (e.g., "TRIM")</td>
+                        </tr>
+                        <tr>
+                            <td><code>transformation_expression</code></td>
+                            <td>STRING</td>
+                            <td>SQL template (e.g., "TRIM({field})")</td>
+                        </tr>
+                        <tr>
+                            <td><code>category</code></td>
+                            <td>STRING</td>
+                            <td>TEXT, DATE, NUMERIC, CUSTOM</td>
+                        </tr>
+                        <tr>
+                            <td><code>is_system</code></td>
+                            <td>BOOLEAN</td>
+                            <td>System-provided vs user-created</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        
+        <!-- Entity Relationship Diagram -->
+        <section class="section">
+            <h2 class="section-title">Entity Relationships</h2>
+            <div class="flow-container" style="text-align: center;">
+                <pre style="text-align: left; display: inline-block; font-size: 0.85rem; line-height: 1.4;">
+┌─────────────────────┐         ┌─────────────────────┐
+│   unmapped_fields   │         │   semantic_fields   │
+│   (Source Fields)   │         │   (Target Fields)   │
+│                     │         │                     │
+│ • unmapped_field_id │         │ • semantic_field_id │
+│ • src_table_name    │         │ • tgt_table_name    │
+│ • src_column_name   │         │ • tgt_column_name   │
+│ • src_comments      │         │ • tgt_comments      │
+│ • src_datatype      │         │ • semantic_field 🔍 │
+└──────────┬──────────┘         └──────────┬──────────┘
+           │                               │
+           │ FK: unmapped_field_id         │ FK: semantic_field_id
+           │                               │
+           ▼                               ▼
+┌─────────────────────────────────────────────────────┐
+│                   mapped_fields                      │
+│               (Completed Mappings)                   │
+│                                                      │
+│ • mapped_field_id (PK)                              │
+│ • semantic_field_id (FK) ─────────────────────────→ │
+│ • concat_strategy                                    │
+│ • transformation_expression                          │
+│ • source_relationship_type (SINGLE/JOIN/UNION)      │
+└──────────────────────┬───────────────────────────────┘
+                       │
+        ┌──────────────┼──────────────┬────────────────┐
+        │              │              │                │
+        ▼              ▼              ▼                ▼
+┌───────────────┐ ┌───────────┐ ┌───────────┐ ┌────────────────┐
+│mapping_details│ │mapping_   │ │mapping_   │ │ mapping_       │
+│               │ │joins      │ │unions     │ │ patterns 🔍    │
+│ • field_order │ │           │ │           │ │                │
+│ • transforms  │ │ • join_   │ │ • union_  │ │ • source_      │
+│ • src_column  │ │   type    │ │   type    │ │   semantic_    │
+│               │ │ • left/   │ │ • union_  │ │   field        │
+│               │ │   right   │ │   order   │ │ • source_      │
+│               │ │   tables  │ │           │ │   fields_json  │
+└───────────────┘ └───────────┘ └───────────┘ └────────────────┘
+
+                    ┌─────────────────────┐
+                    │  mapping_feedback   │
+                    │                     │
+                    │ • feedback_action   │
+                    │ • user_comments     │
+                    │ • src_comments 🔍   │
+                    └─────────────────────┘
+
+🔍 = Vector-indexed for AI search
+                </pre>
             </div>
         </section>
         
