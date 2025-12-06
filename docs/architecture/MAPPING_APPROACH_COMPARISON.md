@@ -310,11 +310,6 @@ Names don't match, but descriptions are semantically similar!
 4. Rejections can use exact lookup (doesn't need vector search)
 5. Good balance of accuracy, performance, and cost
 
-### Implementation Order:
-1. **Phase 1**: Implement Approach 1 (simplest, get working end-to-end)
-2. **Phase 2**: Upgrade to Approach 3 (add mapping_patterns vector search)
-3. **Phase 3**: Consider Approach 2 if accuracy needs improvement
-
 ---
 
 ## Visual Comparison
