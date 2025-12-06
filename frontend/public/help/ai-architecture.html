@@ -1325,6 +1325,371 @@ Missing:
             </div>
         </section>
         
+        <!-- Alternative Designs Section -->
+        <section class="section" style="border-top: 3px solid var(--accent); padding-top: 3rem; margin-top: 3rem;">
+            <h2 class="section-title">🔬 Alternative Architecture Designs</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 1.1rem;">
+                We evaluated multiple approaches for the AI mapping flow. Below are the alternatives considered,
+                with pros, cons, and our recommendation.
+            </p>
+            
+            <!-- Problem Statement -->
+            <div class="table-container" style="border-left: 4px solid var(--accent); margin-bottom: 2rem;">
+                <h4>📋 Problem Statement</h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    Source table/column <strong>names are completely different</strong> from target names, 
+                    but column <strong>descriptions ARE similar</strong>. We need to:
+                </p>
+                <ul style="color: var(--text-secondary); margin-left: 1.5rem;">
+                    <li>Match source to target using description similarity</li>
+                    <li>Learn transformations (TRIM, UPPER) from historical patterns</li>
+                    <li>Detect single vs multi-field mappings</li>
+                    <li>Determine JOIN vs UNION for multi-table sources</li>
+                    <li>Avoid previously rejected mappings</li>
+                </ul>
+                <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px; margin-top: 1rem; font-family: monospace; font-size: 0.9rem;">
+                    <strong style="color: var(--accent);">Example:</strong><br>
+                    Source: <code>patient_data.mbr_ssn_num</code> ("Social security number of the patient")<br>
+                    Target: <code>Member.SSN</code> ("Member social security number")<br><br>
+                    <span style="color: var(--text-secondary);">Names don't match, but descriptions are semantically similar!</span>
+                </div>
+            </div>
+            
+            <!-- Approach 1 -->
+            <div class="table-container" style="margin-bottom: 2rem;">
+                <h4>🔵 Approach 1: Sequential (Target-First)</h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    Vector search targets first, then exact lookup history by target name.
+                </p>
+                <div style="background: var(--bg-dark); padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem;">
+                    <pre style="margin: 0; font-size: 0.85rem; line-height: 1.5; overflow-x: auto;">
+Source Field (with description)
+        │
+        ▼
+┌─────────────────────────────────────┐
+│  STEP 1: Vector Search Targets      │
+│  Query: source description          │
+│  Index: semantic_fields             │
+│  → Find matching target columns     │
+└─────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────┐
+│  STEP 2: Exact Lookup History       │
+│  Query: WHERE tgt_column = 'SSN'    │
+│  → Find patterns for THOSE targets  │
+└─────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────┐
+│  STEP 3: Exact Lookup Rejections    │
+│  Query: WHERE tgt_column = 'SSN'    │
+│  → Find rejections for THOSE targets│
+└─────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────┐
+│  STEP 4: LLM Analysis               │
+│  → Generate recommendations         │
+└─────────────────────────────────────┘</pre>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div style="background: rgba(16, 185, 129, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid var(--primary);">
+                        <strong style="color: var(--primary);">✅ Pros</strong>
+                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
+                            <li>Simpler to implement</li>
+                            <li>Only 1 vector index needed</li>
+                            <li>History is highly relevant (targeted)</li>
+                            <li>Lower infrastructure cost</li>
+                        </ul>
+                    </div>
+                    <div style="background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid #ef4444;">
+                        <strong style="color: #ef4444;">❌ Cons</strong>
+                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
+                            <li>Sequential = slower</li>
+                            <li>History can't influence target selection</li>
+                            <li>Misses patterns if best target not in top N</li>
+                            <li>No cross-target learning</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Approach 2 -->
+            <div class="table-container" style="margin-bottom: 2rem;">
+                <h4>🟣 Approach 2: Parallel (All Vector Search)</h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    Three parallel vector searches, all using source description.
+                </p>
+                <div style="background: var(--bg-dark); padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem;">
+                    <pre style="margin: 0; font-size: 0.85rem; line-height: 1.5; overflow-x: auto;">
+Source Field (with description)
+        │
+        ├────────────────┬────────────────┐
+        │                │                │
+        ▼                ▼                ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│ Vector Search│ │ Vector Search│ │ Vector Search│
+│ TARGETS      │ │ PATTERNS     │ │ REJECTIONS   │
+│              │ │              │ │              │
+│ semantic_    │ │ mapping_     │ │ mapping_     │
+│ fields       │ │ patterns     │ │ feedback     │
+│              │ │              │ │              │
+│ By: source   │ │ By: source   │ │ By: source   │
+│ description  │ │ description  │ │ description  │
+└──────────────┘ └──────────────┘ └──────────────┘
+        │                │                │
+        └────────────────┴────────────────┘
+                         │
+                         ▼
+          ┌─────────────────────────────────────┐
+          │  LLM Analysis                       │
+          │  All 3 results → recommendations    │
+          └─────────────────────────────────────┘</pre>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div style="background: rgba(16, 185, 129, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid var(--primary);">
+                        <strong style="color: var(--primary);">✅ Pros</strong>
+                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
+                            <li>All searches run in parallel (fast)</li>
+                            <li>History influences target selection</li>
+                            <li>Cross-target learning possible</li>
+                            <li>More holistic view for LLM</li>
+                        </ul>
+                    </div>
+                    <div style="background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid #ef4444;">
+                        <strong style="color: #ef4444;">❌ Cons</strong>
+                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
+                            <li>3 vector indexes to maintain</li>
+                            <li>Results may be noisy (mixed contexts)</li>
+                            <li>Higher infrastructure cost</li>
+                            <li>More complex to implement</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Approach 3 (Recommended) -->
+            <div class="table-container" style="margin-bottom: 2rem; border: 2px solid var(--primary);">
+                <h4>🟢 Approach 3: Hybrid (Two-Stage) <span class="badge" style="background: var(--primary);">RECOMMENDED</span></h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    Vector search targets + patterns in parallel, then exact lookup rejections for top candidates.
+                </p>
+                <div style="background: var(--bg-dark); padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem;">
+                    <pre style="margin: 0; font-size: 0.85rem; line-height: 1.5; overflow-x: auto;">
+Source Field (with description)
+        │
+════════════════════════════════════════════════
+STAGE 1: PARALLEL DISCOVERY (Vector Search)
+════════════════════════════════════════════════
+        │
+        ├────────────────────────────┐
+        │                            │
+        ▼                            ▼
+┌─────────────────────┐   ┌─────────────────────┐
+│  Vector Search      │   │  Vector Search      │
+│  TARGETS            │   │  PATTERNS           │
+│  (semantic_fields)  │   │  (mapping_patterns) │
+│                     │   │                     │
+│  Find target        │   │  Find similar       │
+│  candidates by      │   │  sources that       │
+│  description        │   │  were mapped        │
+└─────────────────────┘   └─────────────────────┘
+        │                            │
+        └──────────────┬─────────────┘
+                       │
+                       ▼
+        ┌─────────────────────────────────────┐
+        │  MERGE & RANK TARGET CANDIDATES     │
+        │  Combine from both searches         │
+        └─────────────────────────────────────┘
+                       │
+════════════════════════════════════════════════
+STAGE 2: TARGETED LOOKUP (Exact Match)
+════════════════════════════════════════════════
+                       │
+        ┌──────────────┴──────────────┐
+        │                             │
+        ▼                             ▼
+┌─────────────────────┐   ┌─────────────────────┐
+│  Exact Lookup       │   │  Exact Lookup       │
+│  PATTERNS           │   │  REJECTIONS         │
+│  for top targets    │   │  for top targets    │
+└─────────────────────┘   └─────────────────────┘
+        │                             │
+        └──────────────┬──────────────┘
+                       │
+                       ▼
+        ┌─────────────────────────────────────┐
+        │  LLM Analysis                       │
+        │  Complete context → recommendations │
+        └─────────────────────────────────────┘</pre>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div style="background: rgba(16, 185, 129, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid var(--primary);">
+                        <strong style="color: var(--primary);">✅ Pros</strong>
+                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
+                            <li>History influences target discovery</li>
+                            <li>Final context is targeted (less noise)</li>
+                            <li>Only 2 vector indexes needed</li>
+                            <li>Best of both worlds</li>
+                            <li>Balanced cost/accuracy</li>
+                        </ul>
+                    </div>
+                    <div style="background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid #ef4444;">
+                        <strong style="color: #ef4444;">❌ Cons</strong>
+                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
+                            <li>More complex than Approach 1</li>
+                            <li>Two stages = some sequential delay</li>
+                            <li>Need to tune candidate count</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Approach 4 -->
+            <div class="table-container" style="margin-bottom: 2rem;">
+                <h4>🟠 Approach 4: LLM-Guided Discovery</h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    LLM classifies the field first, then adaptive search strategy based on complexity.
+                </p>
+                <div style="background: var(--bg-dark); padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem;">
+                    <pre style="margin: 0; font-size: 0.85rem; line-height: 1.5; overflow-x: auto;">
+Source Field (with description)
+        │
+        ▼
+┌─────────────────────────────────────┐
+│  LLM CLASSIFICATION (Quick)         │
+│  "Is this common? What domain?      │
+│   What likely targets?"             │
+└─────────────────────────────────────┘
+        │
+        ├─────────────┬─────────────┐
+        │             │             │
+   If common     If ambiguous   If rare
+        │             │             │
+        ▼             ▼             ▼
+┌───────────┐  ┌───────────┐  ┌───────────┐
+│ FAST PATH │  │ MODERATE  │  │ FULL      │
+│ Exact     │  │ Vector    │  │ All 3     │
+│ lookup by │  │ search    │  │ vector    │
+│ LLM hints │  │ targets + │  │ searches  │
+│           │  │ patterns  │  │ + manual  │
+│           │  │           │  │ review    │
+└───────────┘  └───────────┘  └───────────┘
+        │             │             │
+        └─────────────┴─────────────┘
+                      │
+                      ▼
+        ┌─────────────────────────────────────┐
+        │  LLM Final Recommendation           │
+        └─────────────────────────────────────┘</pre>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div style="background: rgba(16, 185, 129, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid var(--primary);">
+                        <strong style="color: var(--primary);">✅ Pros</strong>
+                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
+                            <li>Adaptive to field complexity</li>
+                            <li>Fast path for common fields</li>
+                            <li>Handles edge cases well</li>
+                            <li>Can flag for manual review</li>
+                        </ul>
+                    </div>
+                    <div style="background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid #ef4444;">
+                        <strong style="color: #ef4444;">❌ Cons</strong>
+                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
+                            <li>Two LLM calls = higher latency</li>
+                            <li>More expensive</li>
+                            <li>Complex routing logic</li>
+                            <li>LLM classification could be wrong</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Comparison Table -->
+            <div class="table-container" style="margin-bottom: 2rem;">
+                <h4>📊 Comparison Summary</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Aspect</th>
+                            <th>1. Sequential</th>
+                            <th>2. Parallel</th>
+                            <th style="background: var(--primary); color: white;">3. Hybrid ⭐</th>
+                            <th>4. LLM-Guided</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Vector Indexes</strong></td>
+                            <td>1</td>
+                            <td>3</td>
+                            <td>2</td>
+                            <td>1-3 (adaptive)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Latency</strong></td>
+                            <td>Medium</td>
+                            <td>Low</td>
+                            <td>Medium</td>
+                            <td>Variable</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Cost</strong></td>
+                            <td>Low</td>
+                            <td>High</td>
+                            <td>Medium</td>
+                            <td>High</td>
+                        </tr>
+                        <tr>
+                            <td><strong>History Influences Target?</strong></td>
+                            <td>❌ No</td>
+                            <td>✅ Yes</td>
+                            <td>✅ Yes</td>
+                            <td>✅ Yes</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Cross-Target Learning</strong></td>
+                            <td>❌ No</td>
+                            <td>✅ Yes</td>
+                            <td>Partial</td>
+                            <td>✅ Yes</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Best For</strong></td>
+                            <td>Simple mappings</td>
+                            <td>Diverse sources</td>
+                            <td><strong>General use</strong></td>
+                            <td>Complex/high-value</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Recommendation Box -->
+            <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%); padding: 2rem; border-radius: 16px; border: 2px solid var(--primary);">
+                <h4 style="margin-bottom: 1rem; font-size: 1.3rem;">💡 Our Recommendation: Approach 3 (Hybrid)</h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    The Hybrid approach provides the best balance of accuracy, performance, and cost:
+                </p>
+                <ul style="color: var(--text-secondary); margin-left: 1.5rem;">
+                    <li><strong>History CAN influence target discovery</strong> (unlike Approach 1)</li>
+                    <li><strong>Final context stays targeted</strong> (unlike Approach 2)</li>
+                    <li><strong>Only 2 vector indexes needed</strong> (semantic_fields + mapping_patterns)</li>
+                    <li><strong>Rejections use exact lookup</strong> (no extra vector index needed)</li>
+                </ul>
+                <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-dark); border-radius: 8px;">
+                    <strong style="color: var(--accent);">Implementation Path:</strong>
+                    <ol style="color: var(--text-secondary); margin: 0.5rem 0 0 1.5rem;">
+                        <li><strong>Phase 1:</strong> Implement Approach 1 (get working end-to-end)</li>
+                        <li><strong>Phase 2:</strong> Upgrade to Approach 3 (add mapping_patterns vector search)</li>
+                        <li><strong>Phase 3:</strong> Consider Approach 2 or 4 if accuracy needs improvement</li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+        
         <footer>
             <p>Smart Mapper - Intelligent Data Field Mapping</p>
             <p style="font-size: 0.9rem; margin-top: 0.5rem;">Powered by Databricks AI</p>
