@@ -284,102 +284,18 @@ Names don't match, but descriptions are semantically similar!
 
 ---
 
-## Approach 4: LLM-Guided Discovery (New Option)
-
-### Concept
-
-Let the LLM help determine the best search strategy based on the source field context.
-
-### Flow Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    APPROACH 4: LLM-GUIDED DISCOVERY                         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   SOURCE FIELDS                                                             │
-│   ┌─────────────────────────────────────────────────────────────┐          │
-│   │ • patient_data.mbr_ssn_num                                  │          │
-│   │ • Description: "Social security number of the patient"      │          │
-│   └─────────────────────────────────────────────────────────────┘          │
-│                              │                                              │
-│   ════════════════════════════════════════════════════════════════         │
-│   STEP 1: LLM PRE-ANALYSIS (Quick Classification)                           │
-│   ════════════════════════════════════════════════════════════════         │
-│                              │                                              │
-│                              ▼                                              │
-│   ┌─────────────────────────────────────────────────────────────┐          │
-│   │  LLM CLASSIFICATION                                         │          │
-│   │  ──────────────────────────────────────────────────         │          │
-│   │  "Given this source field, classify:                        │          │
-│   │   - Is this a common field type? (name, date, ID, address)  │          │
-│   │   - What target domain? (member, provider, claims)          │          │
-│   │   - Likely transformations? (TRIM, UPPER, FORMAT)           │          │
-│   │   - Single or multi-field? (standalone or needs combining)" │          │
-│   │                                                             │          │
-│   │  Output: { domain: "member", type: "identifier",            │          │
-│   │           likely_targets: ["SSN", "Tax_ID"],                │          │
-│   │           search_strategy: "EXACT_LOOKUP" }                 │          │
-│   └─────────────────────────────────────────────────────────────┘          │
-│                              │                                              │
-│   ════════════════════════════════════════════════════════════════         │
-│   STEP 2: ADAPTIVE SEARCH (Based on LLM Classification)                     │
-│   ════════════════════════════════════════════════════════════════         │
-│                              │                                              │
-│              ┌───────────────┼───────────────┐                             │
-│              │               │               │                             │
-│      If common field   If ambiguous    If unique/rare                      │
-│              │               │               │                             │
-│              ▼               ▼               ▼                             │
-│   ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐             │
-│   │  EXACT LOOKUP   │ │  VECTOR SEARCH  │ │  FULL VECTOR    │             │
-│   │  By likely      │ │  On targets +   │ │  SEARCH (all 3) │             │
-│   │  targets from   │ │  patterns       │ │                 │             │
-│   │  LLM            │ │                 │ │  + Manual       │             │
-│   │                 │ │                 │ │    review flag  │             │
-│   │  Fast path for  │ │  Moderate path  │ │                 │             │
-│   │  common fields  │ │  for unclear    │ │  Slow path for  │             │
-│   │                 │ │  cases          │ │  unusual fields │             │
-│   └─────────────────┘ └─────────────────┘ └─────────────────┘             │
-│              │               │               │                             │
-│              └───────────────┴───────────────┘                             │
-│                              │                                              │
-│                              ▼                                              │
-│   ┌─────────────────────────────────────────────────────────────┐          │
-│   │  STEP 3: LLM FINAL RECOMMENDATION                           │          │
-│   │  ──────────────────────────────────────────────────         │          │
-│   │  Combine search results with LLM analysis                   │          │
-│   │                                                             │          │
-│   │  Output: Ranked recommendations with confidence             │          │
-│   └─────────────────────────────────────────────────────────────┘          │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Pros & Cons
-
-| ✅ Pros | ❌ Cons |
-|---------|---------|
-| Adaptive to field complexity | Two LLM calls = higher latency |
-| Fast path for common fields | More expensive (2 LLM calls) |
-| Handles edge cases with full search | Complex routing logic |
-| Can flag ambiguous cases for review | LLM classification could be wrong |
-| Reduces unnecessary searches | Harder to debug/explain |
-
----
-
 ## Comparison Summary
 
-| Aspect | Approach 1 (Sequential) | Approach 2 (Parallel) | Approach 3 (Hybrid) | Approach 4 (LLM-Guided) |
-|--------|------------------------|----------------------|---------------------|------------------------|
-| **Vector Indexes** | 1 | 3 | 2 | 1-3 (adaptive) |
-| **Latency** | Medium (sequential) | Low (parallel) | Medium (2 stages) | Variable |
-| **Cost** | Low | High | Medium | High (2 LLM calls) |
-| **History Influence on Target** | ❌ After target selected | ✅ Before target selected | ✅ In Stage 1 | ✅ Via classification |
-| **Noise in Results** | Low (targeted) | High (broad search) | Medium (balanced) | Low (adaptive) |
-| **Cross-Target Learning** | ❌ | ✅ | Partial | ✅ |
-| **Implementation Complexity** | Low | Medium | Medium-High | High |
-| **Best For** | Simple, well-defined mappings | Diverse source systems | General purpose | High-value, complex mappings |
+| Aspect | Approach 1 (Sequential) | Approach 2 (Parallel) | Approach 3 (Hybrid) ⭐ |
+|--------|------------------------|----------------------|---------------------|
+| **Vector Indexes** | 1 | 3 | 2 |
+| **Latency** | Medium (sequential) | Low (parallel) | Medium (2 stages) |
+| **Cost** | Low | High | Medium |
+| **History Influence on Target** | ❌ After target selected | ✅ Before target selected | ✅ In Stage 1 |
+| **Noise in Results** | Low (targeted) | High (broad search) | Medium (balanced) |
+| **Cross-Target Learning** | ❌ | ✅ | Partial |
+| **Implementation Complexity** | Low | Medium | Medium-High |
+| **Best For** | Simple, well-defined mappings | Diverse source systems | **General purpose** |
 
 ---
 
@@ -397,7 +313,7 @@ Let the LLM help determine the best search strategy based on the source field co
 ### Implementation Order:
 1. **Phase 1**: Implement Approach 1 (simplest, get working end-to-end)
 2. **Phase 2**: Upgrade to Approach 3 (add mapping_patterns vector search)
-3. **Phase 3**: Consider Approach 2 or 4 if accuracy needs improvement
+3. **Phase 3**: Consider Approach 2 if accuracy needs improvement
 
 ---
 
@@ -407,12 +323,11 @@ Let the LLM help determine the best search strategy based on the source field co
                     COMPLEXITY
                         ↑
                         │
-      Approach 4        │           
-      (LLM-Guided)      │     Approach 2
-           ●            │     (All Vector)
+                        │     Approach 2
+                        │     (All Vector)
                         │          ●
                         │
-                        │     Approach 3
+                        │     Approach 3 ⭐
                         │     (Hybrid)
                         │          ●
                         │
@@ -435,6 +350,5 @@ The fundamental trade-off is:
 
 - **Approach 1** finds history AFTER target is determined → More precise but may miss opportunities
 - **Approach 2** finds history BY source similarity → More comprehensive but may be noisy
-- **Approach 3** does BOTH → Best of both worlds with moderate complexity
-- **Approach 4** lets LLM decide → Most adaptive but most expensive
+- **Approach 3** does BOTH → Best of both worlds with moderate complexity ⭐
 

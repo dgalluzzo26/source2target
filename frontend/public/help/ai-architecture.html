@@ -1547,66 +1547,6 @@ STAGE 2: TARGETED LOOKUP (Exact Match)
                 </div>
             </div>
             
-            <!-- Approach 4 -->
-            <div class="table-container" style="margin-bottom: 2rem;">
-                <h4>🟠 Approach 4: LLM-Guided Discovery</h4>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                    LLM classifies the field first, then adaptive search strategy based on complexity.
-                </p>
-                <div style="background: var(--bg-dark); padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem;">
-                    <pre style="margin: 0; font-size: 0.85rem; line-height: 1.5; overflow-x: auto;">
-Source Field (with description)
-        │
-        ▼
-┌─────────────────────────────────────┐
-│  LLM CLASSIFICATION (Quick)         │
-│  "Is this common? What domain?      │
-│   What likely targets?"             │
-└─────────────────────────────────────┘
-        │
-        ├─────────────┬─────────────┐
-        │             │             │
-   If common     If ambiguous   If rare
-        │             │             │
-        ▼             ▼             ▼
-┌───────────┐  ┌───────────┐  ┌───────────┐
-│ FAST PATH │  │ MODERATE  │  │ FULL      │
-│ Exact     │  │ Vector    │  │ All 3     │
-│ lookup by │  │ search    │  │ vector    │
-│ LLM hints │  │ targets + │  │ searches  │
-│           │  │ patterns  │  │ + manual  │
-│           │  │           │  │ review    │
-└───────────┘  └───────────┘  └───────────┘
-        │             │             │
-        └─────────────┴─────────────┘
-                      │
-                      ▼
-        ┌─────────────────────────────────────┐
-        │  LLM Final Recommendation           │
-        └─────────────────────────────────────┘</pre>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <div style="background: rgba(16, 185, 129, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid var(--primary);">
-                        <strong style="color: var(--primary);">✅ Pros</strong>
-                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
-                            <li>Adaptive to field complexity</li>
-                            <li>Fast path for common fields</li>
-                            <li>Handles edge cases well</li>
-                            <li>Can flag for manual review</li>
-                        </ul>
-                    </div>
-                    <div style="background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid #ef4444;">
-                        <strong style="color: #ef4444;">❌ Cons</strong>
-                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
-                            <li>Two LLM calls = higher latency</li>
-                            <li>More expensive</li>
-                            <li>Complex routing logic</li>
-                            <li>LLM classification could be wrong</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            
             <!-- Comparison Table -->
             <div class="table-container" style="margin-bottom: 2rem;">
                 <h4>📊 Comparison Summary</h4>
@@ -1617,7 +1557,6 @@ Source Field (with description)
                             <th>1. Sequential</th>
                             <th>2. Parallel</th>
                             <th style="background: var(--primary); color: white;">3. Hybrid ⭐</th>
-                            <th>4. LLM-Guided</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1626,26 +1565,22 @@ Source Field (with description)
                             <td>1</td>
                             <td>3</td>
                             <td>2</td>
-                            <td>1-3 (adaptive)</td>
                         </tr>
                         <tr>
                             <td><strong>Latency</strong></td>
                             <td>Medium</td>
                             <td>Low</td>
                             <td>Medium</td>
-                            <td>Variable</td>
                         </tr>
                         <tr>
                             <td><strong>Cost</strong></td>
                             <td>Low</td>
                             <td>High</td>
                             <td>Medium</td>
-                            <td>High</td>
                         </tr>
                         <tr>
                             <td><strong>History Influences Target?</strong></td>
                             <td>❌ No</td>
-                            <td>✅ Yes</td>
                             <td>✅ Yes</td>
                             <td>✅ Yes</td>
                         </tr>
@@ -1654,14 +1589,12 @@ Source Field (with description)
                             <td>❌ No</td>
                             <td>✅ Yes</td>
                             <td>Partial</td>
-                            <td>✅ Yes</td>
                         </tr>
                         <tr>
                             <td><strong>Best For</strong></td>
                             <td>Simple mappings</td>
                             <td>Diverse sources</td>
                             <td><strong>General use</strong></td>
-                            <td>Complex/high-value</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1684,7 +1617,7 @@ Source Field (with description)
                     <ol style="color: var(--text-secondary); margin: 0.5rem 0 0 1.5rem;">
                         <li><strong>Phase 1:</strong> Implement Approach 1 (get working end-to-end)</li>
                         <li><strong>Phase 2:</strong> Upgrade to Approach 3 (add mapping_patterns vector search)</li>
-                        <li><strong>Phase 3:</strong> Consider Approach 2 or 4 if accuracy needs improvement</li>
+                        <li><strong>Phase 3:</strong> Consider Approach 2 if accuracy needs improvement</li>
                     </ol>
                 </div>
             </div>
