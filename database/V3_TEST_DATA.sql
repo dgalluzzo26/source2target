@@ -413,6 +413,178 @@ INSERT INTO ${CATALOG_SCHEMA}.mapping_feedback (
 
 
 -- ============================================================================
+-- UNMAPPED FIELDS - Similar but different names for AI testing
+-- ============================================================================
+-- These source fields have DIFFERENT column names but SIMILAR descriptions
+-- to test vector search matching against historical mappings above
+-- ============================================================================
+
+-- Unmapped field similar to emp_ssn (mapped to SSN_NUM)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Data', 'Member SSN', 'mbr_data', 'mbr_ssn_num',
+  'YES', 'VARCHAR(11)', 'The social security number for the member', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+-- Unmapped field similar to first_name (mapped to FIRST_NM)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Data', 'Given Name', 'mbr_data', 'gvn_nm',
+  'NO', 'VARCHAR(75)', 'First/given name of the member or patient', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+-- Unmapped field similar to surname (mapped to LAST_NM)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Data', 'Family Name', 'mbr_data', 'fam_nm',
+  'NO', 'VARCHAR(75)', 'Surname or family name of the member', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+-- Unmapped field similar to birth_date (mapped to DOB)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Data', 'Birth Dt', 'mbr_data', 'brth_dt',
+  'YES', 'VARCHAR(10)', 'Date when the member was born in YYYY-MM-DD format', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+-- Unmapped field similar to state_code (mapped to ST)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Address', 'State Abbreviation', 'mbr_addr', 'st_abbr',
+  'NO', 'CHAR(2)', 'Two character state abbreviation for the member address', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+-- Unmapped field similar to city_name (mapped to CITY)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Address', 'City Name', 'mbr_addr', 'cty_nm',
+  'NO', 'VARCHAR(50)', 'City where the member resides', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+-- Unmapped field similar to postal_code (mapped to ZIPCD)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Address', 'Postal Zip', 'mbr_addr', 'pstl_zip',
+  'NO', 'VARCHAR(10)', 'Full postal code with optional extension (format: 12345-6789)', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+-- Unmapped field similar to street_num + street_name (mapped to ADDR_STR_1)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Address', 'Street Number', 'mbr_addr', 'str_nbr',
+  'YES', 'VARCHAR(10)', 'House or building number for the street address', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Address', 'Street Name', 'mbr_addr', 'str_nm',
+  'YES', 'VARCHAR(100)', 'Name of the street for member address', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+-- Unmapped field similar to middle_name (mapped to MDL_NM_INIT)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Data', 'Middle Nm', 'mbr_data', 'mid_nm',
+  'YES', 'VARCHAR(50)', 'Middle name of the member (full name, not just initial)', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+-- Unmapped field similar to title_desc (mapped to TITLE)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Data', 'Name Prefix', 'mbr_data', 'nm_pfx',
+  'YES', 'VARCHAR(10)', 'Title or prefix before the member name (Mr, Mrs, Dr, etc)', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+-- Unmapped field similar to unit_num (mapped to ADDR_STR_2)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Address', 'Apt Unit Nbr', 'mbr_addr', 'apt_unit',
+  'YES', 'VARCHAR(15)', 'Apartment or unit number for the member address', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+-- Unmapped field similar to hire_date/start_dt (mapped to BEG_EFF_DT)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Data', 'Enrollment Start', 'mbr_data', 'enrl_strt_dt',
+  'NO', 'DATE', 'Date when the member enrollment becomes effective', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+-- Unmapped field similar to status (mapped to CURR_REC_IND)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Data', 'Member Status', 'mbr_data', 'mbr_sts',
+  'NO', 'VARCHAR(20)', 'Current status of the member (ACTIVE, INACTIVE, TERMINATED)', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+-- Unmapped field similar to system_code (mapped to SRC_SYS_CD)
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_column_name, src_table_physical_name, src_column_physical_name,
+  src_nullable, src_physical_datatype, src_comments, domain,
+  uploaded_by, uploaded_ts, created_by, created_ts
+) VALUES (
+  'Member Data', 'Source System', 'mbr_data', 'src_sys',
+  'NO', 'VARCHAR(20)', 'Identifier code for the originating source system', 'MEMBER',
+  'test_user@gainwell.com', CURRENT_TIMESTAMP(), 'system', CURRENT_TIMESTAMP()
+);
+
+
+-- ============================================================================
 -- SUMMARY OF TEST DATA
 -- ============================================================================
 -- 
