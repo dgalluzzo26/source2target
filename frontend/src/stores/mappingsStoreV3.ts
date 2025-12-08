@@ -421,19 +421,25 @@ export const useMappingsStoreV3 = defineStore('mappingsV3', () => {
   }
 
   // =========================================================================
-  // HELPER: Parse source columns from comma-separated string
+  // HELPER: Parse source columns from pipe-separated string (CSV-friendly)
+  // Also handles legacy comma-separated for backward compatibility
   // =========================================================================
   function parseSourceColumns(sourceColumns: string | undefined): string[] {
     if (!sourceColumns) return []
-    return sourceColumns.split(',').map(s => s.trim())
+    // Prefer pipe delimiter, fall back to comma for legacy data
+    const delimiter = sourceColumns.includes(' | ') ? ' | ' : ','
+    return sourceColumns.split(delimiter).map(s => s.trim())
   }
 
   // =========================================================================
-  // HELPER: Parse source tables from comma-separated string
+  // HELPER: Parse source tables from pipe-separated string (CSV-friendly)
+  // Also handles legacy comma-separated for backward compatibility
   // =========================================================================
   function parseSourceTables(sourceTables: string | undefined): string[] {
     if (!sourceTables) return []
-    return sourceTables.split(',').map(s => s.trim())
+    // Prefer pipe delimiter, fall back to comma for legacy data
+    const delimiter = sourceTables.includes(' | ') ? ' | ' : ','
+    return sourceTables.split(delimiter).map(s => s.trim())
   }
 
   // =========================================================================

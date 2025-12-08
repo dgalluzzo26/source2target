@@ -557,8 +557,9 @@ function initializeMetadata() {
   const tables = [...new Set(sourceFields.value.map(f => f.src_table_name))]
   const columns = sourceFields.value.map(f => f.src_column_name)
   
-  sourceTables.value = tables.join(', ')
-  sourceColumns.value = columns.join(', ')
+  // Use pipe delimiter for CSV-friendly export
+  sourceTables.value = tables.join(' | ')
+  sourceColumns.value = columns.join(' | ')
   
   // Determine relationship type
   if (tables.length > 1) {
@@ -1043,10 +1044,10 @@ async function handleSave() {
       .filter(d => d)
       .join(' | ')
     
-    // Build source datatypes
+    // Build source datatypes (use pipe delimiter for CSV-friendly export)
     const datatypes = sourceFields.value
       .map(f => f.src_physical_datatype)
-      .join(', ')
+      .join(' | ')
     
     // Get domain from source fields (use first non-null domain)
     const sourceDomain = sourceFields.value

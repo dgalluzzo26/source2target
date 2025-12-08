@@ -627,9 +627,10 @@ class MappingServiceV3:
                     row = cursor.fetchone()
                     
                     if row and row[0] and row[1]:
-                        tables = row[0].split(", ")
-                        columns = row[1].split(", ")
-                        datatypes = row[2].split(", ") if row[2] else ["STRING"] * len(columns)
+                        # Use pipe delimiter (CSV-friendly) - also handle legacy comma delimiter
+                        tables = [t.strip() for t in row[0].split(" | ")] if " | " in row[0] else [t.strip() for t in row[0].split(", ")]
+                        columns = [c.strip() for c in row[1].split(" | ")] if " | " in row[1] else [c.strip() for c in row[1].split(", ")]
+                        datatypes = [d.strip() for d in row[2].split(" | ")] if row[2] and " | " in row[2] else ([d.strip() for d in row[2].split(", ")] if row[2] else ["STRING"] * len(columns))
                         descriptions = row[3].split(" | ") if row[3] else [""] * len(columns)
                         mapped_by = row[4] if row[4] else None
                         source_domain = row[5] if len(row) > 5 and row[5] else None

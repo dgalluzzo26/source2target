@@ -846,10 +846,13 @@ async function generateSQL() {
   generatingSQL.value = true
   
   try {
-    // Parse source columns from edit form
+    // Parse source columns from edit form (handle pipe or comma delimiter)
+    const colDelimiter = editFormData.value.source_columns?.includes(' | ') ? ' | ' : ','
+    const tableDelimiter = editFormData.value.source_tables?.includes(' | ') ? ' | ' : ','
+    
     const sourceColumns = editFormData.value.source_columns
-      ? editFormData.value.source_columns.split(',').map((col: string) => ({
-          table: editFormData.value.source_tables?.split(',')[0]?.trim() || 'source',
+      ? editFormData.value.source_columns.split(colDelimiter).map((col: string) => ({
+          table: editFormData.value.source_tables?.split(tableDelimiter)[0]?.trim() || 'source',
           column: col.trim(),
           datatype: 'STRING'
         }))
