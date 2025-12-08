@@ -375,12 +375,19 @@ const isValid = computed(() => {
 })
 
 onMounted(async () => {
-  console.log('[Mapping Config V3] Loading...')
+  console.log('[Mapping Config V3] === Mounting ===')
+  console.log('[Mapping Config V3] aiStore.selectedSuggestion:', aiStore.selectedSuggestion)
+  console.log('[Mapping Config V3] aiStore.sourceFieldsUsed:', aiStore.sourceFieldsUsed)
+  console.log('[Mapping Config V3] aiStore.sourceFieldsUsed.length:', aiStore.sourceFieldsUsed?.length)
   
   // Load from AI store
   if (aiStore.selectedSuggestion && aiStore.sourceFieldsUsed?.length > 0) {
+    console.log('[Mapping Config V3] Found data in AI store, loading...')
     sourceFields.value = aiStore.sourceFieldsUsed
     targetField.value = aiStore.selectedSuggestion
+    
+    console.log('[Mapping Config V3] Target field:', targetField.value?.tgt_column_name)
+    console.log('[Mapping Config V3] Source fields:', sourceFields.value.map((f: any) => f.src_column_name))
     
     // Auto-populate metadata
     initializeMetadata()
@@ -393,7 +400,9 @@ onMounted(async () => {
     
     console.log('[Mapping Config V3] Loaded', sourceFields.value.length, 'source fields')
   } else {
-    console.warn('[Mapping Config V3] No data in AI store, redirecting')
+    console.warn('[Mapping Config V3] No data in AI store!')
+    console.warn('[Mapping Config V3] selectedSuggestion:', aiStore.selectedSuggestion)
+    console.warn('[Mapping Config V3] sourceFieldsUsed:', aiStore.sourceFieldsUsed)
     toast.add({
       severity: 'warn',
       summary: 'No Selection',

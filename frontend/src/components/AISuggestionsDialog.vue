@@ -584,25 +584,43 @@ function handleRowClick(event: any) {
   // handleAccept(event.data)
 }
 
+// Track if we're closing due to an accepted suggestion (don't clear store in that case)
+const acceptedSuggestion = ref(false)
+
 function handleAccept(suggestion: AISuggestion) {
+  console.log('[AI Suggestions Dialog] === Accepting Suggestion ===')
+  
+  // Mark that we're accepting FIRST (don't clear store on close)
+  acceptedSuggestion.value = true
+  console.log('[AI Suggestions Dialog] acceptedSuggestion flag set to:', acceptedSuggestion.value)
+  
   // Store the suggestion for mapping configuration
   aiStore.selectSuggestion(suggestion)
   
-  // Record acceptance feedback (non-blocking, fire and forget)
-  recordFeedback(suggestion, 'accepted', 'User accepted this AI suggestion').catch(err => {
-    console.warn('[AI Suggestions] Feedback recording failed (non-critical):', err)
-  })
+  console.log('[AI Suggestions Dialog] Accepted suggestion:', suggestion.tgt_column_name)
+  console.log('[AI Suggestions Dialog] aiStore.selectedSuggestion:', aiStore.selectedSuggestion?.tgt_column_name)
+  console.log('[AI Suggestions Dialog] aiStore.sourceFieldsUsed length:', aiStore.sourceFieldsUsed?.length)
   
-  // Emit event to parent to proceed with mapping
-  emit('suggestion-selected', suggestion)
-  isVisible.value = false
-  
+  // Show toast
   toast.add({
     severity: 'success',
     summary: 'Suggestion Accepted',
     detail: `Proceeding with mapping to ${suggestion.tgt_table_name}.${suggestion.tgt_column_name}`,
     life: 3000
   })
+  
+  // Record acceptance feedback (non-blocking, fire and forget)
+  recordFeedback(suggestion, 'accepted', 'User accepted this AI suggestion').catch(err => {
+    console.warn('[AI Suggestions] Feedback recording failed (non-critical):', err)
+  })
+  
+  // IMPORTANT: Emit to parent FIRST (this triggers navigation)
+  // The parent will navigate to mapping-config, which will read from aiStore
+  console.log('[AI Suggestions Dialog] Emitting suggestion-selected to parent')
+  emit('suggestion-selected', suggestion)
+  
+  // Then close dialog (triggers handleClose, but flag prevents clearing)
+  isVisible.value = false
 }
 
 function handleReject(suggestion: AISuggestion) {
@@ -770,15 +788,26 @@ function handleManualSelect(targetField: any) {
 }
 
 function handleClose() {
+  console.log('[AI Suggestions Dialog] === handleClose called ===')
+  console.log('[AI Suggestions Dialog] acceptedSuggestion flag:', acceptedSuggestion.value)
+  
   isVisible.value = false
   showManualSearch.value = false
   manualSearchTerm.value = ''
   manualSearchResults.value = []
   showPatternDetails.value = false
   
-  // Clear AI store to prevent stale data showing on next open
-  aiStore.clearSuggestions()
-  console.log('[AI Suggestions Dialog] Closed and cleared state')
+  // Only clear AI store if we're NOT closing due to accepting a suggestion
+  // (We need to preserve the selected suggestion for the mapping workflow)
+  if (acceptedSuggestion.value) {
+    console.log('[AI Suggestions Dialog] Closed after accepting - keeping store data for workflow')
+    console.log('[AI Suggestions Dialog] Store data preserved:', aiStore.selectedSuggestion?.tgt_column_name)
+    acceptedSuggestion.value = false  // Reset for next time
+  } else {
+    // Clear AI store to prevent stale data showing on next open
+    console.log('[AI Suggestions Dialog] Closed without selection - clearing state')
+    aiStore.clearSuggestions()
+  }
 }
 </script>
 

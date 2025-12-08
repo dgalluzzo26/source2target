@@ -290,8 +290,11 @@ async function handleGetSuggestions() {
 function handleSuggestionSelected(suggestion: AISuggestion) {
   // The suggestion is already stored in aiStore.selectedSuggestion
   // The source fields are already in aiStore.sourceFieldsUsed
-  // Just navigate to the mapping configuration view
-  console.log('[Unmapped Fields] Navigating to mapping config with:', suggestion.tgt_column_name)
+  console.log('[Unmapped Fields] === Suggestion Selected ===')
+  console.log('[Unmapped Fields] Suggestion:', suggestion.tgt_column_name)
+  console.log('[Unmapped Fields] aiStore.selectedSuggestion:', aiStore.selectedSuggestion)
+  console.log('[Unmapped Fields] aiStore.sourceFieldsUsed:', aiStore.sourceFieldsUsed)
+  console.log('[Unmapped Fields] Navigating to mapping-config...')
   router.push({ name: 'mapping-config' })
 }
 
