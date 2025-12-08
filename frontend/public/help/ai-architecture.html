@@ -59,6 +59,16 @@
             font-size: 1.2rem;
         }
         
+        .version-badge {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+        
         .section {
             margin-bottom: 4rem;
         }
@@ -194,9 +204,13 @@
         /* Parallel Searches Visual */
         .parallel-searches {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 1rem;
             margin-top: 1rem;
+        }
+        
+        .parallel-searches.three-col {
+            grid-template-columns: repeat(3, 1fr);
         }
         
         .search-box {
@@ -246,6 +260,16 @@
             border-radius: 4px;
             font-size: 0.7rem;
             font-weight: bold;
+        }
+        
+        .badge.vector {
+            background: var(--secondary);
+            color: white;
+        }
+        
+        .badge.new {
+            background: var(--primary);
+            color: white;
         }
         
         table {
@@ -345,6 +369,21 @@
             font-size: 0.85rem;
         }
         
+        /* Stage boxes */
+        .stage-box {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+            border: 2px solid var(--primary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+        
+        .stage-box h5 {
+            color: var(--primary);
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+        
         /* Footer */
         footer {
             text-align: center;
@@ -356,7 +395,7 @@
         
         /* Responsive */
         @media (max-width: 768px) {
-            .parallel-searches {
+            .parallel-searches, .parallel-searches.three-col {
                 grid-template-columns: 1fr;
             }
             
@@ -382,6 +421,15 @@
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(10px); }
         }
+        
+        /* Highlight box */
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%);
+            border: 2px solid var(--primary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
     </style>
 </head>
 <body>
@@ -389,16 +437,52 @@
         <header>
             <h1>🧠 Smart Mapper AI Architecture</h1>
             <p>Intelligent Data Field Mapping powered by Vector Search & LLM</p>
+            <div class="version-badge">V3 - Simplified Schema</div>
         </header>
         
         <!-- Executive Summary -->
         <section class="section">
             <h2 class="section-title">Executive Summary</h2>
             <p style="font-size: 1.1rem; max-width: 900px;">
-                Smart Mapper uses <strong>AI and vector search</strong> to intelligently suggest data field mappings 
-                from source systems to target schemas. The system learns from historical patterns and user feedback 
-                to continuously improve suggestions, including multi-field mappings and transformations.
+                Smart Mapper uses a <strong>Hybrid AI approach</strong> combining vector search and LLM reasoning 
+                to intelligently suggest data field mappings from source systems to target schemas. 
+                The system learns from historical patterns and user feedback, with each mapping stored as a 
+                <strong>single row with a complete SQL expression</strong> for maximum flexibility.
             </p>
+            
+            <div class="highlight-box">
+                <h4 style="margin-bottom: 0.5rem;">🎯 Key Innovation: Single Row = Complete Mapping</h4>
+                <p style="color: var(--text-secondary);">
+                    Instead of complex multi-table relationships, each mapping is stored as one row with a SQL expression 
+                    that captures all transformations, joins, and unions. This simplifies the data model and makes 
+                    AI learning more effective.
+                </p>
+            </div>
+        </section>
+        
+        <!-- The Problem We Solve -->
+        <section class="section">
+            <h2 class="section-title">The Problem We Solve</h2>
+            <div class="table-container" style="border-left: 4px solid var(--accent);">
+                <h4>📋 Challenge: Names Don't Match, But Descriptions Do</h4>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    Source table/column <strong>names are completely different</strong> from target names, 
+                    but column <strong>descriptions ARE similar</strong>. We need to:
+                </p>
+                <ul style="color: var(--text-secondary); margin-left: 1.5rem; margin-bottom: 1rem;">
+                    <li>Match source to target using description similarity</li>
+                    <li>Learn transformations (TRIM, UPPER) from historical patterns</li>
+                    <li>Detect single vs multi-field mappings</li>
+                    <li>Suggest complete SQL expressions</li>
+                    <li>Avoid previously rejected mappings</li>
+                </ul>
+                <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px; font-family: monospace; font-size: 0.9rem;">
+                    <strong style="color: var(--accent);">Example:</strong><br>
+                    Source: <code>patient_data.mbr_ssn_num</code> ("Social security number of the patient")<br>
+                    Target: <code>Member.SSN</code> ("Member social security number")<br><br>
+                    <span style="color: var(--text-secondary);">Names don't match, but descriptions are semantically similar!</span>
+                </div>
+            </div>
         </section>
         
         <!-- Three Pillars -->
@@ -408,57 +492,71 @@
                 <div class="pillar primary">
                     <div class="pillar-icon">🎯</div>
                     <h3>Semantic Fields</h3>
-                    <div class="pillar-subtitle">Primary Search</div>
-                    <p>"What target fields match these source fields?"</p>
+                    <div class="pillar-subtitle">Target Discovery</div>
+                    <p>"What target fields match this source description?"</p>
                     <ul>
-                        <li>Target field candidates</li>
-                        <li>Data type matching</li>
-                        <li>Description similarity</li>
-                        <li>Always executed</li>
+                        <li>Vector search on target definitions</li>
+                        <li>Matches by description similarity</li>
+                        <li>Data type consideration</li>
+                        <li>Domain filtering</li>
                     </ul>
                 </div>
                 
                 <div class="pillar learning">
                     <div class="pillar-icon">📚</div>
-                    <h3>Mapping Patterns</h3>
-                    <div class="pillar-subtitle">Learning Search</div>
-                    <p>"How did we map similar fields before?"</p>
+                    <h3>Mapped Fields</h3>
+                    <div class="pillar-subtitle">Pattern Learning</div>
+                    <p>"How did we map similar sources before?"</p>
                     <ul>
+                        <li>Vector search on past mappings</li>
+                        <li>Complete SQL expressions</li>
+                        <li>Transformation patterns</li>
                         <li>Multi-field combinations</li>
-                        <li>Transformations used</li>
-                        <li>Join patterns</li>
-                        <li>Complete context</li>
                     </ul>
                 </div>
                 
                 <div class="pillar avoid">
                     <div class="pillar-icon">🚫</div>
                     <h3>Rejection History</h3>
-                    <div class="pillar-subtitle">Avoidance Search</div>
-                    <p>"What should we avoid suggesting?"</p>
+                    <div class="pillar-subtitle">Mistake Avoidance</div>
+                    <p>"What should we NOT suggest?"</p>
                     <ul>
                         <li>Previously rejected mappings</li>
                         <li>User feedback reasoning</li>
                         <li>Prevents repeat mistakes</li>
-                        <li>Semantic matching</li>
+                        <li>Exact lookup by target</li>
                     </ul>
                 </div>
             </div>
         </section>
         
-        <!-- Flow Diagram -->
+        <!-- Hybrid AI Workflow -->
         <section class="section">
-            <h2 class="section-title">Complete AI Mapping Flow</h2>
+            <h2 class="section-title">Hybrid AI Workflow (Two-Stage)</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                We use a <strong>Hybrid approach</strong> that combines parallel vector search for discovery 
+                with targeted exact lookups for context. This balances accuracy, performance, and cost.
+            </p>
+            
             <div class="flow-container">
+                
+                <!-- Stage 1 -->
+                <div class="stage-box">
+                    <h5>═══ STAGE 1: PARALLEL DISCOVERY ═══</h5>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                        Two vector searches run simultaneously to find potential targets
+                    </p>
+                </div>
                 
                 <div class="flow-step">
                     <div class="step-number">1</div>
                     <div class="step-content">
-                        <h4>User Selects Source Fields</h4>
-                        <p>User selects one or more source fields to map to a target</p>
+                        <h4>User Selects Source Field</h4>
+                        <p>User selects a source field (or multiple) to map</p>
                         <div class="step-visual">
-                            ☑ first_name (STRING) - "Member's legal first name"<br>
-                            ☑ last_name (STRING) - "Member's legal last name"
+                            ☑ <strong>mbr_ssn_num</strong> (STRING)<br>
+                            &nbsp;&nbsp;&nbsp;Description: "Social security number of the patient"<br>
+                            &nbsp;&nbsp;&nbsp;Table: patient_data
                         </div>
                     </div>
                 </div>
@@ -468,12 +566,27 @@
                 <div class="flow-step">
                     <div class="step-number">2</div>
                     <div class="step-content">
-                        <h4>Build Semantic Query</h4>
-                        <p>Combine source field information into a searchable query</p>
-                        <div class="step-visual">
-                            "SOURCE TABLES: member | SOURCE COLUMNS: first_name, last_name | 
-                            DESCRIPTIONS: Member's legal first name, Member's legal last name | 
-                            TYPES: STRING, STRING"
+                        <h4>Parallel Vector Searches</h4>
+                        <p>Search targets AND historical patterns simultaneously using source description</p>
+                        <div class="parallel-searches">
+                            <div class="search-box semantic">
+                                <h5>🎯 Vector Search: TARGETS</h5>
+                                <p style="font-size: 0.8rem; color: var(--text-secondary);">semantic_fields table</p>
+                                <ul>
+                                    <li>SSN (92% match)</li>
+                                    <li>Member_ID (45% match)</li>
+                                    <li>Tax_ID (40% match)</li>
+                                </ul>
+                            </div>
+                            <div class="search-box patterns">
+                                <h5>📚 Vector Search: PATTERNS</h5>
+                                <p style="font-size: 0.8rem; color: var(--text-secondary);">mapped_fields table</p>
+                                <ul>
+                                    <li>Similar: ssn_no → SSN</li>
+                                    <li>Transform: TRIM used</li>
+                                    <li>Format: 9 chars</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -483,47 +596,46 @@
                 <div class="flow-step">
                     <div class="step-number">3</div>
                     <div class="step-content">
-                        <h4>Parallel Vector Searches</h4>
-                        <p>Search three indexes simultaneously for comprehensive context</p>
-                        <div class="parallel-searches">
-                            <div class="search-box semantic">
-                                <h5>🎯 Semantic Fields</h5>
-                                <ul>
-                                    <li>full_name</li>
-                                    <li>member_name</li>
-                                    <li>display_name</li>
-                                </ul>
-                            </div>
-                            <div class="search-box patterns">
-                                <h5>📚 Mapping Patterns</h5>
-                                <ul>
-                                    <li>2 fields → name</li>
-                                    <li>TRIM + UPPER</li>
-                                    <li>SPACE concat</li>
-                                </ul>
-                            </div>
-                            <div class="search-box rejections">
-                                <h5>🚫 Rejections</h5>
-                                <ul>
-                                    <li>ssn → full_name</li>
-                                    <li>(wrong match!)</li>
-                                </ul>
-                            </div>
+                        <h4>Merge & Rank Candidates</h4>
+                        <p>Combine results from both searches, rank by relevance</p>
+                        <div class="step-visual">
+                            <strong>Top Candidates:</strong><br>
+                            1. SSN (from targets + confirmed by patterns)<br>
+                            2. Member_ID (from targets only)<br>
+                            3. Tax_ID (from targets only)
                         </div>
                     </div>
                 </div>
                 
-                <div class="arrow-down">↓</div>
+                <!-- Stage 2 -->
+                <div class="stage-box">
+                    <h5>═══ STAGE 2: TARGETED CONTEXT ═══</h5>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                        Exact lookups for top candidates to get precise context
+                    </p>
+                </div>
                 
                 <div class="flow-step">
                     <div class="step-number">4</div>
                     <div class="step-content">
-                        <h4>LLM Reasoning</h4>
-                        <p>Foundation Model analyzes all inputs and generates intelligent suggestions</p>
-                        <div class="step-visual">
-                            <strong>Inputs:</strong> Source fields, target candidates, historical patterns, rejections<br><br>
-                            <strong>Outputs:</strong> Ranked suggestions with confidence scores, recommended transformations, 
-                            multi-field combination suggestions, human-readable reasoning
+                        <h4>Exact Lookups for Top Targets</h4>
+                        <p>Get detailed patterns and rejections for the top N target candidates</p>
+                        <div class="parallel-searches">
+                            <div class="search-box patterns">
+                                <h5>📋 Exact: PATTERNS for SSN</h5>
+                                <ul>
+                                    <li>15 past mappings to SSN</li>
+                                    <li>Common: TRIM(src)</li>
+                                    <li>Sometimes: REPLACE(-, '')</li>
+                                </ul>
+                            </div>
+                            <div class="search-box rejections">
+                                <h5>🚫 Exact: REJECTIONS for SSN</h5>
+                                <ul>
+                                    <li>phone_num → SSN (rejected)</li>
+                                    <li>Reason: "Wrong field type"</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -533,15 +645,18 @@
                 <div class="flow-step">
                     <div class="step-number">5</div>
                     <div class="step-content">
-                        <h4>Present Suggestions</h4>
-                        <p>Display ranked suggestions with explanations to the user</p>
+                        <h4>LLM Analysis</h4>
+                        <p>Foundation Model analyzes all context and generates intelligent suggestions</p>
                         <div class="step-visual">
-                            <strong>🎯 TOP SUGGESTION (95% confidence)</strong><br>
-                            Target: full_name<br>
-                            Transformations: TRIM, UPPER<br>
-                            Concatenation: SPACE<br><br>
-                            "Combine first_name and last_name with space separator. 
-                            Apply TRIM and UPPER based on 15 similar past mappings."
+                            <strong>LLM Inputs:</strong><br>
+                            • Source field info + description<br>
+                            • Target candidates with scores<br>
+                            • Historical patterns for each target<br>
+                            • Previous rejections to avoid<br><br>
+                            <strong>LLM Outputs:</strong><br>
+                            • Ranked suggestions with confidence<br>
+                            • Recommended SQL expression<br>
+                            • Human-readable reasoning
                         </div>
                     </div>
                 </div>
@@ -551,23 +666,40 @@
                 <div class="flow-step">
                     <div class="step-number">6</div>
                     <div class="step-content">
-                        <h4>Learning Loop</h4>
-                        <p>User feedback improves future suggestions</p>
-                        <div class="parallel-searches" style="grid-template-columns: 1fr 1fr;">
+                        <h4>Present AI Suggestion</h4>
+                        <p>User sees ranked suggestions with SQL expressions they can edit</p>
+                        <div class="step-visual">
+                            <strong style="color: var(--primary);">🎯 TOP SUGGESTION (95% confidence)</strong><br><br>
+                            Target: <code>Member.SSN</code><br>
+                            Expression: <code>TRIM(patient_data.mbr_ssn_num)</code><br><br>
+                            <em>"Based on 15 similar mappings, this source field maps to SSN. 
+                            TRIM is recommended based on historical patterns."</em>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="arrow-down">↓</div>
+                
+                <div class="flow-step">
+                    <div class="step-number">7</div>
+                    <div class="step-content">
+                        <h4>User Action → Learning Loop</h4>
+                        <p>User accepts, modifies, or rejects - system learns</p>
+                        <div class="parallel-searches">
                             <div class="search-box" style="border-color: var(--primary);">
-                                <h5>✓ Accept</h5>
+                                <h5>✓ Accept / Modify</h5>
                                 <ul>
-                                    <li>Create mapping</li>
-                                    <li>Save to mapping_patterns</li>
-                                    <li>Available for future learning</li>
+                                    <li>Save to mapped_fields</li>
+                                    <li>SQL expression stored</li>
+                                    <li>Available for future AI learning</li>
                                 </ul>
                             </div>
                             <div class="search-box" style="border-color: #ef4444;">
                                 <h5>✗ Reject</h5>
                                 <ul>
-                                    <li>Record rejection with reason</li>
-                                    <li>Vector-indexed</li>
-                                    <li>Avoided in future</li>
+                                    <li>Save to mapping_feedback</li>
+                                    <li>User reason captured</li>
+                                    <li>AI avoids in future</li>
                                 </ul>
                             </div>
                         </div>
@@ -577,18 +709,47 @@
             </div>
         </section>
         
-        <!-- Data Structures -->
+        <!-- Why Hybrid? -->
         <section class="section">
-            <h2 class="section-title">Complete Data Model</h2>
+            <h2 class="section-title">Why the Hybrid Approach?</h2>
+            <div class="comparison">
+                <div class="comparison-box before">
+                    <h4>❌ Sequential Only</h4>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                        Vector search targets first, then lookup history
+                    </p>
+                    <pre>Problem:
+• History can't influence target selection
+• May miss best target if not in top N
+• Sequential = slower</pre>
+                </div>
+                <div class="comparison-box after">
+                    <h4>✅ Hybrid (Our Approach)</h4>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                        Parallel discovery + targeted context
+                    </p>
+                    <pre>Benefits:
+• History INFLUENCES target discovery
+• Only 2 vector indexes needed
+• Rejections use exact lookup (cheap)
+• Best balance of accuracy/cost</pre>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Data Model -->
+        <section class="section">
+            <h2 class="section-title">V3 Data Model (Simplified)</h2>
             <p style="color: var(--text-secondary); margin-bottom: 2rem;">
-                The Smart Mapper platform uses the following tables to manage source fields, target definitions, mappings, and AI learning.
+                V3 simplifies the schema to just <strong>5 tables</strong>. Each mapping is a single row 
+                with a SQL expression - no more complex multi-table joins.
             </p>
             
             <!-- Table 1: semantic_fields -->
             <div class="table-container">
-                <h4>🎯 semantic_fields (Target Field Definitions)</h4>
+                <h4>🎯 semantic_fields <span class="badge vector">VECTOR INDEXED</span></h4>
                 <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
-                    Defines available target fields for mapping. Vector-indexed for AI search.
+                    Target field definitions. Vector-indexed for AI search by description.
                 </p>
                 <table>
                     <thead>
@@ -607,37 +768,37 @@
                         <tr>
                             <td><code>tgt_table_name</code></td>
                             <td>STRING</td>
-                            <td>Target table logical name (e.g., "Member Table")</td>
+                            <td>Target table logical name</td>
                         </tr>
                         <tr>
                             <td><code>tgt_table_physical_name</code></td>
                             <td>STRING</td>
-                            <td>Target table physical name (e.g., "slv_member")</td>
+                            <td>Target table physical name</td>
                         </tr>
                         <tr>
                             <td><code>tgt_column_name</code></td>
                             <td>STRING</td>
-                            <td>Target column logical name (e.g., "Full Name")</td>
+                            <td>Target column logical name</td>
                         </tr>
                         <tr>
                             <td><code>tgt_column_physical_name</code></td>
                             <td>STRING</td>
-                            <td>Target column physical name (e.g., "full_name")</td>
+                            <td>Target column physical name</td>
                         </tr>
                         <tr>
                             <td><code>tgt_physical_datatype</code></td>
                             <td>STRING</td>
-                            <td>Data type (STRING, INT, DATE, etc.)</td>
+                            <td>Data type (STRING, INT, DATE)</td>
                         </tr>
                         <tr>
                             <td><code>tgt_comments</code></td>
                             <td>STRING</td>
-                            <td>Description of the target field</td>
+                            <td>Description - <strong>critical for AI matching</strong></td>
                         </tr>
                         <tr>
                             <td><code>domain</code></td>
                             <td>STRING</td>
-                            <td>Domain category (claims, member, provider, etc.)</td>
+                            <td>Domain category (claims, member, etc.)</td>
                         </tr>
                         <tr>
                             <td><code>semantic_field</code></td>
@@ -650,9 +811,9 @@
             
             <!-- Table 2: unmapped_fields -->
             <div class="table-container">
-                <h4>📥 unmapped_fields (Source Fields Awaiting Mapping)</h4>
+                <h4>📥 unmapped_fields</h4>
                 <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
-                    Source fields uploaded by users that need to be mapped to target fields.
+                    Source fields awaiting mapping. The <code>src_comments</code> field drives AI matching.
                 </p>
                 <table>
                     <thead>
@@ -691,37 +852,28 @@
                         <tr>
                             <td><code>src_physical_datatype</code></td>
                             <td>STRING</td>
-                            <td>Data type (STRING, INT, DATE, etc.)</td>
-                        </tr>
-                        <tr>
-                            <td><code>src_nullable</code></td>
-                            <td>STRING</td>
-                            <td>Whether nullable (YES/NO)</td>
+                            <td>Data type</td>
                         </tr>
                         <tr>
                             <td><code>src_comments</code></td>
                             <td>STRING</td>
-                            <td>Description of the source field</td>
+                            <td>Description - <strong>critical for AI matching</strong></td>
                         </tr>
                         <tr>
                             <td><code>domain</code></td>
                             <td>STRING</td>
                             <td>Domain category</td>
                         </tr>
-                        <tr>
-                            <td><code>uploaded_by</code></td>
-                            <td>STRING</td>
-                            <td>User who uploaded this field</td>
-                        </tr>
                     </tbody>
                 </table>
             </div>
             
-            <!-- Table 3: mapped_fields -->
-            <div class="table-container">
-                <h4>✅ mapped_fields (Completed Mappings - Target Side)</h4>
+            <!-- Table 3: mapped_fields (THE KEY TABLE) -->
+            <div class="table-container" style="border: 2px solid var(--primary);">
+                <h4>✅ mapped_fields <span class="badge vector">VECTOR INDEXED</span> <span class="badge new">SIMPLIFIED</span></h4>
                 <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
-                    One record per target field with completed mapping. Links to source fields via mapping_details.
+                    <strong>One row = one complete mapping.</strong> The SQL expression captures all logic.
+                    Vector-indexed for AI pattern learning.
                 </p>
                 <table>
                     <thead>
@@ -740,37 +892,47 @@
                         <tr>
                             <td><code>semantic_field_id</code></td>
                             <td>BIGINT (FK)</td>
-                            <td>Reference to semantic_fields</td>
+                            <td>Reference to target field</td>
                         </tr>
                         <tr>
                             <td><code>tgt_table_name</code></td>
                             <td>STRING</td>
-                            <td>Target table name (denormalized)</td>
+                            <td>Target table (denormalized)</td>
                         </tr>
                         <tr>
                             <td><code>tgt_column_name</code></td>
                             <td>STRING</td>
-                            <td>Target column name (denormalized)</td>
+                            <td>Target column (denormalized)</td>
                         </tr>
-                        <tr>
-                            <td><code>concat_strategy</code></td>
+                        <tr style="background: rgba(16, 185, 129, 0.1);">
+                            <td><code>source_expression</code></td>
                             <td>STRING</td>
-                            <td>How to combine sources: NONE, SPACE, COMMA, PIPE, CUSTOM</td>
+                            <td><strong>Complete SQL expression</strong> (e.g., "TRIM(t.col)")</td>
                         </tr>
-                        <tr>
-                            <td><code>concat_separator</code></td>
+                        <tr style="background: rgba(16, 185, 129, 0.1);">
+                            <td><code>source_tables</code></td>
                             <td>STRING</td>
-                            <td>Custom separator if strategy is CUSTOM</td>
+                            <td>Comma-separated source tables</td>
                         </tr>
-                        <tr>
-                            <td><code>transformation_expression</code></td>
+                        <tr style="background: rgba(16, 185, 129, 0.1);">
+                            <td><code>source_columns</code></td>
                             <td>STRING</td>
-                            <td>Full SQL transformation expression</td>
+                            <td>Comma-separated source columns</td>
                         </tr>
-                        <tr>
+                        <tr style="background: rgba(16, 185, 129, 0.1);">
+                            <td><code>source_descriptions</code></td>
+                            <td>STRING</td>
+                            <td>Combined source descriptions</td>
+                        </tr>
+                        <tr style="background: rgba(16, 185, 129, 0.1);">
                             <td><code>source_relationship_type</code></td>
                             <td>STRING</td>
-                            <td>SINGLE, JOIN, or UNION <span class="badge">NEW</span></td>
+                            <td>SINGLE, JOIN, or UNION</td>
+                        </tr>
+                        <tr style="background: rgba(16, 185, 129, 0.1);">
+                            <td><code>transformations_applied</code></td>
+                            <td>STRING</td>
+                            <td>Transformations used (TRIM, UPPER, etc.)</td>
                         </tr>
                         <tr>
                             <td><code>confidence_score</code></td>
@@ -780,7 +942,7 @@
                         <tr>
                             <td><code>mapping_source</code></td>
                             <td>STRING</td>
-                            <td>AI, MANUAL, BULK_UPLOAD</td>
+                            <td>AI, MANUAL, or BULK_UPLOAD</td>
                         </tr>
                         <tr>
                             <td><code>ai_reasoning</code></td>
@@ -788,270 +950,38 @@
                             <td>AI explanation for suggestion</td>
                         </tr>
                         <tr>
+                            <td><code>ai_generated</code></td>
+                            <td>BOOLEAN</td>
+                            <td>Was expression AI-generated?</td>
+                        </tr>
+                        <tr>
                             <td><code>mapped_by</code></td>
                             <td>STRING</td>
-                            <td>User who created/approved mapping</td>
+                            <td>User who created mapping</td>
                         </tr>
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Table 4: mapping_details -->
-            <div class="table-container">
-                <h4>📋 mapping_details (Source Fields in Each Mapping)</h4>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
-                    Individual source fields that contribute to a target mapping. Supports multi-field mappings.
-                </p>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Column</th>
-                            <th>Type</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>mapping_detail_id</code></td>
-                            <td>BIGINT (PK)</td>
-                            <td>Auto-generated primary key</td>
-                        </tr>
-                        <tr>
-                            <td><code>mapped_field_id</code></td>
-                            <td>BIGINT (FK)</td>
-                            <td>Reference to mapped_fields</td>
-                        </tr>
-                        <tr>
-                            <td><code>unmapped_field_id</code></td>
-                            <td>BIGINT (FK)</td>
-                            <td>Reference to unmapped_fields</td>
-                        </tr>
-                        <tr>
-                            <td><code>src_table_name</code></td>
-                            <td>STRING</td>
-                            <td>Source table name (denormalized)</td>
-                        </tr>
-                        <tr>
-                            <td><code>src_column_name</code></td>
-                            <td>STRING</td>
-                            <td>Source column name (denormalized)</td>
-                        </tr>
-                        <tr>
-                            <td><code>field_order</code></td>
-                            <td>INT</td>
-                            <td>Order in concatenation (1, 2, 3...)</td>
-                        </tr>
-                        <tr>
-                            <td><code>transformations</code></td>
-                            <td>STRING</td>
-                            <td>Comma-separated transformations (TRIM, UPPER, etc.)</td>
-                        </tr>
-                        <tr>
-                            <td><code>default_value</code></td>
-                            <td>STRING</td>
-                            <td>Default if source is NULL</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Table 5: mapping_joins -->
-            <div class="table-container">
-                <h4>🔗 mapping_joins (Join Relationships for Multi-Table Mappings)</h4>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
-                    Defines JOIN conditions when source fields come from multiple tables (horizontal combination).
-                </p>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Column</th>
-                            <th>Type</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>mapping_join_id</code></td>
-                            <td>BIGINT (PK)</td>
-                            <td>Auto-generated primary key</td>
-                        </tr>
-                        <tr>
-                            <td><code>mapped_field_id</code></td>
-                            <td>BIGINT (FK)</td>
-                            <td>Reference to mapped_fields</td>
-                        </tr>
-                        <tr>
-                            <td><code>left_table_name</code></td>
-                            <td>STRING</td>
-                            <td>Left table in join</td>
-                        </tr>
-                        <tr>
-                            <td><code>left_join_column</code></td>
-                            <td>STRING</td>
-                            <td>Left table join column</td>
-                        </tr>
-                        <tr>
-                            <td><code>right_table_name</code></td>
-                            <td>STRING</td>
-                            <td>Right table in join</td>
-                        </tr>
-                        <tr>
-                            <td><code>right_join_column</code></td>
-                            <td>STRING</td>
-                            <td>Right table join column</td>
-                        </tr>
-                        <tr>
-                            <td><code>join_type</code></td>
-                            <td>STRING</td>
-                            <td>INNER, LEFT, RIGHT, or FULL</td>
-                        </tr>
-                        <tr>
-                            <td><code>join_order</code></td>
-                            <td>INT</td>
-                            <td>Order of joins (1, 2, 3...)</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Table 6: mapping_unions (NEW) -->
-            <div class="table-container">
-                <h4>⚡ mapping_unions (Union Relationships for Multi-Table Mappings) <span class="badge">NEW</span></h4>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
-                    Defines UNION conditions when stacking rows from multiple tables (vertical combination).
-                </p>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Column</th>
-                            <th>Type</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>mapping_union_id</code></td>
-                            <td>BIGINT (PK)</td>
-                            <td>Auto-generated primary key</td>
-                        </tr>
-                        <tr>
-                            <td><code>mapped_field_id</code></td>
-                            <td>BIGINT (FK)</td>
-                            <td>Reference to mapped_fields</td>
-                        </tr>
-                        <tr>
-                            <td><code>source_table_name</code></td>
-                            <td>STRING</td>
-                            <td>Table being unioned</td>
-                        </tr>
-                        <tr>
-                            <td><code>source_column_name</code></td>
-                            <td>STRING</td>
-                            <td>Column from this table</td>
-                        </tr>
-                        <tr>
-                            <td><code>union_type</code></td>
-                            <td>STRING</td>
-                            <td>UNION or UNION ALL</td>
-                        </tr>
-                        <tr>
-                            <td><code>union_order</code></td>
-                            <td>INT</td>
-                            <td>Order in union (1, 2, 3...)</td>
-                        </tr>
-                        <tr>
-                            <td><code>where_clause</code></td>
-                            <td>STRING</td>
-                            <td>Optional filter (e.g., "year = 2023")</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Table 7: mapping_patterns (NEW) -->
-            <div class="table-container">
-                <h4>📚 mapping_patterns (Complete Mapping History for AI Learning) <span class="badge">NEW</span></h4>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
-                    Complete mappings as single rows for vector search. Enables AI to learn from full context.
-                </p>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Column</th>
-                            <th>Type</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>pattern_id</code></td>
-                            <td>BIGINT (PK)</td>
-                            <td>Auto-generated primary key</td>
-                        </tr>
-                        <tr>
-                            <td><code>mapped_field_id</code></td>
-                            <td>BIGINT (FK)</td>
-                            <td>Reference to mapped_fields</td>
-                        </tr>
-                        <tr>
-                            <td><code>source_fields_json</code></td>
-                            <td>STRING</td>
-                            <td>JSON array of all source fields with details</td>
-                        </tr>
-                        <tr>
-                            <td><code>source_tables</code></td>
-                            <td>STRING</td>
-                            <td>Comma-separated source tables</td>
-                        </tr>
-                        <tr>
-                            <td><code>source_columns</code></td>
-                            <td>STRING</td>
-                            <td>Comma-separated source columns</td>
-                        </tr>
-                        <tr>
-                            <td><code>source_descriptions</code></td>
-                            <td>STRING</td>
-                            <td>Combined source descriptions</td>
-                        </tr>
-                        <tr>
-                            <td><code>source_field_count</code></td>
-                            <td>INT</td>
-                            <td>Number of source fields</td>
-                        </tr>
-                        <tr>
-                            <td><code>tgt_column_name</code></td>
-                            <td>STRING</td>
-                            <td>Target column name</td>
-                        </tr>
-                        <tr>
-                            <td><code>transformation_expression</code></td>
-                            <td>STRING</td>
-                            <td>Full SQL transformation</td>
-                        </tr>
-                        <tr>
-                            <td><code>transformations_applied</code></td>
-                            <td>STRING</td>
-                            <td>Transformations used (TRIM, UPPER, etc.)</td>
-                        </tr>
-                        <tr>
-                            <td><code>source_relationship_type</code></td>
-                            <td>STRING</td>
-                            <td>SINGLE, JOIN, or UNION</td>
-                        </tr>
-                        <tr>
+                        <tr style="background: rgba(99, 102, 241, 0.1);">
                             <td><code>source_semantic_field</code></td>
                             <td>STRING (computed)</td>
-                            <td>🔍 Vector-searchable concatenated field</td>
+                            <td>🔍 Vector-searchable field for AI learning</td>
                         </tr>
                     </tbody>
                 </table>
+                
+                <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-dark); border-radius: 8px;">
+                    <strong style="color: var(--accent);">Example Mappings:</strong>
+                    <pre style="margin-top: 0.5rem; font-size: 0.85rem; overflow-x: auto;">
+Simple:     source_expression = "TRIM(patient.ssn)"
+Multi-col:  source_expression = "CONCAT(TRIM(p.first), ' ', TRIM(p.last))"
+With Join:  source_expression = "CASE WHEN a.type='HOME' THEN a.street END"
+With Union: source_expression = "SELECT city FROM curr UNION SELECT city FROM hist"</pre>
+                </div>
             </div>
             
-            <!-- Table 8: mapping_feedback -->
+            <!-- Table 4: mapping_feedback -->
             <div class="table-container">
-                <h4>💬 mapping_feedback (User Feedback on AI Suggestions)</h4>
+                <h4>🚫 mapping_feedback <span class="badge vector">VECTOR INDEXED</span></h4>
                 <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
-                    Captures user acceptance/rejection of AI suggestions for model improvement.
+                    Rejected AI suggestions. Vector-indexed to help AI avoid similar mistakes.
                 </p>
                 <table>
                     <thead>
@@ -1070,57 +1000,62 @@
                         <tr>
                             <td><code>suggested_src_table</code></td>
                             <td>STRING</td>
-                            <td>Source table in AI suggestion</td>
+                            <td>Source table in rejected suggestion</td>
                         </tr>
                         <tr>
                             <td><code>suggested_src_column</code></td>
                             <td>STRING</td>
-                            <td>Source column in AI suggestion</td>
+                            <td>Source column in rejected suggestion</td>
                         </tr>
                         <tr>
                             <td><code>suggested_tgt_table</code></td>
                             <td>STRING</td>
-                            <td>Target table in AI suggestion</td>
+                            <td>Target table in rejected suggestion</td>
                         </tr>
                         <tr>
                             <td><code>suggested_tgt_column</code></td>
                             <td>STRING</td>
-                            <td>Target column in AI suggestion</td>
-                        </tr>
-                        <tr>
-                            <td><code>feedback_action</code></td>
-                            <td>STRING</td>
-                            <td>ACCEPTED, REJECTED, or MODIFIED</td>
-                        </tr>
-                        <tr>
-                            <td><code>user_comments</code></td>
-                            <td>STRING</td>
-                            <td>User explanation for decision</td>
-                        </tr>
-                        <tr>
-                            <td><code>ai_confidence_score</code></td>
-                            <td>DOUBLE</td>
-                            <td>AI confidence at time of suggestion</td>
+                            <td>Target column in rejected suggestion</td>
                         </tr>
                         <tr>
                             <td><code>src_comments</code></td>
                             <td>STRING</td>
-                            <td>Source description (for vector search) <span class="badge">NEW</span></td>
+                            <td>Source description at time of rejection</td>
+                        </tr>
+                        <tr>
+                            <td><code>tgt_comments</code></td>
+                            <td>STRING</td>
+                            <td>Target description at time of rejection</td>
+                        </tr>
+                        <tr>
+                            <td><code>feedback_action</code></td>
+                            <td>STRING</td>
+                            <td>REJECTED or MODIFIED</td>
+                        </tr>
+                        <tr>
+                            <td><code>user_comments</code></td>
+                            <td>STRING</td>
+                            <td>User's reason for rejection</td>
                         </tr>
                         <tr>
                             <td><code>feedback_by</code></td>
                             <td>STRING</td>
-                            <td>User who provided feedback</td>
+                            <td>User who rejected</td>
+                        </tr>
+                        <tr>
+                            <td><code>source_semantic_field</code></td>
+                            <td>STRING (computed)</td>
+                            <td>🔍 Vector-searchable field</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
             
-            <!-- Table 9: transformation_library -->
+            <!-- Table 5: transformation_library -->
             <div class="table-container">
-                <h4>⚙️ transformation_library (Reusable Transformation Templates)</h4>
+                <h4>⚙️ transformation_library</h4>
                 <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
-                    Predefined SQL transformations that can be applied to source fields.
+                    Predefined SQL transformations that AI can suggest.
                 </p>
                 <table>
                     <thead>
@@ -1156,11 +1091,6 @@
                             <td>STRING</td>
                             <td>TEXT, DATE, NUMERIC, CUSTOM</td>
                         </tr>
-                        <tr>
-                            <td><code>is_system</code></td>
-                            <td>BOOLEAN</td>
-                            <td>System-provided vs user-created</td>
-                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -1171,88 +1101,91 @@
             <h2 class="section-title">Entity Relationships</h2>
             <div class="flow-container" style="text-align: center;">
                 <pre style="text-align: left; display: inline-block; font-size: 0.85rem; line-height: 1.4;">
-┌─────────────────────┐         ┌─────────────────────┐
-│   unmapped_fields   │         │   semantic_fields   │
-│   (Source Fields)   │         │   (Target Fields)   │
-│                     │         │                     │
-│ • unmapped_field_id │         │ • semantic_field_id │
-│ • src_table_name    │         │ • tgt_table_name    │
-│ • src_column_name   │         │ • tgt_column_name   │
-│ • src_comments      │         │ • tgt_comments      │
-│ • src_datatype      │         │ • semantic_field 🔍 │
-└──────────┬──────────┘         └──────────┬──────────┘
-           │                               │
-           │ FK: unmapped_field_id         │ FK: semantic_field_id
-           │                               │
-           ▼                               ▼
-┌─────────────────────────────────────────────────────┐
-│                   mapped_fields                      │
-│               (Completed Mappings)                   │
-│                                                      │
-│ • mapped_field_id (PK)                              │
-│ • semantic_field_id (FK) ─────────────────────────→ │
-│ • concat_strategy                                    │
-│ • transformation_expression                          │
-│ • source_relationship_type (SINGLE/JOIN/UNION)      │
-└──────────────────────┬───────────────────────────────┘
-                       │
-        ┌──────────────┼──────────────┬────────────────┐
-        │              │              │                │
-        ▼              ▼              ▼                ▼
-┌───────────────┐ ┌───────────┐ ┌───────────┐ ┌────────────────┐
-│mapping_details│ │mapping_   │ │mapping_   │ │ mapping_       │
-│               │ │joins      │ │unions     │ │ patterns 🔍    │
-│ • field_order │ │           │ │           │ │                │
-│ • transforms  │ │ • join_   │ │ • union_  │ │ • source_      │
-│ • src_column  │ │   type    │ │   type    │ │   semantic_    │
-│               │ │ • left/   │ │ • union_  │ │   field        │
-│               │ │   right   │ │   order   │ │ • source_      │
-│               │ │   tables  │ │           │ │   fields_json  │
-└───────────────┘ └───────────┘ └───────────┘ └────────────────┘
+┌─────────────────────────────┐         ┌─────────────────────────────┐
+│      unmapped_fields        │         │      semantic_fields        │
+│      (Source Fields)        │         │      (Target Fields)        │
+│                             │         │                             │
+│ • unmapped_field_id (PK)    │         │ • semantic_field_id (PK)    │
+│ • src_table_name            │         │ • tgt_table_name            │
+│ • src_column_name           │         │ • tgt_column_name           │
+│ • src_comments              │         │ • tgt_comments              │
+│ • src_datatype              │         │ • semantic_field 🔍         │
+└─────────────────────────────┘         └──────────────┬──────────────┘
+                                                       │
+                                                       │ FK
+                                                       │
+                                                       ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                          mapped_fields                                │
+│                    (Complete Mappings - ONE ROW EACH)                 │
+│                                                                       │
+│ • mapped_field_id (PK)                                               │
+│ • semantic_field_id (FK) ──────────────────────────────────────────→ │
+│ • source_expression       ← "TRIM(patient.ssn)" - THE SQL!           │
+│ • source_tables           ← "patient_data, address"                  │
+│ • source_columns          ← "ssn, addr_line1"                        │
+│ • source_descriptions     ← Combined for vector search               │
+│ • source_relationship_type← SINGLE / JOIN / UNION                    │
+│ • transformations_applied ← "TRIM, UPPER"                            │
+│ • source_semantic_field 🔍 ← Vector-indexed for AI learning          │
+└──────────────────────────────────────────────────────────────────────┘
 
-                    ┌─────────────────────┐
-                    │  mapping_feedback   │
-                    │                     │
-                    │ • feedback_action   │
-                    │ • user_comments     │
-                    │ • src_comments 🔍   │
-                    └─────────────────────┘
+┌─────────────────────────────┐         ┌─────────────────────────────┐
+│    mapping_feedback         │         │   transformation_library    │
+│    (Rejected Suggestions)   │         │   (SQL Templates)           │
+│                             │         │                             │
+│ • feedback_id (PK)          │         │ • transformation_id (PK)    │
+│ • suggested_src/tgt         │         │ • transformation_code       │
+│ • user_comments             │         │ • transformation_expression │
+│ • source_semantic_field 🔍  │         │ • category                  │
+└─────────────────────────────┘         └─────────────────────────────┘
 
 🔍 = Vector-indexed for AI search
                 </pre>
             </div>
         </section>
         
-        <!-- Why This Architecture -->
+        <!-- What Changed from V2 -->
         <section class="section">
-            <h2 class="section-title">Why This Architecture?</h2>
+            <h2 class="section-title">What Changed from V2?</h2>
             <div class="comparison">
                 <div class="comparison-box before">
-                    <h4>❌ Previous Limitation</h4>
+                    <h4>❌ V2 (Complex)</h4>
                     <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                        Only captured column pairs, missing context
+                        Multiple tables for one mapping
                     </p>
-                    <pre>first_name → full_name
+                    <pre>mapped_fields (1 row)
+  └── mapping_details (N rows)
+  └── mapping_joins (N rows)
+  └── mapping_unions (N rows)
+  └── mapping_patterns (1 row)
 
-Missing:
-• Multi-field combinations
-• Transformations applied
-• Join conditions
-• The complete "recipe"</pre>
+7+ tables, complex joins,
+sync issues between tables</pre>
                 </div>
                 <div class="comparison-box after">
-                    <h4>✅ New Approach</h4>
+                    <h4>✅ V3 (Simple)</h4>
                     <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                        Captures complete patterns
+                        One row = one complete mapping
                     </p>
-                    <pre>{
-  "sources": ["first_name", "last_name"],
-  "target": "full_name",
-  "transformations": ["TRIM", "UPPER"],
-  "concat": "SPACE",
-  "expression": "CONCAT(...)"
-}</pre>
+                    <pre>mapped_fields (1 row)
+  └── source_expression: "CONCAT(...)"
+  └── source_tables: "t1, t2"
+  └── source_columns: "col1, col2"
+
+5 tables total, no joins needed,
+SQL expression is source of truth</pre>
                 </div>
+            </div>
+            
+            <div class="highlight-box" style="margin-top: 2rem;">
+                <h4 style="margin-bottom: 0.5rem;">🗑️ Tables Eliminated</h4>
+                <ul style="color: var(--text-secondary); margin-left: 1.5rem;">
+                    <li><code>mapping_details</code> → Info now in <code>source_columns</code>, <code>source_tables</code></li>
+                    <li><code>mapping_joins</code> → Info now in <code>source_expression</code></li>
+                    <li><code>mapping_unions</code> → Info now in <code>source_expression</code></li>
+                    <li><code>mapping_patterns</code> → <code>mapped_fields</code> IS the pattern table now</li>
+                </ul>
             </div>
         </section>
         
@@ -1267,18 +1200,18 @@ Missing:
                 </div>
                 <div class="benefit">
                     <div class="benefit-icon">📚</div>
-                    <h4>Historical Learning</h4>
-                    <p>AI learns from complete past mappings, not just column pairs</p>
+                    <h4>Pattern Learning</h4>
+                    <p>AI learns from complete SQL expressions, not just column pairs</p>
                 </div>
                 <div class="benefit">
-                    <div class="benefit-icon">🔄</div>
-                    <h4>Multi-Field Support</h4>
-                    <p>Recognizes when fields should be combined (joins or unions)</p>
+                    <div class="benefit-icon">✏️</div>
+                    <h4>SQL Flexibility</h4>
+                    <p>Users can write any SQL - joins, unions, CASE statements, etc.</p>
                 </div>
                 <div class="benefit">
                     <div class="benefit-icon">⚡</div>
-                    <h4>Transformation Hints</h4>
-                    <p>Suggests TRIM, UPPER, etc. based on history</p>
+                    <h4>Simple Schema</h4>
+                    <p>5 tables instead of 9 - easier to maintain and query</p>
                 </div>
                 <div class="benefit">
                     <div class="benefit-icon">🚫</div>
@@ -1286,11 +1219,38 @@ Missing:
                     <p>Won't repeat previously rejected suggestions</p>
                 </div>
                 <div class="benefit">
-                    <div class="benefit-icon">🔍</div>
-                    <h4>Cross-System Matching</h4>
-                    <p>Works even when source systems have different naming conventions</p>
+                    <div class="benefit-icon">🔄</div>
+                    <h4>Hybrid Speed</h4>
+                    <p>Parallel discovery + targeted context = fast & accurate</p>
                 </div>
             </div>
+        </section>
+        
+        <!-- Vector Indexes -->
+        <section class="section">
+            <h2 class="section-title">Vector Search Indexes</h2>
+            <div class="benefits-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+                <div class="benefit" style="border-left: 4px solid var(--primary);">
+                    <div class="benefit-icon">🎯</div>
+                    <h4>semantic_fields.semantic_field</h4>
+                    <p><strong>Purpose:</strong> Find target fields matching source descriptions</p>
+                    <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                        Query: "Find targets similar to 'Patient social security number'"
+                    </p>
+                </div>
+                <div class="benefit" style="border-left: 4px solid var(--secondary);">
+                    <div class="benefit-icon">📚</div>
+                    <h4>mapped_fields.source_semantic_field</h4>
+                    <p><strong>Purpose:</strong> Find similar past mappings for AI pattern learning</p>
+                    <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                        Query: "Find mappings with similar source characteristics"
+                    </p>
+                </div>
+            </div>
+            <p style="color: var(--text-secondary); margin-top: 1.5rem; font-size: 0.9rem;">
+                <strong>Note:</strong> <code>mapping_feedback</code> uses exact lookup by target column (not vector search) 
+                to keep costs low while still avoiding rejected mappings.
+            </p>
         </section>
         
         <!-- Tech Stack -->
@@ -1325,301 +1285,10 @@ Missing:
             </div>
         </section>
         
-        <!-- Alternative Designs Section -->
-        <section class="section" style="border-top: 3px solid var(--accent); padding-top: 3rem; margin-top: 3rem;">
-            <h2 class="section-title">🔬 Alternative Architecture Designs</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 1.1rem;">
-                We evaluated multiple approaches for the AI mapping flow. Below are the alternatives considered,
-                with pros, cons, and our recommendation.
-            </p>
-            
-            <!-- Problem Statement -->
-            <div class="table-container" style="border-left: 4px solid var(--accent); margin-bottom: 2rem;">
-                <h4>📋 Problem Statement</h4>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                    Source table/column <strong>names are completely different</strong> from target names, 
-                    but column <strong>descriptions ARE similar</strong>. We need to:
-                </p>
-                <ul style="color: var(--text-secondary); margin-left: 1.5rem;">
-                    <li>Match source to target using description similarity</li>
-                    <li>Learn transformations (TRIM, UPPER) from historical patterns</li>
-                    <li>Detect single vs multi-field mappings</li>
-                    <li>Determine JOIN vs UNION for multi-table sources</li>
-                    <li>Avoid previously rejected mappings</li>
-                </ul>
-                <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px; margin-top: 1rem; font-family: monospace; font-size: 0.9rem;">
-                    <strong style="color: var(--accent);">Example:</strong><br>
-                    Source: <code>patient_data.mbr_ssn_num</code> ("Social security number of the patient")<br>
-                    Target: <code>Member.SSN</code> ("Member social security number")<br><br>
-                    <span style="color: var(--text-secondary);">Names don't match, but descriptions are semantically similar!</span>
-                </div>
-            </div>
-            
-            <!-- Approach 1 -->
-            <div class="table-container" style="margin-bottom: 2rem;">
-                <h4>🔵 Approach 1: Sequential (Target-First)</h4>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                    Vector search targets first, then exact lookup history by target name.
-                </p>
-                <div style="background: var(--bg-dark); padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem;">
-                    <pre style="margin: 0; font-size: 0.85rem; line-height: 1.5; overflow-x: auto;">
-Source Field (with description)
-        │
-        ▼
-┌─────────────────────────────────────┐
-│  STEP 1: Vector Search Targets      │
-│  Query: source description          │
-│  Index: semantic_fields             │
-│  → Find matching target columns     │
-└─────────────────────────────────────┘
-        │
-        ▼
-┌─────────────────────────────────────┐
-│  STEP 2: Exact Lookup History       │
-│  Query: WHERE tgt_column = 'SSN'    │
-│  → Find patterns for THOSE targets  │
-└─────────────────────────────────────┘
-        │
-        ▼
-┌─────────────────────────────────────┐
-│  STEP 3: Exact Lookup Rejections    │
-│  Query: WHERE tgt_column = 'SSN'    │
-│  → Find rejections for THOSE targets│
-└─────────────────────────────────────┘
-        │
-        ▼
-┌─────────────────────────────────────┐
-│  STEP 4: LLM Analysis               │
-│  → Generate recommendations         │
-└─────────────────────────────────────┘</pre>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <div style="background: rgba(16, 185, 129, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid var(--primary);">
-                        <strong style="color: var(--primary);">✅ Pros</strong>
-                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
-                            <li>Simpler to implement</li>
-                            <li>Only 1 vector index needed</li>
-                            <li>History is highly relevant (targeted)</li>
-                            <li>Lower infrastructure cost</li>
-                        </ul>
-                    </div>
-                    <div style="background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid #ef4444;">
-                        <strong style="color: #ef4444;">❌ Cons</strong>
-                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
-                            <li>Sequential = slower</li>
-                            <li>History can't influence target selection</li>
-                            <li>Misses patterns if best target not in top N</li>
-                            <li>No cross-target learning</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Approach 2 -->
-            <div class="table-container" style="margin-bottom: 2rem;">
-                <h4>🟣 Approach 2: Parallel (All Vector Search)</h4>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                    Three parallel vector searches, all using source description.
-                </p>
-                <div style="background: var(--bg-dark); padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem;">
-                    <pre style="margin: 0; font-size: 0.85rem; line-height: 1.5; overflow-x: auto;">
-Source Field (with description)
-        │
-        ├────────────────┬────────────────┐
-        │                │                │
-        ▼                ▼                ▼
-┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│ Vector Search│ │ Vector Search│ │ Vector Search│
-│ TARGETS      │ │ PATTERNS     │ │ REJECTIONS   │
-│              │ │              │ │              │
-│ semantic_    │ │ mapping_     │ │ mapping_     │
-│ fields       │ │ patterns     │ │ feedback     │
-│              │ │              │ │              │
-│ By: source   │ │ By: source   │ │ By: source   │
-│ description  │ │ description  │ │ description  │
-└──────────────┘ └──────────────┘ └──────────────┘
-        │                │                │
-        └────────────────┴────────────────┘
-                         │
-                         ▼
-          ┌─────────────────────────────────────┐
-          │  LLM Analysis                       │
-          │  All 3 results → recommendations    │
-          └─────────────────────────────────────┘</pre>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <div style="background: rgba(16, 185, 129, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid var(--primary);">
-                        <strong style="color: var(--primary);">✅ Pros</strong>
-                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
-                            <li>All searches run in parallel (fast)</li>
-                            <li>History influences target selection</li>
-                            <li>Cross-target learning possible</li>
-                            <li>More holistic view for LLM</li>
-                        </ul>
-                    </div>
-                    <div style="background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid #ef4444;">
-                        <strong style="color: #ef4444;">❌ Cons</strong>
-                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
-                            <li>3 vector indexes to maintain</li>
-                            <li>Results may be noisy (mixed contexts)</li>
-                            <li>Higher infrastructure cost</li>
-                            <li>More complex to implement</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Approach 3 (Recommended) -->
-            <div class="table-container" style="margin-bottom: 2rem; border: 2px solid var(--primary);">
-                <h4>🟢 Approach 3: Hybrid (Two-Stage) <span class="badge" style="background: var(--primary);">RECOMMENDED</span></h4>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                    Vector search targets + patterns in parallel, then exact lookup rejections for top candidates.
-                </p>
-                <div style="background: var(--bg-dark); padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem;">
-                    <pre style="margin: 0; font-size: 0.85rem; line-height: 1.5; overflow-x: auto;">
-Source Field (with description)
-        │
-════════════════════════════════════════════════
-STAGE 1: PARALLEL DISCOVERY (Vector Search)
-════════════════════════════════════════════════
-        │
-        ├────────────────────────────┐
-        │                            │
-        ▼                            ▼
-┌─────────────────────┐   ┌─────────────────────┐
-│  Vector Search      │   │  Vector Search      │
-│  TARGETS            │   │  PATTERNS           │
-│  (semantic_fields)  │   │  (mapping_patterns) │
-│                     │   │                     │
-│  Find target        │   │  Find similar       │
-│  candidates by      │   │  sources that       │
-│  description        │   │  were mapped        │
-└─────────────────────┘   └─────────────────────┘
-        │                            │
-        └──────────────┬─────────────┘
-                       │
-                       ▼
-        ┌─────────────────────────────────────┐
-        │  MERGE & RANK TARGET CANDIDATES     │
-        │  Combine from both searches         │
-        └─────────────────────────────────────┘
-                       │
-════════════════════════════════════════════════
-STAGE 2: TARGETED LOOKUP (Exact Match)
-════════════════════════════════════════════════
-                       │
-        ┌──────────────┴──────────────┐
-        │                             │
-        ▼                             ▼
-┌─────────────────────┐   ┌─────────────────────┐
-│  Exact Lookup       │   │  Exact Lookup       │
-│  PATTERNS           │   │  REJECTIONS         │
-│  for top targets    │   │  for top targets    │
-└─────────────────────┘   └─────────────────────┘
-        │                             │
-        └──────────────┬──────────────┘
-                       │
-                       ▼
-        ┌─────────────────────────────────────┐
-        │  LLM Analysis                       │
-        │  Complete context → recommendations │
-        └─────────────────────────────────────┘</pre>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <div style="background: rgba(16, 185, 129, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid var(--primary);">
-                        <strong style="color: var(--primary);">✅ Pros</strong>
-                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
-                            <li>History influences target discovery</li>
-                            <li>Final context is targeted (less noise)</li>
-                            <li>Only 2 vector indexes needed</li>
-                            <li>Best of both worlds</li>
-                            <li>Balanced cost/accuracy</li>
-                        </ul>
-                    </div>
-                    <div style="background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: 8px; border-left: 3px solid #ef4444;">
-                        <strong style="color: #ef4444;">❌ Cons</strong>
-                        <ul style="color: var(--text-secondary); margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
-                            <li>More complex than Approach 1</li>
-                            <li>Two stages = some sequential delay</li>
-                            <li>Need to tune candidate count</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Comparison Table -->
-            <div class="table-container" style="margin-bottom: 2rem;">
-                <h4>📊 Comparison Summary</h4>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Aspect</th>
-                            <th>1. Sequential</th>
-                            <th>2. Parallel</th>
-                            <th style="background: var(--primary); color: white;">3. Hybrid ⭐</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><strong>Vector Indexes</strong></td>
-                            <td>1</td>
-                            <td>3</td>
-                            <td>2</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Latency</strong></td>
-                            <td>Medium</td>
-                            <td>Low</td>
-                            <td>Medium</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Cost</strong></td>
-                            <td>Low</td>
-                            <td>High</td>
-                            <td>Medium</td>
-                        </tr>
-                        <tr>
-                            <td><strong>History Influences Target?</strong></td>
-                            <td>❌ No</td>
-                            <td>✅ Yes</td>
-                            <td>✅ Yes</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Cross-Target Learning</strong></td>
-                            <td>❌ No</td>
-                            <td>✅ Yes</td>
-                            <td>Partial</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Best For</strong></td>
-                            <td>Simple mappings</td>
-                            <td>Diverse sources</td>
-                            <td><strong>General use</strong></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Recommendation Box -->
-            <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%); padding: 2rem; border-radius: 16px; border: 2px solid var(--primary);">
-                <h4 style="margin-bottom: 1rem; font-size: 1.3rem;">💡 Our Recommendation: Approach 3 (Hybrid)</h4>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                    The Hybrid approach provides the best balance of accuracy, performance, and cost:
-                </p>
-                <ul style="color: var(--text-secondary); margin-left: 1.5rem;">
-                    <li><strong>History CAN influence target discovery</strong> (unlike Approach 1)</li>
-                    <li><strong>Final context stays targeted</strong> (unlike Approach 2)</li>
-                    <li><strong>Only 2 vector indexes needed</strong> (semantic_fields + mapping_patterns)</li>
-                    <li><strong>Rejections use exact lookup</strong> (no extra vector index needed)</li>
-                </ul>
-            </div>
-        </section>
-        
         <footer>
-            <p>Smart Mapper - Intelligent Data Field Mapping</p>
+            <p>Smart Mapper V3 - Intelligent Data Field Mapping</p>
             <p style="font-size: 0.9rem; margin-top: 0.5rem;">Powered by Databricks AI</p>
         </footer>
     </div>
 </body>
 </html>
-
