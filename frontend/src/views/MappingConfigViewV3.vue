@@ -90,18 +90,20 @@
         </Card>
 
         <!-- Past Mappings Found -->
-        <Card v-else-if="historicalPatterns.length > 0" class="info-card patterns-card">
+        <Card v-else-if="filteredHistoricalPatterns.length > 0" class="info-card patterns-card">
           <template #title>
             <div class="card-title">
               <i class="pi pi-history"></i>
-              Similar Past Mappings ({{ historicalPatterns.length }})
+              Similar Past Mappings ({{ filteredHistoricalPatterns.length }})
             </div>
           </template>
           <template #content>
-            <p class="patterns-hint">Click a pattern to apply its transformations to your current fields</p>
+            <p class="patterns-hint">
+              Showing {{ hasMultipleFields ? (hasMultipleTables ? 'all' : 'SINGLE/UNION') : 'SINGLE' }} patterns for your selection
+            </p>
             <div class="patterns-list">
               <div 
-                v-for="(pattern, idx) in historicalPatterns.slice(0, 3)" 
+                v-for="(pattern, idx) in filteredHistoricalPatterns.slice(0, 3)" 
                 :key="idx"
                 class="pattern-item"
                 @click="usePattern(pattern)"
@@ -174,7 +176,8 @@
                   :options="relationshipOptions" 
                   optionLabel="label"
                   optionValue="value"
-                  @change="updateSqlPlaceholder"
+                  optionDisabled="disabled"
+                  @change="handleRelationshipChange"
                 />
                 <div class="relationship-help">
                   <Message v-if="relationshipType === 'JOIN'" severity="info" :closable="false">
@@ -356,12 +359,53 @@ const generatingSQL = ref(false)
 // Quick transformation dropdown
 const selectedTransformation = ref<string | null>(null)
 
-// Relationship options
-const relationshipOptions = [
-  { label: 'Single', value: 'SINGLE' },
-  { label: 'Join', value: 'JOIN' },
-  { label: 'Union', value: 'UNION' }
-]
+// Relationship options - computed based on source fields
+const hasMultipleFields = computed(() => sourceFields.value.length > 1)
+const hasMultipleTables = computed(() => {
+  const tables = new Set(sourceFields.value.map(f => f.src_table_name || f.src_table_physical_name))
+  return tables.size > 1
+})
+
+// Filter historical patterns based on current selection
+// - 1 column: only show SINGLE patterns
+// - Multiple columns, same table: show SINGLE and UNION
+// - Multiple columns, different tables: show SINGLE, JOIN, and UNION
+const filteredHistoricalPatterns = computed(() => {
+  if (!historicalPatterns.value || historicalPatterns.value.length === 0) {
+    return []
+  }
+  
+  return historicalPatterns.value.filter(pattern => {
+    const patternType = (pattern.source_relationship_type || 'SINGLE').toUpperCase()
+    
+    // Single column selected - only show SINGLE patterns
+    if (!hasMultipleFields.value) {
+      return patternType === 'SINGLE'
+    }
+    
+    // Multiple columns from different tables - show all types
+    if (hasMultipleTables.value) {
+      return true // SINGLE, JOIN, UNION all allowed
+    }
+    
+    // Multiple columns from same table - show SINGLE and UNION (no JOIN)
+    return patternType === 'SINGLE' || patternType === 'UNION'
+  })
+})
+
+const relationshipOptions = computed(() => [
+  { label: 'Single', value: 'SINGLE', disabled: false },
+  { 
+    label: hasMultipleTables.value ? 'Join' : 'Join (need multiple tables)', 
+    value: 'JOIN', 
+    disabled: !hasMultipleTables.value 
+  },
+  { 
+    label: hasMultipleFields.value ? 'Union' : 'Union (need multiple fields)', 
+    value: 'UNION', 
+    disabled: !hasMultipleFields.value 
+  }
+])
 
 // AI examples
 const aiExamples = [
@@ -373,14 +417,20 @@ const aiExamples = [
 ]
 
 // Transformation options
-const transformationOptions = computed(() => {
-  const transforms = mappingsStore.transformations.map(t => ({
-    label: t.transformation_name,
-    value: t.transformation_expression
-  }))
-  transforms.unshift({ label: 'Select transformation...', value: null as any })
-  return transforms
-})
+// Simple built-in transformations (no database needed)
+const transformationOptions = [
+  { label: 'Select transformation...', value: null },
+  { label: 'TRIM', value: 'TRIM({field})' },
+  { label: 'UPPER', value: 'UPPER({field})' },
+  { label: 'LOWER', value: 'LOWER({field})' },
+  { label: 'INITCAP', value: 'INITCAP({field})' },
+  { label: 'TRIM + UPPER', value: 'TRIM(UPPER({field}))' },
+  { label: 'TRIM + INITCAP', value: 'TRIM(INITCAP({field}))' },
+  { label: 'COALESCE (null handling)', value: "COALESCE({field}, '')" },
+  { label: 'CAST to STRING', value: 'CAST({field} AS STRING)' },
+  { label: 'CAST to DATE', value: "TO_DATE({field}, 'yyyy-MM-dd')" },
+  { label: 'CONCAT (2 fields)', value: "CONCAT({field}, ' ', {field2})" }
+]
 
 // SQL placeholder
 const sqlPlaceholder = computed(() => {
@@ -417,6 +467,18 @@ const previewSQL = computed(() => {
 const isValid = computed(() => {
   return sourceExpression.value.trim().length > 0 && targetField.value !== null
 })
+
+// Watch source fields and reset relationship type if invalid
+watch(sourceFields, () => {
+  // If JOIN is selected but we no longer have multiple tables, reset to SINGLE
+  if (relationshipType.value === 'JOIN' && !hasMultipleTables.value) {
+    relationshipType.value = 'SINGLE'
+  }
+  // If UNION is selected but we no longer have multiple fields, reset to SINGLE
+  if (relationshipType.value === 'UNION' && !hasMultipleFields.value) {
+    relationshipType.value = 'SINGLE'
+  }
+}, { deep: true })
 
 onMounted(async () => {
   console.log('[Mapping Config V3] === Mounting ===')
@@ -456,8 +518,7 @@ onMounted(async () => {
     router.push({ name: 'unmapped-fields' })
   }
   
-  // Load transformations
-  await mappingsStore.fetchTransformations()
+  // Note: Quick transforms are now hardcoded, no database fetch needed
 })
 
 function initializeMetadata() {
@@ -634,9 +695,33 @@ function updatePreview() {
   }
 }
 
-function updateSqlPlaceholder() {
-  // Called when relationship type changes - placeholder updates via computed
+function handleRelationshipChange() {
+  // Validate the selection
+  if (relationshipType.value === 'JOIN' && !hasMultipleTables.value) {
+    relationshipType.value = 'SINGLE'
+    toast.add({
+      severity: 'warn',
+      summary: 'Invalid Selection',
+      detail: 'JOIN requires source fields from multiple tables',
+      life: 3000
+    })
+    return
+  }
+  
+  if (relationshipType.value === 'UNION' && !hasMultipleFields.value) {
+    relationshipType.value = 'SINGLE'
+    toast.add({
+      severity: 'warn',
+      summary: 'Invalid Selection',
+      detail: 'UNION requires multiple source fields',
+      life: 3000
+    })
+    return
+  }
+  
   console.log('[Mapping Config] Relationship type changed to:', relationshipType.value)
+  
+  // Update placeholder via computed
 }
 
 async function generateSQL() {
@@ -700,6 +785,79 @@ function getMatchQualitySeverity(quality: string): string {
   }
 }
 
+// SQL Validation - checks for common syntax issues
+function validateSQLExpression(sql: string): { valid: boolean; error?: string } {
+  const trimmedSql = sql.trim()
+  
+  // Check for empty expression
+  if (!trimmedSql) {
+    return { valid: false, error: 'SQL expression cannot be empty' }
+  }
+  
+  // Check for balanced parentheses
+  let parenCount = 0
+  for (const char of trimmedSql) {
+    if (char === '(') parenCount++
+    if (char === ')') parenCount--
+    if (parenCount < 0) {
+      return { valid: false, error: 'Unbalanced parentheses: extra closing parenthesis' }
+    }
+  }
+  if (parenCount !== 0) {
+    return { valid: false, error: 'Unbalanced parentheses: missing closing parenthesis' }
+  }
+  
+  // Check for balanced quotes
+  const singleQuotes = (trimmedSql.match(/'/g) || []).length
+  if (singleQuotes % 2 !== 0) {
+    return { valid: false, error: 'Unbalanced single quotes' }
+  }
+  
+  // Check for common SQL injection patterns (basic)
+  const dangerousPatterns = [/;\s*DROP/i, /;\s*DELETE/i, /;\s*TRUNCATE/i, /;\s*INSERT/i, /;\s*UPDATE/i]
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(trimmedSql)) {
+      return { valid: false, error: 'Expression contains potentially dangerous SQL commands' }
+    }
+  }
+  
+  // Check for unclosed functions (common typos)
+  const openFunctions = trimmedSql.match(/\w+\s*\(/g) || []
+  const closingParens = trimmedSql.match(/\)/g) || []
+  // This is a rough check - already covered by paren balance above
+  
+  // Check for empty function calls
+  if (/\(\s*\)/.test(trimmedSql) && !/CURRENT_TIMESTAMP|CURRENT_DATE|NOW|GETDATE/i.test(trimmedSql)) {
+    return { valid: false, error: 'Empty function call detected - function needs arguments' }
+  }
+  
+  // Check that common functions have proper syntax
+  const functionPatterns = [
+    { pattern: /TRIM\s*\([^)]+\)/i, name: 'TRIM' },
+    { pattern: /UPPER\s*\([^)]+\)/i, name: 'UPPER' },
+    { pattern: /LOWER\s*\([^)]+\)/i, name: 'LOWER' },
+    { pattern: /CONCAT\s*\([^)]+\)/i, name: 'CONCAT' },
+    { pattern: /COALESCE\s*\([^)]+\)/i, name: 'COALESCE' },
+    { pattern: /CAST\s*\([^)]+\s+AS\s+\w+\)/i, name: 'CAST' },
+  ]
+  
+  // Check if functions used have basic structure
+  for (const fn of ['TRIM', 'UPPER', 'LOWER', 'INITCAP']) {
+    const fnRegex = new RegExp(`${fn}\\s*\\(`, 'i')
+    if (fnRegex.test(trimmedSql)) {
+      const fnWithArgs = new RegExp(`${fn}\\s*\\([^)]+\\)`, 'i')
+      if (!fnWithArgs.test(trimmedSql)) {
+        return { valid: false, error: `${fn} function appears to be malformed` }
+      }
+    }
+  }
+  
+  // Warn about potential issues but allow
+  console.log('[SQL Validation] Expression passed validation:', trimmedSql.substring(0, 100))
+  
+  return { valid: true }
+}
+
 function handleBack() {
   router.push({ name: 'unmapped-fields' })
 }
@@ -711,6 +869,18 @@ async function handleSave() {
       summary: 'Validation Error',
       detail: 'Please enter a SQL expression',
       life: 3000
+    })
+    return
+  }
+  
+  // Validate SQL expression
+  const validationResult = validateSQLExpression(sourceExpression.value)
+  if (!validationResult.valid) {
+    toast.add({
+      severity: 'error',
+      summary: 'SQL Validation Error',
+      detail: validationResult.error,
+      life: 5000
     })
     return
   }

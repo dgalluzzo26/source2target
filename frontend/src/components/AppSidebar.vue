@@ -29,11 +29,6 @@ const menuItems = ref<MenuItem[]>([
     to: '/sources'
   },
   {
-    label: 'Transformations',
-    icon: 'pi pi-sync',
-    to: '/transformations'
-  },
-  {
     label: 'Target Systems',
     icon: 'pi pi-cloud-upload',
     to: '/targets'
