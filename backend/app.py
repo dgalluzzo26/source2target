@@ -20,7 +20,7 @@ from typing import Optional, Dict, Any
 from backend.services.config_service import config_service
 from backend.services.system_service import system_service
 from backend.services.auth_service import auth_service
-from backend.routers import semantic, mapping, ai_mapping, unmapped_fields, ai_mapping_v2, mapping_v2, transformation, feedback, ai_mapping_v3
+from backend.routers import semantic, mapping, ai_mapping, unmapped_fields, transformation, feedback, ai_mapping_v3, mapping_v3
 
 # Import Databricks SDK for authentication
 try:
@@ -32,9 +32,9 @@ except ImportError:
     print("Warning: Databricks SDK not available")
 
 app = FastAPI(
-    title="Source2Target API",
-    description="FastAPI backend for Source2Target Databricks app (V2 Multi-Field Mapping)",
-    version="2.0.0"
+    title="Smart Mapper API",
+    description="FastAPI backend for Smart Mapper Databricks app (V3 SQL Expression Mapping)",
+    version="3.0.0"
 )
 
 # Configure CORS for Vue frontend
@@ -46,18 +46,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include V3 routers (new architecture)
+# Include V3 routers (current architecture)
 app.include_router(ai_mapping_v3.router)
-
-# Include V2 routers
+app.include_router(mapping_v3.router)
 app.include_router(unmapped_fields.router)
-app.include_router(mapping_v2.router)
-app.include_router(ai_mapping_v2.router)
 app.include_router(transformation.router)
 app.include_router(feedback.router)
 
-# Include V1 routers (will be deprecated)
+# Include semantic/utility routers
 app.include_router(semantic.router)
+
+# Legacy V1 routers (for backward compatibility)
 app.include_router(mapping.router)
 app.include_router(ai_mapping.router)
 

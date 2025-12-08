@@ -1,7 +1,7 @@
 <template>
   <div class="unmapped-fields-view">
     <div class="view-header">
-      <h1>Source Field Mapping (V2)</h1>
+      <h1>Source Field Mapping</h1>
       <p class="subtitle">Select source fields to map to target fields. You can select multiple fields for combined mappings.</p>
     </div>
 
@@ -229,7 +229,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUnmappedFieldsStore } from '@/stores/unmappedFieldsStore'
-import { useAISuggestionsStoreV2 } from '@/stores/aiSuggestionsStoreV2'
+import { useAISuggestionsStore } from '@/stores/aiSuggestionsStore'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import DataTable from 'primevue/datatable'
@@ -243,11 +243,11 @@ import FileUpload from 'primevue/fileupload'
 import ProgressSpinner from 'primevue/progressspinner'
 import AISuggestionsDialog from '@/components/AISuggestionsDialog.vue'
 import type { UnmappedField } from '@/stores/unmappedFieldsStore'
-import type { AISuggestionV2 } from '@/stores/aiSuggestionsStoreV2'
+import type { AISuggestion } from '@/stores/aiSuggestionsStore'
 
 const router = useRouter()
 const unmappedStore = useUnmappedFieldsStore()
-const aiStore = useAISuggestionsStoreV2()
+const aiStore = useAISuggestionsStore()
 const confirm = useConfirm()
 const toast = useToast()
 
@@ -287,7 +287,7 @@ async function handleGetSuggestions() {
   }
 }
 
-function handleSuggestionSelected(suggestion: AISuggestionV2) {
+function handleSuggestionSelected(suggestion: AISuggestion) {
   // The suggestion is already stored in aiStore.selectedSuggestion
   // The source fields are already in aiStore.sourceFieldsUsed
   // Just navigate to the mapping configuration view

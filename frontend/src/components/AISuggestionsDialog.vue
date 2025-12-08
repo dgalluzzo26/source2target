@@ -349,7 +349,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useAISuggestionsStoreV2 } from '@/stores/aiSuggestionsStoreV2'
+import { useAISuggestionsStore } from '@/stores/aiSuggestionsStore'
 import { useUserStore } from '@/stores/user'
 import { useToast } from 'primevue/usetoast'
 import Dialog from 'primevue/dialog'
@@ -362,7 +362,7 @@ import ProgressBar from 'primevue/progressbar'
 import ProgressSpinner from 'primevue/progressspinner'
 import Message from 'primevue/message'
 import Textarea from 'primevue/textarea'
-import type { AISuggestionV2 } from '@/stores/aiSuggestionsStoreV2'
+import type { AISuggestion } from '@/stores/aiSuggestionsStore'
 
 interface Props {
   visible: boolean
@@ -370,19 +370,19 @@ interface Props {
 
 interface Emits {
   (e: 'update:visible', value: boolean): void
-  (e: 'suggestion-selected', suggestion: AISuggestionV2): void
+  (e: 'suggestion-selected', suggestion: AISuggestion): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const aiStore = useAISuggestionsStoreV2()
+const aiStore = useAISuggestionsStore()
 const userStore = useUserStore()
 const toast = useToast()
 
 // Rejection dialog state
 const showRejectionDialog = ref(false)
-const rejectedSuggestion = ref<AISuggestionV2 | null>(null)
+const rejectedSuggestion = ref<AISuggestion | null>(null)
 const rejectionComment = ref('')
 
 // Manual search state
@@ -435,7 +435,7 @@ function getMatchQualityIcon(quality: string): string {
   }
 }
 
-function getRowClass(data: AISuggestionV2) {
+function getRowClass(data: AISuggestion) {
   return data.rank === 1 ? 'top-suggestion' : ''
 }
 
@@ -444,7 +444,7 @@ function handleRowClick(event: any) {
   // handleAccept(event.data)
 }
 
-function handleAccept(suggestion: AISuggestionV2) {
+function handleAccept(suggestion: AISuggestion) {
   // Store the suggestion for mapping configuration
   aiStore.selectSuggestion(suggestion)
   
@@ -465,7 +465,7 @@ function handleAccept(suggestion: AISuggestionV2) {
   })
 }
 
-function handleReject(suggestion: AISuggestionV2) {
+function handleReject(suggestion: AISuggestion) {
   rejectedSuggestion.value = suggestion
   rejectionComment.value = ''
   showRejectionDialog.value = true
@@ -505,9 +505,9 @@ async function submitRejectionFeedback() {
   closeRejectionDialog()
 }
 
-async function recordFeedback(suggestion: AISuggestionV2, action: 'accepted' | 'rejected', comment: string) {
+async function recordFeedback(suggestion: AISuggestion, action: 'accepted' | 'rejected', comment: string) {
   try {
-    // For V2 multi-field mappings, create one feedback record per source field
+    // For multi-field mappings, create one feedback record per source field
     const feedbackAction = action === 'accepted' ? 'ACCEPTED' : 'REJECTED'
     
     // Get current user email from user store
@@ -610,7 +610,7 @@ function clearManualSearch() {
 
 function handleManualSelect(targetField: any) {
   // Convert manual search result to suggestion format
-  const manualSuggestion: AISuggestionV2 = {
+  const manualSuggestion: AISuggestion = {
     semantic_field_id: targetField.semantic_field_id || 0,
     tgt_table_name: targetField.tgt_table_name,
     tgt_column_name: targetField.tgt_column_name,

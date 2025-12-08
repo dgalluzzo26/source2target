@@ -4,7 +4,7 @@ Feedback API endpoints for AI suggestion tracking.
 Allows users to accept/reject AI suggestions for pattern learning.
 """
 from fastapi import APIRouter, HTTPException, Body
-from backend.models.mapping_v2 import MappingFeedbackV2, MappingFeedbackCreateV2
+from backend.models.shared import MappingFeedbackV2, MappingFeedbackCreateV2
 from backend.services.feedback_service import FeedbackService
 
 router = APIRouter(prefix="/api/v2/feedback", tags=["Feedback V2"])

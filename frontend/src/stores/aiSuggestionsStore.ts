@@ -1,13 +1,14 @@
 /**
- * AI Suggestions Store V2 (Multi-Field)
+ * AI Suggestions Store
  * 
- * Manages AI-powered mapping suggestions for multiple source fields.
+ * Manages AI-powered mapping suggestions for source fields.
+ * Uses V3 API with dual vector search (semantic + historical patterns).
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { UnmappedField } from './unmappedFieldsStore'
 
-export interface AISuggestionV2 {
+export interface AISuggestion {
   semantic_field_id: number  // FK to semantic_fields table (REQUIRED for mapping creation)
   tgt_table_name: string
   tgt_table_physical_name: string
@@ -20,13 +21,14 @@ export interface AISuggestionV2 {
   rank?: number  // UI-only: 1, 2, 3...
 }
 
-export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
+export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   // State
-  const suggestions = ref<AISuggestionV2[]>([])
+  const suggestions = ref<AISuggestion[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
   const sourceFieldsUsed = ref<UnmappedField[]>([])
-  const selectedSuggestion = ref<AISuggestionV2 | null>(null)
+  const selectedSuggestion = ref<AISuggestion | null>(null)
+  const historicalPatterns = ref<any[]>([])
 
   // Computed
   const hasSuggestions = computed(() => suggestions.value.length > 0)
@@ -38,15 +40,17 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
     error.value = null
     suggestions.value = []
     sourceFieldsUsed.value = [...sourceFields]
+    historicalPatterns.value = []
 
     try {
-      console.log('[AI Suggestions V2] Calling real API for', sourceFields.length, 'source fields')
+      console.log('[AI Suggestions] Calling V3 API for', sourceFields.length, 'source fields')
       
-      const response = await fetch('/api/v2/ai-mapping/suggestions', {
+      const response = await fetch('/api/v3/ai/suggestions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           source_fields: sourceFields.map(f => ({
+            unmapped_field_id: f.unmapped_field_id,
             src_table_name: f.src_table_name,
             src_table_physical_name: f.src_table_physical_name,
             src_column_name: f.src_column_name,
@@ -54,7 +58,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
             src_physical_datatype: f.src_physical_datatype,
             src_comments: f.src_comments || ''
           })),
-          num_results: 10
+          num_suggestions: 10
         })
       })
 
@@ -63,12 +67,19 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
         throw new Error(`API error: ${response.status} - ${errorText}`)
       }
 
-      suggestions.value = await response.json()
+      const data = await response.json()
       
-      // Debug: Check if tgt_comments is in the response
+      // Handle response format - might be suggestions array or object with suggestions + patterns
+      if (Array.isArray(data)) {
+        suggestions.value = data
+      } else {
+        suggestions.value = data.suggestions || []
+        historicalPatterns.value = data.historical_patterns || []
+      }
+      
+      // Debug: Check response
       if (suggestions.value.length > 0) {
-        console.log('[AI Suggestions V2] Sample suggestion:', suggestions.value[0])
-        console.log('[AI Suggestions V2] tgt_comments in first result:', suggestions.value[0].tgt_comments)
+        console.log('[AI Suggestions] Sample suggestion:', suggestions.value[0])
       }
       
       // Add rank to each suggestion
@@ -76,27 +87,31 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
         sug.rank = idx + 1
       })
 
-      console.log('[AI Suggestions V2] Generated', suggestions.value.length, 'suggestions for', sourceFields.length, 'fields')
+      console.log('[AI Suggestions] Generated', suggestions.value.length, 'suggestions')
+      if (historicalPatterns.value.length > 0) {
+        console.log('[AI Suggestions] Found', historicalPatterns.value.length, 'historical patterns')
+      }
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to generate suggestions'
-      console.error('[AI Suggestions V2] Error:', error.value)
+      console.error('[AI Suggestions] Error:', error.value)
       suggestions.value = []
     } finally {
       loading.value = false
     }
   }
 
-  function selectSuggestion(suggestion: AISuggestionV2) {
+  function selectSuggestion(suggestion: AISuggestion) {
     selectedSuggestion.value = suggestion
-    console.log('[AI Suggestions V2] Selected:', suggestion.tgt_column_name)
+    console.log('[AI Suggestions] Selected:', suggestion.tgt_column_name)
   }
 
   function clearSuggestions() {
     suggestions.value = []
     sourceFieldsUsed.value = []
     selectedSuggestion.value = null
+    historicalPatterns.value = []
     error.value = null
-    console.log('[AI Suggestions V2] Cleared suggestions')
+    console.log('[AI Suggestions] Cleared suggestions')
   }
 
   return {
@@ -106,6 +121,7 @@ export const useAISuggestionsStoreV2 = defineStore('aiSuggestionsV2', () => {
     error,
     sourceFieldsUsed,
     selectedSuggestion,
+    historicalPatterns,
     
     // Computed
     hasSuggestions,

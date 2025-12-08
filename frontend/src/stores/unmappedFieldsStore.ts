@@ -1,7 +1,7 @@
 /**
- * Unmapped Fields Store (V2)
+ * Unmapped Fields Store
  * 
- * Manages source fields awaiting mapping in the V2 multi-field mapping workflow.
+ * Manages source fields awaiting mapping in the multi-field mapping workflow.
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'

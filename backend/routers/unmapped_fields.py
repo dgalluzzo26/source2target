@@ -5,7 +5,7 @@ Provides REST API for managing source fields awaiting mapping.
 """
 from fastapi import APIRouter, HTTPException, Query, Request
 from typing import List, Optional
-from backend.models.mapping_v2 import UnmappedFieldV2, UnmappedFieldCreateV2
+from backend.models.shared import UnmappedFieldV2, UnmappedFieldCreateV2
 from backend.services.unmapped_fields_service import UnmappedFieldsService
 
 router = APIRouter(prefix="/api/v2/unmapped-fields", tags=["Unmapped Fields V2"])

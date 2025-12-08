@@ -137,7 +137,7 @@
 
             <Divider />
 
-            <h4>V2 Table Configuration</h4>
+            <h4>Table Configuration</h4>
             <Message severity="info" :closable="false" class="table-config-note">
               <strong>Note:</strong> Enter table names only. The catalog and schema specified above will be automatically prepended.
               <br />

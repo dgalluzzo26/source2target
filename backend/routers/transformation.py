@@ -5,7 +5,7 @@ Provides access to reusable SQL transformation templates.
 """
 from fastapi import APIRouter, HTTPException
 from typing import List
-from backend.models.mapping_v2 import TransformationV2, TransformationCreateV2
+from backend.models.shared import TransformationV2, TransformationCreateV2
 from backend.services.transformation_service import TransformationService
 
 router = APIRouter(prefix="/api/v2/transformations", tags=["Transformations V2"])

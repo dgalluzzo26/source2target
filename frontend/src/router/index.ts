@@ -6,8 +6,8 @@
  * 
  * Route Structure:
  * - / (root) → Introduction/Dashboard page
- * - /unmapped-fields → Unmapped Fields page (multi-field mapping)
- * - /mapping-config → Mapping Configuration Wizard (configure mapping)
+ * - /unmapped-fields → Unmapped Fields page (select source fields)
+ * - /mapping-config → Mapping Configuration (SQL editor approach)
  * - /mappings → View Current Mappings (all users)
  * - /semantic-fields → Semantic Table Management (admin only)
  * - /config → Admin Configuration (admin only)
@@ -44,22 +44,22 @@ const router = createRouter({
           component: () => import('../views/IntroductionView.vue')
         },
         {
-          // V2 Unmapped fields page - main entry point for multi-field mapping
+          // Unmapped fields page - main entry point for mapping
           path: '/unmapped-fields',
           name: 'unmapped-fields',
           component: () => import('../views/UnmappedFieldsView.vue')
         },
         {
-          // V2 Mapping configuration page - configure multi-field mapping
+          // Mapping configuration page - SQL editor approach
           path: '/mapping-config',
           name: 'mapping-config',
-          component: () => import('../views/MappingConfigView.vue')
+          component: () => import('../views/MappingConfigViewV3.vue')
         },
         {
           // View current mappings - available to all users
           path: '/mappings',
           name: 'mappings',
-          component: () => import('../views/MappingsListView.vue')
+          component: () => import('../views/MappingsListViewV3.vue')
         },
         {
           // Semantic table management - admin only

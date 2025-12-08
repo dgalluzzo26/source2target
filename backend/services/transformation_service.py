@@ -9,7 +9,7 @@ import functools
 from typing import List, Dict, Any, Optional
 from databricks import sql
 from databricks.sdk import WorkspaceClient
-from backend.models.mapping_v2 import TransformationV2, TransformationCreateV2
+from backend.models.shared import TransformationV2, TransformationCreateV2
 from backend.services.config_service import ConfigService
 
 # Thread pool for blocking database operations
