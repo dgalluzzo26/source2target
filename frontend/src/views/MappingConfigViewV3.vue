@@ -73,7 +73,8 @@
         </Card>
 
         <!-- AI Patterns Card (from historical mappings) -->
-        <Card v-if="historicalPatterns.length > 0" class="info-card patterns-card">
+        <!-- Loading Past Mappings -->
+        <Card v-if="loadingPatterns" class="info-card patterns-card loading-patterns">
           <template #title>
             <div class="card-title">
               <i class="pi pi-history"></i>
@@ -81,6 +82,23 @@
             </div>
           </template>
           <template #content>
+            <div class="loading-patterns-content">
+              <ProgressSpinner style="width: 30px; height: 30px;" />
+              <span>Searching for similar past mappings...</span>
+            </div>
+          </template>
+        </Card>
+
+        <!-- Past Mappings Found -->
+        <Card v-else-if="historicalPatterns.length > 0" class="info-card patterns-card">
+          <template #title>
+            <div class="card-title">
+              <i class="pi pi-history"></i>
+              Similar Past Mappings ({{ historicalPatterns.length }})
+            </div>
+          </template>
+          <template #content>
+            <p class="patterns-hint">Click a pattern to apply its transformations to your current fields</p>
             <div class="patterns-list">
               <div 
                 v-for="(pattern, idx) in historicalPatterns.slice(0, 3)" 
@@ -89,11 +107,13 @@
                 @click="usePattern(pattern)"
               >
                 <div class="pattern-header">
-                  <strong>{{ pattern.source_columns }} → {{ pattern.tgt_column_name }}</strong>
+                  <span class="pattern-target">→ {{ pattern.tgt_column_name }}</span>
                   <Tag v-if="pattern.transformations_applied" :value="pattern.transformations_applied" size="small" severity="warning" />
                 </div>
-                <code class="pattern-sql">{{ pattern.source_expression }}</code>
-                <span class="pattern-hint">Click to use this pattern</span>
+                <div class="pattern-info">
+                  <span class="pattern-type">{{ pattern.source_relationship_type || 'SINGLE' }}</span>
+                </div>
+                <span class="pattern-hint">Click to apply transformations to your fields</span>
               </div>
             </div>
           </template>
@@ -300,6 +320,7 @@ import Dropdown from 'primevue/dropdown'
 import SelectButton from 'primevue/selectbutton'
 import Dialog from 'primevue/dialog'
 import Message from 'primevue/message'
+import ProgressSpinner from 'primevue/progressspinner'
 import type { UnmappedField } from '@/stores/unmappedFieldsStore'
 import type { AISuggestion } from '@/stores/aiSuggestionsStore'
 import api from '@/services/api'
@@ -315,6 +336,7 @@ const toast = useToast()
 const sourceFields = ref<UnmappedField[]>([])
 const targetField = ref<AISuggestion | null>(null)
 const historicalPatterns = ref<any[]>([])
+const loadingPatterns = ref(false)
 const saving = ref(false)
 
 // SQL Expression state
@@ -466,6 +488,8 @@ function generateDefaultExpression() {
 }
 
 async function fetchHistoricalPatterns() {
+  loadingPatterns.value = true
+  
   try {
     // Build search query from source fields
     const descriptions = sourceFields.value
@@ -493,11 +517,48 @@ async function fetchHistoricalPatterns() {
     
   } catch (e) {
     console.warn('[Mapping Config V3] Could not fetch historical patterns:', e)
+  } finally {
+    loadingPatterns.value = false
   }
 }
 
 function usePattern(pattern: any) {
-  sourceExpression.value = pattern.source_expression
+  // Get current field names (not the old ones from the pattern!)
+  const currentFields = sourceFields.value.map(f => f.src_column_physical_name || f.src_column_name)
+  
+  // Extract transformations from the pattern
+  const transforms = pattern.transformations_applied?.split(',').map((t: string) => t.trim()) || []
+  
+  // Build new expression using CURRENT field names with the pattern's transformations
+  let newExpression = ''
+  
+  if (currentFields.length === 1) {
+    // Single field - apply transformations in order
+    newExpression = currentFields[0]
+    for (const transform of transforms.reverse()) {
+      newExpression = `${transform}(${newExpression})`
+    }
+  } else if (pattern.source_relationship_type === 'JOIN') {
+    // Multiple fields with JOIN - user needs to customize
+    const fieldsStr = currentFields.join(', ')
+    newExpression = `-- Apply ${transforms.join(', ')} to: ${fieldsStr}\n-- Customize the JOIN expression below:\nSELECT ${currentFields[0]}\nFROM ${sourceFields.value[0]?.src_table_physical_name || 'table1'}\nJOIN table2 ON condition`
+  } else if (pattern.source_relationship_type === 'UNION') {
+    // UNION pattern
+    newExpression = currentFields.map((f, i) => `SELECT ${transforms.length > 0 ? `${transforms[0]}(${f})` : f} FROM table${i + 1}`).join('\nUNION ALL\n')
+  } else {
+    // Multiple fields - concatenate with transformations
+    const transformedFields = currentFields.map(f => {
+      let expr = f
+      for (const transform of [...transforms].reverse()) {
+        expr = `${transform}(${expr})`
+      }
+      return expr
+    })
+    newExpression = `CONCAT_WS(' ', ${transformedFields.join(', ')})`
+  }
+  
+  sourceExpression.value = newExpression
+  
   if (pattern.transformations_applied) {
     transformationsApplied.value = pattern.transformations_applied
   }
@@ -505,11 +566,13 @@ function usePattern(pattern: any) {
     relationshipType.value = pattern.source_relationship_type
   }
   
+  updatePreview()
+  
   toast.add({
     severity: 'success',
     summary: 'Pattern Applied',
-    detail: 'Historical pattern applied to expression',
-    life: 2000
+    detail: `Applied ${transforms.join(', ') || 'pattern'} to current fields`,
+    life: 3000
   })
 }
 
@@ -849,6 +912,22 @@ async function handleSave() {
   border-left: 4px solid var(--blue-500);
 }
 
+.loading-patterns-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  color: var(--text-color-secondary);
+  font-style: italic;
+}
+
+.patterns-hint {
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  margin-bottom: 0.75rem;
+  font-style: italic;
+}
+
 .patterns-list {
   display: flex;
   flex-direction: column;
@@ -861,18 +940,39 @@ async function handleSave() {
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
+  border: 1px solid transparent;
 }
 
 .pattern-item:hover {
   background: var(--blue-50);
   transform: translateX(4px);
+  border-color: var(--blue-300);
 }
 
 .pattern-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.pattern-target {
+  font-weight: 600;
+  color: var(--gainwell-primary);
+}
+
+.pattern-info {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.pattern-type {
+  font-size: 0.75rem;
+  color: var(--text-color-secondary);
+  background: var(--surface-200);
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
 }
 
 .pattern-sql {
