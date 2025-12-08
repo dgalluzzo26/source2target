@@ -358,8 +358,10 @@ const saving = ref(false)
 // SQL Expression state
 const sourceExpression = ref('')
 const relationshipType = ref<'SINGLE' | 'JOIN' | 'UNION'>('SINGLE')
-const sourceTables = ref('')
-const sourceColumns = ref('')
+const sourceTables = ref('')  // Logical names
+const sourceColumns = ref('')  // Logical names
+const sourceTablesPhysical = ref('')  // Physical names (for restore)
+const sourceColumnsPhysical = ref('')  // Physical names (for restore)
 const transformationsApplied = ref('')
 
 // AI Helper state
@@ -554,12 +556,19 @@ onMounted(async () => {
 
 function initializeMetadata() {
   // Auto-populate metadata from source fields
+  // Logical names (for display)
   const tables = [...new Set(sourceFields.value.map(f => f.src_table_name))]
   const columns = sourceFields.value.map(f => f.src_column_name)
+  
+  // Physical names (for database and restore)
+  const tablesPhysical = [...new Set(sourceFields.value.map(f => f.src_table_physical_name || f.src_table_name))]
+  const columnsPhysical = sourceFields.value.map(f => f.src_column_physical_name || f.src_column_name)
   
   // Use pipe delimiter for CSV-friendly export
   sourceTables.value = tables.join(' | ')
   sourceColumns.value = columns.join(' | ')
+  sourceTablesPhysical.value = tablesPhysical.join(' | ')
+  sourceColumnsPhysical.value = columnsPhysical.join(' | ')
   
   // Determine relationship type
   if (tables.length > 1) {
@@ -1064,7 +1073,9 @@ async function handleSave() {
         tgt_comments: targetField.value.tgt_comments,
         source_expression: sourceExpression.value,
         source_tables: sourceTables.value || undefined,
+        source_tables_physical: sourceTablesPhysical.value || undefined,
         source_columns: sourceColumns.value || undefined,
+        source_columns_physical: sourceColumnsPhysical.value || undefined,
         source_descriptions: descriptions || undefined,
         source_datatypes: datatypes || undefined,
         source_domain: sourceDomain,

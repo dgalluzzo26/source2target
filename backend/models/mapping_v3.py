@@ -104,8 +104,10 @@ class MappedFieldCreateV3(BaseModel):
     source_expression: str = Field(..., description="Complete SQL expression")
     
     # Source metadata
-    source_tables: Optional[str] = None
-    source_columns: Optional[str] = None
+    source_tables: Optional[str] = None  # Logical names
+    source_tables_physical: Optional[str] = None  # Physical names (for restore)
+    source_columns: Optional[str] = None  # Logical names
+    source_columns_physical: Optional[str] = None  # Physical names (for restore)
     source_descriptions: Optional[str] = None
     source_datatypes: Optional[str] = None
     source_domain: Optional[str] = None  # Preserve domain for restore on delete

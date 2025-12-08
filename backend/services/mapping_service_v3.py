@@ -203,7 +203,9 @@ class MappingServiceV3:
                     tgt_comments,
                     source_expression,
                     source_tables,
+                    source_tables_physical,
                     source_columns,
+                    source_columns_physical,
                     source_descriptions,
                     source_datatypes,
                     source_domain,
@@ -224,7 +226,9 @@ class MappingServiceV3:
                     {f"'{self._escape_sql(data.tgt_comments)}'" if data.tgt_comments else 'NULL'},
                     '{self._escape_sql(data.source_expression)}',
                     {f"'{self._escape_sql(data.source_tables)}'" if data.source_tables else 'NULL'},
+                    {f"'{self._escape_sql(data.source_tables_physical)}'" if data.source_tables_physical else 'NULL'},
                     {f"'{self._escape_sql(data.source_columns)}'" if data.source_columns else 'NULL'},
+                    {f"'{self._escape_sql(data.source_columns_physical)}'" if data.source_columns_physical else 'NULL'},
                     {f"'{self._escape_sql(data.source_descriptions)}'" if data.source_descriptions else 'NULL'},
                     {f"'{self._escape_sql(data.source_datatypes)}'" if data.source_datatypes else 'NULL'},
                     {f"'{self._escape_sql(data.source_domain)}'" if data.source_domain else 'NULL'},
@@ -612,11 +616,13 @@ class MappingServiceV3:
             with connection.cursor() as cursor:
                 # Optionally restore source fields to unmapped
                 if restore_to_unmapped:
-                    # Get the mapping's full source info including mapped_by and domain
+                    # Get the mapping's full source info including physical names, mapped_by and domain
                     cursor.execute(f"""
                         SELECT 
                             source_tables, 
+                            source_tables_physical,
                             source_columns, 
+                            source_columns_physical,
                             source_datatypes, 
                             source_descriptions,
                             mapped_by,
@@ -626,18 +632,31 @@ class MappingServiceV3:
                     """)
                     row = cursor.fetchone()
                     
-                    if row and row[0] and row[1]:
-                        # Use pipe delimiter (CSV-friendly) - also handle legacy comma delimiter
-                        tables = [t.strip() for t in row[0].split(" | ")] if " | " in row[0] else [t.strip() for t in row[0].split(", ")]
-                        columns = [c.strip() for c in row[1].split(" | ")] if " | " in row[1] else [c.strip() for c in row[1].split(", ")]
-                        datatypes = [d.strip() for d in row[2].split(" | ")] if row[2] and " | " in row[2] else ([d.strip() for d in row[2].split(", ")] if row[2] else ["STRING"] * len(columns))
-                        descriptions = row[3].split(" | ") if row[3] else [""] * len(columns)
-                        mapped_by = row[4] if row[4] else None
-                        source_domain = row[5] if len(row) > 5 and row[5] else None
+                    if row and row[0] and row[2]:  # source_tables and source_columns
+                        # Helper to parse pipe or comma delimited strings
+                        def parse_delimited(val):
+                            if not val:
+                                return []
+                            return [v.strip() for v in val.split(" | ")] if " | " in val else [v.strip() for v in val.split(", ")]
+                        
+                        # Logical names (for display)
+                        tables = parse_delimited(row[0])
+                        # Physical names (for database) - fall back to logical if not stored
+                        tables_physical = parse_delimited(row[1]) if row[1] else tables
+                        # Logical column names
+                        columns = parse_delimited(row[2])
+                        # Physical column names - fall back to logical if not stored
+                        columns_physical = parse_delimited(row[3]) if row[3] else columns
+                        # Data types
+                        datatypes = parse_delimited(row[4]) if row[4] else ["STRING"] * len(columns)
+                        # Descriptions
+                        descriptions = row[5].split(" | ") if row[5] else [""] * len(columns)
+                        mapped_by = row[6] if row[6] else None
+                        source_domain = row[7] if len(row) > 7 and row[7] else None
                         
                         # Infer domain from table name if not stored
-                        if not source_domain and tables:
-                            table_lower = tables[0].lower()
+                        if not source_domain and tables_physical:
+                            table_lower = tables_physical[0].lower()
                             if 'member' in table_lower:
                                 source_domain = 'member'
                             elif 'claim' in table_lower:
@@ -649,7 +668,17 @@ class MappingServiceV3:
                             elif 'finance' in table_lower or 'payment' in table_lower:
                                 source_domain = 'finance'
                         
-                        for i, (table, column) in enumerate(zip(tables, columns)):
+                        # Ensure physical lists match logical lists length
+                        while len(tables_physical) < len(tables):
+                            tables_physical.append(tables[len(tables_physical)])
+                        while len(columns_physical) < len(columns):
+                            columns_physical.append(columns[len(columns_physical)])
+                        
+                        for i in range(len(columns)):
+                            table = tables[min(i, len(tables)-1)]
+                            table_phys = tables_physical[min(i, len(tables_physical)-1)]
+                            column = columns[i]
+                            column_phys = columns_physical[i] if i < len(columns_physical) else column
                             datatype = datatypes[i] if i < len(datatypes) else "STRING"
                             desc = descriptions[i] if i < len(descriptions) else ""
                             
@@ -667,9 +696,9 @@ class MappingServiceV3:
                                     uploaded_at
                                 ) VALUES (
                                     '{self._escape_sql(table)}',
-                                    '{self._escape_sql(table)}',
+                                    '{self._escape_sql(table_phys)}',
                                     '{self._escape_sql(column)}',
-                                    '{self._escape_sql(column)}',
+                                    '{self._escape_sql(column_phys)}',
                                     'YES',
                                     '{self._escape_sql(datatype)}',
                                     '{self._escape_sql(desc)}',

@@ -58,8 +58,10 @@ export interface MappedFieldCreateV3 {
   tgt_column_physical_name: string
   tgt_comments?: string
   source_expression: string
-  source_tables?: string
-  source_columns?: string
+  source_tables?: string  // Logical names
+  source_tables_physical?: string  // Physical names (for restore on delete)
+  source_columns?: string  // Logical names
+  source_columns_physical?: string  // Physical names (for restore on delete)
   source_descriptions?: string
   source_datatypes?: string
   source_domain?: string  // Preserve domain for restore on delete

@@ -156,10 +156,12 @@ CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.mapped_fields (
   -- =========================================================================
   -- SOURCE METADATA - For display, search, and AI learning
   -- =========================================================================
-  source_tables STRING COMMENT 'Comma-separated source table names (e.g., "patient_data, address")',
-  source_columns STRING COMMENT 'Comma-separated source column names (e.g., "first_name, last_name")',
+  source_tables STRING COMMENT 'Pipe-separated source table logical names (e.g., "Patient Data | Address")',
+  source_tables_physical STRING COMMENT 'Pipe-separated source table physical names (e.g., "patient_data | address")',
+  source_columns STRING COMMENT 'Pipe-separated source column logical names (e.g., "First Name | Last Name")',
+  source_columns_physical STRING COMMENT 'Pipe-separated source column physical names (e.g., "first_name | last_name")',
   source_descriptions STRING COMMENT 'Pipe-separated source column descriptions for AI learning',
-  source_datatypes STRING COMMENT 'Comma-separated source data types',
+  source_datatypes STRING COMMENT 'Pipe-separated source data types',
   source_domain STRING COMMENT 'Domain category from original unmapped fields (for restore on delete)',
   
   -- How sources relate
@@ -309,10 +311,14 @@ CLUSTER BY (feedback_action, suggested_tgt_table);
 
 
 -- ============================================================================
--- MIGRATION: If you already have V3 schema deployed, run this ALTER:
+-- MIGRATION: If you already have V3 schema deployed, run these ALTERs:
 -- ============================================================================
 -- ALTER TABLE ${CATALOG_SCHEMA}.mapped_fields ADD COLUMN 
 --   source_domain STRING COMMENT 'Domain category from original unmapped fields (for restore on delete)';
+-- ALTER TABLE ${CATALOG_SCHEMA}.mapped_fields ADD COLUMN 
+--   source_tables_physical STRING COMMENT 'Pipe-separated source table physical names';
+-- ALTER TABLE ${CATALOG_SCHEMA}.mapped_fields ADD COLUMN 
+--   source_columns_physical STRING COMMENT 'Pipe-separated source column physical names';
 -- ============================================================================
 
 
