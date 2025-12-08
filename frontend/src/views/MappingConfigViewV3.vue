@@ -65,7 +65,6 @@
                     :severity="getMatchQualitySeverity(targetField.match_quality)" 
                     size="small"
                   />
-                  <span class="confidence">{{ Math.round((targetField.search_score || 0) * 100) }}% match</span>
                 </div>
                 <p v-if="targetField.ai_reasoning" class="ai-reasoning">{{ targetField.ai_reasoning }}</p>
               </div>
@@ -155,30 +154,43 @@
                   :options="relationshipOptions" 
                   optionLabel="label"
                   optionValue="value"
+                  @change="updateSqlPlaceholder"
                 />
-                <small class="help-text">
-                  <span v-if="relationshipType === 'SINGLE'">Single source table/field</span>
-                  <span v-else-if="relationshipType === 'JOIN'">Fields from multiple tables joined together</span>
-                  <span v-else>Data from multiple tables combined with UNION</span>
-                </small>
+                <div class="relationship-help">
+                  <Message v-if="relationshipType === 'JOIN'" severity="info" :closable="false">
+                    <strong>JOIN Example:</strong>
+                    <pre>SELECT t1.field1, t2.field2 
+FROM table1 t1 
+JOIN table2 t2 ON t1.id = t2.id</pre>
+                  </Message>
+                  <Message v-else-if="relationshipType === 'UNION'" severity="info" :closable="false">
+                    <strong>UNION Example:</strong>
+                    <pre>SELECT field1 FROM table1
+UNION ALL
+SELECT field1 FROM table2</pre>
+                  </Message>
+                  <small v-else class="help-text">Single source field, optionally with transformations</small>
+                </div>
               </div>
 
-              <!-- Metadata (auto-detected) -->
+              <!-- Metadata (auto-populated, read-only) -->
               <div class="metadata-section">
+                <h4><i class="pi pi-info-circle"></i> Mapping Metadata <small>(auto-populated)</small></h4>
                 <div class="metadata-grid">
                   <div class="field">
                     <label>Source Tables</label>
-                    <InputText v-model="sourceTables" placeholder="Auto-detected from source fields" />
+                    <InputText v-model="sourceTables" disabled class="readonly-field" />
                   </div>
                   <div class="field">
                     <label>Source Columns</label>
-                    <InputText v-model="sourceColumns" placeholder="Auto-detected from source fields" />
+                    <InputText v-model="sourceColumns" disabled class="readonly-field" />
                   </div>
                   <div class="field">
-                    <label>Transformations</label>
-                    <InputText v-model="transformationsApplied" placeholder="e.g., TRIM, UPPER, CONCAT" />
+                    <label>Detected Transformations</label>
+                    <InputText v-model="transformationsApplied" disabled class="readonly-field" placeholder="Auto-detected from SQL" />
                   </div>
                 </div>
+                <small class="metadata-hint">These fields are auto-populated from your selected source fields. Edit the SQL Expression above to define the actual mapping logic.</small>
               </div>
             </div>
           </template>
@@ -350,11 +362,21 @@ const transformationOptions = computed(() => {
 
 // SQL placeholder
 const sqlPlaceholder = computed(() => {
-  if (sourceFields.value.length === 1) {
-    const field = sourceFields.value[0]
-    return `Enter SQL expression, e.g.:\n  ${field.src_column_physical_name}\n  TRIM(${field.src_column_physical_name})\n  UPPER(TRIM(${field.src_column_physical_name}))`
+  const fields = sourceFields.value
+  if (fields.length === 0) {
+    return 'Enter SQL expression...'
+  }
+  
+  const col1 = fields[0]?.src_column_physical_name || 'column1'
+  const cols = fields.map(f => f.src_column_physical_name).join(', ')
+  
+  if (relationshipType.value === 'JOIN') {
+    return `-- JOIN Example:\nSELECT t1.${col1}, t2.field2\nFROM table1 t1\nJOIN table2 t2 ON t1.id = t2.id`
+  } else if (relationshipType.value === 'UNION') {
+    return `-- UNION Example:\nSELECT ${col1} FROM table1\nUNION ALL\nSELECT ${col1} FROM table2`
+  } else if (fields.length === 1) {
+    return `Enter SQL expression, e.g.:\n  ${col1}\n  TRIM(${col1})\n  UPPER(TRIM(${col1}))`
   } else {
-    const cols = sourceFields.value.map(f => f.src_column_physical_name).join(', ')
     return `Enter SQL expression, e.g.:\n  CONCAT(${cols})\n  CONCAT_WS(' ', ${cols})`
   }
 })
@@ -519,9 +541,10 @@ function applyQuickTransform() {
 }
 
 function updatePreview() {
+  const expr = sourceExpression.value.toUpperCase()
+  
   // Auto-detect transformations from expression
   const transforms: string[] = []
-  const expr = sourceExpression.value.toUpperCase()
   
   if (expr.includes('TRIM')) transforms.push('TRIM')
   if (expr.includes('UPPER')) transforms.push('UPPER')
@@ -529,12 +552,28 @@ function updatePreview() {
   if (expr.includes('CONCAT')) transforms.push('CONCAT')
   if (expr.includes('CAST')) transforms.push('CAST')
   if (expr.includes('COALESCE')) transforms.push('COALESCE')
+  if (expr.includes('NVL')) transforms.push('NVL')
   if (expr.includes('DATE_FORMAT')) transforms.push('DATE_FORMAT')
+  if (expr.includes('TO_DATE')) transforms.push('TO_DATE')
   if (expr.includes('INITCAP')) transforms.push('INITCAP')
+  if (expr.includes('SUBSTRING')) transforms.push('SUBSTRING')
+  if (expr.includes('REPLACE')) transforms.push('REPLACE')
+  if (expr.includes('REGEXP')) transforms.push('REGEXP')
   
-  if (transforms.length > 0) {
-    transformationsApplied.value = transforms.join(', ')
+  // Update transformations field
+  transformationsApplied.value = transforms.length > 0 ? transforms.join(', ') : ''
+  
+  // Auto-detect relationship type from SQL
+  if (expr.includes(' JOIN ')) {
+    relationshipType.value = 'JOIN'
+  } else if (expr.includes('UNION')) {
+    relationshipType.value = 'UNION'
   }
+}
+
+function updateSqlPlaceholder() {
+  // Called when relationship type changes - placeholder updates via computed
+  console.log('[Mapping Config] Relationship type changed to:', relationshipType.value)
 }
 
 async function generateSQL() {
@@ -924,11 +963,26 @@ async function handleSave() {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .relationship-section label {
   font-weight: 600;
   color: var(--text-color);
+}
+
+.relationship-help {
+  margin-top: 0.5rem;
+}
+
+.relationship-help pre {
+  background: var(--surface-100);
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  margin: 0.5rem 0 0 0;
+  white-space: pre-wrap;
+  font-family: 'Courier New', monospace;
 }
 
 .help-text {
@@ -939,6 +993,37 @@ async function handleSave() {
 .metadata-section {
   border-top: 1px solid var(--surface-border);
   padding-top: 1rem;
+  background: var(--surface-50);
+  padding: 1rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+}
+
+.metadata-section h4 {
+  margin: 0 0 0.75rem 0;
+  color: var(--text-color-secondary);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.metadata-section h4 small {
+  font-weight: normal;
+  color: var(--text-color-secondary);
+}
+
+.metadata-hint {
+  display: block;
+  margin-top: 0.75rem;
+  color: var(--text-color-secondary);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.readonly-field {
+  background: var(--surface-100) !important;
+  opacity: 0.8;
 }
 
 .metadata-grid {
