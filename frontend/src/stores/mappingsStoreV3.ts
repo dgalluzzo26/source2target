@@ -62,6 +62,7 @@ export interface MappedFieldCreateV3 {
   source_columns?: string
   source_descriptions?: string
   source_datatypes?: string
+  source_domain?: string  // Preserve domain for restore on delete
   source_relationship_type?: string
   transformations_applied?: string
   confidence_score?: number
@@ -290,7 +291,13 @@ export const useMappingsStoreV3 = defineStore('mappingsV3', () => {
       physical_column?: string,
       comments?: string 
     }>,
-    targetColumn: { table: string, column: string, datatype?: string }
+    targetColumn: { 
+      table: string, 
+      column: string, 
+      datatype?: string,
+      physical_table?: string,
+      physical_column?: string 
+    }
   ): Promise<{ sql: string, explanation: string }> {
     try {
       console.log('[Mappings V3 Store] Generating SQL with AI...')
@@ -311,7 +318,9 @@ export const useMappingsStoreV3 = defineStore('mappingsV3', () => {
         })),
         target_field: {
           tgt_table_name: targetColumn.table,
+          tgt_table_physical_name: targetColumn.physical_table || targetColumn.table,
           tgt_column_name: targetColumn.column,
+          tgt_column_physical_name: targetColumn.physical_column || targetColumn.column,
           tgt_physical_datatype: targetColumn.datatype || 'STRING'
         }
       }

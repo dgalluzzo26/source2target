@@ -1051,49 +1051,6 @@ With Union: source_expression = "SELECT city FROM curr UNION SELECT city FROM hi
                 </table>
             </div>
             
-            <!-- Table 5: transformation_library -->
-            <div class="table-container">
-                <h4>⚙️ transformation_library</h4>
-                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
-                    Predefined SQL transformations that AI can suggest.
-                </p>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Column</th>
-                            <th>Type</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>transformation_id</code></td>
-                            <td>BIGINT (PK)</td>
-                            <td>Auto-generated primary key</td>
-                        </tr>
-                        <tr>
-                            <td><code>transformation_name</code></td>
-                            <td>STRING</td>
-                            <td>Display name (e.g., "Trim Whitespace")</td>
-                        </tr>
-                        <tr>
-                            <td><code>transformation_code</code></td>
-                            <td>STRING</td>
-                            <td>Short code (e.g., "TRIM")</td>
-                        </tr>
-                        <tr>
-                            <td><code>transformation_expression</code></td>
-                            <td>STRING</td>
-                            <td>SQL template (e.g., "TRIM({field})")</td>
-                        </tr>
-                        <tr>
-                            <td><code>category</code></td>
-                            <td>STRING</td>
-                            <td>TEXT, DATE, NUMERIC, CUSTOM</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
         </section>
         
         <!-- Entity Relationship Diagram -->
@@ -1130,17 +1087,20 @@ With Union: source_expression = "SELECT city FROM curr UNION SELECT city FROM hi
 │ • source_semantic_field 🔍 ← Vector-indexed for AI learning          │
 └──────────────────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────┐         ┌─────────────────────────────┐
-│    mapping_feedback         │         │   transformation_library    │
-│    (Rejected Suggestions)   │         │   (SQL Templates)           │
-│                             │         │                             │
-│ • feedback_id (PK)          │         │ • transformation_id (PK)    │
-│ • suggested_src/tgt         │         │ • transformation_code       │
-│ • user_comments             │         │ • transformation_expression │
-│ • source_semantic_field 🔍  │         │ • category                  │
-└─────────────────────────────┘         └─────────────────────────────┘
+┌─────────────────────────────┐
+│    mapping_feedback         │
+│    (Rejected Suggestions)   │
+│                             │
+│ • feedback_id (PK)          │
+│ • suggested_src/tgt         │
+│ • user_comments             │
+│ • source_semantic_field 🔍  │
+└─────────────────────────────┘
 
 🔍 = Vector-indexed for AI search
+
+Note: Transformations are generated dynamically by AI
+based on historical patterns - no library table needed.
                 </pre>
             </div>
         </section>
@@ -1173,7 +1133,7 @@ sync issues between tables</pre>
   └── source_tables: "t1, t2"
   └── source_columns: "col1, col2"
 
-5 tables total, no joins needed,
+4 tables total, no joins needed,
 SQL expression is source of truth</pre>
                 </div>
             </div>

@@ -206,6 +206,7 @@ class MappingServiceV3:
                     source_columns,
                     source_descriptions,
                     source_datatypes,
+                    source_domain,
                     source_relationship_type,
                     transformations_applied,
                     confidence_score,
@@ -226,6 +227,7 @@ class MappingServiceV3:
                     {f"'{self._escape_sql(data.source_columns)}'" if data.source_columns else 'NULL'},
                     {f"'{self._escape_sql(data.source_descriptions)}'" if data.source_descriptions else 'NULL'},
                     {f"'{self._escape_sql(data.source_datatypes)}'" if data.source_datatypes else 'NULL'},
+                    {f"'{self._escape_sql(data.source_domain)}'" if data.source_domain else 'NULL'},
                     '{data.source_relationship_type}',
                     {f"'{self._escape_sql(data.transformations_applied)}'" if data.transformations_applied else 'NULL'},
                     {data.confidence_score if data.confidence_score is not None else 'NULL'},
@@ -610,9 +612,15 @@ class MappingServiceV3:
             with connection.cursor() as cursor:
                 # Optionally restore source fields to unmapped
                 if restore_to_unmapped:
-                    # Get the mapping's source info
+                    # Get the mapping's full source info including mapped_by and domain
                     cursor.execute(f"""
-                        SELECT source_tables, source_columns, source_datatypes, source_descriptions
+                        SELECT 
+                            source_tables, 
+                            source_columns, 
+                            source_datatypes, 
+                            source_descriptions,
+                            mapped_by,
+                            source_domain
                         FROM {mapped_fields_table}
                         WHERE mapped_field_id = {mapping_id}
                     """)
@@ -623,6 +631,22 @@ class MappingServiceV3:
                         columns = row[1].split(", ")
                         datatypes = row[2].split(", ") if row[2] else ["STRING"] * len(columns)
                         descriptions = row[3].split(" | ") if row[3] else [""] * len(columns)
+                        mapped_by = row[4] if row[4] else None
+                        source_domain = row[5] if len(row) > 5 and row[5] else None
+                        
+                        # Infer domain from table name if not stored
+                        if not source_domain and tables:
+                            table_lower = tables[0].lower()
+                            if 'member' in table_lower:
+                                source_domain = 'member'
+                            elif 'claim' in table_lower:
+                                source_domain = 'claims'
+                            elif 'provider' in table_lower:
+                                source_domain = 'provider'
+                            elif 'pharmacy' in table_lower or 'drug' in table_lower:
+                                source_domain = 'pharmacy'
+                            elif 'finance' in table_lower or 'payment' in table_lower:
+                                source_domain = 'finance'
                         
                         for i, (table, column) in enumerate(zip(tables, columns)):
                             datatype = datatypes[i] if i < len(datatypes) else "STRING"
@@ -636,7 +660,10 @@ class MappingServiceV3:
                                     src_column_physical_name,
                                     src_nullable,
                                     src_physical_datatype,
-                                    src_comments
+                                    src_comments,
+                                    domain,
+                                    uploaded_by,
+                                    uploaded_at
                                 ) VALUES (
                                     '{self._escape_sql(table)}',
                                     '{self._escape_sql(table)}',
@@ -644,12 +671,15 @@ class MappingServiceV3:
                                     '{self._escape_sql(column)}',
                                     'YES',
                                     '{self._escape_sql(datatype)}',
-                                    '{self._escape_sql(desc)}'
+                                    '{self._escape_sql(desc)}',
+                                    {f"'{self._escape_sql(source_domain)}'" if source_domain else 'NULL'},
+                                    {f"'{self._escape_sql(mapped_by)}'" if mapped_by else 'NULL'},
+                                    CURRENT_TIMESTAMP()
                                 )
                             """
                             cursor.execute(insert_sql)
                         
-                        print(f"[Mapping Service V3] Restored {len(columns)} fields to unmapped")
+                        print(f"[Mapping Service V3] Restored {len(columns)} fields to unmapped with domain={source_domain}, uploaded_by={mapped_by}")
                 
                 # Delete the mapping
                 delete_sql = f"""

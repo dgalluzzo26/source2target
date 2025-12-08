@@ -158,9 +158,21 @@
                 v-model="sourceExpression"
                 :rows="8"
                 class="sql-editor"
+                :class="{ 'sql-error': !sqlValidation.valid && sourceExpression.trim() }"
                 :placeholder="sqlPlaceholder"
                 @input="updatePreview"
               />
+              
+              <!-- SQL Validation Error -->
+              <Message 
+                v-if="!sqlValidation.valid && sourceExpression.trim()" 
+                severity="error" 
+                :closable="false"
+                class="sql-validation-error"
+              >
+                <i class="pi pi-exclamation-triangle"></i>
+                <strong>Invalid SQL:</strong> {{ sqlValidation.error }}
+              </Message>
               
               <!-- SQL Preview -->
               <div class="sql-preview-section">
@@ -233,6 +245,7 @@ SELECT field1 FROM table2</pre>
             @click="handleSave"
             :loading="saving"
             :disabled="!isValid"
+            v-tooltip.top="saveButtonTooltip"
           />
         </div>
       </div>
@@ -463,9 +476,27 @@ const previewSQL = computed(() => {
   return `SELECT ${sourceExpression.value} AS ${targetCol}`
 })
 
-// Validation
+// Validation - includes SQL validation
 const isValid = computed(() => {
-  return sourceExpression.value.trim().length > 0 && targetField.value !== null
+  const hasExpression = sourceExpression.value.trim().length > 0
+  const hasTarget = targetField.value !== null
+  const sqlIsValid = sqlValidation.value.valid
+  
+  return hasExpression && hasTarget && sqlIsValid
+})
+
+// Save button tooltip - explains why disabled
+const saveButtonTooltip = computed(() => {
+  if (!targetField.value) {
+    return 'Select a target field first'
+  }
+  if (!sourceExpression.value.trim()) {
+    return 'Enter a SQL expression'
+  }
+  if (!sqlValidation.value.valid) {
+    return `Fix SQL error: ${sqlValidation.value.error}`
+  }
+  return 'Save this mapping'
 })
 
 // Watch source fields and reset relationship type if invalid
@@ -735,12 +766,18 @@ async function generateSQL() {
       sourceFields.value.map(f => ({
         table: f.src_table_name,
         column: f.src_column_name,
-        datatype: f.src_physical_datatype
+        datatype: f.src_physical_datatype,
+        // CRITICAL: Pass physical names for SQL generation
+        physical_table: f.src_table_physical_name || f.src_table_name,
+        physical_column: f.src_column_physical_name || f.src_column_name,
+        comments: f.src_comments
       })),
       {
         table: targetField.value?.tgt_table_name || '',
         column: targetField.value?.tgt_column_name || '',
-        datatype: 'STRING'
+        datatype: targetField.value?.tgt_physical_datatype || 'STRING',
+        physical_table: targetField.value?.tgt_table_physical_name || targetField.value?.tgt_table_name || '',
+        physical_column: targetField.value?.tgt_column_physical_name || targetField.value?.tgt_column_name || ''
       }
     )
     
@@ -785,8 +822,82 @@ function getMatchQualitySeverity(quality: string): string {
   }
 }
 
-// SQL Validation - checks for common syntax issues
-function validateSQLExpression(sql: string): { valid: boolean; error?: string } {
+// Known valid Databricks SQL functions
+const VALID_SQL_FUNCTIONS = new Set([
+  // String functions
+  'TRIM', 'LTRIM', 'RTRIM', 'UPPER', 'LOWER', 'INITCAP', 'LENGTH', 'LEN',
+  'CONCAT', 'CONCAT_WS', 'SUBSTRING', 'SUBSTR', 'LEFT', 'RIGHT',
+  'REPLACE', 'REGEXP_REPLACE', 'REGEXP_EXTRACT', 'SPLIT', 'SPLIT_PART',
+  'LPAD', 'RPAD', 'REVERSE', 'REPEAT', 'TRANSLATE', 'SOUNDEX',
+  'ASCII', 'CHR', 'CHAR', 'INSTR', 'LOCATE', 'POSITION',
+  'FORMAT_STRING', 'PRINTF', 'OVERLAY', 'LEVENSHTEIN',
+  // Null handling
+  'COALESCE', 'NVL', 'NVL2', 'NULLIF', 'IFNULL', 'ISNULL',
+  // Type conversion
+  'CAST', 'CONVERT', 'TRY_CAST', 'TO_CHAR', 'TO_NUMBER',
+  // Date/Time functions
+  'DATE', 'TO_DATE', 'DATE_FORMAT', 'DATE_ADD', 'DATE_SUB', 'DATEDIFF',
+  'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND', 'DAYOFWEEK', 'DAYOFYEAR',
+  'CURRENT_DATE', 'CURRENT_TIMESTAMP', 'NOW', 'GETDATE', 'SYSDATE',
+  'TIMESTAMP', 'TO_TIMESTAMP', 'FROM_UNIXTIME', 'UNIX_TIMESTAMP',
+  'ADD_MONTHS', 'MONTHS_BETWEEN', 'LAST_DAY', 'NEXT_DAY', 'TRUNC',
+  'DATE_TRUNC', 'EXTRACT', 'DATEPART', 'TIMESTAMPADD', 'TIMESTAMPDIFF',
+  // Numeric functions
+  'ROUND', 'FLOOR', 'CEIL', 'CEILING', 'ABS', 'MOD', 'POWER', 'POW',
+  'SQRT', 'EXP', 'LOG', 'LOG10', 'LN', 'SIGN', 'RAND', 'RANDOM',
+  'GREATEST', 'LEAST', 'TRUNCATE',
+  // Aggregate functions
+  'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'COLLECT_LIST', 'COLLECT_SET',
+  'FIRST', 'LAST', 'STDDEV', 'VARIANCE', 'PERCENTILE', 'APPROX_COUNT_DISTINCT',
+  // Conditional functions
+  'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'IF', 'IIF', 'DECODE', 'NULLIF',
+  // Array/Map functions
+  'ARRAY', 'MAP', 'STRUCT', 'NAMED_STRUCT', 'SIZE', 'EXPLODE', 'POSEXPLODE',
+  'ARRAY_CONTAINS', 'ELEMENT_AT', 'SLICE', 'SEQUENCE', 'FLATTEN',
+  // Window functions
+  'ROW_NUMBER', 'RANK', 'DENSE_RANK', 'NTILE', 'LAG', 'LEAD',
+  'FIRST_VALUE', 'LAST_VALUE', 'OVER', 'PARTITION', 'ORDER',
+  // JSON functions
+  'GET_JSON_OBJECT', 'JSON_TUPLE', 'TO_JSON', 'FROM_JSON', 'SCHEMA_OF_JSON',
+  // Other
+  'HASH', 'MD5', 'SHA1', 'SHA2', 'BASE64', 'UNBASE64', 'CRC32',
+  'UUID', 'MONOTONICALLY_INCREASING_ID',
+  // SQL keywords that might appear like functions
+  'SELECT', 'FROM', 'WHERE', 'JOIN', 'INNER', 'LEFT', 'RIGHT', 'OUTER',
+  'ON', 'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'BETWEEN', 'LIKE', 'UNION', 'ALL',
+  'GROUP', 'BY', 'HAVING', 'ORDER', 'ASC', 'DESC', 'LIMIT', 'AS', 'DISTINCT'
+])
+
+// Common typos and their corrections
+const COMMON_TYPOS: Record<string, string> = {
+  'INITCA': 'INITCAP',
+  'INTCAP': 'INITCAP',
+  'INITCP': 'INITCAP',
+  'INTICAP': 'INITCAP',
+  'UPPPER': 'UPPER',
+  'UPER': 'UPPER',
+  'LOWWER': 'LOWER',
+  'LOWEER': 'LOWER',
+  'TRIN': 'TRIM',
+  'TIRM': 'TRIM',
+  'TRIIM': 'TRIM',
+  'CONACT': 'CONCAT',
+  'CONCATE': 'CONCAT',
+  'COALESE': 'COALESCE',
+  'COLASCE': 'COALESCE',
+  'COLAESCE': 'COALESCE',
+  'SUBSTING': 'SUBSTRING',
+  'SUBSTRIG': 'SUBSTRING',
+  'REPLCE': 'REPLACE',
+  'RPLACE': 'REPLACE',
+  'LENGHT': 'LENGTH',
+  'LEGTH': 'LENGTH',
+  'ROUNG': 'ROUND',
+  'ROUD': 'ROUND',
+}
+
+// SQL Validation - checks for common syntax issues and invalid functions
+function validateSQLExpression(sql: string): { valid: boolean; error?: string; warning?: string } {
   const trimmedSql = sql.trim()
   
   // Check for empty expression
@@ -814,49 +925,87 @@ function validateSQLExpression(sql: string): { valid: boolean; error?: string } 
   }
   
   // Check for common SQL injection patterns (basic)
-  const dangerousPatterns = [/;\s*DROP/i, /;\s*DELETE/i, /;\s*TRUNCATE/i, /;\s*INSERT/i, /;\s*UPDATE/i]
+  const dangerousPatterns = [/;\s*DROP/i, /;\s*DELETE/i, /;\s*TRUNCATE/i, /;\s*INSERT\s+INTO/i, /;\s*UPDATE\s+\w+\s+SET/i]
   for (const pattern of dangerousPatterns) {
     if (pattern.test(trimmedSql)) {
       return { valid: false, error: 'Expression contains potentially dangerous SQL commands' }
     }
   }
   
-  // Check for unclosed functions (common typos)
-  const openFunctions = trimmedSql.match(/\w+\s*\(/g) || []
-  const closingParens = trimmedSql.match(/\)/g) || []
-  // This is a rough check - already covered by paren balance above
+  // Extract all function-like patterns (word followed by parenthesis)
+  const functionMatches = trimmedSql.match(/\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g) || []
   
-  // Check for empty function calls
-  if (/\(\s*\)/.test(trimmedSql) && !/CURRENT_TIMESTAMP|CURRENT_DATE|NOW|GETDATE/i.test(trimmedSql)) {
-    return { valid: false, error: 'Empty function call detected - function needs arguments' }
-  }
-  
-  // Check that common functions have proper syntax
-  const functionPatterns = [
-    { pattern: /TRIM\s*\([^)]+\)/i, name: 'TRIM' },
-    { pattern: /UPPER\s*\([^)]+\)/i, name: 'UPPER' },
-    { pattern: /LOWER\s*\([^)]+\)/i, name: 'LOWER' },
-    { pattern: /CONCAT\s*\([^)]+\)/i, name: 'CONCAT' },
-    { pattern: /COALESCE\s*\([^)]+\)/i, name: 'COALESCE' },
-    { pattern: /CAST\s*\([^)]+\s+AS\s+\w+\)/i, name: 'CAST' },
-  ]
-  
-  // Check if functions used have basic structure
-  for (const fn of ['TRIM', 'UPPER', 'LOWER', 'INITCAP']) {
-    const fnRegex = new RegExp(`${fn}\\s*\\(`, 'i')
-    if (fnRegex.test(trimmedSql)) {
-      const fnWithArgs = new RegExp(`${fn}\\s*\\([^)]+\\)`, 'i')
-      if (!fnWithArgs.test(trimmedSql)) {
-        return { valid: false, error: `${fn} function appears to be malformed` }
+  for (const match of functionMatches) {
+    // Extract just the function name
+    const fnName = match.replace(/\s*\($/, '').toUpperCase()
+    
+    // Skip if it looks like a table.column pattern or field name
+    if (fnName.includes('.')) continue
+    
+    // Check for common typos first
+    if (COMMON_TYPOS[fnName]) {
+      return { 
+        valid: false, 
+        error: `Invalid function "${fnName}" - did you mean "${COMMON_TYPOS[fnName]}"?` 
+      }
+    }
+    
+    // Check if it's a known SQL function
+    if (!VALID_SQL_FUNCTIONS.has(fnName)) {
+      // Check for similar functions (Levenshtein-like match)
+      const suggestions = Array.from(VALID_SQL_FUNCTIONS).filter(validFn => {
+        // Simple similarity check: same first 2-3 letters
+        return validFn.startsWith(fnName.substring(0, 2)) || 
+               fnName.startsWith(validFn.substring(0, 2))
+      }).slice(0, 3)
+      
+      if (suggestions.length > 0) {
+        return { 
+          valid: false, 
+          error: `Unknown function "${fnName}" - did you mean: ${suggestions.join(', ')}?` 
+        }
+      }
+      
+      return { 
+        valid: false, 
+        error: `Unknown function "${fnName}" - please use valid Databricks SQL functions` 
       }
     }
   }
   
-  // Warn about potential issues but allow
+  // Check for empty function calls (except no-arg functions)
+  const noArgFunctions = /CURRENT_TIMESTAMP|CURRENT_DATE|NOW|GETDATE|SYSDATE|UUID/i
+  if (/\(\s*\)/.test(trimmedSql)) {
+    // Find which function has empty args
+    const emptyFnMatch = trimmedSql.match(/\b(\w+)\s*\(\s*\)/i)
+    if (emptyFnMatch && !noArgFunctions.test(emptyFnMatch[1])) {
+      return { valid: false, error: `Function ${emptyFnMatch[1]}() requires arguments` }
+    }
+  }
+  
+  // Check that known functions have proper syntax
+  for (const fn of ['TRIM', 'UPPER', 'LOWER', 'INITCAP', 'CONCAT', 'COALESCE']) {
+    const fnRegex = new RegExp(`\\b${fn}\\s*\\(`, 'i')
+    if (fnRegex.test(trimmedSql)) {
+      const fnWithArgs = new RegExp(`\\b${fn}\\s*\\([^)]+\\)`, 'i')
+      if (!fnWithArgs.test(trimmedSql)) {
+        return { valid: false, error: `${fn} function appears to be malformed - check syntax` }
+      }
+    }
+  }
+  
   console.log('[SQL Validation] Expression passed validation:', trimmedSql.substring(0, 100))
   
   return { valid: true }
 }
+
+// Reactive validation state
+const sqlValidation = computed(() => {
+  if (!sourceExpression.value.trim()) {
+    return { valid: true, error: undefined } // Empty is ok until save
+  }
+  return validateSQLExpression(sourceExpression.value)
+})
 
 function handleBack() {
   router.push({ name: 'unmapped-fields' })
@@ -899,6 +1048,11 @@ async function handleSave() {
       .map(f => f.src_physical_datatype)
       .join(', ')
     
+    // Get domain from source fields (use first non-null domain)
+    const sourceDomain = sourceFields.value
+      .map(f => (f as any).domain)
+      .find(d => d) || undefined
+    
     const mappingId = await mappingsStore.createMapping(
       {
         semantic_field_id: targetField.value.semantic_field_id,
@@ -912,6 +1066,7 @@ async function handleSave() {
         source_columns: sourceColumns.value || undefined,
         source_descriptions: descriptions || undefined,
         source_datatypes: datatypes || undefined,
+        source_domain: sourceDomain,
         source_relationship_type: relationshipType.value,
         transformations_applied: transformationsApplied.value || undefined,
         confidence_score: targetField.value.search_score,
@@ -1226,6 +1381,26 @@ async function handleSave() {
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: break-word;
+}
+
+/* SQL Editor error state */
+.sql-editor.sql-error {
+  border-color: var(--red-500) !important;
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
+.sql-editor.sql-error:deep(textarea) {
+  border-color: var(--red-500) !important;
+}
+
+/* SQL Validation Error Message */
+.sql-validation-error {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.sql-validation-error i {
+  margin-right: 0.5rem;
 }
 
 /* Override PrimeVue Textarea to allow proper wrapping */

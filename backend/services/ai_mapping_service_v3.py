@@ -114,8 +114,9 @@ class AIMappingServiceV3:
         datatypes = []
         
         for field in source_fields:
-            tables.add(field.get('src_table_name', ''))
-            columns.append(field.get('src_column_name', ''))
+            # Use physical names for actual database references
+            tables.add(field.get('src_table_physical_name', field.get('src_table_name', '')))
+            columns.append(field.get('src_column_physical_name', field.get('src_column_name', '')))
             descriptions.append(field.get('src_comments', '') or 'No description')
             datatypes.append(field.get('src_physical_datatype', '') or 'UNKNOWN')
         
@@ -352,20 +353,40 @@ class AIMappingServiceV3:
         print(f"[AI Mapping V3] Calling LLM for analysis...")
         
         try:
-            # Build source context
+            # Build source context with PHYSICAL names for SQL generation
             source_info = []
+            current_field_names = []
+            current_table_names = []
+            
             for field in source_fields:
+                # Always use physical names for SQL
+                physical_table = field.get('src_table_physical_name', field.get('src_table_name', 'unknown_table'))
+                physical_column = field.get('src_column_physical_name', field.get('src_column_name', 'unknown_column'))
+                
+                current_field_names.append(physical_column)
+                current_table_names.append(physical_table)
+                
                 source_info.append(
-                    f"- {field['src_table_name']}.{field['src_column_name']} "
+                    f"- {physical_table}.{physical_column} "
                     f"({field.get('src_physical_datatype', 'UNKNOWN')}): "
                     f"{field.get('src_comments', 'No description')}"
                 )
             
-            # Build target candidates context
+            current_field_names_str = ', '.join(current_field_names)
+            
+            # Build qualified names for multi-table scenarios
+            qualified_field_names = [
+                f"{t}.{c}" for t, c in zip(current_table_names, current_field_names)
+            ]
+            qualified_field_names_str = ', '.join(qualified_field_names)
+            
+            # Build target candidates context - use PHYSICAL names
             target_info = []
             for i, t in enumerate(target_candidates[:5], 1):
+                tgt_table = t.get('tgt_table_physical_name', t.get('tgt_table_name', 'unknown'))
+                tgt_column = t.get('tgt_column_physical_name', t.get('tgt_column_name', 'unknown'))
                 target_info.append(
-                    f"{i}. {t['tgt_table_name']}.{t['tgt_column_name']} "
+                    f"{i}. {tgt_table}.{tgt_column} "
                     f"(Score: {t.get('search_score', 0):.4f}) - {t.get('tgt_comments', 'No description')}"
                 )
             
@@ -381,10 +402,6 @@ class AIMappingServiceV3:
                     f"  (Note: Field names in original were different - only use the transformation pattern)"
                 )
             
-            # Get current source field names for the LLM to use
-            current_field_names = [f.get('src_column_physical_name', f.get('src_column_name', '')) for f in source_fields]
-            current_field_names_str = ', '.join(current_field_names)
-            
             # Build rejection context
             rejection_info = []
             for r in rejections[:5]:
@@ -395,27 +412,31 @@ class AIMappingServiceV3:
             
             prompt = f"""You are an expert data mapping assistant. Analyze these inputs and provide mapping recommendations.
 
-CURRENT SOURCE FIELDS TO MAP (use THESE exact field names in your SQL):
+CURRENT SOURCE FIELDS TO MAP (use THESE EXACT PHYSICAL names in your SQL):
 {chr(10).join(source_info)}
 
-CURRENT FIELD NAMES TO USE IN SQL: {current_field_names_str}
+PHYSICAL COLUMN NAMES FOR SQL: {current_field_names_str}
+FULLY QUALIFIED NAMES (table.column): {qualified_field_names_str}
 
 TARGET CANDIDATES (from vector search):
 {chr(10).join(target_info) if target_info else 'No candidates found'}
 
-HISTORICAL PATTERNS (learn TRANSFORMATIONS from these, but use CURRENT field names above):
+HISTORICAL PATTERNS (learn TRANSFORMATIONS from these, but use CURRENT PHYSICAL field names above):
 {chr(10).join(pattern_info) if pattern_info else 'No historical patterns found'}
 
-IMPORTANT: The historical patterns show what transformations (TRIM, UPPER, INITCAP, etc.) were 
-typically applied for similar mappings. Apply those same transformations but use the CURRENT 
-source field names listed above - NOT the old field names from historical patterns.
+CRITICAL: 
+- Use ONLY the PHYSICAL column names listed above in any SQL expressions
+- Physical names are: {current_field_names_str}
+- For multi-table joins, use qualified names: {qualified_field_names_str}
+- The historical patterns show what transformations (TRIM, UPPER, INITCAP, etc.) were typically applied
+- Apply those same transformations but with the CURRENT PHYSICAL field names - NOT old field names
 
 REJECTED MAPPINGS (avoid these):
 {chr(10).join(rejection_info) if rejection_info else 'No rejections'}
 
 Based on this analysis, provide:
-1. The BEST target field match
-2. A SQL expression using the CURRENT field names: {current_field_names_str}
+1. The BEST target field match (use physical names)
+2. A SQL expression using ONLY these PHYSICAL field names: {current_field_names_str}
 3. Recommended transformations based on historical patterns
 4. Whether this should be SINGLE, JOIN, or UNION based on sources
 
@@ -492,47 +513,63 @@ Respond in JSON format:
         print(f"[AI Mapping V3] Generating SQL from: '{user_description}'")
         
         try:
-            # Build source context with physical names
+            # Build source context with PHYSICAL names only
             source_info = []
-            field_names = []
+            physical_column_names = []
+            physical_table_names = []
+            qualified_names = []
+            
             for field in source_fields:
-                physical_name = field.get('src_column_physical_name', field.get('src_column_name', 'column'))
-                table_name = field.get('src_table_physical_name', field.get('src_table_name', 'table'))
-                field_names.append(physical_name)
+                physical_column = field.get('src_column_physical_name', field.get('src_column_name', 'column'))
+                physical_table = field.get('src_table_physical_name', field.get('src_table_name', 'table'))
+                physical_column_names.append(physical_column)
+                physical_table_names.append(physical_table)
+                qualified_names.append(f"{physical_table}.{physical_column}")
                 source_info.append(
-                    f"- {table_name}.{physical_name} ({field.get('src_physical_datatype', 'STRING')})"
+                    f"- {physical_table}.{physical_column} ({field.get('src_physical_datatype', 'STRING')})"
                 )
             
-            field_names_str = ', '.join(field_names)
+            physical_names_str = ', '.join(physical_column_names)
+            qualified_names_str = ', '.join(qualified_names)
+            
+            # Target also uses physical names
+            tgt_table = target_field.get('tgt_table_physical_name', target_field.get('tgt_table_name', 'TARGET'))
+            tgt_column = target_field.get('tgt_column_physical_name', target_field.get('tgt_column_name', 'COLUMN'))
             
             prompt = f"""Generate a Databricks SQL expression based on the user's request.
 
-SOURCE FIELDS (use these EXACT field names in your SQL):
+SOURCE FIELDS - PHYSICAL DATABASE NAMES (use ONLY these in your SQL):
 {chr(10).join(source_info)}
 
-FIELD NAMES TO USE: {field_names_str}
+PHYSICAL COLUMN NAMES: {physical_names_str}
+FULLY QUALIFIED (table.column): {qualified_names_str}
 
-TARGET FIELD:
-- {target_field.get('tgt_table_name', 'TARGET')}.{target_field.get('tgt_column_name', 'COLUMN')} ({target_field.get('tgt_physical_datatype', 'STRING')})
+TARGET FIELD (physical name):
+- {tgt_table}.{tgt_column} ({target_field.get('tgt_physical_datatype', 'STRING')})
 
 USER REQUEST: "{user_description}"
 
-Common transformations:
-- TRIM(field) - remove whitespace
-- UPPER(field) - uppercase
-- LOWER(field) - lowercase
-- INITCAP(field) - title case
-- CONCAT(field1, ' ', field2) - combine fields
-- COALESCE(field, 'default') - handle nulls
-- CAST(field AS type) - type conversion
-- TO_DATE(field, 'format') - date conversion
-- SUBSTR(field, start, length) - substring
+Common Databricks SQL transformations:
+- TRIM(column) - remove whitespace
+- UPPER(column) - uppercase
+- LOWER(column) - lowercase
+- INITCAP(column) - title case
+- CONCAT(col1, ' ', col2) - combine fields
+- COALESCE(column, 'default') - handle nulls
+- CAST(column AS type) - type conversion
+- TO_DATE(column, 'format') - date conversion
+- SUBSTR(column, start, length) - substring
+- REPLACE(column, 'old', 'new') - replace text
+- REGEXP_REPLACE(column, pattern, replacement) - regex replace
 
-IMPORTANT: Use the EXACT field names listed above ({field_names_str}) in your SQL expression.
+CRITICAL: 
+- Use ONLY these PHYSICAL column names in your SQL: {physical_names_str}
+- For multi-table scenarios, use qualified names: {qualified_names_str}
+- Do NOT use logical/display names - only the physical database names above
 
 Generate valid Databricks SQL. Respond in JSON:
 {{
-  "sql_expression": "TRIM(UPPER({field_names[0] if field_names else 'column'}))",
+  "sql_expression": "TRIM(UPPER({physical_column_names[0] if physical_column_names else 'column'}))",
   "transformations_used": ["TRIM", "UPPER"],
   "explanation": "Applied uppercase and trim as requested"
 }}

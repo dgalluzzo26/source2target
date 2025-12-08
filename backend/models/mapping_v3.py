@@ -108,6 +108,7 @@ class MappedFieldCreateV3(BaseModel):
     source_columns: Optional[str] = None
     source_descriptions: Optional[str] = None
     source_datatypes: Optional[str] = None
+    source_domain: Optional[str] = None  # Preserve domain for restore on delete
     source_relationship_type: str = "SINGLE"
     transformations_applied: Optional[str] = None
     

@@ -13,7 +13,6 @@
 -- 2. unmapped_fields     - Source fields awaiting mapping
 -- 3. mapped_fields       - Complete mappings with SQL expression (vector indexed)
 -- 4. mapping_feedback    - Rejected suggestions (vector indexed)
--- 5. transformation_library - Reusable transformation templates
 --
 -- ============================================================================
 -- REPLACE THIS WITH YOUR CATALOG.SCHEMA
@@ -161,6 +160,7 @@ CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.mapped_fields (
   source_columns STRING COMMENT 'Comma-separated source column names (e.g., "first_name, last_name")',
   source_descriptions STRING COMMENT 'Pipe-separated source column descriptions for AI learning',
   source_datatypes STRING COMMENT 'Comma-separated source data types',
+  source_domain STRING COMMENT 'Domain category from original unmapped fields (for restore on delete)',
   
   -- How sources relate
   source_relationship_type STRING DEFAULT 'SINGLE' COMMENT 'SINGLE (one table), JOIN (multiple tables joined), UNION (multiple tables unioned)',
@@ -268,39 +268,6 @@ TBLPROPERTIES (
 
 
 -- ============================================================================
--- TABLE 5: transformation_library (Reusable Transformation Templates)
--- ============================================================================
--- Purpose: Store common transformation patterns for AI suggestions and UI
--- Vector Search: No
--- ============================================================================
-
-CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.transformation_library (
-  transformation_id BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 1 INCREMENT BY 1),
-  transformation_name STRING NOT NULL COMMENT 'Friendly name (e.g., Standard Name Format)',
-  transformation_code STRING NOT NULL COMMENT 'Short code (e.g., STD_NAME)',
-  transformation_expression STRING NOT NULL COMMENT 'SQL expression template with {field} placeholder',
-  transformation_description STRING COMMENT 'Description of what this transformation does',
-  category STRING COMMENT 'Category: TEXT, DATE, NUMERIC, CUSTOM',
-  is_system BOOLEAN DEFAULT false COMMENT 'Whether this is a system-provided transformation',
-  
-  -- Audit fields
-  created_by STRING DEFAULT 'system' COMMENT 'User who created this transformation',
-  created_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Timestamp when created',
-  updated_by STRING COMMENT 'User who last updated',
-  updated_ts TIMESTAMP COMMENT 'Timestamp when last updated',
-  
-  CONSTRAINT pk_transformation_library PRIMARY KEY (transformation_id)
-)
-COMMENT 'Library of reusable transformation patterns for AI suggestions and user reference.'
-TBLPROPERTIES (
-  'delta.enableChangeDataFeed' = 'true',
-  'delta.autoOptimize.optimizeWrite' = 'true',
-  'delta.autoOptimize.autoCompact' = 'true',
-  'delta.feature.allowColumnDefaults' = 'supported'
-);
-
-
--- ============================================================================
 -- LIQUID CLUSTERING for Performance Optimization
 -- ============================================================================
 
@@ -315,41 +282,6 @@ CLUSTER BY (tgt_table_physical_name, mapping_status);
 
 ALTER TABLE ${CATALOG_SCHEMA}.mapping_feedback 
 CLUSTER BY (feedback_action, suggested_tgt_table);
-
-ALTER TABLE ${CATALOG_SCHEMA}.transformation_library 
-CLUSTER BY (category, is_system);
-
-
--- ============================================================================
--- SEED DATA: Common Transformations
--- ============================================================================
-
-INSERT INTO ${CATALOG_SCHEMA}.transformation_library 
-  (transformation_name, transformation_code, transformation_expression, transformation_description, category, is_system)
-VALUES
-  ('Trim Whitespace', 'TRIM', 'TRIM({field})', 'Remove leading and trailing whitespace', 'TEXT', true),
-  ('Uppercase', 'UPPER', 'UPPER({field})', 'Convert text to uppercase', 'TEXT', true),
-  ('Lowercase', 'LOWER', 'LOWER({field})', 'Convert text to lowercase', 'TEXT', true),
-  ('Title Case', 'INITCAP', 'INITCAP({field})', 'Convert text to title case', 'TEXT', true),
-  ('Trim and Upper', 'TRIM_UPPER', 'TRIM(UPPER({field}))', 'Remove whitespace and convert to uppercase', 'TEXT', true),
-  ('Trim and Lower', 'TRIM_LOWER', 'TRIM(LOWER({field}))', 'Remove whitespace and convert to lowercase', 'TEXT', true),
-  ('Remove Special Chars', 'ALPHA_ONLY', 'REGEXP_REPLACE({field}, "[^a-zA-Z0-9 ]", "")', 'Remove special characters', 'TEXT', true),
-  ('Remove Dashes', 'NO_DASH', 'REPLACE({field}, "-", "")', 'Remove all dashes', 'TEXT', true),
-  ('Replace Null with Empty', 'COALESCE_EMPTY', 'COALESCE({field}, '''')', 'Replace NULL with empty string', 'TEXT', true),
-  ('Replace Null with Zero', 'COALESCE_ZERO', 'COALESCE({field}, 0)', 'Replace NULL with zero', 'NUMERIC', true),
-  ('Format SSN', 'FORMAT_SSN', 'CONCAT(SUBSTR({field}, 1, 3), "-", SUBSTR({field}, 4, 2), "-", SUBSTR({field}, 6, 4))', 'Format SSN as XXX-XX-XXXX', 'TEXT', true),
-  ('Unformat SSN', 'UNFORMAT_SSN', 'REPLACE({field}, "-", "")', 'Remove dashes from SSN', 'TEXT', true),
-  ('Format Phone', 'FORMAT_PHONE', 'CONCAT("(", SUBSTR({field}, 1, 3), ") ", SUBSTR({field}, 4, 3), "-", SUBSTR({field}, 7, 4))', 'Format phone as (XXX) XXX-XXXX', 'TEXT', true),
-  ('Date to String', 'DATE_TO_STR', 'DATE_FORMAT({field}, "yyyy-MM-dd")', 'Convert date to YYYY-MM-DD string', 'DATE', true),
-  ('String to Date', 'STR_TO_DATE', 'TO_DATE({field}, "yyyy-MM-dd")', 'Convert string to date', 'DATE', true),
-  ('Extract Year', 'YEAR', 'YEAR({field})', 'Extract year from date', 'DATE', true),
-  ('Extract Month', 'MONTH', 'MONTH({field})', 'Extract month from date', 'DATE', true),
-  ('Round to 2 Decimals', 'ROUND_2', 'ROUND({field}, 2)', 'Round to 2 decimal places', 'NUMERIC', true),
-  ('Cast to String', 'TO_STRING', 'CAST({field} AS STRING)', 'Convert to string', 'NUMERIC', true),
-  ('Cast to Integer', 'TO_INT', 'CAST({field} AS INT)', 'Convert to integer', 'NUMERIC', true),
-  ('Cast to Decimal', 'TO_DECIMAL', 'CAST({field} AS DECIMAL(18,2))', 'Convert to decimal(18,2)', 'NUMERIC', true),
-  ('Concatenate with Space', 'CONCAT_SPACE', 'CONCAT({field1}, '' '', {field2})', 'Join two fields with space', 'TEXT', true),
-  ('Concatenate with Comma', 'CONCAT_COMMA', 'CONCAT({field1}, '', '', {field2})', 'Join two fields with comma', 'TEXT', true);
 
 
 -- ============================================================================
@@ -377,20 +309,28 @@ VALUES
 
 
 -- ============================================================================
+-- MIGRATION: If you already have V3 schema deployed, run this ALTER:
+-- ============================================================================
+-- ALTER TABLE ${CATALOG_SCHEMA}.mapped_fields ADD COLUMN 
+--   source_domain STRING COMMENT 'Domain category from original unmapped fields (for restore on delete)';
+-- ============================================================================
+
+
+-- ============================================================================
 -- END OF V3 SCHEMA
 -- ============================================================================
 -- 
 -- Summary of tables:
 -- 1. semantic_fields     - 12 columns (target definitions, vector indexed)
 -- 2. unmapped_fields     - 13 columns (source fields to map)
--- 3. mapped_fields       - 23 columns (complete mappings, vector indexed)
+-- 3. mapped_fields       - 24 columns (complete mappings, vector indexed) - includes source_domain
 -- 4. mapping_feedback    - 18 columns (rejections, vector indexed)
--- 5. transformation_library - 10 columns (transform templates)
 --
 -- Eliminated from V2:
 -- - mapping_details (info now in mapped_fields.source_* columns)
 -- - mapping_joins (info now in mapped_fields.source_expression)
 -- - mapping_unions (info now in mapped_fields.source_expression)
+-- - transformation_library (AI generates transformations dynamically)
 --
 -- ============================================================================
 

@@ -4,7 +4,6 @@ Shared Pydantic models used across V3 services.
 These models are shared between multiple services and don't belong
 to a specific version. They include:
 - UnmappedField: Source fields awaiting mapping
-- Transformation: Reusable transformation templates
 - MappingFeedback: User feedback on AI suggestions
 """
 from pydantic import BaseModel, Field
@@ -55,44 +54,6 @@ class UnmappedFieldCreate(BaseModel):
     src_comments: Optional[str] = None
     domain: Optional[str] = None
     uploaded_by: Optional[str] = None
-
-
-class Transformation(BaseModel):
-    """
-    Reusable transformation template.
-    
-    Predefined SQL transformations that can be applied to source fields.
-    
-    Attributes:
-        transformation_id: Unique identifier
-        transformation_name: Display name
-        transformation_code: Short code
-        transformation_expression: SQL expression template
-        transformation_description: Human-readable explanation
-        category: Grouping category
-        is_system: Whether system-provided
-        created_ts: Creation timestamp
-    """
-    model_config = {"from_attributes": True, "arbitrary_types_allowed": True}
-    
-    transformation_id: Optional[int] = Field(None, description="Unique identifier")
-    transformation_name: str = Field(..., description="Display name")
-    transformation_code: str = Field(..., description="Short code")
-    transformation_expression: str = Field(..., description="SQL expression template")
-    transformation_description: Optional[str] = Field(None, description="Description")
-    category: Optional[str] = Field(None, description="Category")
-    is_system: Optional[bool] = Field(False, description="System-provided")
-    created_ts: Optional[datetime] = Field(None, description="Creation timestamp")
-
-
-class TransformationCreate(BaseModel):
-    """Create request for transformation."""
-    transformation_name: str
-    transformation_code: str
-    transformation_expression: str
-    transformation_description: Optional[str] = None
-    category: Optional[str] = None
-    is_system: Optional[bool] = False
 
 
 class MappingFeedback(BaseModel):
@@ -151,8 +112,6 @@ class MappingFeedbackCreate(BaseModel):
 # Aliases for backward compatibility
 UnmappedFieldV2 = UnmappedField
 UnmappedFieldCreateV2 = UnmappedFieldCreate
-TransformationV2 = Transformation
-TransformationCreateV2 = TransformationCreate
 MappingFeedbackV2 = MappingFeedback
 MappingFeedbackCreateV2 = MappingFeedbackCreate
 
