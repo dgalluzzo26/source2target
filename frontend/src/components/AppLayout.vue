@@ -49,13 +49,6 @@
               <span class="layout-menuitem-text" v-if="!sidebarCollapsed">View Mappings</span>
             </router-link>
           </li>
-          <li>
-            <a href="/help/auto-mapper-mockup.html" target="_blank" class="layout-menuitem-link mockup-link" v-tooltip.right="sidebarCollapsed ? 'Auto Mapper Mock-up' : ''">
-              <i class="layout-menuitem-icon pi pi-bolt"></i>
-              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Auto Mapper Mock-up</span>
-              <span class="mockup-badge" v-if="!sidebarCollapsed">NEW</span>
-            </a>
-          </li>
           
           <!-- Admin Section -->
           <li class="menu-section" v-if="!sidebarCollapsed && userStore.isAdmin">
@@ -78,13 +71,6 @@
               <i class="layout-menuitem-icon pi pi-cog"></i>
               <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Settings</span>
             </router-link>
-          </li>
-          <li v-if="userStore.isAdmin">
-            <a href="/help/code-generation-mockup.html" target="_blank" class="layout-menuitem-link mockup-link" v-tooltip.right="sidebarCollapsed ? 'Code Generation Mock-up' : ''">
-              <i class="layout-menuitem-icon pi pi-code"></i>
-              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Code Generation Mock-up</span>
-              <span class="mockup-badge" v-if="!sidebarCollapsed">NEW</span>
-            </a>
           </li>
           
           <!-- Help Section -->
@@ -360,23 +346,6 @@ onMounted(() => {
 
 .layout-menuitem-text {
   font-weight: 500;
-}
-
-/* Mockup Link Styling */
-.mockup-link {
-  position: relative;
-}
-
-.mockup-badge {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: white;
-  font-size: 0.6rem;
-  padding: 2px 6px;
-  border-radius: 8px;
-  font-weight: 700;
-  margin-left: auto;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 /* Help Button Wrapper in Sidebar */
