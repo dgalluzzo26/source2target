@@ -185,21 +185,14 @@ class MappingServiceV3:
         print(f"[Mapping Service V3] Creating mapping: {data.tgt_table_name}.{data.tgt_column_name}")
         print(f"[Mapping Service V3] Source expression: {data.source_expression[:100]}...")
         
-        # Build source_semantic_field
-        source_semantic = self._build_source_semantic_field(
-            data.source_tables,
-            data.source_columns,
-            data.source_descriptions,
-            data.transformations_applied,
-            data.tgt_table_name,
-            data.tgt_column_name
-        )
+        # Note: source_semantic_field is a generated column in the database
+        # It auto-generates from source_tables, source_columns, source_descriptions, etc.
         
         connection = self._get_sql_connection(server_hostname, http_path)
         
         try:
             with connection.cursor() as cursor:
-                # Insert into mapped_fields
+                # Insert into mapped_fields (without source_semantic_field - it may be a generated column)
                 insert_sql = f"""
                 INSERT INTO {mapped_fields_table} (
                     semantic_field_id,
@@ -220,8 +213,7 @@ class MappingServiceV3:
                     ai_reasoning,
                     ai_generated,
                     mapping_status,
-                    mapped_by,
-                    source_semantic_field
+                    mapped_by
                 ) VALUES (
                     {data.semantic_field_id},
                     '{self._escape_sql(data.tgt_table_name)}',
@@ -241,8 +233,7 @@ class MappingServiceV3:
                     {f"'{self._escape_sql(data.ai_reasoning)}'" if data.ai_reasoning else 'NULL'},
                     {str(data.ai_generated).lower()},
                     'ACTIVE',
-                    {f"'{self._escape_sql(data.mapped_by)}'" if data.mapped_by else 'NULL'},
-                    '{self._escape_sql(source_semantic)}'
+                    {f"'{self._escape_sql(data.mapped_by)}'" if data.mapped_by else 'NULL'}
                 )
                 """
                 
@@ -531,26 +522,9 @@ class MappingServiceV3:
                 if not set_parts:
                     return {"message": "No fields to update"}
                 
-                # Rebuild source_semantic_field if source info changed
-                if any([data.source_tables, data.source_columns, data.source_descriptions, data.transformations_applied]):
-                    # First, get current values
-                    cursor.execute(f"""
-                        SELECT source_tables, source_columns, source_descriptions, 
-                               transformations_applied, tgt_table_name, tgt_column_name
-                        FROM {mapped_fields_table}
-                        WHERE mapped_field_id = {mapping_id}
-                    """)
-                    current = cursor.fetchone()
-                    if current:
-                        new_semantic = self._build_source_semantic_field(
-                            data.source_tables or current[0],
-                            data.source_columns or current[1],
-                            data.source_descriptions or current[2],
-                            data.transformations_applied or current[3],
-                            current[4],
-                            current[5]
-                        )
-                        set_parts.append(f"source_semantic_field = '{self._escape_sql(new_semantic)}'")
+                # Note: source_semantic_field is a generated column in the database
+                # It auto-updates based on source_tables, source_columns, etc.
+                # No need to explicitly update it here
                 
                 set_clause = ", ".join(set_parts)
                 
