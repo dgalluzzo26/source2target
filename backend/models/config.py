@@ -79,20 +79,25 @@ class AIModelConfig(BaseModel):
 
 class VectorSearchConfig(BaseModel):
     """
-    Vector search configuration for semantic similarity matching (V2).
+    Vector search configuration for semantic similarity matching (V3).
     
-    Defines the Databricks Vector Search index and endpoint used for finding
-    similar target fields based on semantic meaning. V2 uses semantic_fields_vs index.
+    Defines the Databricks Vector Search indexes and endpoint used for AI mapping.
+    V3 uses two indexes: semantic_fields for target discovery, mapped_fields for pattern learning.
     
     NOTE: Vector search index names must be fully qualified (catalog.schema.index_name)
     because they are managed separately from SQL tables.
     
     Attributes:
-        index_name: Fully qualified name of the vector search index (catalog.schema.index_name)
+        semantic_fields_index: Vector search index for target field matching (catalog.schema.index_name)
+        mapped_fields_index: Vector search index for historical mapping patterns (catalog.schema.index_name)
         endpoint_name: Name of the vector search endpoint
     """
-    index_name: str = Field(default="oztest_dev.smartmapper.semantic_fields_vs", description="Vector search index (fully qualified)")
-    endpoint_name: str = Field(default="s2t_vsendpoint", description="Vector search endpoint name")
+    semantic_fields_index: str = Field(default="oztest_dev.smartmapper.semantic_fields_vs", description="Vector search index for target fields (fully qualified)")
+    mapped_fields_index: str = Field(default="oztest_dev.smartmapper.mapped_fields_vs", description="Vector search index for mapping patterns (fully qualified)")
+    endpoint_name: str = Field(default="smartmapper_vs_endpoint", description="Vector search endpoint name")
+    
+    # Legacy field for backward compatibility
+    index_name: str = Field(default="oztest_dev.smartmapper.semantic_fields_vs", description="[DEPRECATED] Use semantic_fields_index instead")
 
 
 class UIConfig(BaseModel):

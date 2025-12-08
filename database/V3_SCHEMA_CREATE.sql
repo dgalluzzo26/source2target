@@ -186,20 +186,11 @@ CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.mapped_fields (
   updated_ts TIMESTAMP COMMENT 'Timestamp when mapping was last updated',
   
   -- =========================================================================
-  -- VECTOR SEARCH: Computed semantic field for AI pattern matching
+  -- VECTOR SEARCH: Semantic field for AI pattern matching
   -- =========================================================================
-  -- This allows AI to find similar past mappings based on source characteristics
-  source_semantic_field STRING GENERATED ALWAYS AS (
-    CONCAT_WS(' | ',
-      CONCAT('SOURCE TABLES: ', COALESCE(source_tables, '')),
-      CONCAT('SOURCE COLUMNS: ', COALESCE(source_columns, '')),
-      CONCAT('SOURCE DESCRIPTIONS: ', COALESCE(source_descriptions, '')),
-      CONCAT('SOURCE TYPES: ', COALESCE(source_datatypes, '')),
-      CONCAT('TRANSFORMS: ', COALESCE(transformations_applied, '')),
-      CONCAT('RELATIONSHIP: ', COALESCE(source_relationship_type, 'SINGLE')),
-      CONCAT('TARGET: ', COALESCE(tgt_table_name, ''), '.', COALESCE(tgt_column_name, ''))
-    )
-  ) COMMENT 'Concatenated field for vector embedding - used by AI to find similar mapping patterns',
+  -- This field must be populated on INSERT/UPDATE with concatenated source info
+  -- Formula: CONCAT_WS(' | ', 'SOURCE TABLES: ' || source_tables, 'SOURCE COLUMNS: ' || source_columns, ...)
+  source_semantic_field STRING COMMENT 'Concatenated field for vector embedding - populated on insert with source info for AI pattern matching',
   
   CONSTRAINT pk_mapped_fields PRIMARY KEY (mapped_field_id),
   CONSTRAINT fk_mapped_semantic FOREIGN KEY (semantic_field_id) REFERENCES ${CATALOG_SCHEMA}.semantic_fields(semantic_field_id)
@@ -262,15 +253,8 @@ CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.mapping_feedback (
   -- =========================================================================
   -- VECTOR SEARCH: For finding similar past rejections
   -- =========================================================================
-  source_semantic_field STRING GENERATED ALWAYS AS (
-    CONCAT_WS(' | ',
-      CONCAT('SOURCE: ', COALESCE(suggested_src_table, ''), '.', COALESCE(suggested_src_column, '')),
-      CONCAT('SOURCE DESC: ', COALESCE(src_comments, '')),
-      CONCAT('TARGET: ', COALESCE(suggested_tgt_table, ''), '.', COALESCE(suggested_tgt_column, '')),
-      CONCAT('TARGET DESC: ', COALESCE(tgt_comments, '')),
-      CONCAT('REJECTED BECAUSE: ', COALESCE(user_comments, ''))
-    )
-  ) COMMENT 'Concatenated field for vector embedding - used by AI to avoid similar bad suggestions',
+  -- This field must be populated on INSERT with concatenated rejection info
+  source_semantic_field STRING COMMENT 'Concatenated field for vector embedding - populated on insert for AI rejection avoidance',
   
   CONSTRAINT pk_mapping_feedback PRIMARY KEY (feedback_id)
 )

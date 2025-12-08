@@ -284,14 +284,25 @@
 
           <div class="config-form">
             <div class="field">
-              <label for="vector_index_name">Vector Search Index Name</label>
+              <label for="semantic_fields_index">Semantic Fields VS Index</label>
               <InputText 
-                id="vector_index_name"
-                v-model="config.vector_search.index_name"
+                id="semantic_fields_index"
+                v-model="config.vector_search.semantic_fields_index"
                 placeholder="catalog.schema.semantic_fields_vs"
                 class="w-full"
               />
-              <small>Fully qualified name of the Vector Search index (catalog.schema.index_name required)</small>
+              <small>Vector search index for TARGET field matching (fully qualified: catalog.schema.index_name)</small>
+            </div>
+
+            <div class="field">
+              <label for="mapped_fields_index">Mapped Fields VS Index</label>
+              <InputText 
+                id="mapped_fields_index"
+                v-model="config.vector_search.mapped_fields_index"
+                placeholder="catalog.schema.mapped_fields_vs"
+                class="w-full"
+              />
+              <small>Vector search index for historical MAPPING PATTERNS (fully qualified: catalog.schema.index_name)</small>
             </div>
 
             <div class="field-group">
@@ -300,7 +311,7 @@
                 <InputText 
                   id="vector_endpoint_name"
                   v-model="config.vector_search.endpoint_name"
-                  placeholder="s2t_vsendpoint"
+                  placeholder="smartmapper_vs_endpoint"
                   class="w-full"
                 />
                 <small>Name of the Vector Search endpoint</small>
@@ -560,8 +571,9 @@ const config = ref({
     support_url: 'https://mygainwell.sharepoint.com'
   },
   vector_search: {
-    index_name: 'oztest_dev.smartmapper.semantic_fields_vs',
-    endpoint_name: 's2t_vsendpoint'
+    semantic_fields_index: 'oztest_dev.smartmapper.semantic_fields_vs',
+    mapped_fields_index: 'oztest_dev.smartmapper.mapped_fields_vs',
+    endpoint_name: 'smartmapper_vs_endpoint'
   },
   security: {
     admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
