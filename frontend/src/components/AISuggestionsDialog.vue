@@ -35,10 +35,24 @@
         </div>
       </div>
 
-      <!-- Loading State -->
+      <!-- Loading State with Stages -->
       <div v-if="aiStore.loading" class="loading-container">
         <ProgressSpinner />
-        <p>Analyzing fields and generating AI suggestions...</p>
+        <h3>Analyzing Your Fields</h3>
+        <div class="loading-stages">
+          <div class="loading-stage" :class="{ active: loadingStage >= 1, completed: loadingStage > 1 }">
+            <i :class="loadingStage > 1 ? 'pi pi-check-circle' : 'pi pi-search'"></i>
+            <span>Searching target field matches...</span>
+          </div>
+          <div class="loading-stage" :class="{ active: loadingStage >= 2, completed: loadingStage > 2 }">
+            <i :class="loadingStage > 2 ? 'pi pi-check-circle' : 'pi pi-history'"></i>
+            <span>Finding similar past mappings...</span>
+          </div>
+          <div class="loading-stage" :class="{ active: loadingStage >= 3 }">
+            <i class="pi pi-sparkles"></i>
+            <span>AI analyzing best matches...</span>
+          </div>
+        </div>
         <p class="loading-hint">This may take a few seconds</p>
       </div>
 
@@ -46,6 +60,68 @@
       <Message v-if="aiStore.error" severity="error" :closable="true">
         {{ aiStore.error }}
       </Message>
+
+      <!-- Multi-Column Pattern Alert -->
+      <div v-if="!aiStore.loading && multiColumnPatterns.length > 0" class="multi-column-alert">
+        <Message severity="warn" :closable="false">
+          <template #icon>
+            <i class="pi pi-exclamation-triangle" style="font-size: 1.5rem;"></i>
+          </template>
+          <div class="alert-content">
+            <strong>Multi-Column Mapping Detected!</strong>
+            <p>Based on {{ multiColumnPatterns.length }} similar past mapping(s), this target field typically uses <strong>multiple source columns</strong>.</p>
+            <div class="pattern-examples">
+              <div v-for="(pattern, idx) in multiColumnPatterns.slice(0, 2)" :key="idx" class="pattern-example">
+                <i class="pi pi-history"></i>
+                <span>
+                  <strong>{{ pattern.tgt_column_name }}</strong> used: 
+                  <code>{{ pattern.source_columns }}</code>
+                  <span v-if="pattern.source_relationship_type" class="relationship-type">
+                    ({{ pattern.source_relationship_type }})
+                  </span>
+                </span>
+              </div>
+            </div>
+            <p class="action-hint">
+              <i class="pi pi-lightbulb"></i>
+              Consider selecting additional source fields before mapping, or use the SQL helper to combine fields.
+            </p>
+          </div>
+        </Message>
+      </div>
+
+      <!-- Historical Patterns Summary -->
+      <div v-if="!aiStore.loading && aiStore.historicalPatterns.length > 0" class="historical-patterns-section">
+        <h3 @click="showPatternDetails = !showPatternDetails" class="collapsible-header">
+          <i class="pi pi-history"></i>
+          Similar Past Mappings Found ({{ aiStore.historicalPatterns.length }})
+          <i :class="showPatternDetails ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" class="toggle-icon"></i>
+        </h3>
+        <div v-if="showPatternDetails" class="patterns-list">
+          <div v-for="(pattern, idx) in aiStore.historicalPatterns.slice(0, 5)" :key="idx" class="pattern-card">
+            <div class="pattern-header">
+              <Tag :value="pattern.source_relationship_type || 'SINGLE'" 
+                   :severity="pattern.source_relationship_type === 'SINGLE' ? 'info' : 'warning'" 
+                   size="small" />
+              <span class="target-name">→ {{ pattern.tgt_table_name }}.{{ pattern.tgt_column_name }}</span>
+            </div>
+            <div class="pattern-details">
+              <div v-if="pattern.source_columns" class="detail-item">
+                <label>Source Columns:</label>
+                <code>{{ pattern.source_columns }}</code>
+              </div>
+              <div v-if="pattern.source_expression" class="detail-item">
+                <label>Expression:</label>
+                <code>{{ truncateExpression(pattern.source_expression) }}</code>
+              </div>
+              <div v-if="pattern.transformations_applied" class="detail-item">
+                <label>Transforms:</label>
+                <span class="transforms">{{ pattern.transformations_applied }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- AI Suggestions Table -->
       <div v-if="!aiStore.loading && aiStore.hasSuggestions" class="suggestions-section">
@@ -348,7 +424,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useAISuggestionsStore } from '@/stores/aiSuggestionsStore'
 import { useUserStore } from '@/stores/user'
 import { useToast } from 'primevue/usetoast'
@@ -390,6 +466,70 @@ const showManualSearch = ref(false)
 const manualSearchTerm = ref('')
 const manualSearchResults = ref<any[]>([])
 const manualSearchLoading = ref(false)
+
+// Historical patterns state
+const showPatternDetails = ref(false)
+
+// Loading stage simulation (1=targets, 2=patterns, 3=LLM)
+const loadingStage = ref(1)
+let loadingInterval: ReturnType<typeof setInterval> | null = null
+
+// Watch for loading state changes
+watch(() => aiStore.loading, (isLoading) => {
+  if (isLoading) {
+    // Start stage animation
+    loadingStage.value = 1
+    loadingInterval = setInterval(() => {
+      if (loadingStage.value < 3) {
+        loadingStage.value++
+      }
+    }, 1200) // Advance every 1.2 seconds
+  } else {
+    // Stop animation
+    if (loadingInterval) {
+      clearInterval(loadingInterval)
+      loadingInterval = null
+    }
+    loadingStage.value = 1
+  }
+})
+
+onUnmounted(() => {
+  if (loadingInterval) {
+    clearInterval(loadingInterval)
+  }
+})
+
+// Computed: patterns that indicate multi-column mapping
+const multiColumnPatterns = computed(() => {
+  return aiStore.historicalPatterns.filter(p => {
+    // Check if pattern has multiple columns or is a JOIN/UNION
+    const relationshipType = p.source_relationship_type?.toUpperCase()
+    if (relationshipType === 'JOIN' || relationshipType === 'UNION') {
+      return true
+    }
+    // Check if source_columns contains commas (multiple columns)
+    if (p.source_columns && p.source_columns.includes(',')) {
+      return true
+    }
+    // Check if expression contains multiple table references
+    if (p.source_expression && (
+      p.source_expression.includes('CONCAT') ||
+      p.source_expression.includes('||') ||
+      p.source_expression.includes('JOIN') ||
+      p.source_expression.includes('UNION')
+    )) {
+      return true
+    }
+    return false
+  })
+})
+
+// Helper: truncate long expressions
+function truncateExpression(expr: string, maxLen: number = 80): string {
+  if (!expr) return ''
+  return expr.length > maxLen ? expr.substring(0, maxLen) + '...' : expr
+}
 
 const isVisible = computed({
   get: () => props.visible,
@@ -711,9 +851,205 @@ function handleClose() {
   gap: 1rem;
 }
 
+.loading-container h3 {
+  margin: 0;
+  color: var(--gainwell-dark);
+}
+
+.loading-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--surface-50);
+  border-radius: 8px;
+  min-width: 300px;
+}
+
+.loading-stage {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+
+.loading-stage.active {
+  opacity: 1;
+  color: var(--gainwell-primary);
+  font-weight: 600;
+}
+
+.loading-stage.completed {
+  opacity: 1;
+  color: var(--green-600);
+}
+
+.loading-stage.completed i {
+  color: var(--green-600);
+}
+
+.loading-stage i {
+  font-size: 1.1rem;
+}
+
 .loading-hint {
   color: var(--text-color-secondary);
   font-size: 0.9rem;
+}
+
+/* Multi-Column Pattern Alert */
+.multi-column-alert {
+  margin-bottom: 1rem;
+}
+
+.multi-column-alert .alert-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.multi-column-alert .alert-content strong {
+  font-size: 1.1rem;
+  color: #856404;
+}
+
+.multi-column-alert .alert-content p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.pattern-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(255, 193, 7, 0.1);
+  border-radius: 6px;
+  margin: 0.5rem 0;
+}
+
+.pattern-example {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.pattern-example i {
+  color: #856404;
+}
+
+.pattern-example code {
+  background: rgba(0,0,0,0.05);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.relationship-type {
+  color: var(--orange-700);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.action-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-style: italic;
+  color: #6c757d;
+}
+
+.action-hint i {
+  color: #ffc107;
+}
+
+/* Historical Patterns Section */
+.historical-patterns-section {
+  padding: 1rem;
+  background: var(--surface-50);
+  border-radius: 8px;
+  border-left: 4px solid var(--gainwell-secondary);
+}
+
+.historical-patterns-section .collapsible-header {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--gainwell-dark);
+  cursor: pointer;
+  user-select: none;
+}
+
+.historical-patterns-section .collapsible-header:hover {
+  color: var(--gainwell-primary);
+}
+
+.historical-patterns-section .toggle-icon {
+  margin-left: auto;
+  font-size: 0.9rem;
+  color: var(--text-color-secondary);
+}
+
+.patterns-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.pattern-card {
+  padding: 0.75rem;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid var(--surface-border);
+}
+
+.pattern-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.pattern-header .target-name {
+  font-weight: 600;
+  color: var(--gainwell-dark);
+}
+
+.pattern-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-left: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.pattern-details .detail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.pattern-details .detail-item label {
+  font-weight: 600;
+  color: var(--text-color-secondary);
+  min-width: 100px;
+}
+
+.pattern-details .detail-item code {
+  background: var(--surface-100);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+.pattern-details .transforms {
+  color: var(--gainwell-accent);
 }
 
 .suggestions-section h3 {

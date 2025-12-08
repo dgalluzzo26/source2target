@@ -174,6 +174,19 @@ class AIMappingServiceV3:
                 results = df.to_dict('records')
                 
                 print(f"[AI Mapping V3] Found {len(results)} target candidates")
+                
+                # Debug: print first few results with scores
+                if results:
+                    print(f"[AI Mapping V3] Sample target results:")
+                    for i, r in enumerate(results[:3]):
+                        score = r.get('search_score')
+                        print(f"  {i+1}. {r.get('tgt_column_name')} - score: {score} (type: {type(score).__name__})")
+                
+                # Ensure scores are floats (pandas might return numpy types)
+                for r in results:
+                    if 'search_score' in r and r['search_score'] is not None:
+                        r['search_score'] = float(r['search_score'])
+                
                 return results
                 
         except Exception as e:
@@ -234,6 +247,21 @@ class AIMappingServiceV3:
                 results = df.to_dict('records')
                 
                 print(f"[AI Mapping V3] Found {len(results)} historical patterns")
+                
+                # Debug: print first few pattern results
+                if results:
+                    print(f"[AI Mapping V3] Sample pattern results:")
+                    for i, r in enumerate(results[:3]):
+                        score = r.get('search_score')
+                        print(f"  {i+1}. {r.get('tgt_column_name')} - expr: {r.get('source_expression', '')[:50]} - score: {score}")
+                
+                # Ensure scores are floats
+                for r in results:
+                    if 'search_score' in r and r['search_score'] is not None:
+                        r['search_score'] = float(r['search_score'])
+                    if 'confidence_score' in r and r['confidence_score'] is not None:
+                        r['confidence_score'] = float(r['confidence_score'])
+                
                 return results
                 
         except Exception as e:
@@ -408,14 +436,19 @@ Respond in JSON format:
             )
             
             response_text = response.choices[0].message.content
-            print(f"[AI Mapping V3] LLM response: {response_text[:200]}...")
+            print(f"[AI Mapping V3] LLM response: {response_text[:500]}...")
             
             # Parse JSON response
             json_start = response_text.find('{')
             json_end = response_text.rfind('}') + 1
             if json_start >= 0 and json_end > json_start:
-                return json.loads(response_text[json_start:json_end])
+                parsed = json.loads(response_text[json_start:json_end])
+                # Debug: print parsed best_target
+                if 'best_target' in parsed:
+                    print(f"[AI Mapping V3] LLM best_target: {parsed['best_target']}")
+                return parsed
             
+            print(f"[AI Mapping V3] Could not find JSON in response")
             return {"error": "Could not parse LLM response"}
             
         except Exception as e:

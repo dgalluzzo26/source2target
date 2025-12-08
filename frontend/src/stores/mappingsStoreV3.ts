@@ -281,25 +281,52 @@ export const useMappingsStoreV3 = defineStore('mappingsV3', () => {
   // GENERATE SQL WITH AI
   // =========================================================================
   async function generateSQLWithAI(
-    naturalLanguageRequest: string,
-    sourceColumns: Array<{ table: string, column: string, datatype: string }>,
-    targetColumn: { table: string, column: string, datatype: string }
+    userDescription: string,
+    sourceColumns: Array<{ 
+      table: string, 
+      column: string, 
+      datatype?: string,
+      physical_table?: string,
+      physical_column?: string,
+      comments?: string 
+    }>,
+    targetColumn: { table: string, column: string, datatype?: string }
   ): Promise<{ sql: string, explanation: string }> {
     try {
       console.log('[Mappings V3 Store] Generating SQL with AI...')
+      console.log('[Mappings V3 Store] User description:', userDescription)
+      console.log('[Mappings V3 Store] Source columns:', sourceColumns)
+      console.log('[Mappings V3 Store] Target column:', targetColumn)
       
-      const response = await api.post('/api/v3/ai/generate-sql', {
-        request: naturalLanguageRequest,
-        source_columns: sourceColumns,
-        target_column: targetColumn
-      })
+      // Transform to API format
+      const requestBody = {
+        user_description: userDescription,
+        source_fields: sourceColumns.map(col => ({
+          src_table_name: col.table,
+          src_table_physical_name: col.physical_table || col.table,
+          src_column_name: col.column,
+          src_column_physical_name: col.physical_column || col.column,
+          src_physical_datatype: col.datatype || 'STRING',
+          src_comments: col.comments || ''
+        })),
+        target_field: {
+          tgt_table_name: targetColumn.table,
+          tgt_column_name: targetColumn.column,
+          tgt_physical_datatype: targetColumn.datatype || 'STRING'
+        }
+      }
+      
+      console.log('[Mappings V3 Store] Request body:', JSON.stringify(requestBody, null, 2))
+      
+      const response = await api.post('/api/v3/ai/generate-sql', requestBody)
 
       return {
-        sql: response.data.generated_sql,
-        explanation: response.data.explanation
+        sql: response.data.sql_expression || response.data.generated_sql || '',
+        explanation: response.data.explanation || ''
       }
     } catch (e: any) {
       console.error('[Mappings V3 Store] Error generating SQL:', e)
+      console.error('[Mappings V3 Store] Response data:', e.response?.data)
       throw new Error(e.response?.data?.detail || 'Failed to generate SQL')
     }
   }

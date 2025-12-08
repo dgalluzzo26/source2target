@@ -67,18 +67,60 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       }
 
       const data = await response.json()
-      console.log('[AI Suggestions] V3 API response:', data)
+      console.log('[AI Suggestions] V3 API response:', JSON.stringify(data, null, 2))
       
       // V3 API returns target_candidates, historical_patterns, best_target, etc.
-      // Transform target_candidates into AISuggestion format
       const targetCandidates = data.target_candidates || []
       const bestTarget = data.best_target || {}
       const llmReasoning = bestTarget.reasoning || data.recommended_expression || ''
       
+      console.log('[AI Suggestions] Best target from LLM:', bestTarget)
+      console.log('[AI Suggestions] Target candidates count:', targetCandidates.length)
+      
       // Transform target candidates into suggestion format
       suggestions.value = targetCandidates.map((candidate: any, idx: number) => {
-        const score = candidate.search_score || 0
-        const isBestTarget = bestTarget.tgt_column_name === candidate.tgt_column_name
+        // Parse score - might be number, string, or undefined
+        let score = 0
+        if (candidate.search_score !== undefined && candidate.search_score !== null) {
+          score = typeof candidate.search_score === 'string' 
+            ? parseFloat(candidate.search_score) 
+            : Number(candidate.search_score)
+        }
+        
+        // Check if this is the LLM's best target (case-insensitive comparison)
+        const candidateCol = (candidate.tgt_column_name || '').toLowerCase().trim()
+        const bestTargetCol = (bestTarget.tgt_column_name || '').toLowerCase().trim()
+        const isBestTarget = candidateCol === bestTargetCol && candidateCol !== ''
+        
+        // Also check table name match if available
+        const candidateTable = (candidate.tgt_table_name || '').toLowerCase().trim()
+        const bestTargetTable = (bestTarget.tgt_table_name || '').toLowerCase().trim()
+        const isExactMatch = isBestTarget && (bestTargetTable === '' || candidateTable === bestTargetTable)
+        
+        // Debug first few candidates
+        if (idx < 3) {
+          console.log(`[AI Suggestions] Candidate ${idx + 1}:`, {
+            column: candidate.tgt_column_name,
+            score: candidate.search_score,
+            parsedScore: score,
+            isBestTarget: isExactMatch,
+            bestTargetCol
+          })
+        }
+        
+        // Determine match quality
+        const matchQuality = getMatchQuality(score, isExactMatch)
+        
+        // Build reasoning
+        let reasoning = ''
+        if (isExactMatch && llmReasoning) {
+          reasoning = llmReasoning
+        } else if (candidate.tgt_comments) {
+          reasoning = candidate.tgt_comments
+        } else {
+          // Score is 0-1 similarity, display as decimal (e.g., 0.85) not percentage
+          reasoning = `Vector search similarity: ${score.toFixed(4)}`
+        }
         
         return {
           semantic_field_id: candidate.semantic_field_id || 0,
@@ -88,25 +130,35 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
           tgt_column_physical_name: candidate.tgt_column_physical_name || candidate.tgt_column_name || '',
           tgt_comments: candidate.tgt_comments || '',
           search_score: score,
-          match_quality: getMatchQuality(score, isBestTarget),
-          ai_reasoning: isBestTarget ? llmReasoning : (candidate.tgt_comments || `Vector search match (${Math.round(score * 100)}%)`),
+          match_quality: matchQuality,
+          ai_reasoning: reasoning,
           rank: idx + 1
         } as AISuggestion
       })
+      
+      // If we have a best target but it's not in top candidates, move it to top
+      if (bestTarget.tgt_column_name && suggestions.value.length > 0) {
+        const bestIdx = suggestions.value.findIndex(
+          s => s.tgt_column_name.toLowerCase() === bestTarget.tgt_column_name?.toLowerCase()
+        )
+        if (bestIdx > 0) {
+          // Move best target to position 0
+          const best = suggestions.value.splice(bestIdx, 1)[0]
+          best.match_quality = 'Excellent'
+          best.ai_reasoning = llmReasoning || best.ai_reasoning
+          suggestions.value.unshift(best)
+          // Re-rank
+          suggestions.value.forEach((s, i) => { s.rank = i + 1 })
+        }
+      }
       
       // Store historical patterns
       historicalPatterns.value = data.historical_patterns || []
       
       // Debug output
-      console.log('[AI Suggestions] Transformed', suggestions.value.length, 'suggestions')
+      console.log('[AI Suggestions] Final suggestions:', suggestions.value.length)
       if (suggestions.value.length > 0) {
         console.log('[AI Suggestions] Top suggestion:', suggestions.value[0])
-      }
-      if (historicalPatterns.value.length > 0) {
-        console.log('[AI Suggestions] Found', historicalPatterns.value.length, 'historical patterns')
-      }
-      if (bestTarget.tgt_column_name) {
-        console.log('[AI Suggestions] LLM best target:', bestTarget.tgt_column_name, 'confidence:', bestTarget.confidence)
       }
       
     } catch (e) {
@@ -120,11 +172,24 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   
   // Helper: Convert score to match quality
   function getMatchQuality(score: number, isBestTarget: boolean): 'Excellent' | 'Strong' | 'Good' | 'Weak' | 'Unknown' {
+    // LLM's best target always gets Excellent
     if (isBestTarget) return 'Excellent'
-    if (score >= 0.85) return 'Excellent'
-    if (score >= 0.70) return 'Strong'
-    if (score >= 0.50) return 'Good'
-    if (score >= 0.30) return 'Weak'
+    
+    // Handle invalid scores
+    if (isNaN(score) || score === null || score === undefined) {
+      console.warn('[AI Suggestions] Invalid score:', score)
+      return 'Unknown'
+    }
+    
+    // Vector search scores are typically 0-1
+    // But some systems return 0-100, so normalize if needed
+    const normalizedScore = score > 1 ? score / 100 : score
+    
+    if (normalizedScore >= 0.85) return 'Excellent'
+    if (normalizedScore >= 0.70) return 'Strong'
+    if (normalizedScore >= 0.50) return 'Good'
+    if (normalizedScore >= 0.30) return 'Weak'
+    if (normalizedScore > 0) return 'Weak'  // Any positive score is at least Weak
     return 'Unknown'
   }
 
