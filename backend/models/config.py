@@ -22,41 +22,37 @@ from typing import Optional
 
 class DatabaseConfig(BaseModel):
     """
-    Database connection configuration for Databricks SQL Warehouse (V2 Schema).
+    Database connection configuration for Databricks SQL Warehouse (V3 Schema).
     
-    Defines the connection details for accessing the V2 multi-field mapping tables
-    in Databricks. All operations use the specified warehouse.
+    V3 simplified schema uses 5 core tables:
+    - semantic_fields: Target field definitions (vector indexed)
+    - unmapped_fields: Source fields awaiting mapping
+    - mapped_fields: Complete mappings with SQL expressions (vector indexed)
+    - mapping_feedback: Rejected suggestions for AI learning
+    - transformation_library: Reusable transformation templates
     
     Attributes:
         warehouse_name: Display name of the SQL warehouse
         catalog: Databricks catalog name
         schema: Databricks schema name
-        semantic_fields_table: Target field definitions (table name only, catalog.schema prepended automatically)
-        unmapped_fields_table: Source fields awaiting mapping (table name only)
-        mapped_fields_table: Target fields with mappings (table name only)
-        mapping_details_table: Source fields in each mapping (table name only)
-        mapping_joins_table: Join definitions for multi-table mappings (table name only)
-        mapping_feedback_table: User feedback on AI suggestions (table name only)
-        transformation_library_table: Reusable transformation templates (table name only)
+        semantic_fields_table: Target field definitions
+        unmapped_fields_table: Source fields awaiting mapping
+        mapped_fields_table: Complete mappings with SQL expressions
+        mapping_feedback_table: Rejected AI suggestions
+        transformation_library_table: Reusable transformation templates
         server_hostname: Databricks workspace hostname
         http_path: SQL warehouse HTTP path for connections
     """
     warehouse_name: str = Field(default="gia-oztest-dev-data-warehouse", description="SQL warehouse display name")
     catalog: str = Field(default="oztest_dev", description="Databricks catalog name")
     schema: str = Field(default="smartmapper", description="Databricks schema name")
-    semantic_fields_table: str = Field(default="semantic_fields", description="Target field definitions (V2)")
-    unmapped_fields_table: str = Field(default="unmapped_fields", description="Source fields awaiting mapping (V2)")
-    mapped_fields_table: str = Field(default="mapped_fields", description="Target fields with mappings (V2)")
-    mapping_details_table: str = Field(default="mapping_details", description="Source fields in each mapping (V2)")
-    mapping_joins_table: str = Field(default="mapping_joins", description="Join definitions for multi-table mappings (V2)")
-    mapping_feedback_table: str = Field(default="mapping_feedback", description="User feedback on AI suggestions (V2)")
-    transformation_library_table: str = Field(default="transformation_library", description="Reusable transformations (V2)")
+    semantic_fields_table: str = Field(default="semantic_fields", description="Target field definitions")
+    unmapped_fields_table: str = Field(default="unmapped_fields", description="Source fields awaiting mapping")
+    mapped_fields_table: str = Field(default="mapped_fields", description="Complete mappings with SQL expressions")
+    mapping_feedback_table: str = Field(default="mapping_feedback", description="Rejected AI suggestions")
+    transformation_library_table: str = Field(default="transformation_library", description="Reusable transformations")
     server_hostname: str = Field(default="Acuity-oz-test-ue1.cloud.databricks.com", description="Databricks workspace hostname")
     http_path: str = Field(default="/sql/1.0/warehouses/173ea239ed13be7d", description="SQL warehouse HTTP path")
-    
-    # Legacy V1 fields for backward compatibility
-    mapping_table: Optional[str] = Field(default=None, description="[V1 Legacy] Old mappings table")
-    semantic_table: Optional[str] = Field(default=None, description="[V1 Legacy] Old semantic table")
 
 
 class AIModelConfig(BaseModel):

@@ -92,8 +92,8 @@ class UnmappedFieldsService:
         """
         Read unmapped fields from the database for the current user (synchronous, for thread pool).
         
-        Filters out fields that are currently in use (have active mappings) by checking
-        the mapping_details table.
+        In V3, unmapped fields are deleted when they get mapped, so we just query
+        the unmapped_fields table directly - no join needed.
         
         Args:
             server_hostname: Databricks workspace hostname
@@ -112,33 +112,26 @@ class UnmappedFieldsService:
         
         connection = self._get_sql_connection(server_hostname, http_path)
         
-        # Get mapping_details table name from config
-        config = self.config_service.get_config()
-        mapping_details_table = self.config_service.get_fully_qualified_table_name(config.database.mapping_details_table)
-        
         try:
             with connection.cursor() as cursor:
-                # Query unmapped fields filtered by current user
-                # Exclude fields that are currently mapped (exist in mapping_details)
+                # V3: Query unmapped fields for current user
+                # Fields are deleted from this table when mapped, so no join needed
                 query = f"""
                 SELECT 
-                    uf.unmapped_field_id as id,
-                    uf.src_table_name,
-                    uf.src_table_physical_name,
-                    uf.src_column_name,
-                    uf.src_column_physical_name,
-                    uf.src_nullable,
-                    uf.src_physical_datatype,
-                    uf.src_comments,
-                    uf.domain,
-                    uf.uploaded_ts as uploaded_at,
-                    uf.uploaded_by
-                FROM {unmapped_fields_table} uf
-                LEFT JOIN {mapping_details_table} md 
-                    ON uf.unmapped_field_id = md.unmapped_field_id
-                WHERE uf.uploaded_by = '{current_user.replace("'", "''")}'
-                  AND md.unmapped_field_id IS NULL
-                ORDER BY uf.src_table_name, uf.src_column_name
+                    unmapped_field_id as id,
+                    src_table_name,
+                    src_table_physical_name,
+                    src_column_name,
+                    src_column_physical_name,
+                    src_nullable,
+                    src_physical_datatype,
+                    src_comments,
+                    domain,
+                    uploaded_ts as uploaded_at,
+                    uploaded_by
+                FROM {unmapped_fields_table}
+                WHERE uploaded_by = '{current_user.replace("'", "''")}'
+                ORDER BY src_table_name, src_column_name
                 """
                 
                 if limit:

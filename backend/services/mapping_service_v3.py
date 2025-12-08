@@ -6,12 +6,14 @@ V3 KEY CHANGES:
 - SQL expression captures all logic
 - Simpler CRUD operations
 - source_semantic_field populated on insert for vector search
+- Vector search index synced after create/update operations
 
 Manages:
 - Creating mappings (single row with SQL expression)
 - Reading mappings (simple SELECT)
 - Updating mappings (source_expression, metadata)
 - Deleting mappings
+- Syncing vector search index
 """
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
@@ -61,6 +63,45 @@ class MappingServiceV3:
             "mapping_feedback_table": f"{catalog}.{schema}.mapping_feedback",
             "transformation_library_table": f"{catalog}.{schema}.transformation_library"
         }
+    
+    def _get_vector_search_config(self) -> Dict[str, str]:
+        """Get vector search configuration."""
+        config = self.config_service.get_config()
+        return {
+            "endpoint_name": config.vector_search.endpoint_name,
+            "mapped_fields_index": config.vector_search.mapped_fields_index,
+            "semantic_fields_index": config.vector_search.semantic_fields_index
+        }
+    
+    def _sync_vector_search_index(self, index_name: str) -> bool:
+        """
+        Sync/refresh a vector search index after data changes.
+        
+        This ensures new mappings are immediately searchable by the AI.
+        
+        Args:
+            index_name: Fully qualified index name (catalog.schema.index_name)
+            
+        Returns:
+            True if sync was successful, False otherwise
+        """
+        try:
+            print(f"[Mapping Service V3] Syncing vector search index: {index_name}")
+            
+            # Use the workspace client to sync the index
+            # The sync operation triggers an incremental update of the index
+            self.workspace_client.vector_search_indexes.sync_index(
+                index_name=index_name
+            )
+            
+            print(f"[Mapping Service V3] Vector search index sync initiated: {index_name}")
+            return True
+            
+        except Exception as e:
+            # Log but don't fail - VS sync is best-effort
+            # Index will eventually catch up via scheduled sync
+            print(f"[Mapping Service V3] Warning: Could not sync vector search index: {e}")
+            return False
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):
         """Get SQL connection with proper OAuth token handling."""
@@ -242,11 +283,18 @@ class MappingServiceV3:
         data: MappedFieldCreateV3,
         unmapped_field_ids: Optional[List[int]] = None
     ) -> Dict[str, Any]:
-        """Create a V3 mapping (async wrapper)."""
+        """
+        Create a V3 mapping (async wrapper).
+        
+        After creating the mapping, syncs the vector search index to make
+        the new mapping immediately available for AI pattern matching.
+        """
         db_config = self._get_db_config()
+        vs_config = self._get_vector_search_config()
         loop = asyncio.get_event_loop()
         
-        return await loop.run_in_executor(
+        # Create the mapping
+        result = await loop.run_in_executor(
             executor,
             functools.partial(
                 self._create_mapping_sync,
@@ -258,6 +306,20 @@ class MappingServiceV3:
                 unmapped_field_ids
             )
         )
+        
+        # Sync vector search index (best-effort, non-blocking)
+        try:
+            await loop.run_in_executor(
+                executor,
+                functools.partial(
+                    self._sync_vector_search_index,
+                    vs_config["mapped_fields_index"]
+                )
+            )
+        except Exception as e:
+            print(f"[Mapping Service V3] VS sync failed (non-fatal): {e}")
+        
+        return result
     
     # =========================================================================
     # GET ALL MAPPINGS
@@ -513,11 +575,18 @@ class MappingServiceV3:
         mapping_id: int,
         data: MappedFieldUpdateV3
     ) -> Dict[str, Any]:
-        """Update a mapping (async wrapper)."""
+        """
+        Update a mapping (async wrapper).
+        
+        After updating, syncs the vector search index if source_semantic_field
+        was modified to keep AI pattern matching current.
+        """
         db_config = self._get_db_config()
+        vs_config = self._get_vector_search_config()
         loop = asyncio.get_event_loop()
         
-        return await loop.run_in_executor(
+        # Update the mapping
+        result = await loop.run_in_executor(
             executor,
             functools.partial(
                 self._update_mapping_sync,
@@ -528,6 +597,22 @@ class MappingServiceV3:
                 data
             )
         )
+        
+        # Sync vector search index if source info changed (best-effort)
+        # The _update_mapping_sync rebuilds source_semantic_field when source info changes
+        if any([data.source_tables, data.source_columns, data.source_descriptions, data.transformations_applied]):
+            try:
+                await loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._sync_vector_search_index,
+                        vs_config["mapped_fields_index"]
+                    )
+                )
+            except Exception as e:
+                print(f"[Mapping Service V3] VS sync failed (non-fatal): {e}")
+        
+        return result
     
     # =========================================================================
     # DELETE MAPPING

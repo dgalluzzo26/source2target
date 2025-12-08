@@ -174,29 +174,7 @@
                 placeholder="mapped_fields"
                 class="w-full"
               />
-              <small>Target fields with completed mappings (table name only)</small>
-            </div>
-
-            <div class="field">
-              <label for="mapping_details_table">Mapping Details Table</label>
-              <InputText 
-                id="mapping_details_table"
-                v-model="config.database.mapping_details_table"
-                placeholder="mapping_details"
-                class="w-full"
-              />
-              <small>Source field details for each mapping (table name only)</small>
-            </div>
-
-            <div class="field">
-              <label for="mapping_joins_table">Mapping Joins Table</label>
-              <InputText 
-                id="mapping_joins_table"
-                v-model="config.database.mapping_joins_table"
-                placeholder="mapping_joins"
-                class="w-full"
-              />
-              <small>Join definitions for multi-table mappings (table name only)</small>
+              <small>Complete mappings with SQL expressions (table name only)</small>
             </div>
 
             <div class="field">
@@ -540,6 +518,7 @@ const isAuthenticated = computed(() => true) // userStore.isAdmin
 
 // Configuration data structure based on original app
 // NOTE: Table names should be just the table name, catalog.schema is prepended automatically
+// V3 Schema: 5 core tables (semantic_fields, unmapped_fields, mapped_fields, mapping_feedback, transformation_library)
 const config = ref({
   database: {
     warehouse_name: 'gia-oztest-dev-data-warehouse',
@@ -548,14 +527,10 @@ const config = ref({
     semantic_fields_table: 'semantic_fields',
     unmapped_fields_table: 'unmapped_fields',
     mapped_fields_table: 'mapped_fields',
-    mapping_details_table: 'mapping_details',
-    mapping_joins_table: 'mapping_joins',
     mapping_feedback_table: 'mapping_feedback',
     transformation_library_table: 'transformation_library',
     server_hostname: 'Acuity-oz-test-ue1.cloud.databricks.com',
-    http_path: '/sql/1.0/warehouses/173ea239ed13be7d',
-    mapping_table: undefined,
-    semantic_table: undefined
+    http_path: '/sql/1.0/warehouses/173ea239ed13be7d'
   },
   ai_model: {
     previous_mappings_table_name: 'mapped_fields',
@@ -563,7 +538,7 @@ const config = ref({
     default_prompt: ''
   },
   ui: {
-    app_title: 'Source-to-Target Mapping Platform',
+    app_title: 'Smart Mapper',
     theme_color: '#4a5568',
     sidebar_expanded: true
   },
@@ -661,23 +636,19 @@ const importConfiguration = (event: any) => {
 const resetConfiguration = async () => {
   loading.value.reset = true
   setTimeout(() => {
-    // Reset to default values (table names only, catalog.schema prepended automatically)
+    // Reset to V3 default values (table names only, catalog.schema prepended automatically)
     config.value = {
       database: {
         warehouse_name: 'gia-oztest-dev-data-warehouse',
         catalog: 'oztest_dev',
-        schema: 'source2target',
+        schema: 'smartmapper',
         semantic_fields_table: 'semantic_fields',
         unmapped_fields_table: 'unmapped_fields',
         mapped_fields_table: 'mapped_fields',
-        mapping_details_table: 'mapping_details',
-        mapping_joins_table: 'mapping_joins',
         mapping_feedback_table: 'mapping_feedback',
         transformation_library_table: 'transformation_library',
         server_hostname: 'Acuity-oz-test-ue1.cloud.databricks.com',
-        http_path: '/sql/1.0/warehouses/173ea239ed13be7d',
-        mapping_table: undefined,
-        semantic_table: undefined
+        http_path: '/sql/1.0/warehouses/173ea239ed13be7d'
       },
       ai_model: {
         previous_mappings_table_name: 'mapped_fields',
@@ -685,7 +656,7 @@ const resetConfiguration = async () => {
         default_prompt: ''
       },
       ui: {
-        app_title: 'Source-to-Target Mapping Platform',
+        app_title: 'Smart Mapper',
         theme_color: '#4a5568',
         sidebar_expanded: true
       },
@@ -693,8 +664,9 @@ const resetConfiguration = async () => {
         support_url: 'https://mygainwell.sharepoint.com'
       },
       vector_search: {
-        index_name: 'oztest_dev.smartmapper.semantic_fields_vs',
-        endpoint_name: 's2t_vsendpoint'
+        semantic_fields_index: 'oztest_dev.smartmapper.semantic_fields_vs',
+        mapped_fields_index: 'oztest_dev.smartmapper.mapped_fields_vs',
+        endpoint_name: 'smartmapper_vs_endpoint'
       },
       security: {
         admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
