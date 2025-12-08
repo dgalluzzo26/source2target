@@ -36,11 +36,18 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   
   // Actions
   async function generateSuggestions(sourceFields: UnmappedField[]) {
+    // IMPORTANT: Clear ALL previous state first
+    console.log('[AI Suggestions] === Starting new suggestion request ===')
+    console.log('[AI Suggestions] Clearing previous state...')
+    
     loading.value = true
     error.value = null
     suggestions.value = []
+    historicalPatterns.value = []  // Clear patterns BEFORE setting sourceFields
     sourceFieldsUsed.value = [...sourceFields]
-    historicalPatterns.value = []
+    
+    console.log('[AI Suggestions] State cleared. Historical patterns:', historicalPatterns.value.length)
+    console.log('[AI Suggestions] Source fields for this query:', sourceFields.map(f => f.src_column_name))
 
     try {
       console.log('[AI Suggestions] Calling V3 API for', sourceFields.length, 'source fields')
@@ -152,11 +159,18 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         }
       }
       
-      // Store historical patterns
-      historicalPatterns.value = data.historical_patterns || []
+      // Store historical patterns from API response
+      const patternsFromApi = data.historical_patterns || []
+      console.log('[AI Suggestions] Historical patterns received from API:', patternsFromApi.length)
+      if (patternsFromApi.length > 0) {
+        console.log('[AI Suggestions] Pattern targets:', patternsFromApi.map((p: any) => p.tgt_column_name))
+      }
+      historicalPatterns.value = patternsFromApi
       
       // Debug output
+      console.log('[AI Suggestions] === Results Summary ===')
       console.log('[AI Suggestions] Final suggestions:', suggestions.value.length)
+      console.log('[AI Suggestions] Final historical patterns:', historicalPatterns.value.length)
       if (suggestions.value.length > 0) {
         console.log('[AI Suggestions] Top suggestion:', suggestions.value[0])
       }

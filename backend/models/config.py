@@ -90,7 +90,7 @@ class VectorSearchConfig(BaseModel):
     """
     semantic_fields_index: str = Field(default="oztest_dev.smartmapper.semantic_fields_vs", description="Vector search index for target fields (fully qualified)")
     mapped_fields_index: str = Field(default="oztest_dev.smartmapper.mapped_fields_vs", description="Vector search index for mapping patterns (fully qualified)")
-    endpoint_name: str = Field(default="smartmapper_vs_endpoint", description="Vector search endpoint name")
+    endpoint_name: str = Field(default="s2t_vsendpoint", description="Vector search endpoint name")
     
     # Legacy field for backward compatibility
     index_name: str = Field(default="oztest_dev.smartmapper.semantic_fields_vs", description="[DEPRECATED] Use semantic_fields_index instead")

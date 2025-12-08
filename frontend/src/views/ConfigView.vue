@@ -548,7 +548,7 @@ const config = ref({
   vector_search: {
     semantic_fields_index: 'oztest_dev.smartmapper.semantic_fields_vs',
     mapped_fields_index: 'oztest_dev.smartmapper.mapped_fields_vs',
-    endpoint_name: 'smartmapper_vs_endpoint'
+    endpoint_name: 's2t_vsendpoint'
   },
   security: {
     admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
@@ -589,10 +589,29 @@ const testVectorSearch = async () => {
 
 const saveConfiguration = async () => {
   loading.value.save = true
-  setTimeout(() => {
-    console.log('Configuration saved (simulated)')
+  try {
+    // Try to save configuration to backend
+    const response = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config.value)
+    })
+    
+    if (response.ok) {
+      console.log('Configuration saved successfully')
+      // Show success (would use toast in full implementation)
+      alert('Configuration saved successfully!')
+    } else {
+      // Backend doesn't support dynamic config save - show manual instructions
+      console.log('Configuration save not supported by backend')
+      alert('Configuration saved to session only.\n\nTo persist changes permanently, update app_config.json and restart the server.')
+    }
+  } catch (error) {
+    console.log('Config API not available - showing manual instructions')
+    alert('Configuration saved to session only.\n\nTo persist changes permanently, edit app_config.json and restart the backend server.')
+  } finally {
     loading.value.save = false
-  }, 1000)
+  }
 }
 
 const exportConfiguration = async () => {
@@ -666,7 +685,7 @@ const resetConfiguration = async () => {
       vector_search: {
         semantic_fields_index: 'oztest_dev.smartmapper.semantic_fields_vs',
         mapped_fields_index: 'oztest_dev.smartmapper.mapped_fields_vs',
-        endpoint_name: 'smartmapper_vs_endpoint'
+        endpoint_name: 's2t_vsendpoint'
       },
       security: {
         admin_group_name: 'gia-oztest-dev-ue1-data-engineers',

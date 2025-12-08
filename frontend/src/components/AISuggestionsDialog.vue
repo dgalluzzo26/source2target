@@ -774,6 +774,11 @@ function handleClose() {
   showManualSearch.value = false
   manualSearchTerm.value = ''
   manualSearchResults.value = []
+  showPatternDetails.value = false
+  
+  // Clear AI store to prevent stale data showing on next open
+  aiStore.clearSuggestions()
+  console.log('[AI Suggestions Dialog] Closed and cleared state')
 }
 </script>
 
