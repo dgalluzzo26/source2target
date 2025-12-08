@@ -369,15 +369,21 @@ class AIMappingServiceV3:
                     f"(Score: {t.get('search_score', 0):.4f}) - {t.get('tgt_comments', 'No description')}"
                 )
             
-            # Build historical patterns context
+            # Build historical patterns context - emphasize TRANSFORMATIONS only
             pattern_info = []
             for p in historical_patterns[:5]:
+                transforms = p.get('transformations_applied', 'None')
+                rel_type = p.get('source_relationship_type', 'SINGLE')
                 pattern_info.append(
-                    f"- Source: {p.get('source_columns', '')} → Target: {p['tgt_column_name']}\n"
-                    f"  Expression: {p.get('source_expression', 'N/A')}\n"
-                    f"  Transforms: {p.get('transformations_applied', 'None')}\n"
-                    f"  Type: {p.get('source_relationship_type', 'SINGLE')}"
+                    f"- Target: {p['tgt_column_name']}\n"
+                    f"  Transformations Used: {transforms}\n"
+                    f"  Relationship Type: {rel_type}\n"
+                    f"  (Note: Field names in original were different - only use the transformation pattern)"
                 )
+            
+            # Get current source field names for the LLM to use
+            current_field_names = [f.get('src_column_physical_name', f.get('src_column_name', '')) for f in source_fields]
+            current_field_names_str = ', '.join(current_field_names)
             
             # Build rejection context
             rejection_info = []
@@ -389,21 +395,27 @@ class AIMappingServiceV3:
             
             prompt = f"""You are an expert data mapping assistant. Analyze these inputs and provide mapping recommendations.
 
-SOURCE FIELDS TO MAP:
+CURRENT SOURCE FIELDS TO MAP (use THESE exact field names in your SQL):
 {chr(10).join(source_info)}
+
+CURRENT FIELD NAMES TO USE IN SQL: {current_field_names_str}
 
 TARGET CANDIDATES (from vector search):
 {chr(10).join(target_info) if target_info else 'No candidates found'}
 
-HISTORICAL PATTERNS (similar past mappings):
+HISTORICAL PATTERNS (learn TRANSFORMATIONS from these, but use CURRENT field names above):
 {chr(10).join(pattern_info) if pattern_info else 'No historical patterns found'}
+
+IMPORTANT: The historical patterns show what transformations (TRIM, UPPER, INITCAP, etc.) were 
+typically applied for similar mappings. Apply those same transformations but use the CURRENT 
+source field names listed above - NOT the old field names from historical patterns.
 
 REJECTED MAPPINGS (avoid these):
 {chr(10).join(rejection_info) if rejection_info else 'No rejections'}
 
 Based on this analysis, provide:
 1. The BEST target field match
-2. A SQL expression for the mapping (Databricks SQL syntax)
+2. A SQL expression using the CURRENT field names: {current_field_names_str}
 3. Recommended transformations based on historical patterns
 4. Whether this should be SINGLE, JOIN, or UNION based on sources
 
@@ -415,8 +427,8 @@ Respond in JSON format:
     "confidence": 0.0-1.0,
     "reasoning": "..."
   }},
-  "recommended_expression": "TRIM(UPPER(table.column))",
-  "recommended_transformations": ["TRIM", "UPPER"],
+  "recommended_expression": "TRIM(INITCAP({current_field_names[0] if current_field_names else 'field_name'}))",
+  "recommended_transformations": ["TRIM", "INITCAP"],
   "detected_pattern": "SINGLE|JOIN|UNION",
   "pattern_reasoning": "...",
   "alternative_targets": [
@@ -480,18 +492,25 @@ Respond in JSON format:
         print(f"[AI Mapping V3] Generating SQL from: '{user_description}'")
         
         try:
-            # Build source context
+            # Build source context with physical names
             source_info = []
+            field_names = []
             for field in source_fields:
+                physical_name = field.get('src_column_physical_name', field.get('src_column_name', 'column'))
+                table_name = field.get('src_table_physical_name', field.get('src_table_name', 'table'))
+                field_names.append(physical_name)
                 source_info.append(
-                    f"- {field['src_table_name']}.{field['src_column_name']} "
-                    f"({field.get('src_physical_datatype', 'STRING')})"
+                    f"- {table_name}.{physical_name} ({field.get('src_physical_datatype', 'STRING')})"
                 )
+            
+            field_names_str = ', '.join(field_names)
             
             prompt = f"""Generate a Databricks SQL expression based on the user's request.
 
-SOURCE FIELDS:
+SOURCE FIELDS (use these EXACT field names in your SQL):
 {chr(10).join(source_info)}
+
+FIELD NAMES TO USE: {field_names_str}
 
 TARGET FIELD:
 - {target_field.get('tgt_table_name', 'TARGET')}.{target_field.get('tgt_column_name', 'COLUMN')} ({target_field.get('tgt_physical_datatype', 'STRING')})
@@ -509,9 +528,11 @@ Common transformations:
 - TO_DATE(field, 'format') - date conversion
 - SUBSTR(field, start, length) - substring
 
+IMPORTANT: Use the EXACT field names listed above ({field_names_str}) in your SQL expression.
+
 Generate valid Databricks SQL. Respond in JSON:
 {{
-  "sql_expression": "TRIM(UPPER(table.column))",
+  "sql_expression": "TRIM(UPPER({field_names[0] if field_names else 'column'}))",
   "transformations_used": ["TRIM", "UPPER"],
   "explanation": "Applied uppercase and trim as requested"
 }}

@@ -687,7 +687,7 @@ async function handleSave() {
         ai_generated: false,
         mapped_by: userStore.userEmail || 'unknown'
       },
-      sourceFields.value.map(f => f.unmapped_field_id).filter((id): id is number => id !== undefined)
+      sourceFields.value.map(f => (f as any).id || (f as any).unmapped_field_id).filter((id): id is number => id !== undefined && id > 0)
     )
     
     toast.add({
@@ -904,6 +904,8 @@ async function handleSave() {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-width: 0;  /* Allow flex item to shrink */
+  overflow: hidden;
 }
 
 .editor-card {
@@ -911,6 +913,12 @@ async function handleSave() {
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   flex: 1;
+  min-width: 0;  /* Allow card to shrink */
+  overflow: hidden;
+}
+
+.editor-card :deep(.p-card-content) {
+  overflow: hidden;
 }
 
 .card-title-with-actions {
@@ -934,12 +942,32 @@ async function handleSave() {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  min-width: 0;
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .sql-editor {
   font-family: 'Courier New', 'Monaco', monospace;
   font-size: 0.95rem;
   width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Override PrimeVue Textarea to allow proper wrapping */
+.sql-editor:deep(textarea) {
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+.sql-preview-section {
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .sql-preview-section h4 {
@@ -956,7 +984,13 @@ async function handleSave() {
   font-size: 0.9rem;
   margin: 0;
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 200px;
   border: 1px solid var(--surface-border);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
 .relationship-section {

@@ -28,6 +28,13 @@
       </div>
       <div class="toolbar-right">
         <Button 
+          label="Export CSV" 
+          icon="pi pi-download" 
+          severity="secondary"
+          outlined
+          @click="exportMappings"
+        />
+        <Button 
           label="Refresh" 
           icon="pi pi-refresh" 
           severity="secondary"
@@ -589,6 +596,76 @@ function handleStatusChange() {
 
 function handleRefresh() {
   fetchMappings()
+}
+
+function exportMappings() {
+  if (filteredMappings.value.length === 0) {
+    toast.add({
+      severity: 'warn',
+      summary: 'No Data',
+      detail: 'No mappings to export',
+      life: 3000
+    })
+    return
+  }
+  
+  // Define CSV headers
+  const headers = [
+    'Target Table',
+    'Target Column',
+    'Target Physical Name',
+    'Source Tables',
+    'Source Columns',
+    'Source Expression',
+    'Relationship Type',
+    'Transformations',
+    'Confidence Score',
+    'Mapping Source',
+    'Status',
+    'Mapped By',
+    'Mapped Date'
+  ]
+  
+  // Build CSV rows
+  const rows = filteredMappings.value.map(m => [
+    m.tgt_table_name || '',
+    m.tgt_column_name || '',
+    m.tgt_column_physical_name || '',
+    m.source_tables || '',
+    m.source_columns || '',
+    `"${(m.source_expression || '').replace(/"/g, '""')}"`,  // Escape quotes in SQL
+    m.source_relationship_type || 'SINGLE',
+    m.transformations_applied || '',
+    m.confidence_score || '',
+    m.mapping_source || '',
+    m.mapping_status || '',
+    m.mapped_by || '',
+    m.mapped_ts ? new Date(m.mapped_ts).toISOString() : ''
+  ])
+  
+  // Create CSV content
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.join(','))
+  ].join('\n')
+  
+  // Create and download file
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `mappings_export_${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+  
+  toast.add({
+    severity: 'success',
+    summary: 'Export Complete',
+    detail: `Exported ${filteredMappings.value.length} mappings to CSV`,
+    life: 3000
+  })
 }
 
 // Helper functions
