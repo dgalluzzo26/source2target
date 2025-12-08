@@ -18,7 +18,7 @@
 -- ============================================================================
 -- REPLACE THIS WITH YOUR CATALOG.SCHEMA
 -- ============================================================================
--- Find/Replace: ${CATALOG_SCHEMA} with your catalog.schema (e.g., prod_catalog.smart_mapper)
+-- Find/Replace: ${CATALOG_SCHEMA} with your catalog.schema (e.g., oztest_dev.smartmapper)
 -- ============================================================================
 
 

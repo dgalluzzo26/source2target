@@ -533,7 +533,7 @@ const config = ref({
   database: {
     warehouse_name: 'gia-oztest-dev-data-warehouse',
     catalog: 'oztest_dev',
-    schema: 'source2target',
+    schema: 'smartmapper',
     semantic_fields_table: 'semantic_fields',
     unmapped_fields_table: 'unmapped_fields',
     mapped_fields_table: 'mapped_fields',
@@ -560,7 +560,7 @@ const config = ref({
     support_url: 'https://mygainwell.sharepoint.com'
   },
   vector_search: {
-    index_name: 'oztest_dev.source2target.semantic_fields_vs',
+    index_name: 'oztest_dev.smartmapper.semantic_fields_vs',
     endpoint_name: 's2t_vsendpoint'
   },
   security: {
@@ -681,7 +681,7 @@ const resetConfiguration = async () => {
         support_url: 'https://mygainwell.sharepoint.com'
       },
       vector_search: {
-        index_name: 'oztest_dev.source2target.semantic_fields_vs',
+        index_name: 'oztest_dev.smartmapper.semantic_fields_vs',
         endpoint_name: 's2t_vsendpoint'
       },
       security: {

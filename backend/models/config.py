@@ -43,7 +43,7 @@ class DatabaseConfig(BaseModel):
     """
     warehouse_name: str = Field(default="gia-oztest-dev-data-warehouse", description="SQL warehouse display name")
     catalog: str = Field(default="oztest_dev", description="Databricks catalog name")
-    schema: str = Field(default="source2target", description="Databricks schema name")
+    schema: str = Field(default="smartmapper", description="Databricks schema name")
     semantic_fields_table: str = Field(default="semantic_fields", description="Target field definitions (V2)")
     unmapped_fields_table: str = Field(default="unmapped_fields", description="Source fields awaiting mapping (V2)")
     mapped_fields_table: str = Field(default="mapped_fields", description="Target fields with mappings (V2)")
@@ -91,7 +91,7 @@ class VectorSearchConfig(BaseModel):
         index_name: Fully qualified name of the vector search index (catalog.schema.index_name)
         endpoint_name: Name of the vector search endpoint
     """
-    index_name: str = Field(default="oztest_dev.source2target.semantic_fields_vs", description="Vector search index (fully qualified)")
+    index_name: str = Field(default="oztest_dev.smartmapper.semantic_fields_vs", description="Vector search index (fully qualified)")
     endpoint_name: str = Field(default="s2t_vsendpoint", description="Vector search endpoint name")
 
 
