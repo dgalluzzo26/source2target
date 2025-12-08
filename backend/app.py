@@ -20,7 +20,7 @@ from typing import Optional, Dict, Any
 from backend.services.config_service import config_service
 from backend.services.system_service import system_service
 from backend.services.auth_service import auth_service
-from backend.routers import semantic, mapping, ai_mapping, unmapped_fields, ai_mapping_v2, mapping_v2, transformation, feedback
+from backend.routers import semantic, mapping, ai_mapping, unmapped_fields, ai_mapping_v2, mapping_v2, transformation, feedback, ai_mapping_v3
 
 # Import Databricks SDK for authentication
 try:
@@ -45,6 +45,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include V3 routers (new architecture)
+app.include_router(ai_mapping_v3.router)
 
 # Include V2 routers
 app.include_router(unmapped_fields.router)
