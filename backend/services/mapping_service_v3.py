@@ -641,12 +641,12 @@ class MappingServiceV3:
                         
                         # Logical names (for display)
                         tables = parse_delimited(row[0])
-                        # Physical names (for database) - fall back to logical if not stored
-                        tables_physical = parse_delimited(row[1]) if row[1] else tables
+                        # Physical names (for database) - REQUIRED
+                        tables_physical = parse_delimited(row[1]) if row[1] else []
                         # Logical column names
                         columns = parse_delimited(row[2])
-                        # Physical column names - fall back to logical if not stored
-                        columns_physical = parse_delimited(row[3]) if row[3] else columns
+                        # Physical column names - REQUIRED
+                        columns_physical = parse_delimited(row[3]) if row[3] else []
                         # Data types
                         datatypes = parse_delimited(row[4]) if row[4] else ["STRING"] * len(columns)
                         # Descriptions
@@ -668,11 +668,9 @@ class MappingServiceV3:
                             elif 'finance' in table_lower or 'payment' in table_lower:
                                 source_domain = 'finance'
                         
-                        # Ensure physical lists match logical lists length
-                        while len(tables_physical) < len(tables):
-                            tables_physical.append(tables[len(tables_physical)])
-                        while len(columns_physical) < len(columns):
-                            columns_physical.append(columns[len(columns_physical)])
+                        # Skip restore if physical names not available
+                        if not tables_physical or not columns_physical:
+                            print(f"[Mapping Service V3] WARNING: Cannot restore - physical names not stored for mapping {mapping_id}")
                         
                         for i in range(len(columns)):
                             table = tables[min(i, len(tables)-1)]

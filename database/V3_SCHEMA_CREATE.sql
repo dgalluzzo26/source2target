@@ -311,18 +311,6 @@ CLUSTER BY (feedback_action, suggested_tgt_table);
 
 
 -- ============================================================================
--- MIGRATION: If you already have V3 schema deployed, run these ALTERs:
--- ============================================================================
--- ALTER TABLE ${CATALOG_SCHEMA}.mapped_fields ADD COLUMN 
---   source_domain STRING COMMENT 'Domain category from original unmapped fields (for restore on delete)';
--- ALTER TABLE ${CATALOG_SCHEMA}.mapped_fields ADD COLUMN 
---   source_tables_physical STRING COMMENT 'Pipe-separated source table physical names';
--- ALTER TABLE ${CATALOG_SCHEMA}.mapped_fields ADD COLUMN 
---   source_columns_physical STRING COMMENT 'Pipe-separated source column physical names';
--- ============================================================================
-
-
--- ============================================================================
 -- END OF V3 SCHEMA
 -- ============================================================================
 -- 
