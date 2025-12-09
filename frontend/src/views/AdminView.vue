@@ -29,11 +29,11 @@
 
       <Card class="admin-card info-card">
         <template #title>
-          <i class="pi pi-info-circle"></i> Quick Transforms
+          <i class="pi pi-sparkles"></i> AI-Powered Mapping
         </template>
         <template #content>
-          <p>SQL transformations are now built into the mapping workflow. Use the "Quick Transform" dropdown or AI Helper when creating mappings.</p>
-          <p class="hint">No separate transformation library needed.</p>
+          <p>SQL transformations and AI suggestions are built into the mapping workflow.</p>
+          <p class="hint">Use "Quick Transform" or "AI Helper" when creating mappings.</p>
         </template>
       </Card>
     </div>

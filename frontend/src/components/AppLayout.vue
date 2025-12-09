@@ -61,9 +61,9 @@
             </router-link>
           </li>
           <li v-if="userStore.isAdmin">
-            <router-link to="/admin" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Transformation Management' : ''">
+            <router-link to="/admin" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Admin Tools' : ''">
               <i class="layout-menuitem-icon pi pi-shield"></i>
-              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Transformation Management</span>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Admin Tools</span>
             </router-link>
           </li>
           <li v-if="userStore.isAdmin">
