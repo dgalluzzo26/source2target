@@ -544,7 +544,7 @@ onMounted(async () => {
     
     if (templateSQL && templateSQL.trim()) {
       console.log('[Mapping Config V3] ✓ Using template-generated SQL:', templateSQL)
-      sqlExpression.value = templateSQL
+      sourceExpression.value = templateSQL
       
       // Clear sources
       sessionStorage.removeItem('templateGeneratedSQL')
@@ -556,7 +556,7 @@ onMounted(async () => {
       // Generate default expression
       generateDefaultExpression()
     }
-    console.log('[Mapping Config V3] Final sqlExpression.value:', sqlExpression.value)
+    console.log('[Mapping Config V3] Final sourceExpression.value:', sourceExpression.value)
     console.log('[Mapping Config V3] ========== END TEMPLATE SQL CHECK ==========')
     
     // Fetch historical patterns
