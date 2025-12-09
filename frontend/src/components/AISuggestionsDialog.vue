@@ -552,10 +552,14 @@ function handleSkipTemplate() {
 }
 
 function handleApplyTemplate(data: { pattern: HistoricalPattern, selectedFields: UnmappedField[], generatedSQL: string }) {
-  console.log('[AI Suggestions Dialog] === Applying Template ===')
+  console.log('[AI Suggestions Dialog] ========== APPLYING TEMPLATE ==========')
   console.log('[AI Suggestions Dialog] Pattern:', data.pattern.tgt_column_name)
-  console.log('[AI Suggestions Dialog] Selected fields:', data.selectedFields.map(f => f.src_column_name))
-  console.log('[AI Suggestions Dialog] Generated SQL:', data.generatedSQL)
+  console.log('[AI Suggestions Dialog] Selected fields:', data.selectedFields.map(f => ({
+    name: f.src_column_name,
+    physical: f.src_column_physical_name
+  })))
+  console.log('[AI Suggestions Dialog] Generated SQL received:', data.generatedSQL)
+  console.log('[AI Suggestions Dialog] SQL length:', data.generatedSQL?.length || 0)
   
   // Mark as accepting to prevent store clear
   acceptedSuggestion.value = true
@@ -586,13 +590,14 @@ function handleApplyTemplate(data: { pattern: HistoricalPattern, selectedFields:
   
   // Store the generated SQL in multiple places to ensure it's available
   // 1. In the aiStore for direct access
-  aiStore.recommendedExpression = data.generatedSQL
+  aiStore.recommendedExpression = data.generatedSQL || ''
+  console.log('[AI Suggestions Dialog] Set aiStore.recommendedExpression to:', aiStore.recommendedExpression)
   
-  // 2. In sessionStorage as backup
-  if (data.generatedSQL) {
-    sessionStorage.setItem('templateGeneratedSQL', data.generatedSQL)
-    console.log('[AI Suggestions Dialog] Stored SQL in sessionStorage:', data.generatedSQL)
-  }
+  // 2. In sessionStorage as backup (ALWAYS set, even if empty, for debugging)
+  const sqlToStore = data.generatedSQL || ''
+  sessionStorage.setItem('templateGeneratedSQL', sqlToStore)
+  console.log('[AI Suggestions Dialog] Stored in sessionStorage:', sqlToStore)
+  console.log('[AI Suggestions Dialog] Verify sessionStorage:', sessionStorage.getItem('templateGeneratedSQL'))
   
   // 3. Emit to parent
   emit('template-applied', data)

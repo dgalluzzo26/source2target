@@ -431,42 +431,72 @@ function buildSQLExpression(): string {
   // Get all filled fields (use physical names for SQL)
   const filledSlots = templateSlots.value.filter(s => s.selectedField)
   
-  console.log('[PatternTemplate] Building SQL - Filled slots:', filledSlots.length)
-  console.log('[PatternTemplate] Slot details:', filledSlots.map(s => ({
+  console.log('[PatternTemplate] ========== BUILDING SQL ==========')
+  console.log('[PatternTemplate] Filled slots count:', filledSlots.length)
+  console.log('[PatternTemplate] All slots:', templateSlots.value.map(s => ({
     label: s.label,
-    fieldName: s.selectedField?.src_column_name,
-    physicalName: s.selectedField?.src_column_physical_name
+    hasFilled: !!s.selectedField,
+    selectedFieldId: s.selectedFieldId
   })))
   
-  // Get field names - prefer physical name, fall back to column name
-  const fields = filledSlots.map(s => {
-    const field = s.selectedField!
-    // Try multiple sources for the column name
-    const name = field.src_column_physical_name || 
-                 field.src_column_name || 
-                 (field as any).column_name ||
-                 (field as any).name ||
-                 ''
-    return name.toLowerCase().replace(/\s+/g, '_')  // Normalize to lowercase with underscores
-  }).filter(f => f)
-  
-  console.log('[PatternTemplate] Field names for SQL:', fields)
-  
-  if (fields.length === 0) {
-    console.log('[PatternTemplate] No fields to build SQL for')
-    // Fallback: try to get names from slot labels
-    const fallbackFields = filledSlots.map(s => 
-      s.originalColumn || s.label.toLowerCase().replace(/\s+/g, '_')
-    ).filter(f => f)
-    
-    if (fallbackFields.length > 0) {
-      console.log('[PatternTemplate] Using fallback field names:', fallbackFields)
-      return buildSQLForFields(fallbackFields)
-    }
+  if (filledSlots.length === 0) {
+    console.log('[PatternTemplate] ERROR: No filled slots!')
     return ''
   }
   
-  return buildSQLForFields(fields)
+  // Debug: log full field objects
+  filledSlots.forEach((s, i) => {
+    console.log(`[PatternTemplate] Slot ${i} field:`, JSON.stringify(s.selectedField, null, 2))
+  })
+  
+  // Get field names - try multiple properties
+  const fields: string[] = []
+  
+  for (const slot of filledSlots) {
+    const field = slot.selectedField
+    if (!field) continue
+    
+    // Try to get the column name from various sources
+    let colName = ''
+    
+    // Check common property names
+    if (field.src_column_physical_name && field.src_column_physical_name.trim()) {
+      colName = field.src_column_physical_name.trim()
+    } else if (field.src_column_name && field.src_column_name.trim()) {
+      colName = field.src_column_name.trim()
+    } else if ((field as any).column_name) {
+      colName = (field as any).column_name
+    } else if ((field as any).columnName) {
+      colName = (field as any).columnName
+    } else if ((field as any).name) {
+      colName = (field as any).name
+    }
+    
+    // Normalize: lowercase and replace spaces with underscores
+    if (colName) {
+      colName = colName.toLowerCase().replace(/\s+/g, '_')
+      fields.push(colName)
+      console.log(`[PatternTemplate] Found field name: ${colName}`)
+    } else {
+      // Ultimate fallback: use the slot label
+      const fallback = slot.label.toLowerCase().replace(/\s+/g, '_')
+      fields.push(fallback)
+      console.log(`[PatternTemplate] Using slot label as fallback: ${fallback}`)
+    }
+  }
+  
+  console.log('[PatternTemplate] Final field names for SQL:', fields)
+  
+  if (fields.length === 0) {
+    console.log('[PatternTemplate] ERROR: Could not extract any field names!')
+    return ''
+  }
+  
+  const sql = buildSQLForFields(fields)
+  console.log('[PatternTemplate] Generated SQL:', sql)
+  console.log('[PatternTemplate] ========== END BUILDING SQL ==========')
+  
+  return sql
 }
 
 function buildSQLForFields(fields: string[]): string {

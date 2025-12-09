@@ -534,13 +534,16 @@ onMounted(async () => {
     // Check for template-generated SQL from multiple sources
     // 1. First check aiStore.recommendedExpression (set by template or AI)
     // 2. Then check sessionStorage as backup
+    console.log('[Mapping Config V3] ========== CHECKING FOR TEMPLATE SQL ==========')
     const aiStoreSQL = aiStore.recommendedExpression
     const sessionSQL = sessionStorage.getItem('templateGeneratedSQL')
+    console.log('[Mapping Config V3] aiStore.recommendedExpression:', aiStoreSQL)
+    console.log('[Mapping Config V3] sessionStorage templateGeneratedSQL:', sessionSQL)
+    
     const templateSQL = aiStoreSQL || sessionSQL
     
-    if (templateSQL) {
-      console.log('[Mapping Config V3] Using template-generated SQL:', templateSQL)
-      console.log('[Mapping Config V3] Source: aiStore=', !!aiStoreSQL, ', session=', !!sessionSQL)
+    if (templateSQL && templateSQL.trim()) {
+      console.log('[Mapping Config V3] ✓ Using template-generated SQL:', templateSQL)
       sqlExpression.value = templateSQL
       
       // Clear sources
@@ -549,9 +552,12 @@ onMounted(async () => {
       // Parse transformations from the SQL
       detectTransformations()
     } else {
+      console.log('[Mapping Config V3] ✗ No template SQL found, generating default')
       // Generate default expression
       generateDefaultExpression()
     }
+    console.log('[Mapping Config V3] Final sqlExpression.value:', sqlExpression.value)
+    console.log('[Mapping Config V3] ========== END TEMPLATE SQL CHECK ==========')
     
     // Fetch historical patterns
     await fetchHistoricalPatterns()
