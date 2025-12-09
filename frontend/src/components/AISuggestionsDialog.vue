@@ -61,21 +61,26 @@
         {{ aiStore.error }}
       </Message>
 
-      <!-- PATTERN TEMPLATE SECTION (Priority Display) -->
-      <!-- Show when we detect user needs to add more fields based on historical patterns -->
-      <div v-if="!aiStore.loading && aiStore.hasRelevantTemplates && !showManualSearch" class="pattern-template-section">
+      <!-- PATTERN TEMPLATE DIALOG (shown when user clicks "Use as Template") -->
+      <Dialog
+        v-model:visible="showTemplateDialog"
+        modal
+        header="Apply Historical Pattern as Template"
+        :style="{ width: '80vw', maxWidth: '900px' }"
+        @hide="handleCloseTemplateDialog"
+      >
         <PatternTemplateCard
-          v-if="aiStore.topTemplate"
-          :pattern="aiStore.topTemplate.pattern"
+          v-if="aiStore.selectedTemplatePattern"
+          :pattern="aiStore.selectedTemplatePattern"
           :currently-selected-fields="aiStore.sourceFieldsUsed"
           :available-fields="availableUnmappedFields"
-          @skip="handleSkipTemplate"
+          @skip="handleCloseTemplateDialog"
           @apply="handleApplyTemplate"
         />
-      </div>
+      </Dialog>
 
-      <!-- Multi-Column Pattern Alert (simplified - only when no template shown) -->
-      <div v-if="!aiStore.loading && !aiStore.hasRelevantTemplates && relevantMultiColumnPatterns.length > 0" class="multi-column-alert">
+      <!-- Multi-Column Pattern Alert (informational only) -->
+      <div v-if="!aiStore.loading && relevantMultiColumnPatterns.length > 0" class="multi-column-alert">
         <Message severity="warn" :closable="false">
           <template #icon>
             <i class="pi pi-exclamation-triangle" style="font-size: 1.5rem;"></i>
@@ -103,25 +108,30 @@
         </Message>
       </div>
 
-      <!-- Historical Patterns Summary (shown when no template is displayed) -->
-      <div v-if="!aiStore.loading && !aiStore.hasRelevantTemplates && aiStore.historicalPatterns.length > 0" class="historical-patterns-section">
+      <!-- Historical Patterns Summary - User can choose to use any as template -->
+      <div v-if="!aiStore.loading && aiStore.historicalPatterns.length > 0" class="historical-patterns-section">
         <h3 @click="showPatternDetails = !showPatternDetails" class="collapsible-header">
           <i class="pi pi-history"></i>
-          Similar Past Mappings Found ({{ aiStore.historicalPatterns.length }})
+          Similar Past Mappings ({{ aiStore.historicalPatterns.length }})
           <i :class="showPatternDetails ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" class="toggle-icon"></i>
         </h3>
+        <p class="patterns-hint">
+          <i class="pi pi-info-circle"></i>
+          Click "Use as Template" to apply a past mapping pattern to your current fields
+        </p>
         <div v-if="showPatternDetails" class="patterns-list">
-          <div v-for="(pattern, idx) in aiStore.historicalPatterns.slice(0, 5)" :key="idx" class="pattern-card">
+          <div v-for="(pattern, idx) in aiStore.historicalPatterns.slice(0, 8)" :key="idx" class="pattern-card">
             <div class="pattern-header">
               <Tag :value="pattern.source_relationship_type || 'SINGLE'" 
                    :severity="pattern.source_relationship_type === 'SINGLE' ? 'info' : 'warning'" 
                    size="small" />
               <span class="target-name">→ {{ pattern.tgt_table_name }}.{{ pattern.tgt_column_name }}</span>
               <Tag 
-                v-if="pattern.templateRelevance && pattern.templateRelevance > 0.3" 
-                :value="`${Math.round((pattern.templateRelevance || 0) * 100)}% relevant`" 
-                severity="success" 
+                v-if="pattern.isMultiColumn" 
+                value="Multi-Column" 
+                severity="warning" 
                 size="small" 
+                icon="pi pi-table"
               />
             </div>
             <div class="pattern-details">
@@ -133,10 +143,16 @@
                 <label>Transforms:</label>
                 <span class="transforms">{{ pattern.transformations_applied }}</span>
               </div>
-              <div v-if="pattern.isMultiColumn" class="detail-item multi-column-badge">
-                <Tag value="Multi-Column" severity="warning" size="small" icon="pi pi-table" />
-                <span>{{ pattern.columnCount }} columns</span>
-              </div>
+            </div>
+            <div class="pattern-actions">
+              <Button
+                label="Use as Template"
+                icon="pi pi-copy"
+                size="small"
+                severity="secondary"
+                @click="handleUseAsTemplate(pattern)"
+                v-tooltip.top="'Apply this pattern to your selected fields'"
+              />
             </div>
           </div>
         </div>
@@ -512,7 +528,10 @@ const manualSearchResults = ref<any[]>([])
 const manualSearchLoading = ref(false)
 
 // Historical patterns state
-const showPatternDetails = ref(false)
+const showPatternDetails = ref(true)  // Default to expanded for better UX
+
+// Template dialog state
+const showTemplateDialog = ref(false)
 
 // Loading stage simulation (1=targets, 2=patterns, 3=LLM)
 const loadingStage = ref(1)
@@ -544,11 +563,22 @@ onUnmounted(() => {
   }
 })
 
-// Template handling
+// Template handling - User-driven approach
+function handleUseAsTemplate(pattern: HistoricalPattern) {
+  console.log('[AI Suggestions Dialog] User selected pattern as template:', pattern.tgt_column_name)
+  aiStore.selectPatternAsTemplate(pattern)
+  showTemplateDialog.value = true
+}
+
+function handleCloseTemplateDialog() {
+  console.log('[AI Suggestions Dialog] Closing template dialog')
+  showTemplateDialog.value = false
+  aiStore.clearSelectedTemplate()
+}
+
 function handleSkipTemplate() {
-  console.log('[AI Suggestions Dialog] User skipped template, showing vector search results')
-  // User chose to skip the template workflow, just continue with normal suggestions
-  // The suggestions are already loaded, so we don't need to do anything special
+  console.log('[AI Suggestions Dialog] User skipped template')
+  handleCloseTemplateDialog()
 }
 
 function handleApplyTemplate(data: { pattern: HistoricalPattern, selectedFields: UnmappedField[], generatedSQL: string }) {
@@ -1177,15 +1207,26 @@ function handleClose() {
   color: var(--gainwell-accent);
 }
 
-.pattern-details .multi-column-badge {
+.patterns-hint {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-top: 0.25rem;
+  margin: 0.5rem 0 0 0;
+  font-size: 0.9rem;
+  color: var(--text-color-secondary);
+  font-style: italic;
 }
 
-.pattern-template-section {
-  margin-bottom: 1.5rem;
+.patterns-hint i {
+  color: var(--gainwell-secondary);
+}
+
+.pattern-actions {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--surface-border);
+  display: flex;
+  justify-content: flex-end;
 }
 
 .suggestions-section h3 {

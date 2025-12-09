@@ -67,6 +67,10 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const patternTemplates = ref<PatternTemplate[]>([])  // Templates that need additional fields
   const recommendedExpression = ref<string>('')
   const detectedPatternType = ref<string>('SINGLE')
+  const selectedTemplatePattern = ref<HistoricalPattern | null>(null)  // User-selected pattern to use as template
+  
+  // Track top score for relative quality calculation (used by getMatchQuality)
+  let topVectorScore = 0
 
   // Computed
   const hasSuggestions = computed(() => suggestions.value.length > 0)
@@ -95,6 +99,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     recommendedExpression.value = ''
     detectedPatternType.value = 'SINGLE'
     sourceFieldsUsed.value = [...sourceFields]
+    topVectorScore = 0  // Reset for new request
     
     console.log('[AI Suggestions] State cleared. Historical patterns:', historicalPatterns.value.length)
     console.log('[AI Suggestions] Source fields for this query:', sourceFields.map(f => f.src_column_name))
@@ -141,6 +146,15 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       })
       console.log('[AI Suggestions] === END RAW SCORES ===')
       
+      // Set top score for relative quality calculation
+      if (targetCandidates.length > 0 && targetCandidates[0].search_score) {
+        const rawTop = typeof targetCandidates[0].search_score === 'string' 
+          ? parseFloat(targetCandidates[0].search_score) 
+          : Number(targetCandidates[0].search_score)
+        topVectorScore = normalizeScore(rawTop)
+        console.log('[AI Suggestions] Top vector score (normalized):', topVectorScore)
+      }
+      
       // Transform target candidates into suggestion format
       suggestions.value = targetCandidates.map((candidate: any, idx: number) => {
         // Parse score - might be number, string, or undefined
@@ -168,7 +182,8 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         const isExactMatch = isBestTarget && (bestTargetTable === '' || candidateTable === bestTargetTable)
         
         // Determine match quality FIRST (before logging)
-        const matchQuality = getMatchQuality(score, isExactMatch)
+        // Pass rank (idx + 1) for rank-based quality since vector scores are compressed
+        const matchQuality = getMatchQuality(score, isExactMatch, idx + 1)
         
         // Debug first few candidates
         if (idx < 5) {
@@ -228,30 +243,20 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       recommendedExpression.value = data.recommended_expression || ''
       detectedPatternType.value = data.detected_pattern || 'SINGLE'
       
-      // Process historical patterns with enhanced analysis
+      // Process historical patterns - just enhance with metadata, no auto-detection
+      // User will choose which pattern to use as template
       const patternsFromApi = data.historical_patterns || []
       console.log('[AI Suggestions] Historical patterns received from API:', patternsFromApi.length)
       
-      // Enhance patterns with analysis
+      // Enhance patterns with basic analysis (multi-column detection, etc.)
       const enhancedPatterns = processPatterns(patternsFromApi, sourceFields)
       historicalPatterns.value = enhancedPatterns
       
-      // Generate pattern templates for multi-column patterns
-      const templates = generatePatternTemplates(enhancedPatterns, sourceFields, allAvailableFields || [])
-      patternTemplates.value = templates
+      // Clear any previous template selection - user will choose
+      patternTemplates.value = []
+      selectedTemplatePattern.value = null
       
       console.log('[AI Suggestions] Enhanced patterns:', enhancedPatterns.length)
-      console.log('[AI Suggestions] Pattern templates generated:', templates.length)
-      
-      // BOOST: If historical patterns strongly match target columns, boost those suggestions
-      // This addresses the issue where vector search gives weak scores for combined fields
-      // but historical patterns show what target should be used
-      if (enhancedPatterns.length > 0) {
-        boostPatternMatchingSuggestions(enhancedPatterns)
-        
-        // Also add pattern-based suggestions to the list if they're not already there
-        addPatternBasedSuggestions(enhancedPatterns)
-      }
       
       // Debug output
       console.log('[AI Suggestions] === Results Summary ===')
@@ -284,12 +289,12 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     return rawScore
   }
   
-  // Helper: Convert score to match quality
-  // Uses RELATIVE scoring - compare against the top score in the results
-  // This prevents unrelated fields from showing as "Strong" just because 
-  // they have some vector similarity
-  function getMatchQuality(score: number, isBestTarget: boolean): 'Excellent' | 'Strong' | 'Good' | 'Weak' | 'Unknown' {
-    // LLM's best target always gets Excellent
+  // Helper: Convert score to match quality using HYBRID scoring
+  // Combines:
+  // 1. ABSOLUTE threshold - if top score is low, cap quality levels
+  // 2. RELATIVE position - distance from top score determines tier within cap
+  function getMatchQuality(score: number, isBestTarget: boolean, rank?: number): 'Excellent' | 'Strong' | 'Good' | 'Weak' | 'Unknown' {
+    // LLM's best target always gets Excellent (AI validated this match)
     if (isBestTarget) return 'Excellent'
     
     // Handle invalid scores
@@ -298,17 +303,53 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       return 'Unknown'
     }
     
-    // Normalize if needed (in case raw score wasn't pre-normalized)
-    const normalizedScore = score > 1 ? score / 100 : score
+    // Determine the quality CAP based on the absolute top score
+    // This ensures weak vector search results don't show misleading "Strong" ratings
+    let maxQuality: 'Strong' | 'Good' | 'Weak' = 'Weak'
+    if (topVectorScore >= 0.50) {
+      maxQuality = 'Strong'  // Top score is solid - allow Strong for rank 1
+    } else if (topVectorScore >= 0.35) {
+      maxQuality = 'Good'    // Top score is moderate - cap at Good
+    } else {
+      maxQuality = 'Weak'    // Top score is weak - all results are Weak
+    }
     
-    // STRICTER thresholds - only truly good matches get high quality
-    // These thresholds work with normalized scores (0-1 range after x100)
-    if (normalizedScore >= 0.70) return 'Excellent'  // Very strong semantic match
-    if (normalizedScore >= 0.55) return 'Strong'     // Good match
-    if (normalizedScore >= 0.40) return 'Good'       // Moderate match
-    if (normalizedScore >= 0.20) return 'Weak'       // Some relevance
-    if (normalizedScore > 0) return 'Weak'
-    return 'Unknown'
+    // Now determine quality within the cap using rank
+    let quality: 'Strong' | 'Good' | 'Weak' = 'Weak'
+    
+    if (rank !== undefined) {
+      // Rank-based quality (relative positioning)
+      if (rank === 1) {
+        quality = 'Strong'
+      } else if (rank <= 3) {
+        quality = 'Good'
+      } else {
+        quality = 'Weak'
+      }
+    } else if (topVectorScore > 0 && score > 0) {
+      // Fallback: Use score ratio
+      const relativeScore = score / topVectorScore
+      if (relativeScore >= 0.98) {
+        quality = 'Strong'
+      } else if (relativeScore >= 0.90) {
+        quality = 'Good'
+      } else {
+        quality = 'Weak'
+      }
+    }
+    
+    // Apply the cap - quality cannot exceed maxQuality
+    const qualityOrder = ['Weak', 'Good', 'Strong'] as const
+    const qualityIdx = qualityOrder.indexOf(quality)
+    const maxIdx = qualityOrder.indexOf(maxQuality)
+    const cappedQuality = qualityOrder[Math.min(qualityIdx, maxIdx)]
+    
+    // Debug log for first few
+    if (rank && rank <= 3) {
+      console.log(`[AI Suggestions] Quality for rank ${rank}: topScore=${topVectorScore.toFixed(3)}, maxQuality=${maxQuality}, rawQuality=${quality}, capped=${cappedQuality}`)
+    }
+    
+    return cappedQuality
   }
   
   // Helper: Process historical patterns to detect multi-column mappings
@@ -390,263 +431,24 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     })
   }
   
-  // Helper: Boost suggestions that match high-relevance historical patterns
-  // ONLY boost when we're confident the pattern is actually relevant
-  function boostPatternMatchingSuggestions(patterns: HistoricalPattern[]) {
-    // Boost patterns that match the current selection
-    // Use moderate threshold to surface relevant pattern-based mappings
-    const highlyRelevantPatterns = patterns.filter(p => 
-      ((p.templateRelevance || 0) >= 0.25 || (p.search_score || 0) >= 0.4) && 
-      p.matchedToCurrentSelection
-    )
-    
-    if (highlyRelevantPatterns.length === 0) {
-      console.log('[AI Suggestions] No highly relevant patterns to boost (need relevance >= 0.5 AND matchedToCurrentSelection)')
-      return
-    }
-    
-    console.log('[AI Suggestions] Boosting', highlyRelevantPatterns.length, 'highly relevant patterns')
-    
-    // For each highly relevant pattern, find matching suggestions
-    for (const pattern of highlyRelevantPatterns) {
-      const patternTarget = (pattern.tgt_column_name || '').toLowerCase()
-      const patternTable = (pattern.tgt_table_name || '').toLowerCase()
-      
-      const matchingIdx = suggestions.value.findIndex(s => {
-        const sugTarget = (s.tgt_column_name || '').toLowerCase()
-        const sugTable = (s.tgt_table_name || '').toLowerCase()
-        return sugTarget === patternTarget && (patternTable === '' || sugTable === patternTable)
-      })
-      
-      if (matchingIdx >= 0) {
-        const suggestion = suggestions.value[matchingIdx]
-        
-        // Boost this suggestion
-        const boosted = {
-          ...suggestion,
-          match_quality: 'Excellent' as const,
-          ai_reasoning: `Historical pattern match (${Math.round((pattern.templateRelevance || 0) * 100)}% relevance): This target has been successfully mapped ${pattern.columnCount || 1} time(s) with similar source fields using ${pattern.transformations_applied || 'direct mapping'}.`,
-          fromPattern: true,
-          patternId: pattern.mapped_field_id
-        }
-        
-        // If not already at top, move to position 0 or 1 (after LLM best if present)
-        if (matchingIdx > 1) {
-          suggestions.value.splice(matchingIdx, 1)
-          // Insert at position 1 (after LLM best) or 0 if LLM best isn't excellent
-          const insertIdx = suggestions.value[0]?.match_quality === 'Excellent' && !suggestions.value[0]?.fromPattern ? 1 : 0
-          suggestions.value.splice(insertIdx, 0, boosted)
-        } else {
-          // Just update in place
-          suggestions.value[matchingIdx] = boosted
-        }
-        
-        // Re-rank all suggestions
-        suggestions.value.forEach((s, i) => { s.rank = i + 1 })
-        
-        console.log('[AI Suggestions] Boosted pattern-matching suggestion:', patternTarget, 'to rank', suggestions.value.findIndex(s => s.tgt_column_name?.toLowerCase() === patternTarget) + 1)
-      }
-    }
-  }
-  
-  // Helper: Add suggestions based on historical patterns that aren't already in the list
-  // ONLY add if the pattern is highly relevant to the user's selection
-  function addPatternBasedSuggestions(patterns: HistoricalPattern[]) {
-    // STRICT: Only add patterns that are:
-    // 1. Multi-column AND
-    // 2. Have high relevance (actually match the user's selected fields)
-    const highlyRelevantPatterns = patterns.filter(p => 
-      p.isMultiColumn && 
-      (p.matchedToCurrentSelection || (p.search_score || 0) >= 0.3) &&
-      ((p.templateRelevance || 0) >= 0.15 || (p.search_score || 0) >= 0.3)
-    ).slice(0, 2)  // Max 2 pattern suggestions
-    
-    console.log('[AI Suggestions] Adding pattern suggestions:', highlyRelevantPatterns.map(p => p.tgt_column_name))
-    
-    for (const pattern of highlyRelevantPatterns) {
-      const patternTarget = (pattern.tgt_column_name || '').toLowerCase()
-      
-      // Check if already in suggestions
-      const exists = suggestions.value.some(s => 
-        (s.tgt_column_name || '').toLowerCase() === patternTarget
-      )
-      
-      if (!exists && pattern.tgt_column_name) {
-        // Add as a new suggestion at position based on search score
-        const newSuggestion: AISuggestion = {
-          semantic_field_id: 0, // Will need lookup
-          tgt_table_name: pattern.tgt_table_name || '',
-          tgt_table_physical_name: pattern.tgt_table_physical_name || pattern.tgt_table_name || '',
-          tgt_column_name: pattern.tgt_column_name,
-          tgt_column_physical_name: pattern.tgt_column_physical_name || pattern.tgt_column_name || '',
-          tgt_comments: '',
-          search_score: pattern.search_score || 0.5,
-          match_quality: 'Strong',
-          ai_reasoning: `📋 Pattern Match: This target typically uses ${pattern.columnCount || 2}+ columns with ${pattern.transformations_applied || 'combined'} transformation. ${pattern.source_relationship_type || 'CONCAT'} pattern detected.`,
-          rank: 0,
-          fromPattern: true,
-          patternId: pattern.mapped_field_id
-        }
-        
-        // Insert at position 1 (after best if present) or 0
-        const insertIdx = suggestions.value.length > 0 && suggestions.value[0].match_quality === 'Excellent' ? 1 : 0
-        suggestions.value.splice(insertIdx, 0, newSuggestion)
-        
-        console.log('[AI Suggestions] Added pattern-based suggestion:', pattern.tgt_column_name)
-      }
-    }
-    
-    // Re-rank all suggestions
-    suggestions.value.forEach((s, i) => { s.rank = i + 1 })
-  }
-  
-  // Helper: Generate pattern templates for multi-column patterns
-  // ONLY show templates when the pattern is HIGHLY relevant to the user's selection
-  function generatePatternTemplates(
-    patterns: HistoricalPattern[], 
-    selectedFields: UnmappedField[],
-    availableFields: UnmappedField[]
-  ): PatternTemplate[] {
-    const templates: PatternTemplate[] = []
-    
-    console.log('[AI Suggestions] Generating templates from', patterns.length, 'patterns')
-    console.log('[AI Suggestions] Selected fields:', selectedFields.map(f => f.src_column_name))
-    
-    // Get words from the selected field names and descriptions for matching
-    const selectedFieldInfo = selectedFields.map(f => ({
-      name: (f.src_column_physical_name || f.src_column_name || '').toLowerCase(),
-      words: new Set((f.src_column_physical_name || f.src_column_name || '').toLowerCase().split(/[_\s]+/)),
-      descWords: new Set((f.src_comments || '').toLowerCase().split(/\s+/).filter(w => w.length > 2))
-    }))
-    
-    // Filter multi-column patterns that are relevant to the user's selection
-    // Use RELAXED thresholds to help users discover pattern-based mappings
-    const relevantPatterns = patterns.filter(p => {
-      if (!p.isMultiColumn) return false
-      
-      // Check if pattern columns have any word overlap with selected fields
-      const patternCols = (p.source_columns || '').toLowerCase().split(/[|,]/).map(c => c.trim()).filter(c => c)
-      const patternWords = new Set<string>()
-      patternCols.forEach(col => col.split(/[_\s]+/).forEach(w => {
-        if (w.length > 1) patternWords.add(w)  // Skip single-char words
-      }))
-      
-      // Also check target column name for semantic relevance
-      const targetWords = new Set((p.tgt_column_name || '').toLowerCase().split(/[_\s]+/).filter(w => w.length > 1))
-      
-      // Calculate word overlap with selected fields
-      let patternOverlap = 0
-      let targetOverlap = 0
-      selectedFieldInfo.forEach(sf => {
-        sf.words.forEach(w => {
-          if (w.length > 1 && patternWords.has(w)) patternOverlap++
-          if (w.length > 1 && targetWords.has(w)) targetOverlap++
-        })
-        // Also check description words against target
-        sf.descWords.forEach(w => {
-          if (targetWords.has(w)) targetOverlap++
-        })
-      })
-      
-      // RELAXED: Show template if ANY meaningful overlap OR pattern has some relevance
-      const hasPatternOverlap = patternOverlap >= 1
-      const hasTargetOverlap = targetOverlap >= 1
-      const hasRelevance = (p.templateRelevance || 0) >= 0.15  // Lowered from 0.4
-      const hasGoodSearchScore = (p.search_score || 0) >= 0.3  // Vector search found it relevant
-      
-      const show = hasPatternOverlap || hasTargetOverlap || hasRelevance || hasGoodSearchScore
-      
-      console.log(`[AI Suggestions] Pattern ${p.tgt_column_name}: patternOverlap=${patternOverlap}, targetOverlap=${targetOverlap}, relevance=${p.templateRelevance?.toFixed(2)}, searchScore=${p.search_score?.toFixed(2)}, show=${show}`)
-      
-      return show
-    })
-    
-    console.log('[AI Suggestions] Relevant multi-column patterns:', relevantPatterns.length)
-    
-    relevantPatterns.forEach(pattern => {
-      const sourceColsStr = pattern.source_columns || ''
-      const sourceCols = sourceColsStr.split(/[|,]/).map(c => c.trim()).filter(c => c)
-      
-      // If no source_columns, try to infer from expression or just show as template
-      let columnsForTemplate = sourceCols
-      if (columnsForTemplate.length === 0 && pattern.source_expression) {
-        // Try to extract column names from expression
-        // Match patterns like "column_name" or table.column
-        const matches = pattern.source_expression.match(/\b([a-z][a-z0-9_]*)\b/gi) || []
-        const keywords = new Set(['CONCAT', 'TRIM', 'UPPER', 'LOWER', 'INITCAP', 'COALESCE', 'CAST', 'AS', 'FROM', 'SELECT', 'AND', 'OR', 'NULL', 'STRING', 'INT', 'VARCHAR'])
-        columnsForTemplate = matches.filter(m => !keywords.has(m.toUpperCase()))
-      }
-      
-      // Determine which fields are already selected vs missing
-      const selectedInPattern: string[] = []
-      const missingInPattern: string[] = []
-      
-      // For each selected field, see if it matches any pattern column
-      const matchedPatternCols = new Set<string>()
-      selectedFields.forEach(field => {
-        const fCol = (field.src_column_physical_name || field.src_column_name || '').toLowerCase()
-        const fWords = new Set(fCol.split(/[_\s]+/))
-        
-        columnsForTemplate.forEach(col => {
-          const colLower = col.toLowerCase()
-          const colWords = colLower.split(/[_\s]+/)
-          
-          // Check for match
-          const hasOverlap = colWords.some(w => fWords.has(w)) || fCol === colLower
-          if (hasOverlap) {
-            selectedInPattern.push(col)
-            matchedPatternCols.add(col)
-          }
-        })
-      })
-      
-      // Remaining columns are "missing"
-      columnsForTemplate.forEach(col => {
-        if (!matchedPatternCols.has(col)) {
-          missingInPattern.push(col)
-        }
-      })
-      
-      // Create template if:
-      // 1. It's a multi-column pattern (even if we couldn't match slots), OR
-      // 2. User has some fields selected but not all
-      const shouldShowTemplate = 
-        (pattern.isMultiColumn && columnsForTemplate.length > 1) ||
-        (selectedInPattern.length > 0 && missingInPattern.length > 0) ||
-        (pattern.search_score && pattern.search_score > 0.4 && columnsForTemplate.length > 1)
-      
-      if (shouldShowTemplate) {
-        // If we couldn't determine selected/missing, default to showing current field as selected
-        // and pattern suggests adding more
-        if (selectedInPattern.length === 0 && selectedFields.length > 0) {
-          selectedInPattern.push(selectedFields[0].src_column_name)
-          missingInPattern.push('Additional Field')
-        }
-        
-        templates.push({
-          pattern,
-          relevanceScore: pattern.templateRelevance || pattern.search_score || 0,
-          selectedFields: selectedInPattern,
-          missingFields: missingInPattern,
-          isComplete: missingInPattern.length === 0,
-          suggestedSQL: pattern.source_expression || ''
-        })
-        
-        console.log('[AI Suggestions] Created template for', pattern.tgt_column_name, {
-          selected: selectedInPattern,
-          missing: missingInPattern,
-          score: pattern.search_score
-        })
-      }
-    })
-    
-    // Sort by relevance score
-    return templates.sort((a, b) => b.relevanceScore - a.relevanceScore)
-  }
-
   function selectSuggestion(suggestion: AISuggestion) {
     selectedSuggestion.value = suggestion
     console.log('[AI Suggestions] Selected:', suggestion.tgt_column_name)
+  }
+
+  // User explicitly chooses a historical pattern to use as template
+  function selectPatternAsTemplate(pattern: HistoricalPattern) {
+    selectedTemplatePattern.value = pattern
+    console.log('[AI Suggestions] User selected pattern as template:', pattern.tgt_column_name, {
+      sourceCols: pattern.source_columns,
+      expression: pattern.source_expression,
+      isMultiColumn: pattern.isMultiColumn
+    })
+  }
+  
+  // Clear the selected template
+  function clearSelectedTemplate() {
+    selectedTemplatePattern.value = null
   }
 
   function clearSuggestions() {
@@ -655,6 +457,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     selectedSuggestion.value = null
     historicalPatterns.value = []
     patternTemplates.value = []
+    selectedTemplatePattern.value = null
     recommendedExpression.value = ''
     detectedPatternType.value = 'SINGLE'
     error.value = null
@@ -686,6 +489,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     patternTemplates,
     recommendedExpression,
     detectedPatternType,
+    selectedTemplatePattern,
     
     // Computed
     hasSuggestions,
@@ -697,6 +501,8 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     // Actions
     generateSuggestions,
     selectSuggestion,
+    selectPatternAsTemplate,
+    clearSelectedTemplate,
     clearSuggestions,
     addSourceField,
     setSourceFields
