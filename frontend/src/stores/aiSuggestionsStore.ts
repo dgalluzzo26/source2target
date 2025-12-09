@@ -134,6 +134,13 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       console.log('[AI Suggestions] Best target from LLM:', bestTarget)
       console.log('[AI Suggestions] Target candidates count:', targetCandidates.length)
       
+      // Log ALL raw scores for calibration
+      console.log('[AI Suggestions] === RAW VECTOR SEARCH SCORES ===')
+      targetCandidates.forEach((c: any, i: number) => {
+        console.log(`  ${i + 1}. ${c.tgt_column_name}: raw=${c.search_score}`)
+      })
+      console.log('[AI Suggestions] === END RAW SCORES ===')
+      
       // Transform target candidates into suggestion format
       suggestions.value = targetCandidates.map((candidate: any, idx: number) => {
         // Parse score - might be number, string, or undefined
@@ -352,6 +359,18 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       // Normalize relevance by total columns in pattern
       const normalizedRelevance = sourceCols.length > 0 ? relevance / sourceCols.length : 0
       
+      // Log relevance calculation for debugging
+      if (isMultiColumn) {
+        console.log(`[AI Suggestions] Pattern relevance calc for ${p.tgt_column_name}:`, {
+          sourceCols,
+          selectedCols: Array.from(selectedColNames),
+          matchedCols,
+          rawRelevance: relevance,
+          normalizedRelevance: normalizedRelevance.toFixed(3),
+          isMultiColumn
+        })
+      }
+      
       return {
         ...p,
         isMultiColumn,
@@ -374,10 +393,11 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   // Helper: Boost suggestions that match high-relevance historical patterns
   // ONLY boost when we're confident the pattern is actually relevant
   function boostPatternMatchingSuggestions(patterns: HistoricalPattern[]) {
-    // STRICT: Only boost patterns with HIGH relevance (> 0.5)
-    // This prevents irrelevant patterns from polluting the suggestions
+    // Boost patterns that match the current selection
+    // Use moderate threshold to surface relevant pattern-based mappings
     const highlyRelevantPatterns = patterns.filter(p => 
-      (p.templateRelevance || 0) >= 0.5 && p.matchedToCurrentSelection
+      ((p.templateRelevance || 0) >= 0.25 || (p.search_score || 0) >= 0.4) && 
+      p.matchedToCurrentSelection
     )
     
     if (highlyRelevantPatterns.length === 0) {
@@ -437,8 +457,8 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     // 2. Have high relevance (actually match the user's selected fields)
     const highlyRelevantPatterns = patterns.filter(p => 
       p.isMultiColumn && 
-      p.matchedToCurrentSelection &&
-      (p.templateRelevance || 0) >= 0.4
+      (p.matchedToCurrentSelection || (p.search_score || 0) >= 0.3) &&
+      ((p.templateRelevance || 0) >= 0.15 || (p.search_score || 0) >= 0.3)
     ).slice(0, 2)  // Max 2 pattern suggestions
     
     console.log('[AI Suggestions] Adding pattern suggestions:', highlyRelevantPatterns.map(p => p.tgt_column_name))
@@ -499,31 +519,46 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       descWords: new Set((f.src_comments || '').toLowerCase().split(/\s+/).filter(w => w.length > 2))
     }))
     
-    // STRICT filter: Only consider multi-column patterns where:
-    // 1. Pattern has high relevance score (templateRelevance > 0.4)
-    // 2. OR pattern's source columns have significant word overlap with selected field
+    // Filter multi-column patterns that are relevant to the user's selection
+    // Use RELAXED thresholds to help users discover pattern-based mappings
     const relevantPatterns = patterns.filter(p => {
       if (!p.isMultiColumn) return false
       
       // Check if pattern columns have any word overlap with selected fields
       const patternCols = (p.source_columns || '').toLowerCase().split(/[|,]/).map(c => c.trim()).filter(c => c)
       const patternWords = new Set<string>()
-      patternCols.forEach(col => col.split(/[_\s]+/).forEach(w => patternWords.add(w)))
+      patternCols.forEach(col => col.split(/[_\s]+/).forEach(w => {
+        if (w.length > 1) patternWords.add(w)  // Skip single-char words
+      }))
+      
+      // Also check target column name for semantic relevance
+      const targetWords = new Set((p.tgt_column_name || '').toLowerCase().split(/[_\s]+/).filter(w => w.length > 1))
       
       // Calculate word overlap with selected fields
-      let overlap = 0
+      let patternOverlap = 0
+      let targetOverlap = 0
       selectedFieldInfo.forEach(sf => {
         sf.words.forEach(w => {
-          if (patternWords.has(w)) overlap++
+          if (w.length > 1 && patternWords.has(w)) patternOverlap++
+          if (w.length > 1 && targetWords.has(w)) targetOverlap++
+        })
+        // Also check description words against target
+        sf.descWords.forEach(w => {
+          if (targetWords.has(w)) targetOverlap++
         })
       })
       
-      const hasSignificantOverlap = overlap >= 1 && overlap >= Math.min(patternWords.size, 2) * 0.3
-      const hasHighRelevance = (p.templateRelevance || 0) >= 0.4
+      // RELAXED: Show template if ANY meaningful overlap OR pattern has some relevance
+      const hasPatternOverlap = patternOverlap >= 1
+      const hasTargetOverlap = targetOverlap >= 1
+      const hasRelevance = (p.templateRelevance || 0) >= 0.15  // Lowered from 0.4
+      const hasGoodSearchScore = (p.search_score || 0) >= 0.3  // Vector search found it relevant
       
-      console.log(`[AI Suggestions] Pattern ${p.tgt_column_name}: overlap=${overlap}, relevance=${p.templateRelevance}, show=${hasSignificantOverlap || hasHighRelevance}`)
+      const show = hasPatternOverlap || hasTargetOverlap || hasRelevance || hasGoodSearchScore
       
-      return hasSignificantOverlap || hasHighRelevance
+      console.log(`[AI Suggestions] Pattern ${p.tgt_column_name}: patternOverlap=${patternOverlap}, targetOverlap=${targetOverlap}, relevance=${p.templateRelevance?.toFixed(2)}, searchScore=${p.search_score?.toFixed(2)}, show=${show}`)
+      
+      return show
     })
     
     console.log('[AI Suggestions] Relevant multi-column patterns:', relevantPatterns.length)
