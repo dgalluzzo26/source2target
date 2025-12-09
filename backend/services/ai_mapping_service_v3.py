@@ -131,6 +131,17 @@ class AIMappingServiceV3:
     # VECTOR SEARCH: SEMANTIC FIELDS (Find matching targets)
     # =========================================================================
     
+    # Minimum score thresholds for filtering weak/irrelevant results
+    # Databricks vector search returns raw cosine similarity (typically 0.001-0.01 range)
+    # Higher threshold = fewer but more relevant results
+    # Score ranges observed:
+    #   0.008+ = excellent match (same semantic meaning)
+    #   0.005-0.008 = good match (related concepts)
+    #   0.003-0.005 = weak match (some word overlap)
+    #   <0.003 = very weak (likely irrelevant)
+    MIN_TARGET_SCORE = 0.0045  # Filter out bottom ~50% - keeps good/excellent matches
+    MIN_PATTERN_SCORE = 0.0040  # Slightly lower for patterns to catch more history
+    
     def _vector_search_targets_sync(
         self,
         server_hostname: str,
@@ -141,6 +152,7 @@ class AIMappingServiceV3:
     ) -> List[Dict[str, Any]]:
         """
         Vector search on semantic_fields to find matching TARGET columns.
+        Filters results below MIN_TARGET_SCORE threshold.
         """
         print(f"[AI Mapping V3] Vector search TARGETS: {query_text[:100]}...")
         
@@ -172,21 +184,31 @@ class AIMappingServiceV3:
                 cursor.execute(query)
                 arrow_table = cursor.fetchall_arrow()
                 df = arrow_table.to_pandas()
-                results = df.to_dict('records')
+                all_results = df.to_dict('records')
                 
-                print(f"[AI Mapping V3] Found {len(results)} target candidates")
+                print(f"[AI Mapping V3] Vector search returned {len(all_results)} target candidates")
                 
-                # Debug: print first few results with scores
-                if results:
-                    print(f"[AI Mapping V3] Sample target results:")
-                    for i, r in enumerate(results[:3]):
-                        score = r.get('search_score')
-                        print(f"  {i+1}. {r.get('tgt_column_name')} - score: {score} (type: {type(score).__name__})")
-                
-                # Ensure scores are floats (pandas might return numpy types)
-                for r in results:
+                # Ensure scores are floats and filter by minimum threshold
+                results = []
+                for r in all_results:
                     if 'search_score' in r and r['search_score'] is not None:
                         r['search_score'] = float(r['search_score'])
+                        # Only include results above minimum threshold
+                        if r['search_score'] >= self.MIN_TARGET_SCORE:
+                            results.append(r)
+                        else:
+                            print(f"[AI Mapping V3] Filtered out (low score): {r.get('tgt_column_name')} - score: {r['search_score']:.6f}")
+                    else:
+                        results.append(r)  # Include if no score (shouldn't happen)
+                
+                print(f"[AI Mapping V3] After filtering (>= {self.MIN_TARGET_SCORE}): {len(results)} targets")
+                
+                # Debug: print kept results with scores
+                if results:
+                    print(f"[AI Mapping V3] Top target results:")
+                    for i, r in enumerate(results[:5]):
+                        score = r.get('search_score')
+                        print(f"  {i+1}. {r.get('tgt_column_name')} - score: {score:.6f}")
                 
                 return results
                 
@@ -211,6 +233,7 @@ class AIMappingServiceV3:
         """
         Vector search on mapped_fields to find similar HISTORICAL PATTERNS.
         Returns past mappings with their SQL expressions and transformations.
+        Filters results below MIN_PATTERN_SCORE threshold.
         """
         print(f"[AI Mapping V3] Vector search PATTERNS: {query_text[:100]}...")
         
@@ -249,23 +272,34 @@ class AIMappingServiceV3:
                 cursor.execute(query)
                 arrow_table = cursor.fetchall_arrow()
                 df = arrow_table.to_pandas()
-                results = df.to_dict('records')
+                all_results = df.to_dict('records')
                 
-                print(f"[AI Mapping V3] Found {len(results)} historical patterns")
+                print(f"[AI Mapping V3] Vector search returned {len(all_results)} historical patterns")
                 
-                # Debug: print first few pattern results
-                if results:
-                    print(f"[AI Mapping V3] Sample pattern results:")
-                    for i, r in enumerate(results[:3]):
-                        score = r.get('search_score')
-                        print(f"  {i+1}. {r.get('tgt_column_name')} - expr: {r.get('source_expression', '')[:50]} - score: {score}")
-                
-                # Ensure scores are floats
-                for r in results:
+                # Ensure scores are floats and filter by minimum threshold
+                results = []
+                for r in all_results:
                     if 'search_score' in r and r['search_score'] is not None:
                         r['search_score'] = float(r['search_score'])
                     if 'confidence_score' in r and r['confidence_score'] is not None:
                         r['confidence_score'] = float(r['confidence_score'])
+                    
+                    # Filter by minimum score threshold
+                    score = r.get('search_score', 0) or 0
+                    if score >= self.MIN_PATTERN_SCORE:
+                        results.append(r)
+                    else:
+                        print(f"[AI Mapping V3] Filtered out pattern (low score): {r.get('tgt_column_name')} - score: {score:.6f}")
+                
+                print(f"[AI Mapping V3] After filtering (>= {self.MIN_PATTERN_SCORE}): {len(results)} patterns")
+                
+                # Debug: print kept pattern results
+                if results:
+                    print(f"[AI Mapping V3] Top pattern results:")
+                    for i, r in enumerate(results[:5]):
+                        score = r.get('search_score', 0)
+                        expr = (r.get('source_expression') or '')[:40]
+                        print(f"  {i+1}. {r.get('tgt_column_name')} - score: {score:.6f} - expr: {expr}")
                 
                 return results
                 

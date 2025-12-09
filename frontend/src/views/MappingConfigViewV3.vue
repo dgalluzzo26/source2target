@@ -382,97 +382,34 @@ const hasMultipleTables = computed(() => {
 })
 
 // Filter historical patterns based on current selection
-// Key insight: Patterns should be STRONGLY RELEVANT to the current source field(s)
-// We use SEMANTIC keywords (not generic words) for matching
+// Backend already filters by minimum score - just filter by relationship type
 const filteredHistoricalPatterns = computed(() => {
   if (!historicalPatterns.value || historicalPatterns.value.length === 0) {
-    console.log('[Mapping Config] No historical patterns to filter')
+    console.log('[Mapping Config] No historical patterns to display')
     return []
   }
   
-  console.log('[Mapping Config] Filtering', historicalPatterns.value.length, 'patterns')
+  console.log('[Mapping Config] Filtering', historicalPatterns.value.length, 'patterns by relationship type')
+  console.log('[Mapping Config] hasMultipleFields:', hasMultipleFields.value)
+  console.log('[Mapping Config] hasMultipleTables:', hasMultipleTables.value)
   
-  // Generic/common words to IGNORE in matching (these cause false positives)
-  const STOP_WORDS = new Set([
-    'the', 'of', 'and', 'for', 'in', 'to', 'is', 'on', 'at', 'by', 'an', 'as', 'or',
-    'managing', 'employee', 'member', 'data', 'field', 'column', 'table', 'value',
-    'current', 'curr', 'rec', 'ind', 'indicator', 'code', 'type', 'status', 'flag',
-    'date', 'time', 'timestamp', 'number', 'num', 'key', 'id', 'identifier',
-    'record', 'row', 'line', 'text', 'string', 'varchar', 'char', 'int', 'integer'
-  ])
-  
-  // Extract SEMANTIC keywords from current source field (not stop words)
-  const currentSemanticWords = new Set<string>()
-  sourceFields.value.forEach(f => {
-    const name = (f.src_column_physical_name || f.src_column_name || '').toLowerCase()
-    const description = (f.src_comments || '').toLowerCase()
-    
-    // Extract meaningful words (not stop words, length > 2)
-    const words = [...name.split(/[_\s]+/), ...description.split(/[_\s.,]+/)]
-    words.filter(w => w.length > 2 && !STOP_WORDS.has(w)).forEach(w => currentSemanticWords.add(w))
-  })
-  
-  console.log('[Mapping Config] Current SEMANTIC keywords:', Array.from(currentSemanticWords))
-  
-  // Score and filter patterns
-  const scoredPatterns = historicalPatterns.value.map(pattern => {
+  const filtered = historicalPatterns.value.filter(pattern => {
     const patternType = (pattern.source_relationship_type || 'SINGLE').toUpperCase()
     
-    // Extract semantic words from pattern
-    const patternCols = (pattern.source_columns || '').toLowerCase()
-    const patternDesc = (pattern.source_descriptions || '').toLowerCase()
-    const patternTarget = (pattern.tgt_column_name || '').toLowerCase()
-    
-    const patternWords = new Set<string>()
-    const allPatternText = `${patternCols} ${patternDesc} ${patternTarget}`
-    allPatternText.split(/[_\s.,|]+/)
-      .filter(w => w.length > 2 && !STOP_WORDS.has(w))
-      .forEach(w => patternWords.add(w))
-    
-    // Count SEMANTIC word overlap (must match on meaningful words)
-    let semanticOverlap = 0
-    currentSemanticWords.forEach(cw => {
-      patternWords.forEach(pw => {
-        // Exact match or one contains the other
-        if (cw === pw || (cw.length >= 4 && pw.includes(cw)) || (pw.length >= 4 && cw.includes(pw))) {
-          semanticOverlap++
-        }
-      })
-    })
-    
-    // Relevance score: overlap relative to current field keywords
-    const relevanceScore = currentSemanticWords.size > 0 
-      ? semanticOverlap / currentSemanticWords.size 
-      : 0
-    
-    // Check relationship type filter
-    let passesTypeFilter = false
+    // Filter by relationship type based on current selection
     if (!hasMultipleFields.value) {
-      passesTypeFilter = patternType === 'SINGLE'
+      // Single column selected - only show SINGLE patterns
+      return patternType === 'SINGLE'
     } else if (hasMultipleTables.value) {
-      passesTypeFilter = true
+      // Multiple columns from different tables - show all types
+      return true
     } else {
-      passesTypeFilter = ['SINGLE', 'UNION', 'CONCAT'].includes(patternType)
+      // Multiple columns from same table - show SINGLE, UNION, CONCAT (no JOIN)
+      return patternType === 'SINGLE' || patternType === 'UNION' || patternType === 'CONCAT'
     }
-    
-    return { pattern, relevanceScore, passesTypeFilter, patternWords: Array.from(patternWords) }
-  })
+  }).slice(0, 5)  // Limit to top 5
   
-  // Only include patterns with STRONG relevance (>= 50% semantic word match)
-  // AND passing the type filter
-  const filtered = scoredPatterns
-    .filter(sp => sp.passesTypeFilter && sp.relevanceScore >= 0.5)
-    .sort((a, b) => b.relevanceScore - a.relevanceScore)
-    .slice(0, 3)  // Only show top 3
-    .map(sp => sp.pattern)
-  
-  console.log('[Mapping Config] Pattern scores:', scoredPatterns.map(sp => ({
-    target: sp.pattern.tgt_column_name,
-    relevance: sp.relevanceScore.toFixed(2),
-    passesType: sp.passesTypeFilter,
-    words: sp.patternWords.slice(0, 5)
-  })))
-  console.log('[Mapping Config] Filtered to', filtered.length, 'relevant patterns')
+  console.log('[Mapping Config] Showing', filtered.length, 'patterns')
   
   return filtered
 })

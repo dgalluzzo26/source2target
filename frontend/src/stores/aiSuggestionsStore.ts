@@ -478,10 +478,8 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       }
       
       // Transform target candidates into suggestion format
-      // FILTER OUT weak results to avoid showing irrelevant matches like "address" for "first name"
-      const MIN_SCORE_THRESHOLD = 0.35  // Only show results with at least 35% similarity
-      
-      const allSuggestions = targetCandidates.map((candidate: any, idx: number) => {
+      // Backend already filters by minimum score threshold - just display what we get
+      suggestions.value = targetCandidates.map((candidate: any, idx: number) => {
         // Parse score - might be number, string, or undefined
         // Databricks vector search returns raw cosine similarity scores (typically 0.001-0.01 range)
         // Multiply by 100 to get a more intuitive 0-1 scale (e.g., 0.00576 -> 0.576)
@@ -491,8 +489,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
             ? parseFloat(candidate.search_score) 
             : Number(candidate.search_score)
           
-          // If score is very small (< 0.1), multiply by 100 to normalize
-          // This handles Databricks vector search raw scores
+          // If score is very small (< 0.1), multiply by 100 to normalize for display
           score = rawScore < 0.1 ? rawScore * 100 : rawScore
         }
         
@@ -506,18 +503,15 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         const bestTargetTable = (bestTarget.tgt_table_name || '').toLowerCase().trim()
         const isExactMatch = isBestTarget && (bestTargetTable === '' || candidateTable === bestTargetTable)
         
-        // Determine match quality FIRST (before logging)
-        // Pass rank (idx + 1) for rank-based quality since vector scores are compressed
+        // Determine match quality based on rank (backend already sorted by score)
         const matchQuality = getMatchQuality(score, isExactMatch, idx + 1)
         
         // Debug first few candidates
         if (idx < 5) {
-          const rawScore = candidate.search_score
           console.log(`[AI Suggestions] Candidate ${idx + 1}:`, {
             column: candidate.tgt_column_name,
-            rawScore: rawScore,
-            normalizedScore: score,
-            wasNormalized: rawScore < 0.02,
+            rawScore: candidate.search_score,
+            displayScore: score,
             matchQuality: matchQuality,
             isBestTarget: isExactMatch
           })
@@ -530,7 +524,6 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         } else if (candidate.tgt_comments) {
           reasoning = candidate.tgt_comments
         } else {
-          // Score is 0-1 similarity, display as decimal (e.g., 0.85) not percentage
           reasoning = `Vector search similarity: ${score.toFixed(4)}`
         }
         
@@ -544,25 +537,11 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
           search_score: score,
           match_quality: matchQuality,
           ai_reasoning: reasoning,
-          rank: idx + 1,
-          _isLLMBestTarget: isExactMatch  // Internal flag for filtering
-        } as AISuggestion & { _isLLMBestTarget: boolean }
+          rank: idx + 1
+        } as AISuggestion
       })
       
-      // Filter to only show:
-      // 1. LLM's best target (always show)
-      // 2. Suggestions with score >= MIN_SCORE_THRESHOLD
-      // 3. Top 5 results maximum to avoid clutter
-      suggestions.value = allSuggestions
-        .filter(s => s._isLLMBestTarget || s.search_score >= MIN_SCORE_THRESHOLD)
-        .slice(0, 5)  // Limit to top 5
-        .map((s, idx) => {
-          // Remove internal flag and re-rank
-          const { _isLLMBestTarget, ...suggestion } = s
-          return { ...suggestion, rank: idx + 1 } as AISuggestion
-        })
-      
-      console.log(`[AI Suggestions] Filtered from ${allSuggestions.length} to ${suggestions.value.length} (threshold: ${MIN_SCORE_THRESHOLD})`)
+      console.log(`[AI Suggestions] Displaying ${suggestions.value.length} suggestions (backend already filtered)`)
       
       // If we have a best target but it's not in top candidates, move it to top
       if (bestTarget.tgt_column_name && suggestions.value.length > 0) {
@@ -694,34 +673,20 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   }
   
   // Helper: Process historical patterns to detect multi-column mappings
-  // ALSO filters out irrelevant patterns (must have semantic relevance to current selection)
+  // Backend already filters by minimum score threshold - just enhance with metadata
   function processPatterns(patterns: any[], selectedFields: UnmappedField[]): HistoricalPattern[] {
-    // Stop words to ignore in relevance calculation
-    const STOP_WORDS = new Set([
-      'the', 'of', 'and', 'for', 'in', 'to', 'is', 'on', 'at', 'by', 'an', 'as', 'or',
-      'managing', 'employee', 'member', 'data', 'field', 'column', 'table', 'value',
-      'current', 'curr', 'rec', 'ind', 'indicator', 'code', 'type', 'status', 'flag',
-      'date', 'time', 'timestamp', 'number', 'num', 'key', 'id', 'identifier'
-    ])
-    
     const selectedColNames = new Set(
       selectedFields.map(f => (f.src_column_physical_name || f.src_column_name || '').toLowerCase())
     )
-    
-    // Extract MEANINGFUL words from selected fields (not stop words)
-    const selectedSemanticWords = new Set<string>()
+    const selectedColWords = new Set<string>()
     selectedFields.forEach(f => {
-      const name = (f.src_column_physical_name || f.src_column_name || '').toLowerCase()
-      const desc = (f.src_comments || '').toLowerCase()
-      const allWords = [...name.split(/[_\s]+/), ...desc.split(/[_\s.,]+/)]
-      allWords.filter(w => w.length > 2 && !STOP_WORDS.has(w)).forEach(w => selectedSemanticWords.add(w))
+      const words = (f.src_column_physical_name || f.src_column_name || '').toLowerCase().split(/[_\s]+/)
+      words.forEach(w => selectedColWords.add(w))
     })
     
-    console.log('[AI Suggestions] Selected semantic words for pattern filtering:', Array.from(selectedSemanticWords))
+    console.log('[AI Suggestions] Processing', patterns.length, 'patterns from backend (already filtered by score)')
     
-    const MIN_PATTERN_RELEVANCE = 0.3  // Minimum relevance to include a pattern
-    
-    const processedPatterns = patterns.map((p: any) => {
+    return patterns.map((p: any) => {
       // Parse source columns to determine if multi-column
       const sourceColsStr = p.source_columns || ''
       const sourceCols = sourceColsStr.split(/[|,]/).map((c: string) => c.trim()).filter((c: string) => c)
@@ -734,70 +699,44 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
                              p.source_expression.includes('||')
                            ))
       
-      // Calculate SEMANTIC relevance (not just word overlap, but meaningful words)
-      const patternDesc = (p.source_descriptions || '').toLowerCase()
-      const patternTarget = (p.tgt_column_name || '').toLowerCase()
-      const patternAllText = `${sourceColsStr.toLowerCase()} ${patternDesc} ${patternTarget}`
-      
-      const patternSemanticWords = new Set<string>()
-      patternAllText.split(/[_\s.,|]+/)
-        .filter(w => w.length > 2 && !STOP_WORDS.has(w))
-        .forEach(w => patternSemanticWords.add(w))
-      
-      // Count semantic overlap
-      let semanticOverlap = 0
-      selectedSemanticWords.forEach(sw => {
-        patternSemanticWords.forEach(pw => {
-          if (sw === pw || (sw.length >= 4 && pw.includes(sw)) || (pw.length >= 4 && sw.includes(pw))) {
-            semanticOverlap++
-          }
-        })
-      })
-      
-      const semanticRelevance = selectedSemanticWords.size > 0 
-        ? semanticOverlap / selectedSemanticWords.size 
-        : 0
-      
-      // Also check direct column match
+      // Calculate how well this pattern matches the current selection (for template matching)
       let matchedCols = 0
+      let relevance = 0
+      
       sourceCols.forEach((col: string) => {
-        if (selectedColNames.has(col.toLowerCase())) {
+        const colLower = col.toLowerCase()
+        const colWords = colLower.split(/[_\s]+/)
+        
+        // Check direct match
+        if (selectedColNames.has(colLower)) {
           matchedCols++
+          relevance += 1.0
+        } else {
+          // Check word overlap
+          const overlap = colWords.filter((w: string) => selectedColWords.has(w)).length
+          if (overlap > 0) {
+            relevance += overlap / Math.max(colWords.length, 1) * 0.5
+          }
         }
       })
       
-      // Combined relevance: prioritize direct matches, then semantic
-      const combinedRelevance = matchedCols > 0 ? 1.0 : semanticRelevance
-      
-      console.log(`[AI Suggestions] Pattern ${p.tgt_column_name}: semanticRelevance=${semanticRelevance.toFixed(2)}, matchedCols=${matchedCols}, combinedRelevance=${combinedRelevance.toFixed(2)}`)
+      // Normalize relevance by total columns in pattern
+      const normalizedRelevance = sourceCols.length > 0 ? relevance / sourceCols.length : 0
       
       return {
         ...p,
         isMultiColumn,
         columnCount: sourceCols.length,
-        matchedToCurrentSelection: matchedCols > 0 || semanticRelevance >= MIN_PATTERN_RELEVANCE,
-        templateRelevance: combinedRelevance,
-        // Normalize search scores - Databricks returns raw scores that need x100
+        matchedToCurrentSelection: matchedCols > 0,
+        templateRelevance: normalizedRelevance,
+        // Normalize search scores for display - Databricks returns raw scores that need x100
         search_score: normalizeScore(typeof p.search_score === 'number' ? p.search_score : parseFloat(p.search_score) || 0),
         confidence_score: normalizeScore(typeof p.confidence_score === 'number' ? p.confidence_score : parseFloat(p.confidence_score) || 0)
       } as HistoricalPattern
+    }).sort((a, b) => {
+      // Sort by search score (already filtered by backend)
+      return (b.search_score || 0) - (a.search_score || 0)
     })
-    
-    // Filter to only relevant patterns and limit to top 5
-    const filteredPatterns = processedPatterns
-      .filter(p => p.templateRelevance >= MIN_PATTERN_RELEVANCE)
-      .sort((a, b) => {
-        // Sort by relevance first, then by search score
-        if (b.templateRelevance !== a.templateRelevance) {
-          return (b.templateRelevance || 0) - (a.templateRelevance || 0)
-        }
-        return (b.search_score || 0) - (a.search_score || 0)
-      })
-      .slice(0, 5)  // Limit to top 5 relevant patterns
-    
-    console.log(`[AI Suggestions] Filtered patterns: ${processedPatterns.length} -> ${filteredPatterns.length} (threshold: ${MIN_PATTERN_RELEVANCE})`)
-    
-    return filteredPatterns
   }
   
   function selectSuggestion(suggestion: AISuggestion) {
