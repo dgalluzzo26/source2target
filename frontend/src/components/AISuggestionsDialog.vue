@@ -584,8 +584,17 @@ function handleApplyTemplate(data: { pattern: HistoricalPattern, selectedFields:
   
   aiStore.selectSuggestion(suggestion)
   
-  // Store the generated SQL for use in mapping config
-  // We'll emit this so the parent can pass it along
+  // Store the generated SQL in multiple places to ensure it's available
+  // 1. In the aiStore for direct access
+  aiStore.recommendedExpression = data.generatedSQL
+  
+  // 2. In sessionStorage as backup
+  if (data.generatedSQL) {
+    sessionStorage.setItem('templateGeneratedSQL', data.generatedSQL)
+    console.log('[AI Suggestions Dialog] Stored SQL in sessionStorage:', data.generatedSQL)
+  }
+  
+  // 3. Emit to parent
   emit('template-applied', data)
   
   toast.add({

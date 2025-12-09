@@ -531,12 +531,19 @@ onMounted(async () => {
     // Auto-populate metadata
     initializeMetadata()
     
-    // Check for template-generated SQL from sessionStorage
-    const templateSQL = sessionStorage.getItem('templateGeneratedSQL')
+    // Check for template-generated SQL from multiple sources
+    // 1. First check aiStore.recommendedExpression (set by template or AI)
+    // 2. Then check sessionStorage as backup
+    const aiStoreSQL = aiStore.recommendedExpression
+    const sessionSQL = sessionStorage.getItem('templateGeneratedSQL')
+    const templateSQL = aiStoreSQL || sessionSQL
+    
     if (templateSQL) {
       console.log('[Mapping Config V3] Using template-generated SQL:', templateSQL)
+      console.log('[Mapping Config V3] Source: aiStore=', !!aiStoreSQL, ', session=', !!sessionSQL)
       sqlExpression.value = templateSQL
-      // Clear the sessionStorage item
+      
+      // Clear sources
       sessionStorage.removeItem('templateGeneratedSQL')
       
       // Parse transformations from the SQL

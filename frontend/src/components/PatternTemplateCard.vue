@@ -195,55 +195,83 @@ const templateSlots = ref<TemplateSlot[]>([])
 function parsePatternSlots() {
   const slots: TemplateSlot[] = []
   
+  console.log('[PatternTemplate] Parsing slots for pattern:', props.pattern.tgt_column_name)
+  console.log('[PatternTemplate] Currently selected fields:', props.currentlySelectedFields.map(f => f.src_column_name))
+  
   // Get source columns from pattern
   const columnsStr = props.pattern.source_columns || ''
   const tablesStr = props.pattern.source_tables || ''
   
   // Parse columns - support both | and , delimiters
-  const columns = columnsStr.split(/[|,]/).map(c => c.trim()).filter(c => c)
+  let columns = columnsStr.split(/[|,]/).map(c => c.trim()).filter(c => c)
   const tables = tablesStr.split(/[|,]/).map(t => t.trim()).filter(t => t)
   
-  // Create slots for each column in the pattern
-  columns.forEach((col, idx) => {
-    // Check if this column is already selected by the user
-    const alreadySelected = props.currentlySelectedFields.find(
-      f => matchesColumn(f, col, tables[idx])
-    )
-    
-    // Generate a descriptive label from the column name
-    const label = generateLabel(col)
-    
-    slots.push({
-      label,
-      originalColumn: col,
-      originalTable: tables[idx] || '',
-      selectedField: alreadySelected || null,
-      selectedFieldId: alreadySelected?.id || null
-    })
-  })
+  console.log('[PatternTemplate] Pattern columns:', columns)
   
-  // If no columns parsed, create generic slots based on relationship type
-  if (slots.length === 0 && props.pattern.source_relationship_type) {
-    // Create slots for the currently selected field
-    props.currentlySelectedFields.forEach((field, idx) => {
+  // Track which currently-selected fields have been assigned to slots
+  const assignedFieldIds = new Set<number>()
+  
+  // If pattern has columns defined, create slots for them
+  if (columns.length > 0) {
+    columns.forEach((col, idx) => {
+      // Try to match currently selected fields to this slot
+      const alreadySelected = props.currentlySelectedFields.find(
+        f => !assignedFieldIds.has(f.id) && matchesColumn(f, col, tables[idx])
+      )
+      
+      if (alreadySelected) {
+        assignedFieldIds.add(alreadySelected.id)
+      }
+      
+      const label = generateLabel(col)
+      
       slots.push({
-        label: generateLabel(field.src_column_name),
-        originalColumn: field.src_column_physical_name || field.src_column_name,
-        originalTable: field.src_table_physical_name || field.src_table_name,
-        selectedField: field,
-        selectedFieldId: field.id
+        label,
+        originalColumn: col,
+        originalTable: tables[idx] || '',
+        selectedField: alreadySelected || null,
+        selectedFieldId: alreadySelected?.id || null
       })
     })
-    
-    // Add an empty slot for additional field
-    slots.push({
-      label: 'Additional Field',
-      originalColumn: '',
-      originalTable: '',
-      selectedField: null,
-      selectedFieldId: null
-    })
   }
+  
+  // If no pattern columns OR we didn't match all selected fields, create slots for selected fields
+  if (columns.length === 0 || props.currentlySelectedFields.some(f => !assignedFieldIds.has(f.id))) {
+    // First slot: Always include the user's currently selected field(s)
+    props.currentlySelectedFields.forEach((field) => {
+      if (!assignedFieldIds.has(field.id)) {
+        // Add this selected field as a filled slot
+        slots.unshift({  // Add at beginning so selected fields are first
+          label: generateLabel(field.src_column_name),
+          originalColumn: field.src_column_physical_name || field.src_column_name,
+          originalTable: field.src_table_physical_name || field.src_table_name,
+          selectedField: field,
+          selectedFieldId: field.id
+        })
+        assignedFieldIds.add(field.id)
+      }
+    })
+    
+    // If this is a multi-column pattern, add empty slot(s) for additional fields
+    const expectedSlots = props.pattern.source_relationship_type === 'CONCAT' ? 2 : 
+                         (columns.length > 0 ? columns.length : 2)
+    
+    while (slots.length < expectedSlots) {
+      slots.push({
+        label: slots.length === 0 ? 'First Field' : slots.length === 1 ? 'Second Field' : `Field ${slots.length + 1}`,
+        originalColumn: '',
+        originalTable: '',
+        selectedField: null,
+        selectedFieldId: null
+      })
+    }
+  }
+  
+  console.log('[PatternTemplate] Created slots:', slots.map(s => ({
+    label: s.label,
+    filled: !!s.selectedField,
+    fieldName: s.selectedField?.src_column_name
+  })))
   
   templateSlots.value = slots
 }
@@ -369,7 +397,29 @@ const generatedSQL = computed(() => {
   const transforms = props.pattern.transformations_applied || ''
   const fields = templateSlots.value.map(s => 
     s.selectedField?.src_column_physical_name || s.selectedField?.src_column_name || ''
-  )
+  ).filter(f => f)
+  
+  console.log('[PatternTemplate] Generating SQL for fields:', fields)
+  console.log('[PatternTemplate] Pattern transforms:', transforms)
+  console.log('[PatternTemplate] Pattern expression:', props.pattern.source_expression)
+  
+  // If pattern has a source_expression, try to adapt it to the new field names
+  if (props.pattern.source_expression && props.pattern.source_columns) {
+    // Try to replace old column names with new ones
+    let adaptedSQL = props.pattern.source_expression
+    const oldColumns = props.pattern.source_columns.split(/[|,]/).map(c => c.trim()).filter(c => c)
+    
+    oldColumns.forEach((oldCol, idx) => {
+      if (fields[idx]) {
+        // Replace old column name with new one (case-insensitive)
+        const regex = new RegExp(`\\b${oldCol}\\b`, 'gi')
+        adaptedSQL = adaptedSQL.replace(regex, fields[idx])
+      }
+    })
+    
+    console.log('[PatternTemplate] Adapted SQL:', adaptedSQL)
+    return adaptedSQL
+  }
   
   // Parse transforms (e.g., "TRIM, INITCAP, CONCAT")
   const transformList = transforms.split(/[,\s]+/).map(t => t.trim().toUpperCase()).filter(t => t)
@@ -389,7 +439,9 @@ const generatedSQL = computed(() => {
       })
       return expr
     })
-    return `CONCAT(${fieldExpressions.join(", ' ', ")})`
+    const sql = `CONCAT(${fieldExpressions.join(", ' ', ")})`
+    console.log('[PatternTemplate] Generated concat SQL:', sql)
+    return sql
   } else {
     // Single field with transforms
     let expr = fields[0]
@@ -398,6 +450,7 @@ const generatedSQL = computed(() => {
         expr = `${t}(${expr})`
       }
     })
+    console.log('[PatternTemplate] Generated single SQL:', expr)
     return expr
   }
 })
