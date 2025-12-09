@@ -427,68 +427,128 @@ const filledSlotCount = computed(() => {
 })
 
 // Generate SQL based on filled slots and pattern transformations
-const generatedSQL = computed(() => {
-  if (!allSlotsFilled.value) return ''
+function buildSQLExpression(): string {
+  // Get all filled fields (use physical names for SQL)
+  const filledSlots = templateSlots.value.filter(s => s.selectedField)
   
+  console.log('[PatternTemplate] Building SQL - Filled slots:', filledSlots.length)
+  console.log('[PatternTemplate] Slot details:', filledSlots.map(s => ({
+    label: s.label,
+    fieldName: s.selectedField?.src_column_name,
+    physicalName: s.selectedField?.src_column_physical_name
+  })))
+  
+  // Get field names - prefer physical name, fall back to column name
+  const fields = filledSlots.map(s => {
+    const field = s.selectedField!
+    // Try multiple sources for the column name
+    const name = field.src_column_physical_name || 
+                 field.src_column_name || 
+                 (field as any).column_name ||
+                 (field as any).name ||
+                 ''
+    return name.toLowerCase().replace(/\s+/g, '_')  // Normalize to lowercase with underscores
+  }).filter(f => f)
+  
+  console.log('[PatternTemplate] Field names for SQL:', fields)
+  
+  if (fields.length === 0) {
+    console.log('[PatternTemplate] No fields to build SQL for')
+    // Fallback: try to get names from slot labels
+    const fallbackFields = filledSlots.map(s => 
+      s.originalColumn || s.label.toLowerCase().replace(/\s+/g, '_')
+    ).filter(f => f)
+    
+    if (fallbackFields.length > 0) {
+      console.log('[PatternTemplate] Using fallback field names:', fallbackFields)
+      return buildSQLForFields(fallbackFields)
+    }
+    return ''
+  }
+  
+  return buildSQLForFields(fields)
+}
+
+function buildSQLForFields(fields: string[]): string {
   const transforms = props.pattern.transformations_applied || ''
-  const fields = templateSlots.value.map(s => 
-    s.selectedField?.src_column_physical_name || s.selectedField?.src_column_name || ''
-  ).filter(f => f)
-  
-  console.log('[PatternTemplate] Generating SQL for fields:', fields)
   console.log('[PatternTemplate] Pattern transforms:', transforms)
   console.log('[PatternTemplate] Pattern expression:', props.pattern.source_expression)
   
+  const transforms = props.pattern.transformations_applied || ''
+  
   // If pattern has a source_expression, try to adapt it to the new field names
   if (props.pattern.source_expression && props.pattern.source_columns) {
-    // Try to replace old column names with new ones
     let adaptedSQL = props.pattern.source_expression
     const oldColumns = props.pattern.source_columns.split(/[|,]/).map(c => c.trim()).filter(c => c)
     
     oldColumns.forEach((oldCol, idx) => {
       if (fields[idx]) {
-        // Replace old column name with new one (case-insensitive)
-        const regex = new RegExp(`\\b${oldCol}\\b`, 'gi')
+        // Replace old column name with new one (case-insensitive, word boundary)
+        const regex = new RegExp(`\\b${escapeRegex(oldCol)}\\b`, 'gi')
         adaptedSQL = adaptedSQL.replace(regex, fields[idx])
       }
     })
     
-    console.log('[PatternTemplate] Adapted SQL:', adaptedSQL)
+    console.log('[PatternTemplate] Adapted SQL from pattern:', adaptedSQL)
     return adaptedSQL
   }
   
   // Parse transforms (e.g., "TRIM, INITCAP, CONCAT")
   const transformList = transforms.split(/[,\s]+/).map(t => t.trim().toUpperCase()).filter(t => t)
   
-  // Build expression based on relationship type and transforms
+  // Determine relationship type
   const relType = props.pattern.source_relationship_type?.toUpperCase() || 'SINGLE'
   
+  // Multi-field: use CONCAT with transforms applied to each field
   if (relType === 'CONCAT' || transformList.includes('CONCAT') || fields.length > 1) {
-    // Concatenation pattern
     const fieldExpressions = fields.map(f => {
       let expr = f
-      // Apply transforms to each field
-      transformList.filter(t => t !== 'CONCAT').forEach(t => {
-        if (['TRIM', 'UPPER', 'LOWER', 'INITCAP'].includes(t)) {
-          expr = `${t}(${expr})`
-        }
-      })
+      // Apply each transform (except CONCAT itself) - default to TRIM if none specified
+      const appliedTransforms = transformList.filter(t => t !== 'CONCAT')
+      if (appliedTransforms.length === 0) {
+        expr = `TRIM(${expr})`
+      } else {
+        appliedTransforms.forEach(t => {
+          if (['TRIM', 'UPPER', 'LOWER', 'INITCAP'].includes(t)) {
+            expr = `${t}(${expr})`
+          }
+        })
+      }
       return expr
     })
-    const sql = `CONCAT(${fieldExpressions.join(", ' ', ")})`
-    console.log('[PatternTemplate] Generated concat SQL:', sql)
+    
+    // Use CONCAT_WS for cleaner syntax with separator
+    const sql = `CONCAT_WS(' ', ${fieldExpressions.join(', ')})`
+    console.log('[PatternTemplate] Generated CONCAT SQL:', sql)
     return sql
   } else {
     // Single field with transforms
     let expr = fields[0]
-    transformList.forEach(t => {
-      if (['TRIM', 'UPPER', 'LOWER', 'INITCAP', 'COALESCE'].includes(t)) {
-        expr = `${t}(${expr})`
-      }
-    })
-    console.log('[PatternTemplate] Generated single SQL:', expr)
+    
+    // If no transforms specified, apply TRIM as default for strings
+    if (transformList.length === 0) {
+      expr = `TRIM(${expr})`
+    } else {
+      transformList.forEach(t => {
+        if (['TRIM', 'UPPER', 'LOWER', 'INITCAP', 'COALESCE'].includes(t)) {
+          expr = `${t}(${expr})`
+        }
+      })
+    }
+    console.log('[PatternTemplate] Generated single field SQL:', expr)
     return expr
   }
+}
+
+// Helper to escape regex special characters
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// Computed for display (preview)
+const generatedSQL = computed(() => {
+  if (!allSlotsFilled.value) return ''
+  return buildSQLExpression()
 })
 
 function truncate(str: string, maxLen: number): string {
@@ -497,16 +557,26 @@ function truncate(str: string, maxLen: number): string {
 }
 
 function handleApplyTemplate() {
-  if (!allSlotsFilled.value) return
+  if (!allSlotsFilled.value) {
+    console.log('[PatternTemplate] Cannot apply - not all slots filled')
+    return
+  }
   
   const selectedFields = templateSlots.value
     .filter(s => s.selectedField)
     .map(s => s.selectedField as UnmappedField)
   
+  // Build SQL expression directly (don't rely on computed)
+  const sql = buildSQLExpression()
+  
+  console.log('[PatternTemplate] === Applying Template ===')
+  console.log('[PatternTemplate] Selected fields:', selectedFields.map(f => f.src_column_name))
+  console.log('[PatternTemplate] Generated SQL:', sql)
+  
   emit('apply', {
     pattern: props.pattern,
     selectedFields,
-    generatedSQL: generatedSQL.value
+    generatedSQL: sql
   })
 }
 
