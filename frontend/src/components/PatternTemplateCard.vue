@@ -206,21 +206,24 @@ function parsePatternSlots() {
   let columns = columnsStr.split(/[|,]/).map(c => c.trim()).filter(c => c)
   const tables = tablesStr.split(/[|,]/).map(t => t.trim()).filter(t => t)
   
-  console.log('[PatternTemplate] Pattern columns:', columns)
+  console.log('[PatternTemplate] Pattern columns from history:', columns)
   
   // Track which currently-selected fields have been assigned to slots
   const assignedFieldIds = new Set<number>()
   
-  // If pattern has columns defined, create slots for them
+  // If pattern has columns defined, create slots for ONLY those columns
+  // Try to match user's selected fields to each pattern slot
   if (columns.length > 0) {
     columns.forEach((col, idx) => {
       // Try to match currently selected fields to this slot
+      // Use broader matching to catch variations like "street_num" vs "Street Number"
       const alreadySelected = props.currentlySelectedFields.find(
         f => !assignedFieldIds.has(f.id) && matchesColumn(f, col, tables[idx])
       )
       
       if (alreadySelected) {
         assignedFieldIds.add(alreadySelected.id)
+        console.log('[PatternTemplate] Matched user field', alreadySelected.src_column_name, 'to pattern slot', col)
       }
       
       const label = generateLabel(col)
@@ -233,41 +236,34 @@ function parsePatternSlots() {
         selectedFieldId: alreadySelected?.id || null
       })
     })
-  }
-  
-  // If no pattern columns OR we didn't match all selected fields, create slots for selected fields
-  if (columns.length === 0 || props.currentlySelectedFields.some(f => !assignedFieldIds.has(f.id))) {
-    // First slot: Always include the user's currently selected field(s)
+    
+    // DON'T add extra slots for unmatched selected fields - they might just not match
+    // the pattern column names exactly. The user can select them in the empty slots.
+  } else {
+    // No pattern columns - create generic slots
+    // First slot: the user's currently selected field
     props.currentlySelectedFields.forEach((field) => {
-      if (!assignedFieldIds.has(field.id)) {
-        // Add this selected field as a filled slot
-        slots.unshift({  // Add at beginning so selected fields are first
-          label: generateLabel(field.src_column_name),
-          originalColumn: field.src_column_physical_name || field.src_column_name,
-          originalTable: field.src_table_physical_name || field.src_table_name,
-          selectedField: field,
-          selectedFieldId: field.id
-        })
-        assignedFieldIds.add(field.id)
-      }
+      slots.push({
+        label: generateLabel(field.src_column_name),
+        originalColumn: field.src_column_physical_name || field.src_column_name,
+        originalTable: field.src_table_physical_name || field.src_table_name,
+        selectedField: field,
+        selectedFieldId: field.id
+      })
+      assignedFieldIds.add(field.id)
     })
     
-    // If this is a multi-column pattern, add empty slot(s) for additional fields
-    const expectedSlots = props.pattern.source_relationship_type === 'CONCAT' ? 2 : 
-                         (columns.length > 0 ? columns.length : 2)
-    
-    while (slots.length < expectedSlots) {
-      slots.push({
-        label: slots.length === 0 ? 'First Field' : slots.length === 1 ? 'Second Field' : `Field ${slots.length + 1}`,
-        originalColumn: '',
-        originalTable: '',
-        selectedField: null,
-        selectedFieldId: null
-      })
-    }
+    // Add one empty slot for the additional field
+    slots.push({
+      label: 'Additional Field',
+      originalColumn: '',
+      originalTable: '',
+      selectedField: null,
+      selectedFieldId: null
+    })
   }
   
-  console.log('[PatternTemplate] Created slots:', slots.map(s => ({
+  console.log('[PatternTemplate] Created', slots.length, 'slots:', slots.map(s => ({
     label: s.label,
     filled: !!s.selectedField,
     fieldName: s.selectedField?.src_column_name
@@ -281,15 +277,55 @@ function matchesColumn(field: UnmappedField, column: string, table?: string): bo
   const fieldColDisplay = (field.src_column_name || '').toLowerCase()
   const colLower = column.toLowerCase()
   
-  // Check exact or fuzzy match
-  if (fieldCol === colLower || fieldColDisplay === colLower) return true
+  // Check exact match
+  if (fieldCol === colLower || fieldColDisplay === colLower) {
+    console.log('[PatternTemplate] Exact match:', fieldCol, '===', colLower)
+    return true
+  }
   
-  // Check partial match (e.g., "street_num" matches "street_number")
-  const fieldWords = fieldCol.split(/[_\s]+/)
-  const colWords = colLower.split(/[_\s]+/)
-  const commonWords = fieldWords.filter(w => colWords.some(cw => cw.includes(w) || w.includes(cw)))
+  // Normalize: remove underscores, spaces, and common abbreviations
+  const normalize = (s: string) => s
+    .replace(/[_\s-]+/g, '')  // Remove separators
+    .replace(/number/g, 'num')  // Normalize abbreviations
+    .replace(/street/g, 'st')
+    .replace(/address/g, 'addr')
+    .replace(/name/g, 'nm')
   
-  return commonWords.length >= Math.min(fieldWords.length, colWords.length) * 0.6
+  const normalizedField = normalize(fieldCol)
+  const normalizedCol = normalize(colLower)
+  
+  if (normalizedField === normalizedCol) {
+    console.log('[PatternTemplate] Normalized match:', fieldCol, '~', colLower)
+    return true
+  }
+  
+  // Check word overlap (e.g., "street_num" vs "street_number")
+  const fieldWords = fieldCol.split(/[_\s]+/).filter(w => w.length > 1)
+  const colWords = colLower.split(/[_\s]+/).filter(w => w.length > 1)
+  
+  // Count matching words (with partial matching)
+  let matchScore = 0
+  for (const fw of fieldWords) {
+    for (const cw of colWords) {
+      if (fw === cw) {
+        matchScore += 1
+      } else if (fw.includes(cw) || cw.includes(fw)) {
+        matchScore += 0.8  // Partial match (num vs number)
+      } else if (fw.substring(0, 3) === cw.substring(0, 3) && fw.length > 2 && cw.length > 2) {
+        matchScore += 0.5  // Same prefix (str vs street)
+      }
+    }
+  }
+  
+  const maxWords = Math.max(fieldWords.length, colWords.length)
+  const matchRatio = maxWords > 0 ? matchScore / maxWords : 0
+  
+  if (matchRatio >= 0.5) {
+    console.log('[PatternTemplate] Word overlap match:', fieldCol, '~', colLower, 'ratio:', matchRatio.toFixed(2))
+    return true
+  }
+  
+  return false
 }
 
 function generateLabel(column: string): string {
