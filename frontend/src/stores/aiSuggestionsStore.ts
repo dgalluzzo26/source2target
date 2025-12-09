@@ -33,7 +33,9 @@ export interface HistoricalPattern {
   tgt_column_physical_name?: string
   source_expression?: string
   source_tables?: string
+  source_tables_physical?: string
   source_columns?: string
+  source_columns_physical?: string
   source_descriptions?: string
   source_relationship_type?: string
   transformations_applied?: string
@@ -54,6 +56,34 @@ export interface PatternTemplate {
   selectedFields: string[]  // Column names user has selected
   isComplete: boolean
   suggestedSQL?: string
+}
+
+// Unified item for combined ranked list
+export interface UnifiedMappingOption {
+  id: string  // Unique identifier
+  rank: number
+  source: 'ai_pick' | 'pattern' | 'vector'  // Where this option came from
+  
+  // Target info
+  tgt_table_name: string
+  tgt_table_physical_name: string
+  tgt_column_name: string
+  tgt_column_physical_name: string
+  tgt_comments?: string
+  
+  // Quality/relevance
+  matchQuality: 'Excellent' | 'Strong' | 'Good' | 'Weak' | 'Unknown'
+  score: number  // Normalized 0-1 score for ranking
+  reasoning: string
+  
+  // For AI suggestions
+  semantic_field_id?: number
+  
+  // For patterns (template usage)
+  pattern?: HistoricalPattern
+  sourceColumns?: string
+  transformations?: string
+  isMultiColumn?: boolean
 }
 
 export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
@@ -84,6 +114,94 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const multiColumnPatterns = computed(() => {
     return historicalPatterns.value.filter(p => p.isMultiColumn)
   })
+  
+  // Unified ranked list combining AI suggestions and historical patterns
+  const unifiedOptions = computed((): UnifiedMappingOption[] => {
+    const options: UnifiedMappingOption[] = []
+    
+    // Add AI suggestions
+    suggestions.value.forEach((s, idx) => {
+      // Determine source type based on properties
+      let source: 'ai_pick' | 'pattern' | 'vector' = 'vector'
+      if (s.match_quality === 'Excellent' && idx === 0) {
+        source = 'ai_pick'  // LLM's best pick
+      } else if (s.fromPattern) {
+        source = 'pattern'
+      }
+      
+      options.push({
+        id: `suggestion-${s.semantic_field_id}-${s.tgt_column_name}`,
+        rank: 0,  // Will be set after sorting
+        source,
+        tgt_table_name: s.tgt_table_name,
+        tgt_table_physical_name: s.tgt_table_physical_name,
+        tgt_column_name: s.tgt_column_name,
+        tgt_column_physical_name: s.tgt_column_physical_name,
+        tgt_comments: s.tgt_comments,
+        matchQuality: s.match_quality,
+        score: s.search_score,
+        reasoning: s.ai_reasoning,
+        semantic_field_id: s.semantic_field_id
+      })
+    })
+    
+    // Add historical patterns that aren't already in suggestions
+    historicalPatterns.value.forEach((p) => {
+      // Check if this pattern's target is already in options
+      const alreadyExists = options.some(o => 
+        o.tgt_column_name.toLowerCase() === p.tgt_column_name.toLowerCase() &&
+        o.tgt_table_name.toLowerCase() === p.tgt_table_name.toLowerCase()
+      )
+      
+      if (!alreadyExists) {
+        // Calculate quality based on relevance
+        let quality: 'Excellent' | 'Strong' | 'Good' | 'Weak' | 'Unknown' = 'Weak'
+        const relevance = p.templateRelevance || 0
+        if (relevance >= 0.7) quality = 'Strong'
+        else if (relevance >= 0.4) quality = 'Good'
+        else if (relevance > 0) quality = 'Weak'
+        
+        options.push({
+          id: `pattern-${p.mapped_field_id}`,
+          rank: 0,
+          source: 'pattern',
+          tgt_table_name: p.tgt_table_name,
+          tgt_table_physical_name: p.tgt_table_physical_name || p.tgt_table_name,
+          tgt_column_name: p.tgt_column_name,
+          tgt_column_physical_name: p.tgt_column_physical_name || p.tgt_column_name,
+          tgt_comments: '',
+          matchQuality: quality,
+          score: p.search_score || relevance,
+          reasoning: p.transformations_applied 
+            ? `Historical pattern using ${p.transformations_applied}`
+            : 'Based on similar past mapping',
+          pattern: p,
+          sourceColumns: p.source_columns,
+          transformations: p.transformations_applied,
+          isMultiColumn: p.isMultiColumn
+        })
+      }
+    })
+    
+    // Sort by: 1) ai_pick first, 2) score descending
+    options.sort((a, b) => {
+      // AI pick always first
+      if (a.source === 'ai_pick' && b.source !== 'ai_pick') return -1
+      if (b.source === 'ai_pick' && a.source !== 'ai_pick') return 1
+      
+      // Then by score
+      return b.score - a.score
+    })
+    
+    // Assign ranks
+    options.forEach((opt, idx) => {
+      opt.rank = idx + 1
+    })
+    
+    return options
+  })
+  
+  const hasOptions = computed(() => unifiedOptions.value.length > 0)
   
   // Actions
   async function generateSuggestions(sourceFields: UnmappedField[], allAvailableFields?: UnmappedField[]) {
@@ -493,10 +611,12 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     
     // Computed
     hasSuggestions,
+    hasOptions,
     topSuggestion,
     hasRelevantTemplates,
     topTemplate,
     multiColumnPatterns,
+    unifiedOptions,
     
     // Actions
     generateSuggestions,

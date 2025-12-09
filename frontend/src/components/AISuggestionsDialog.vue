@@ -79,170 +79,134 @@
         />
       </Dialog>
 
-      <!-- Multi-Column Pattern Alert (informational only) -->
-      <div v-if="!aiStore.loading && relevantMultiColumnPatterns.length > 0" class="multi-column-alert">
-        <Message severity="warn" :closable="false">
-          <template #icon>
-            <i class="pi pi-exclamation-triangle" style="font-size: 1.5rem;"></i>
-          </template>
-          <div class="alert-content">
-            <strong>Multi-Column Mapping Pattern Found!</strong>
-            <p>Based on similar past mappings, this target field typically uses <strong>multiple source columns</strong>.</p>
-            <div class="pattern-examples">
-              <div v-for="(pattern, idx) in relevantMultiColumnPatterns.slice(0, 2)" :key="idx" class="pattern-example">
-                <i class="pi pi-history"></i>
-                <span>
-                  <strong>{{ pattern.tgt_column_name }}</strong> used: 
-                  <code>{{ pattern.source_columns }}</code>
-                  <span v-if="pattern.source_relationship_type" class="relationship-type">
-                    ({{ pattern.source_relationship_type }})
-                  </span>
-                </span>
-              </div>
-            </div>
-            <p class="action-hint">
-              <i class="pi pi-lightbulb"></i>
-              Consider selecting additional source fields before mapping, or use the SQL helper to combine fields.
-            </p>
-          </div>
-        </Message>
-      </div>
-
-      <!-- Historical Patterns Summary - User can choose to use any as template -->
-      <div v-if="!aiStore.loading && aiStore.historicalPatterns.length > 0" class="historical-patterns-section">
-        <h3 @click="showPatternDetails = !showPatternDetails" class="collapsible-header">
-          <i class="pi pi-history"></i>
-          Similar Past Mappings ({{ aiStore.historicalPatterns.length }})
-          <i :class="showPatternDetails ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" class="toggle-icon"></i>
-        </h3>
-        <p class="patterns-hint">
-          <i class="pi pi-info-circle"></i>
-          Click "Use as Template" to apply a past mapping pattern to your current fields
-        </p>
-        <div v-if="showPatternDetails" class="patterns-list">
-          <div v-for="(pattern, idx) in aiStore.historicalPatterns.slice(0, 8)" :key="idx" class="pattern-card">
-            <div class="pattern-header">
-              <Tag :value="pattern.source_relationship_type || 'SINGLE'" 
-                   :severity="pattern.source_relationship_type === 'SINGLE' ? 'info' : 'warning'" 
-                   size="small" />
-              <span class="target-name">→ {{ pattern.tgt_table_name }}.{{ pattern.tgt_column_name }}</span>
-              <Tag 
-                v-if="pattern.isMultiColumn" 
-                value="Multi-Column" 
-                severity="warning" 
-                size="small" 
-                icon="pi pi-table"
-              />
-            </div>
-            <div class="pattern-details">
-              <div v-if="pattern.source_columns" class="detail-item">
-                <label>Source Columns:</label>
-                <code>{{ pattern.source_columns }}</code>
-              </div>
-              <div v-if="pattern.transformations_applied" class="detail-item">
-                <label>Transforms:</label>
-                <span class="transforms">{{ pattern.transformations_applied }}</span>
-              </div>
-            </div>
-            <div class="pattern-actions">
-              <Button
-                label="Use as Template"
-                icon="pi pi-copy"
-                size="small"
-                severity="secondary"
-                @click="handleUseAsTemplate(pattern)"
-                v-tooltip.top="'Apply this pattern to your selected fields'"
-              />
-            </div>
-          </div>
+      <!-- UNIFIED RANKED LIST - All options in one place -->
+      <div v-if="!aiStore.loading && aiStore.hasOptions" class="unified-options-section">
+        <div class="section-header">
+          <h3>
+            <i class="pi pi-list"></i>
+            Recommended Mappings
+          </h3>
+          <span class="options-count">{{ aiStore.unifiedOptions.length }} options found</span>
         </div>
-      </div>
-
-      <!-- AI Suggestions Table -->
-      <div v-if="!aiStore.loading && aiStore.hasSuggestions" class="suggestions-section">
-        <h3>
-          <i class="pi pi-sparkles"></i>
-          AI Suggested Target Fields
-        </h3>
         
-        <DataTable
-          :value="aiStore.suggestions"
-          dataKey="tgt_column_name"
-          :paginator="false"
-          class="suggestions-table"
-          stripedRows
-          @row-click="handleRowClick"
-          :rowClass="getRowClass"
-        >
-          <!-- Rank -->
-          <Column header="Rank" style="width: 5rem">
-            <template #body="{ data }">
-              <div class="rank-badge" :class="`rank-${data.rank}`">
-                #{{ data.rank }}
+        <!-- Options List -->
+        <div class="options-list">
+          <div 
+            v-for="option in aiStore.unifiedOptions.slice(0, 15)" 
+            :key="option.id"
+            class="option-card"
+            :class="[
+              `source-${option.source}`,
+              `quality-${option.matchQuality.toLowerCase()}`
+            ]"
+          >
+            <!-- Card Header -->
+            <div class="option-header">
+              <div class="rank-badge" :class="`rank-${option.rank}`">
+                #{{ option.rank }}
               </div>
-            </template>
-          </Column>
-
-          <!-- Target Field -->
-          <Column header="Target Field" style="min-width: 15rem">
-            <template #body="{ data }">
-              <div class="target-field">
-                <strong>{{ data.tgt_table_name }}.{{ data.tgt_column_name }}</strong>
-                <span class="physical-name">{{ data.tgt_column_physical_name }}</span>
+              <div class="target-info">
+                <div class="target-name">
+                  {{ option.tgt_table_name }}.{{ option.tgt_column_name }}
+                </div>
+                <div class="target-physical">
+                  {{ option.tgt_table_physical_name }}.{{ option.tgt_column_physical_name }}
+                </div>
               </div>
-            </template>
-          </Column>
-
-          <!-- Description -->
-          <Column header="Description" style="min-width: 18rem">
-            <template #body="{ data }">
-              <div class="target-description">
-                <i v-if="data.tgt_comments" class="pi pi-info-circle"></i>
-                <span>{{ data.tgt_comments || 'No description available' }}</span>
-              </div>
-            </template>
-          </Column>
-
-          <!-- Match Quality -->
-          <Column header="Match Quality" style="min-width: 12rem">
-            <template #body="{ data }">
-              <div class="match-quality">
+              <div class="option-badges">
+                <!-- Source badge -->
                 <Tag 
-                  :value="data.match_quality" 
-                  :severity="getMatchQualitySeverity(data.match_quality)"
-                  :icon="getMatchQualityIcon(data.match_quality)"
+                  v-if="option.source === 'ai_pick'"
+                  value="AI Pick"
+                  severity="success"
+                  icon="pi pi-sparkles"
                 />
                 <Tag 
-                  v-if="data.fromPattern" 
-                  value="Pattern" 
-                  severity="warning" 
+                  v-else-if="option.source === 'pattern'"
+                  value="Pattern"
+                  severity="warning"
                   icon="pi pi-history"
-                  class="pattern-tag"
+                />
+                <Tag 
+                  v-else
+                  value="Vector"
+                  severity="info"
+                  icon="pi pi-search"
+                />
+                <!-- Quality badge -->
+                <Tag 
+                  :value="option.matchQuality"
+                  :severity="getMatchQualitySeverity(option.matchQuality)"
+                  :icon="getMatchQualityIcon(option.matchQuality)"
+                />
+                <!-- Multi-column indicator -->
+                <Tag 
+                  v-if="option.isMultiColumn"
+                  value="Multi-Column"
+                  severity="contrast"
+                  icon="pi pi-table"
                 />
               </div>
-            </template>
-          </Column>
-
-          <!-- AI Reasoning -->
-          <Column header="AI Reasoning" style="min-width: 20rem">
-            <template #body="{ data }">
-              <div class="ai-reasoning">
+            </div>
+            
+            <!-- Card Body -->
+            <div class="option-body">
+              <!-- Description/Reasoning -->
+              <div class="option-reasoning">
                 <i class="pi pi-comment"></i>
-                <span>{{ data.ai_reasoning }}</span>
+                <span>{{ option.reasoning }}</span>
               </div>
-            </template>
-          </Column>
-
-          <!-- Actions -->
-          <Column header="Actions" style="width: 15rem">
-            <template #body="{ data }">
-              <div class="action-buttons">
+              
+              <!-- Target Comments (if available) -->
+              <div v-if="option.tgt_comments" class="option-description">
+                <i class="pi pi-info-circle"></i>
+                <span>{{ option.tgt_comments }}</span>
+              </div>
+              
+              <!-- Pattern details (for pattern source) -->
+              <div v-if="option.source === 'pattern' && option.pattern" class="pattern-info">
+                <div v-if="option.sourceColumns" class="pattern-detail">
+                  <span class="detail-label">Source Columns:</span>
+                  <code>{{ option.sourceColumns }}</code>
+                </div>
+                <div v-if="option.transformations" class="pattern-detail">
+                  <span class="detail-label">Transforms:</span>
+                  <span class="transforms-value">{{ option.transformations }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Card Actions -->
+            <div class="option-actions">
+              <!-- For patterns - Use as Template -->
+              <template v-if="option.source === 'pattern' && option.pattern">
+                <Button
+                  label="Use as Template"
+                  icon="pi pi-copy"
+                  size="small"
+                  severity="warning"
+                  @click="handleUseAsTemplate(option.pattern)"
+                  v-tooltip.top="'Apply this pattern to your selected fields'"
+                />
+                <Button
+                  label="Accept Target"
+                  icon="pi pi-check"
+                  size="small"
+                  severity="success"
+                  outlined
+                  @click="handleAcceptFromOption(option)"
+                  v-tooltip.top="'Accept this target without using pattern template'"
+                />
+              </template>
+              
+              <!-- For AI/Vector suggestions - Accept/Reject -->
+              <template v-else>
                 <Button
                   label="Accept"
                   icon="pi pi-check"
                   size="small"
                   severity="success"
-                  @click.stop="handleAccept(data)"
+                  @click="handleAcceptFromOption(option)"
                   v-tooltip.top="'Accept this suggestion and continue with mapping'"
                 />
                 <Button
@@ -251,22 +215,27 @@
                   size="small"
                   severity="danger"
                   outlined
-                  @click.stop="handleReject(data)"
+                  @click="handleRejectFromOption(option)"
                   v-tooltip.top="'Reject this suggestion and provide feedback'"
                 />
-              </div>
-            </template>
-          </Column>
-        </DataTable>
-
-        <!-- Info Message -->
-        <Message severity="info" :closable="false" class="info-message">
-          <strong>Tip:</strong> Accept a suggestion to proceed with mapping configuration, or reject with comments to help improve future AI suggestions.
+              </template>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Tip Message -->
+        <Message severity="info" :closable="false" class="tip-message">
+          <div class="tip-content">
+            <strong>💡 Tip:</strong> 
+            <span class="tip-ai">AI Pick</span> = LLM's best recommendation, 
+            <span class="tip-pattern">Pattern</span> = similar past mapping (can use as template), 
+            <span class="tip-vector">Vector</span> = semantic similarity match
+          </div>
         </Message>
       </div>
 
-      <!-- No Suggestions -->
-      <div v-if="!aiStore.loading && !aiStore.hasSuggestions && !showManualSearch" class="no-suggestions">
+      <!-- No Options Found -->
+      <div v-if="!aiStore.loading && !aiStore.hasOptions && !showManualSearch" class="no-suggestions">
         <i class="pi pi-inbox" style="font-size: 3rem; color: var(--text-color-secondary);"></i>
         <h3>No Suggestions Available</h3>
         <p>The AI could not generate suggestions for the selected fields.</p>
@@ -483,7 +452,7 @@ import ProgressSpinner from 'primevue/progressspinner'
 import Message from 'primevue/message'
 import Textarea from 'primevue/textarea'
 import PatternTemplateCard from '@/components/PatternTemplateCard.vue'
-import type { AISuggestion, HistoricalPattern, PatternTemplate } from '@/stores/aiSuggestionsStore'
+import type { AISuggestion, HistoricalPattern, PatternTemplate, UnifiedMappingOption } from '@/stores/aiSuggestionsStore'
 import type { UnmappedField } from '@/stores/unmappedFieldsStore'
 
 interface Props {
@@ -748,6 +717,46 @@ function handleReject(suggestion: AISuggestion) {
   rejectedSuggestion.value = suggestion
   rejectionComment.value = ''
   showRejectionDialog.value = true
+}
+
+// Handle accept from unified option
+function handleAcceptFromOption(option: UnifiedMappingOption) {
+  // Convert unified option to AISuggestion format
+  const suggestion: AISuggestion = {
+    semantic_field_id: option.semantic_field_id || 0,
+    tgt_table_name: option.tgt_table_name,
+    tgt_table_physical_name: option.tgt_table_physical_name,
+    tgt_column_name: option.tgt_column_name,
+    tgt_column_physical_name: option.tgt_column_physical_name,
+    tgt_comments: option.tgt_comments,
+    search_score: option.score,
+    match_quality: option.matchQuality,
+    ai_reasoning: option.reasoning,
+    rank: option.rank,
+    fromPattern: option.source === 'pattern',
+    patternId: option.pattern?.mapped_field_id
+  }
+  
+  handleAccept(suggestion)
+}
+
+// Handle reject from unified option
+function handleRejectFromOption(option: UnifiedMappingOption) {
+  // Convert to AISuggestion format for rejection dialog
+  const suggestion: AISuggestion = {
+    semantic_field_id: option.semantic_field_id || 0,
+    tgt_table_name: option.tgt_table_name,
+    tgt_table_physical_name: option.tgt_table_physical_name,
+    tgt_column_name: option.tgt_column_name,
+    tgt_column_physical_name: option.tgt_column_physical_name,
+    tgt_comments: option.tgt_comments,
+    search_score: option.score,
+    match_quality: option.matchQuality,
+    ai_reasoning: option.reasoning,
+    rank: option.rank
+  }
+  
+  handleReject(suggestion)
 }
 
 function closeRejectionDialog() {
@@ -1052,6 +1061,305 @@ function handleClose() {
 .loading-hint {
   color: var(--text-color-secondary);
   font-size: 0.9rem;
+}
+
+/* ============================================
+   UNIFIED OPTIONS SECTION
+   ============================================ */
+.unified-options-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.unified-options-section .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--surface-200);
+}
+
+.unified-options-section .section-header h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--gainwell-dark);
+  font-size: 1.25rem;
+}
+
+.unified-options-section .section-header h3 i {
+  color: var(--gainwell-primary);
+}
+
+.unified-options-section .options-count {
+  color: var(--text-color-secondary);
+  font-size: 0.9rem;
+}
+
+.options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Option Card - Base */
+.option-card {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-radius: 12px;
+  border: 2px solid var(--surface-200);
+  overflow: hidden;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.option-card:hover {
+  border-color: var(--gainwell-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+/* Option Card - Source Variants */
+.option-card.source-ai_pick {
+  border-color: var(--green-400);
+  background: linear-gradient(135deg, #f0fdf4, white);
+}
+
+.option-card.source-ai_pick:hover {
+  border-color: var(--green-600);
+}
+
+.option-card.source-pattern {
+  border-color: var(--yellow-400);
+  background: linear-gradient(135deg, #fefce8, white);
+}
+
+.option-card.source-pattern:hover {
+  border-color: var(--yellow-600);
+}
+
+.option-card.source-vector {
+  border-color: var(--blue-200);
+  background: linear-gradient(135deg, #eff6ff, white);
+}
+
+.option-card.source-vector:hover {
+  border-color: var(--blue-500);
+}
+
+/* Option Card - Quality Accents */
+.option-card.quality-excellent {
+  border-left: 5px solid var(--green-500);
+}
+
+.option-card.quality-strong {
+  border-left: 5px solid var(--blue-500);
+}
+
+.option-card.quality-good {
+  border-left: 5px solid var(--yellow-500);
+}
+
+.option-card.quality-weak {
+  border-left: 5px solid var(--gray-400);
+}
+
+/* Option Header */
+.option-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom: 1px solid var(--surface-100);
+}
+
+.option-header .rank-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.option-header .rank-badge.rank-1 {
+  background: linear-gradient(135deg, #fde047, #facc15);
+  color: #713f12;
+  box-shadow: 0 2px 8px rgba(250, 204, 21, 0.4);
+}
+
+.option-header .rank-badge.rank-2 {
+  background: linear-gradient(135deg, #e5e7eb, #d1d5db);
+  color: #374151;
+}
+
+.option-header .rank-badge.rank-3 {
+  background: linear-gradient(135deg, #fed7aa, #fdba74);
+  color: #9a3412;
+}
+
+.option-header .rank-badge:not(.rank-1):not(.rank-2):not(.rank-3) {
+  background: var(--surface-100);
+  color: var(--text-color-secondary);
+}
+
+.option-header .target-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.option-header .target-name {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--gainwell-dark);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.option-header .target-physical {
+  font-family: 'Fira Code', 'Monaco', monospace;
+  font-size: 0.8rem;
+  color: var(--text-color-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.option-header .option-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Option Body */
+.option-body {
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.option-reasoning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  color: var(--text-color-secondary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.option-reasoning i {
+  color: var(--gainwell-primary);
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.option-description {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--surface-50);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: var(--text-color);
+  line-height: 1.4;
+}
+
+.option-description i {
+  color: var(--gainwell-secondary);
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+
+.pattern-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: #fffbeb;
+  border-radius: 6px;
+  border: 1px dashed #fcd34d;
+}
+
+.pattern-detail {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.pattern-detail .detail-label {
+  font-weight: 600;
+  color: #92400e;
+}
+
+.pattern-detail code {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.pattern-detail .transforms-value {
+  color: #ea580c;
+  font-weight: 500;
+}
+
+/* Option Actions */
+.option-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--surface-50);
+  border-top: 1px solid var(--surface-100);
+}
+
+/* Tip Message */
+.tip-message {
+  margin-top: 0.5rem;
+}
+
+.tip-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.tip-ai {
+  background: var(--green-100);
+  color: var(--green-700);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.tip-pattern {
+  background: var(--yellow-100);
+  color: var(--yellow-700);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.tip-vector {
+  background: var(--blue-100);
+  color: var(--blue-700);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 600;
 }
 
 /* Multi-Column Pattern Alert */

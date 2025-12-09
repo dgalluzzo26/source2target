@@ -156,7 +156,9 @@ interface HistoricalPattern {
   tgt_table_physical_name?: string
   tgt_column_physical_name?: string
   source_columns?: string
+  source_columns_physical?: string
   source_tables?: string
+  source_tables_physical?: string
   source_expression?: string
   source_relationship_type?: string
   transformations_applied?: string
@@ -503,17 +505,45 @@ function buildSQLForFields(fields: string[]): string {
   const transforms = props.pattern.transformations_applied || ''
   console.log('[PatternTemplate] Pattern transforms:', transforms)
   console.log('[PatternTemplate] Pattern expression:', props.pattern.source_expression)
+  console.log('[PatternTemplate] New fields to use:', fields)
   
   // If pattern has a source_expression, try to adapt it to the new field names
   if (props.pattern.source_expression && props.pattern.source_columns) {
     let adaptedSQL = props.pattern.source_expression
-    const oldColumns = props.pattern.source_columns.split(/[|,]/).map(c => c.trim()).filter(c => c)
+    // Try physical names first (used in SQL expressions), fallback to display names
+    const oldColumnsPhysical = props.pattern.source_columns_physical || props.pattern.source_columns || ''
+    const oldColumns = oldColumnsPhysical.split(/[|,]/).map(c => c.trim()).filter(c => c)
+    const oldTablesPhysical = props.pattern.source_tables_physical || props.pattern.source_tables || ''
+    const oldTables = oldTablesPhysical.split(/[|,]/).map(t => t.trim()).filter(t => t)
+    
+    console.log('[PatternTemplate] Old columns:', oldColumns)
+    console.log('[PatternTemplate] Old tables:', oldTables)
+    
+    // Get the new table names from the selected fields
+    const newTables = templateSlots.value
+      .filter(s => s.selectedField)
+      .map(s => (s.selectedField?.src_table_physical_name || s.selectedField?.src_table_name || '').toLowerCase().replace(/\s+/g, '_'))
+    
+    console.log('[PatternTemplate] New tables:', newTables)
     
     oldColumns.forEach((oldCol, idx) => {
       if (fields[idx]) {
-        // Replace old column name with new one (case-insensitive, word boundary)
-        const regex = new RegExp(`\\b${escapeRegex(oldCol)}\\b`, 'gi')
-        adaptedSQL = adaptedSQL.replace(regex, fields[idx])
+        const newCol = fields[idx]
+        const oldTable = oldTables[Math.min(idx, oldTables.length - 1)] || ''
+        const newTable = newTables[idx] || newTables[0] || ''
+        
+        // First, replace table-qualified names (table.column -> new_table.new_column)
+        if (oldTable) {
+          const tableQualifiedRegex = new RegExp(`\\b${escapeRegex(oldTable)}\\.${escapeRegex(oldCol)}\\b`, 'gi')
+          const newQualified = newTable ? `${newTable}.${newCol}` : newCol
+          adaptedSQL = adaptedSQL.replace(tableQualifiedRegex, newQualified)
+          console.log(`[PatternTemplate] Replacing ${oldTable}.${oldCol} with ${newQualified}`)
+        }
+        
+        // Then, replace any remaining unqualified column names
+        const unqualifiedRegex = new RegExp(`\\b${escapeRegex(oldCol)}\\b`, 'gi')
+        adaptedSQL = adaptedSQL.replace(unqualifiedRegex, newCol)
+        console.log(`[PatternTemplate] Replacing ${oldCol} with ${newCol}`)
       }
     })
     
