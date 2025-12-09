@@ -382,9 +382,10 @@ const hasMultipleTables = computed(() => {
 })
 
 // Filter historical patterns based on current selection
-// - 1 column: show SINGLE patterns and any pattern with transformations (user wants to see what transforms were used)
-// - Multiple columns, same table: show SINGLE, UNION, CONCAT
-// - Multiple columns, different tables: show all types
+// Key insight: Patterns should be RELEVANT to the current source field(s)
+// A pattern is relevant if:
+// 1. It has the right relationship type for the selection
+// 2. Its source columns are similar to the current source columns
 const filteredHistoricalPatterns = computed(() => {
   if (!historicalPatterns.value || historicalPatterns.value.length === 0) {
     console.log('[Mapping Config] No historical patterns to filter')
@@ -395,29 +396,61 @@ const filteredHistoricalPatterns = computed(() => {
   console.log('[Mapping Config] hasMultipleFields:', hasMultipleFields.value)
   console.log('[Mapping Config] hasMultipleTables:', hasMultipleTables.value)
   
+  // Get current source field keywords for relevance check
+  const currentFieldWords = new Set<string>()
+  sourceFields.value.forEach(f => {
+    const name = (f.src_column_physical_name || f.src_column_name || '').toLowerCase()
+    const description = (f.src_comments || '').toLowerCase()
+    // Extract words
+    name.split(/[_\s]+/).filter(w => w.length > 2).forEach(w => currentFieldWords.add(w))
+    description.split(/[_\s.,]+/).filter(w => w.length > 2).forEach(w => currentFieldWords.add(w))
+  })
+  
+  console.log('[Mapping Config] Current field keywords:', Array.from(currentFieldWords).slice(0, 10))
+  
   const filtered = historicalPatterns.value.filter(pattern => {
     const patternType = (pattern.source_relationship_type || 'SINGLE').toUpperCase()
-    const hasTransformations = pattern.transformations_applied && pattern.transformations_applied.trim() !== ''
     
-    // Single column selected:
-    // - Show SINGLE patterns
-    // - Show CONCAT patterns (might be combining later, useful to see transformations)
-    // - Show ANY pattern that has transformations (user wants to see what transforms are commonly used)
+    // Check if pattern's source columns are relevant to current selection
+    const patternCols = (pattern.source_columns || '').toLowerCase()
+    const patternDesc = (pattern.source_descriptions || '').toLowerCase()
+    const patternWords = new Set<string>()
+    patternCols.split(/[_\s|,]+/).filter(w => w.length > 2).forEach(w => patternWords.add(w))
+    patternDesc.split(/[_\s.,|]+/).filter(w => w.length > 2).forEach(w => patternWords.add(w))
+    
+    // Count word overlap
+    let overlap = 0
+    patternWords.forEach(pw => {
+      if (currentFieldWords.has(pw)) overlap++
+    })
+    const relevance = patternWords.size > 0 ? overlap / patternWords.size : 0
+    
+    // Pattern is relevant if at least 30% word overlap OR high confidence
+    const isRelevant = relevance >= 0.3 || (pattern.confidence_score && pattern.confidence_score >= 0.7)
+    
+    // Apply relationship type filter
+    let passesTypeFilter = false
     if (!hasMultipleFields.value) {
-      const show = patternType === 'SINGLE' || patternType === 'CONCAT' || hasTransformations
-      if (show) {
-        console.log('[Mapping Config] Including pattern:', pattern.tgt_column_name, 'type:', patternType, 'transforms:', pattern.transformations_applied)
-      }
-      return show
+      // Single column: only SINGLE patterns
+      passesTypeFilter = patternType === 'SINGLE'
+    } else if (hasMultipleTables.value) {
+      // Multiple tables: all types allowed
+      passesTypeFilter = true
+    } else {
+      // Multiple columns, same table: SINGLE, UNION, CONCAT
+      passesTypeFilter = patternType === 'SINGLE' || patternType === 'UNION' || patternType === 'CONCAT'
     }
     
-    // Multiple columns from different tables - show all types
-    if (hasMultipleTables.value) {
-      return true // SINGLE, JOIN, UNION, CONCAT all allowed
+    const include = passesTypeFilter && isRelevant
+    
+    if (include) {
+      console.log('[Mapping Config] Including pattern:', pattern.tgt_column_name, 
+        'type:', patternType, 
+        'relevance:', relevance.toFixed(2), 
+        'transforms:', pattern.transformations_applied)
     }
     
-    // Multiple columns from same table - show SINGLE, UNION, CONCAT (no JOIN since same table)
-    return patternType === 'SINGLE' || patternType === 'UNION' || patternType === 'CONCAT'
+    return include
   })
   
   console.log('[Mapping Config] Filtered to', filtered.length, 'patterns')

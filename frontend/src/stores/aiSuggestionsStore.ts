@@ -295,19 +295,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const unifiedOptions = computed((): UnifiedMappingOption[] => {
     const options: UnifiedMappingOption[] = []
     
-    // Build a map of patterns by target for quick lookup
-    // We'll use this to ENRICH AI suggestions with pattern data (transformations)
-    const patternsByTarget = new Map<string, HistoricalPattern>()
-    historicalPatterns.value.forEach(p => {
-      const key = `${p.tgt_table_name.toLowerCase()}.${p.tgt_column_name.toLowerCase()}`
-      // Keep the pattern with transformations if multiple exist
-      const existing = patternsByTarget.get(key)
-      if (!existing || (p.transformations_applied && !existing.transformations_applied)) {
-        patternsByTarget.set(key, p)
-      }
-    })
-    
-    // Add AI suggestions, ENRICHED with pattern data if available
+    // Add AI suggestions (from vector search on semantic_fields)
     suggestions.value.forEach((s, idx) => {
       // Determine source type based on properties
       let source: 'ai_pick' | 'pattern' | 'vector' = 'vector'
@@ -315,40 +303,6 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         source = 'ai_pick'  // LLM's best pick
       } else if (s.fromPattern) {
         source = 'pattern'
-      }
-      
-      // Check if we have a historical pattern for this target
-      const patternKey = `${s.tgt_table_name.toLowerCase()}.${s.tgt_column_name.toLowerCase()}`
-      const matchingPattern = patternsByTarget.get(patternKey)
-      
-      // If there's a matching pattern with transformations, enrich the suggestion
-      let transformations: string | undefined = undefined
-      let pattern: HistoricalPattern | undefined = undefined
-      let suggestedMappings: SuggestedFieldMapping[] | undefined = undefined
-      let allFieldsMatched = false
-      let generatedSQL = ''
-      let enrichedReasoning = s.ai_reasoning
-      
-      if (matchingPattern) {
-        transformations = matchingPattern.transformations_applied
-        pattern = matchingPattern
-        
-        // Auto-match fields for the pattern
-        const matchResult = autoMatchPatternFields(matchingPattern)
-        suggestedMappings = matchResult.mappings
-        allFieldsMatched = matchResult.allMatched
-        generatedSQL = matchResult.generatedSQL
-        
-        // Enrich reasoning to mention transformations
-        if (transformations) {
-          enrichedReasoning = `${s.ai_reasoning || 'Matched by vector search'}. Historical pattern uses: ${transformations}`
-        }
-        
-        console.log(`[Unified Options] Enriched suggestion ${s.tgt_column_name} with pattern:`, {
-          transformations,
-          allFieldsMatched,
-          generatedSQL: generatedSQL?.substring(0, 50)
-        })
       }
       
       options.push({
@@ -362,21 +316,13 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         tgt_comments: s.tgt_comments,
         matchQuality: s.match_quality,
         score: s.search_score,
-        reasoning: enrichedReasoning,
-        semantic_field_id: s.semantic_field_id,
-        // Pattern enrichment data
-        transformations,
-        pattern,
-        suggestedMappings,
-        allFieldsMatched,
-        generatedSQL,
-        sourceColumns: matchingPattern?.source_columns,
-        isMultiColumn: matchingPattern?.isMultiColumn
+        reasoning: s.ai_reasoning,
+        semantic_field_id: s.semantic_field_id
       })
     })
     
-    // Add historical patterns that DON'T have a matching AI suggestion
-    // (these are patterns targeting different columns than vector search found)
+    // Add historical patterns that aren't already in suggestions
+    // (patterns are from vector search on mapped_fields - similar SOURCE mappings)
     historicalPatterns.value.forEach((p) => {
       // Check if this pattern's target is already in options
       const alreadyExists = options.some(o => 
@@ -392,7 +338,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         // Auto-match pattern fields to user's selected fields
         const { mappings, allMatched, generatedSQL } = autoMatchPatternFields(p)
         
-        console.log(`[Unified Options] Adding pattern-only ${p.tgt_column_name}:`, {
+        console.log(`[Unified Options] Adding pattern ${p.tgt_column_name}:`, {
           search_score: p.search_score,
           templateRelevance: p.templateRelevance,
           finalScore: score,

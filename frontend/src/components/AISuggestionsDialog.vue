@@ -163,8 +163,8 @@
                 <span>{{ option.tgt_comments }}</span>
               </div>
               
-              <!-- Pattern/Transformation details - shown when ANY option has transformations -->
-              <div v-if="option.transformations || (option.pattern && option.source === 'pattern')" class="pattern-info-enhanced">
+              <!-- Pattern details with suggested mappings -->
+              <div v-if="option.source === 'pattern' && option.pattern" class="pattern-info-enhanced">
                 <!-- Suggested Field Mappings -->
                 <div v-if="option.suggestedMappings && option.suggestedMappings.length > 0" class="suggested-mappings">
                   <div class="mappings-header">
@@ -220,31 +220,9 @@
             
             <!-- Card Actions -->
             <div class="option-actions">
-              <!-- For options with transformation data (patterns OR enriched suggestions) -->
-              <template v-if="option.transformations && option.allFieldsMatched && option.generatedSQL">
-                <!-- Primary action: Apply with transformations -->
-                <Button
-                  label="Apply with Transforms"
-                  icon="pi pi-check"
-                  size="small"
-                  severity="success"
-                  @click="handleApplySuggestedMapping(option)"
-                  v-tooltip.top="'Apply this mapping with the suggested transformations'"
-                />
-                <!-- Accept without transforms -->
-                <Button
-                  label="Accept (No Transforms)"
-                  icon="pi pi-arrow-right"
-                  size="small"
-                  severity="secondary"
-                  outlined
-                  @click="handleAcceptFromOption(option)"
-                  v-tooltip.top="'Accept target without applying transformations'"
-                />
-              </template>
-              
-              <!-- For patterns without full field matching -->
-              <template v-else-if="option.source === 'pattern' && option.pattern">
+              <!-- For patterns with suggested mappings -->
+              <template v-if="option.source === 'pattern' && option.pattern">
+                <!-- Primary action: Apply if all fields matched -->
                 <Button
                   v-if="option.allFieldsMatched"
                   label="Apply Suggested Mapping"
@@ -275,7 +253,7 @@
                 />
               </template>
               
-              <!-- For AI/Vector suggestions without transformations - simple Accept/Reject -->
+              <!-- For AI/Vector suggestions - Accept/Reject -->
               <template v-else>
                 <Button
                   label="Accept"
