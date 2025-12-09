@@ -231,8 +231,11 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       // BOOST: If historical patterns strongly match target columns, boost those suggestions
       // This addresses the issue where vector search gives weak scores for combined fields
       // but historical patterns show what target should be used
-      if (enhancedPatterns.length > 0 && suggestions.value.length > 0) {
+      if (enhancedPatterns.length > 0) {
         boostPatternMatchingSuggestions(enhancedPatterns)
+        
+        // Also add pattern-based suggestions to the list if they're not already there
+        addPatternBasedSuggestions(enhancedPatterns)
       }
       
       // Debug output
@@ -405,76 +408,147 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     }
   }
   
-  // Helper: Generate pattern templates for incomplete multi-column patterns
+  // Helper: Add suggestions based on historical patterns that aren't already in the list
+  function addPatternBasedSuggestions(patterns: HistoricalPattern[]) {
+    // Get multi-column patterns with decent scores
+    const relevantPatterns = patterns.filter(p => 
+      p.isMultiColumn && (p.search_score || 0) > 0.2
+    ).slice(0, 3)  // Top 3 patterns
+    
+    for (const pattern of relevantPatterns) {
+      const patternTarget = (pattern.tgt_column_name || '').toLowerCase()
+      
+      // Check if already in suggestions
+      const exists = suggestions.value.some(s => 
+        (s.tgt_column_name || '').toLowerCase() === patternTarget
+      )
+      
+      if (!exists && pattern.tgt_column_name) {
+        // Add as a new suggestion at position based on search score
+        const newSuggestion: AISuggestion = {
+          semantic_field_id: 0, // Will need lookup
+          tgt_table_name: pattern.tgt_table_name || '',
+          tgt_table_physical_name: pattern.tgt_table_physical_name || pattern.tgt_table_name || '',
+          tgt_column_name: pattern.tgt_column_name,
+          tgt_column_physical_name: pattern.tgt_column_physical_name || pattern.tgt_column_name || '',
+          tgt_comments: '',
+          search_score: pattern.search_score || 0.5,
+          match_quality: 'Strong',
+          ai_reasoning: `📋 Pattern Match: This target typically uses ${pattern.columnCount || 2}+ columns with ${pattern.transformations_applied || 'combined'} transformation. ${pattern.source_relationship_type || 'CONCAT'} pattern detected.`,
+          rank: 0,
+          fromPattern: true,
+          patternId: pattern.mapped_field_id
+        }
+        
+        // Insert at position 1 (after best if present) or 0
+        const insertIdx = suggestions.value.length > 0 && suggestions.value[0].match_quality === 'Excellent' ? 1 : 0
+        suggestions.value.splice(insertIdx, 0, newSuggestion)
+        
+        console.log('[AI Suggestions] Added pattern-based suggestion:', pattern.tgt_column_name)
+      }
+    }
+    
+    // Re-rank all suggestions
+    suggestions.value.forEach((s, i) => { s.rank = i + 1 })
+  }
+  
+  // Helper: Generate pattern templates for multi-column patterns
   function generatePatternTemplates(
     patterns: HistoricalPattern[], 
     selectedFields: UnmappedField[],
     availableFields: UnmappedField[]
   ): PatternTemplate[] {
     const templates: PatternTemplate[] = []
-    const selectedColNames = new Set(
-      selectedFields.map(f => (f.src_column_physical_name || f.src_column_name || '').toLowerCase())
+    
+    console.log('[AI Suggestions] Generating templates from', patterns.length, 'patterns')
+    console.log('[AI Suggestions] Selected fields:', selectedFields.map(f => f.src_column_name))
+    
+    // Consider ANY multi-column pattern with decent search score
+    // Much more lenient - show template as an option even if we're not sure about slot matching
+    const multiColumnPatterns = patterns.filter(p => 
+      p.isMultiColumn || 
+      (p.source_relationship_type && ['CONCAT', 'JOIN', 'UNION'].includes(p.source_relationship_type.toUpperCase())) ||
+      (p.search_score && p.search_score > 0.2)
     )
     
-    // Only consider multi-column patterns where user has selected some but not all fields
-    patterns
-      .filter(p => p.isMultiColumn && p.matchedToCurrentSelection)
-      .forEach(pattern => {
-        const sourceColsStr = pattern.source_columns || ''
-        const sourceCols = sourceColsStr.split(/[|,]/).map(c => c.trim()).filter(c => c)
+    console.log('[AI Suggestions] Multi-column patterns found:', multiColumnPatterns.length)
+    
+    multiColumnPatterns.forEach(pattern => {
+      const sourceColsStr = pattern.source_columns || ''
+      const sourceCols = sourceColsStr.split(/[|,]/).map(c => c.trim()).filter(c => c)
+      
+      // If no source_columns, try to infer from expression or just show as template
+      let columnsForTemplate = sourceCols
+      if (columnsForTemplate.length === 0 && pattern.source_expression) {
+        // Try to extract column names from expression
+        // Match patterns like "column_name" or table.column
+        const matches = pattern.source_expression.match(/\b([a-z][a-z0-9_]*)\b/gi) || []
+        const keywords = new Set(['CONCAT', 'TRIM', 'UPPER', 'LOWER', 'INITCAP', 'COALESCE', 'CAST', 'AS', 'FROM', 'SELECT', 'AND', 'OR', 'NULL', 'STRING', 'INT', 'VARCHAR'])
+        columnsForTemplate = matches.filter(m => !keywords.has(m.toUpperCase()))
+      }
+      
+      // Determine which fields are already selected vs missing
+      const selectedInPattern: string[] = []
+      const missingInPattern: string[] = []
+      
+      // For each selected field, see if it matches any pattern column
+      const matchedPatternCols = new Set<string>()
+      selectedFields.forEach(field => {
+        const fCol = (field.src_column_physical_name || field.src_column_name || '').toLowerCase()
+        const fWords = new Set(fCol.split(/[_\s]+/))
         
-        if (sourceCols.length <= 1) return
-        
-        const selectedInPattern: string[] = []
-        const missingInPattern: string[] = []
-        
-        sourceCols.forEach(col => {
+        columnsForTemplate.forEach(col => {
           const colLower = col.toLowerCase()
           const colWords = colLower.split(/[_\s]+/)
           
-          // Check if any selected field matches this column
-          const isSelected = selectedFields.some(f => {
-            const fCol = (f.src_column_physical_name || f.src_column_name || '').toLowerCase()
-            const fWords = fCol.split(/[_\s]+/)
-            
-            // Direct match
-            if (fCol === colLower) return true
-            
-            // Word overlap match (e.g., "street_num" matches "street_number")
-            const overlap = fWords.filter(w => colWords.some(cw => cw.includes(w) || w.includes(cw))).length
-            return overlap >= Math.min(fWords.length, colWords.length) * 0.6
-          })
-          
-          if (isSelected) {
+          // Check for match
+          const hasOverlap = colWords.some(w => fWords.has(w)) || fCol === colLower
+          if (hasOverlap) {
             selectedInPattern.push(col)
-          } else {
-            missingInPattern.push(col)
+            matchedPatternCols.add(col)
           }
         })
-        
-        // Only create template if user has some fields selected but not all
-        if (selectedInPattern.length > 0 && missingInPattern.length > 0) {
-          // Calculate how likely the missing fields exist in available fields
-          const hasPossibleMatches = missingInPattern.some(missing => {
-            const missingWords = missing.toLowerCase().split(/[_\s]+/)
-            return availableFields.some(f => {
-              const fCol = (f.src_column_physical_name || f.src_column_name || '').toLowerCase()
-              const fWords = fCol.split(/[_\s]+/)
-              const overlap = fWords.filter(w => missingWords.some(mw => mw.includes(w) || w.includes(mw))).length
-              return overlap > 0
-            })
-          })
-          
-          templates.push({
-            pattern,
-            relevanceScore: pattern.templateRelevance || 0,
-            selectedFields: selectedInPattern,
-            missingFields: missingInPattern,
-            isComplete: false,
-            suggestedSQL: pattern.source_expression || ''
-          })
+      })
+      
+      // Remaining columns are "missing"
+      columnsForTemplate.forEach(col => {
+        if (!matchedPatternCols.has(col)) {
+          missingInPattern.push(col)
         }
       })
+      
+      // Create template if:
+      // 1. It's a multi-column pattern (even if we couldn't match slots), OR
+      // 2. User has some fields selected but not all
+      const shouldShowTemplate = 
+        (pattern.isMultiColumn && columnsForTemplate.length > 1) ||
+        (selectedInPattern.length > 0 && missingInPattern.length > 0) ||
+        (pattern.search_score && pattern.search_score > 0.4 && columnsForTemplate.length > 1)
+      
+      if (shouldShowTemplate) {
+        // If we couldn't determine selected/missing, default to showing current field as selected
+        // and pattern suggests adding more
+        if (selectedInPattern.length === 0 && selectedFields.length > 0) {
+          selectedInPattern.push(selectedFields[0].src_column_name)
+          missingInPattern.push('Additional Field')
+        }
+        
+        templates.push({
+          pattern,
+          relevanceScore: pattern.templateRelevance || pattern.search_score || 0,
+          selectedFields: selectedInPattern,
+          missingFields: missingInPattern,
+          isComplete: missingInPattern.length === 0,
+          suggestedSQL: pattern.source_expression || ''
+        })
+        
+        console.log('[AI Suggestions] Created template for', pattern.tgt_column_name, {
+          selected: selectedInPattern,
+          missing: missingInPattern,
+          score: pattern.search_score
+        })
+      }
+    })
     
     // Sort by relevance score
     return templates.sort((a, b) => b.relevanceScore - a.relevanceScore)

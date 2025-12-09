@@ -188,13 +188,20 @@
           </Column>
 
           <!-- Match Quality -->
-          <Column header="Match Quality" style="min-width: 10rem">
+          <Column header="Match Quality" style="min-width: 12rem">
             <template #body="{ data }">
               <div class="match-quality">
                 <Tag 
                   :value="data.match_quality" 
                   :severity="getMatchQualitySeverity(data.match_quality)"
                   :icon="getMatchQualityIcon(data.match_quality)"
+                />
+                <Tag 
+                  v-if="data.fromPattern" 
+                  value="Pattern" 
+                  severity="warning" 
+                  icon="pi pi-history"
+                  class="pattern-tag"
                 />
               </div>
             </template>
@@ -644,7 +651,9 @@ function getMatchQualityIcon(quality: string): string {
 }
 
 function getRowClass(data: AISuggestion) {
-  return data.rank === 1 ? 'top-suggestion' : ''
+  if (data.rank === 1) return 'top-suggestion'
+  if (data.fromPattern) return 'pattern-suggestion'
+  return ''
 }
 
 function handleRowClick(event: any) {
@@ -1250,6 +1259,11 @@ function handleClose() {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.match-quality .pattern-tag {
+  margin-top: 0.25rem;
 }
 
 .ai-reasoning {
@@ -1301,6 +1315,16 @@ function handleClose() {
 
 :deep(.top-suggestion:hover) {
   background: var(--green-100) !important;
+}
+
+/* Pattern-based suggestion highlighting */
+:deep(.pattern-suggestion) {
+  background: #fffbeb !important;
+  border-left: 3px solid #f59e0b;
+}
+
+:deep(.pattern-suggestion:hover) {
+  background: #fef3c7 !important;
 }
 
 /* Row hover effect */
