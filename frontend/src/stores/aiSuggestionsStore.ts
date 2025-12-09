@@ -161,15 +161,15 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         const isExactMatch = isBestTarget && (bestTargetTable === '' || candidateTable === bestTargetTable)
         
         // Debug first few candidates
-        if (idx < 3) {
+        if (idx < 5) {
           const rawScore = candidate.search_score
           console.log(`[AI Suggestions] Candidate ${idx + 1}:`, {
             column: candidate.tgt_column_name,
             rawScore: rawScore,
             normalizedScore: score,
-            wasNormalized: rawScore < 0.1,
-            isBestTarget: isExactMatch,
-            bestTargetCol
+            wasNormalized: rawScore < 0.02,
+            matchQuality: matchQuality,
+            isBestTarget: isExactMatch
           })
         }
         
@@ -264,18 +264,23 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   }
   
   // Helper: Normalize Databricks vector search scores
-  // Raw scores are typically 0.001-0.01 range, multiply by 100 to get 0-1 scale
+  // Raw scores from Databricks are typically in 0.001-0.01 range
+  // We multiply by 100 to get a more intuitive 0-1 scale
+  // BUT only for very small scores that are clearly raw Databricks scores
   function normalizeScore(rawScore: number): number {
     if (!rawScore || isNaN(rawScore)) return 0
-    // If score is very small (< 0.1), it's a raw Databricks score - multiply by 100
-    return rawScore < 0.1 ? rawScore * 100 : rawScore
+    // Only normalize if score is VERY small (< 0.02) - clearly a raw Databricks score
+    // Scores >= 0.02 are likely already in a reasonable range
+    if (rawScore < 0.02) {
+      return rawScore * 100
+    }
+    return rawScore
   }
   
   // Helper: Convert score to match quality
-  // After normalization, scores should be in 0-1 range where:
-  // - 0.5+ is typically a strong semantic match
-  // - 0.3-0.5 is moderate similarity  
-  // - Below 0.3 is weak
+  // Uses RELATIVE scoring - compare against the top score in the results
+  // This prevents unrelated fields from showing as "Strong" just because 
+  // they have some vector similarity
   function getMatchQuality(score: number, isBestTarget: boolean): 'Excellent' | 'Strong' | 'Good' | 'Weak' | 'Unknown' {
     // LLM's best target always gets Excellent
     if (isBestTarget) return 'Excellent'
@@ -286,15 +291,15 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       return 'Unknown'
     }
     
-    // Vector search scores are typically 0-1 (cosine similarity)
-    // Adjusted thresholds based on typical Databricks vector search ranges
+    // Normalize if needed (in case raw score wasn't pre-normalized)
     const normalizedScore = score > 1 ? score / 100 : score
     
-    // More realistic thresholds for semantic search
-    if (normalizedScore >= 0.55) return 'Excellent'  // Strong semantic match
-    if (normalizedScore >= 0.45) return 'Strong'     // Good match
-    if (normalizedScore >= 0.35) return 'Good'       // Moderate match
-    if (normalizedScore >= 0.25) return 'Weak'       // Some relevance
+    // STRICTER thresholds - only truly good matches get high quality
+    // These thresholds work with normalized scores (0-1 range after x100)
+    if (normalizedScore >= 0.70) return 'Excellent'  // Very strong semantic match
+    if (normalizedScore >= 0.55) return 'Strong'     // Good match
+    if (normalizedScore >= 0.40) return 'Good'       // Moderate match
+    if (normalizedScore >= 0.20) return 'Weak'       // Some relevance
     if (normalizedScore > 0) return 'Weak'
     return 'Unknown'
   }
