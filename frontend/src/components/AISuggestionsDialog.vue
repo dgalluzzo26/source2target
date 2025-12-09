@@ -163,39 +163,93 @@
                 <span>{{ option.tgt_comments }}</span>
               </div>
               
-              <!-- Pattern details (for pattern source) -->
-              <div v-if="option.source === 'pattern' && option.pattern" class="pattern-info">
-                <div v-if="option.sourceColumns" class="pattern-detail">
-                  <span class="detail-label">Source Columns:</span>
-                  <code>{{ option.sourceColumns }}</code>
+              <!-- Pattern details with suggested mappings -->
+              <div v-if="option.source === 'pattern' && option.pattern" class="pattern-info-enhanced">
+                <!-- Suggested Field Mappings -->
+                <div v-if="option.suggestedMappings && option.suggestedMappings.length > 0" class="suggested-mappings">
+                  <div class="mappings-header">
+                    <i class="pi pi-arrow-right-arrow-left"></i>
+                    <span>Suggested Field Mapping:</span>
+                    <Tag 
+                      v-if="option.allFieldsMatched"
+                      value="All Matched ✓"
+                      severity="success"
+                      size="small"
+                    />
+                    <Tag 
+                      v-else
+                      value="Partial Match"
+                      severity="warning"
+                      size="small"
+                    />
+                  </div>
+                  <div class="mappings-table">
+                    <div 
+                      v-for="(mapping, idx) in option.suggestedMappings" 
+                      :key="idx"
+                      class="mapping-row"
+                      :class="{ matched: mapping.isMatched, unmatched: !mapping.isMatched }"
+                    >
+                      <span class="pattern-col">{{ mapping.patternColumn }}</span>
+                      <i class="pi pi-arrow-right mapping-arrow"></i>
+                      <span v-if="mapping.isMatched" class="matched-field">
+                        {{ mapping.suggestedField?.src_column_name }}
+                        <i class="pi pi-check-circle match-icon"></i>
+                      </span>
+                      <span v-else class="unmatched-field">
+                        <i class="pi pi-question-circle"></i>
+                        No match found
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div v-if="option.transformations" class="pattern-detail">
-                  <span class="detail-label">Transforms:</span>
+                
+                <!-- Transforms -->
+                <div v-if="option.transformations" class="pattern-transforms">
+                  <span class="transforms-label">🔧 Transforms:</span>
                   <span class="transforms-value">{{ option.transformations }}</span>
+                </div>
+                
+                <!-- Generated SQL Preview (only if all matched) -->
+                <div v-if="option.allFieldsMatched && option.generatedSQL" class="sql-preview-mini">
+                  <span class="sql-label">📝 SQL:</span>
+                  <code class="sql-code">{{ truncateSQL(option.generatedSQL, 80) }}</code>
                 </div>
               </div>
             </div>
             
             <!-- Card Actions -->
             <div class="option-actions">
-              <!-- For patterns - Use as Template -->
+              <!-- For patterns with suggested mappings -->
               <template v-if="option.source === 'pattern' && option.pattern">
+                <!-- Primary action: Apply if all fields matched -->
                 <Button
-                  label="Use as Template"
-                  icon="pi pi-copy"
-                  size="small"
-                  severity="warning"
-                  @click="handleUseAsTemplate(option.pattern)"
-                  v-tooltip.top="'Apply this pattern to your selected fields'"
-                />
-                <Button
-                  label="Accept Target"
+                  v-if="option.allFieldsMatched"
+                  label="Apply Suggested Mapping"
                   icon="pi pi-check"
                   size="small"
                   severity="success"
+                  @click="handleApplySuggestedMapping(option)"
+                  v-tooltip.top="'Apply this pattern with the suggested field mappings'"
+                />
+                <Button
+                  v-else
+                  label="Complete Mapping"
+                  icon="pi pi-pencil"
+                  size="small"
+                  severity="warning"
+                  @click="handleUseAsTemplate(option.pattern)"
+                  v-tooltip.top="'Some fields need to be matched manually'"
+                />
+                <!-- Secondary action: Customize -->
+                <Button
+                  label="Customize..."
+                  icon="pi pi-cog"
+                  size="small"
+                  severity="secondary"
                   outlined
-                  @click="handleAcceptFromOption(option)"
-                  v-tooltip.top="'Accept this target without using pattern template'"
+                  @click="handleUseAsTemplate(option.pattern)"
+                  v-tooltip.top="'Open template dialog to customize field mappings'"
                 />
               </template>
               
@@ -452,7 +506,7 @@ import ProgressSpinner from 'primevue/progressspinner'
 import Message from 'primevue/message'
 import Textarea from 'primevue/textarea'
 import PatternTemplateCard from '@/components/PatternTemplateCard.vue'
-import type { AISuggestion, HistoricalPattern, PatternTemplate, UnifiedMappingOption } from '@/stores/aiSuggestionsStore'
+import type { AISuggestion, HistoricalPattern, PatternTemplate, UnifiedMappingOption, SuggestedFieldMapping } from '@/stores/aiSuggestionsStore'
 import type { UnmappedField } from '@/stores/unmappedFieldsStore'
 
 interface Props {
@@ -738,6 +792,73 @@ function handleAcceptFromOption(option: UnifiedMappingOption) {
   }
   
   handleAccept(suggestion)
+}
+
+// Handle apply suggested mapping (for patterns with all fields matched)
+function handleApplySuggestedMapping(option: UnifiedMappingOption) {
+  if (!option.pattern || !option.suggestedMappings || !option.allFieldsMatched) {
+    console.warn('[AI Suggestions Dialog] Cannot apply - missing data')
+    return
+  }
+  
+  console.log('[AI Suggestions Dialog] === Applying Suggested Mapping ===')
+  console.log('[AI Suggestions Dialog] Pattern:', option.pattern.tgt_column_name)
+  console.log('[AI Suggestions Dialog] Generated SQL:', option.generatedSQL)
+  
+  // Get all matched fields
+  const selectedFields = option.suggestedMappings
+    .filter(m => m.suggestedField)
+    .map(m => m.suggestedField!)
+  
+  console.log('[AI Suggestions Dialog] Selected fields:', selectedFields.map(f => f.src_column_name))
+  
+  // Mark as accepting to prevent store clear
+  acceptedSuggestion.value = true
+  
+  // Update stores with the matched fields
+  aiStore.setSourceFields(selectedFields)
+  unmappedStore.selectedFields = selectedFields
+  
+  // Create suggestion for navigation
+  const suggestion: AISuggestion = {
+    semantic_field_id: 0,
+    tgt_table_name: option.tgt_table_name,
+    tgt_table_physical_name: option.tgt_table_physical_name,
+    tgt_column_name: option.tgt_column_name,
+    tgt_column_physical_name: option.tgt_column_physical_name,
+    tgt_comments: option.tgt_comments,
+    search_score: option.score,
+    match_quality: 'Excellent',
+    ai_reasoning: `Applied pattern with ${selectedFields.length} fields`,
+    rank: option.rank,
+    fromPattern: true,
+    patternId: option.pattern.mapped_field_id
+  }
+  
+  aiStore.selectSuggestion(suggestion)
+  
+  // Store the generated SQL
+  aiStore.recommendedExpression = option.generatedSQL || ''
+  sessionStorage.setItem('templateGeneratedSQL', option.generatedSQL || '')
+  
+  console.log('[AI Suggestions Dialog] Stored SQL:', option.generatedSQL)
+  
+  toast.add({
+    severity: 'success',
+    summary: 'Pattern Applied',
+    detail: `Mapping ${selectedFields.length} fields to ${option.tgt_column_name}`,
+    life: 3000
+  })
+  
+  // Close and navigate
+  isVisible.value = false
+  router.push({ name: 'mapping-config' })
+}
+
+// Helper: Truncate SQL for preview
+function truncateSQL(sql: string, maxLen: number): string {
+  if (!sql) return ''
+  return sql.length > maxLen ? sql.substring(0, maxLen) + '...' : sql
 }
 
 // Handle reject from unified option
@@ -1281,6 +1402,137 @@ function handleClose() {
   flex-shrink: 0;
 }
 
+/* Enhanced Pattern Info with Suggested Mappings */
+.pattern-info-enhanced {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #fffbeb, #fef3c7);
+  border-radius: 8px;
+  border: 1px solid #fcd34d;
+}
+
+.suggested-mappings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.mappings-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #92400e;
+  font-size: 0.9rem;
+}
+
+.mappings-header i {
+  color: #f59e0b;
+}
+
+.mappings-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  background: white;
+  border-radius: 6px;
+  padding: 0.5rem;
+  border: 1px solid #fde68a;
+}
+
+.mapping-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.mapping-row.matched {
+  background: #f0fdf4;
+}
+
+.mapping-row.unmatched {
+  background: #fef2f2;
+}
+
+.mapping-row .pattern-col {
+  font-family: 'Fira Code', monospace;
+  color: #78716c;
+  min-width: 120px;
+}
+
+.mapping-row .mapping-arrow {
+  color: #a8a29e;
+  font-size: 0.8rem;
+}
+
+.mapping-row .matched-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #166534;
+}
+
+.mapping-row .match-icon {
+  color: #22c55e;
+  font-size: 0.9rem;
+}
+
+.mapping-row .unmatched-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #dc2626;
+  font-style: italic;
+}
+
+.mapping-row .unmatched-field i {
+  color: #f87171;
+}
+
+.pattern-transforms {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.pattern-transforms .transforms-label {
+  color: #78716c;
+}
+
+.pattern-transforms .transforms-value {
+  color: #ea580c;
+  font-weight: 600;
+}
+
+.sql-preview-mini {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: #1e1e1e;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.sql-preview-mini .sql-label {
+  color: #a3e635;
+  flex-shrink: 0;
+}
+
+.sql-preview-mini .sql-code {
+  color: #f0abfc;
+  font-family: 'Fira Code', monospace;
+  word-break: break-all;
+}
+
+/* Legacy pattern-info (for backward compatibility) */
 .pattern-info {
   display: flex;
   flex-wrap: wrap;

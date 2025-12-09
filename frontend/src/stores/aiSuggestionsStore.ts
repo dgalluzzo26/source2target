@@ -58,6 +58,14 @@ export interface PatternTemplate {
   suggestedSQL?: string
 }
 
+// Suggested field mapping for patterns
+export interface SuggestedFieldMapping {
+  patternColumn: string  // Original column name from pattern
+  suggestedField: UnmappedField | null  // Matched field from user's selection
+  matchConfidence: number  // 0-1 confidence of the match
+  isMatched: boolean
+}
+
 // Unified item for combined ranked list
 export interface UnifiedMappingOption {
   id: string  // Unique identifier
@@ -84,6 +92,11 @@ export interface UnifiedMappingOption {
   sourceColumns?: string
   transformations?: string
   isMultiColumn?: boolean
+  
+  // Suggested field mappings (for patterns)
+  suggestedMappings?: SuggestedFieldMapping[]
+  allFieldsMatched?: boolean
+  generatedSQL?: string
 }
 
 export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
@@ -114,6 +127,169 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const multiColumnPatterns = computed(() => {
     return historicalPatterns.value.filter(p => p.isMultiColumn)
   })
+  
+  // Helper: Auto-match pattern columns to user's selected fields
+  function autoMatchPatternFields(pattern: HistoricalPattern): {
+    mappings: SuggestedFieldMapping[],
+    allMatched: boolean,
+    generatedSQL: string
+  } {
+    const mappings: SuggestedFieldMapping[] = []
+    const selectedFields = sourceFieldsUsed.value
+    
+    // Parse pattern columns
+    const patternColsPhysical = (pattern.source_columns_physical || pattern.source_columns || '').split(/[|,]/).map(c => c.trim()).filter(c => c)
+    const patternCols = (pattern.source_columns || '').split(/[|,]/).map(c => c.trim()).filter(c => c)
+    
+    // Use physical names if available, fall back to display names
+    const columnsToMatch = patternColsPhysical.length > 0 ? patternColsPhysical : patternCols
+    
+    // Track which selected fields have been used
+    const usedFieldIds = new Set<number>()
+    
+    columnsToMatch.forEach((patternCol, idx) => {
+      const patternColLower = patternCol.toLowerCase()
+      const patternWords = new Set(patternColLower.split(/[_\s]+/).filter(w => w.length > 1))
+      
+      // Find best matching field from user's selection
+      let bestMatch: UnmappedField | null = null
+      let bestScore = 0
+      
+      selectedFields.forEach(field => {
+        if (usedFieldIds.has(field.id)) return // Already used
+        
+        const fieldColLower = (field.src_column_physical_name || field.src_column_name || '').toLowerCase()
+        const fieldWords = new Set(fieldColLower.split(/[_\s]+/).filter(w => w.length > 1))
+        
+        // Calculate match score
+        let score = 0
+        
+        // Exact match
+        if (fieldColLower === patternColLower) {
+          score = 1.0
+        } else {
+          // Word overlap
+          let overlap = 0
+          fieldWords.forEach(fw => {
+            patternWords.forEach(pw => {
+              if (fw === pw) overlap += 1
+              else if (fw.includes(pw) || pw.includes(fw)) overlap += 0.5
+            })
+          })
+          score = overlap / Math.max(fieldWords.size, patternWords.size)
+        }
+        
+        if (score > bestScore) {
+          bestScore = score
+          bestMatch = field
+        }
+      })
+      
+      // Accept match if score is reasonable (> 0.3)
+      if (bestMatch && bestScore > 0.3) {
+        usedFieldIds.add(bestMatch.id)
+        mappings.push({
+          patternColumn: patternCols[idx] || patternCol, // Use display name for UI
+          suggestedField: bestMatch,
+          matchConfidence: bestScore,
+          isMatched: true
+        })
+      } else {
+        mappings.push({
+          patternColumn: patternCols[idx] || patternCol,
+          suggestedField: null,
+          matchConfidence: 0,
+          isMatched: false
+        })
+      }
+    })
+    
+    const allMatched = mappings.length > 0 && mappings.every(m => m.isMatched)
+    
+    // Generate SQL if all fields matched
+    let generatedSQL = ''
+    if (allMatched) {
+      generatedSQL = generateSQLFromMappings(pattern, mappings)
+    }
+    
+    return { mappings, allMatched, generatedSQL }
+  }
+  
+  // Helper: Generate SQL from matched fields
+  function generateSQLFromMappings(pattern: HistoricalPattern, mappings: SuggestedFieldMapping[]): string {
+    const fields = mappings
+      .filter(m => m.suggestedField)
+      .map(m => (m.suggestedField!.src_column_physical_name || m.suggestedField!.src_column_name || '').toLowerCase().replace(/\s+/g, '_'))
+    
+    if (fields.length === 0) return ''
+    
+    // If pattern has source_expression, adapt it
+    if (pattern.source_expression && pattern.source_columns_physical) {
+      let adaptedSQL = pattern.source_expression
+      const oldColumns = (pattern.source_columns_physical || '').split(/[|,]/).map(c => c.trim()).filter(c => c)
+      const oldTables = (pattern.source_tables_physical || '').split(/[|,]/).map(t => t.trim()).filter(t => t)
+      
+      // Get new table names
+      const newTables = mappings
+        .filter(m => m.suggestedField)
+        .map(m => (m.suggestedField!.src_table_physical_name || m.suggestedField!.src_table_name || '').toLowerCase().replace(/\s+/g, '_'))
+      
+      oldColumns.forEach((oldCol, idx) => {
+        if (fields[idx]) {
+          const oldTable = oldTables[Math.min(idx, oldTables.length - 1)] || ''
+          const newTable = newTables[idx] || newTables[0] || ''
+          
+          // Replace table-qualified names first
+          if (oldTable) {
+            const tableQualifiedRegex = new RegExp(`\\b${oldTable}\\.${oldCol}\\b`, 'gi')
+            const newQualified = newTable ? `${newTable}.${fields[idx]}` : fields[idx]
+            adaptedSQL = adaptedSQL.replace(tableQualifiedRegex, newQualified)
+          }
+          
+          // Replace unqualified column names
+          const unqualifiedRegex = new RegExp(`\\b${oldCol}\\b`, 'gi')
+          adaptedSQL = adaptedSQL.replace(unqualifiedRegex, fields[idx])
+        }
+      })
+      
+      return adaptedSQL
+    }
+    
+    // Build SQL from transformations
+    const transforms = (pattern.transformations_applied || '').split(/[,\s]+/).map(t => t.trim().toUpperCase()).filter(t => t)
+    
+    if (fields.length > 1 || transforms.includes('CONCAT')) {
+      // Multi-field: CONCAT
+      const fieldExpressions = fields.map(f => {
+        let expr = f
+        const appliedTransforms = transforms.filter(t => t !== 'CONCAT')
+        if (appliedTransforms.length === 0) {
+          expr = `TRIM(${expr})`
+        } else {
+          appliedTransforms.forEach(t => {
+            if (['TRIM', 'UPPER', 'LOWER', 'INITCAP'].includes(t)) {
+              expr = `${t}(${expr})`
+            }
+          })
+        }
+        return expr
+      })
+      return `CONCAT_WS(' ', ${fieldExpressions.join(', ')})`
+    } else {
+      // Single field
+      let expr = fields[0]
+      if (transforms.length === 0) {
+        expr = `TRIM(${expr})`
+      } else {
+        transforms.forEach(t => {
+          if (['TRIM', 'UPPER', 'LOWER', 'INITCAP'].includes(t)) {
+            expr = `${t}(${expr})`
+          }
+        })
+      }
+      return expr
+    }
+  }
   
   // Unified ranked list combining AI suggestions and historical patterns
   const unifiedOptions = computed((): UnifiedMappingOption[] => {
@@ -154,12 +330,21 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       )
       
       if (!alreadyExists) {
-        // Calculate quality based on relevance
-        let quality: 'Excellent' | 'Strong' | 'Good' | 'Weak' | 'Unknown' = 'Weak'
-        const relevance = p.templateRelevance || 0
-        if (relevance >= 0.7) quality = 'Strong'
-        else if (relevance >= 0.4) quality = 'Good'
-        else if (relevance > 0) quality = 'Weak'
+        // Use normalized search_score (already x100 from processPatterns)
+        // Combined with templateRelevance for better ranking
+        const score = Math.max(p.search_score || 0, p.templateRelevance || 0)
+        
+        // Auto-match pattern fields to user's selected fields
+        const { mappings, allMatched, generatedSQL } = autoMatchPatternFields(p)
+        
+        console.log(`[Unified Options] Adding pattern ${p.tgt_column_name}:`, {
+          search_score: p.search_score,
+          templateRelevance: p.templateRelevance,
+          finalScore: score,
+          mappingsCount: mappings.length,
+          allMatched,
+          generatedSQL: generatedSQL?.substring(0, 50)
+        })
         
         options.push({
           id: `pattern-${p.mapped_field_id}`,
@@ -170,8 +355,11 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
           tgt_column_name: p.tgt_column_name,
           tgt_column_physical_name: p.tgt_column_physical_name || p.tgt_column_name,
           tgt_comments: '',
-          matchQuality: quality,
-          score: p.search_score || relevance,
+          matchQuality: 'Unknown',  // Will be set after sorting by rank
+          score: score,
+          suggestedMappings: mappings,
+          allFieldsMatched: allMatched,
+          generatedSQL: generatedSQL,
           reasoning: p.transformations_applied 
             ? `Historical pattern using ${p.transformations_applied}`
             : 'Based on similar past mapping',
@@ -193,9 +381,24 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       return b.score - a.score
     })
     
-    // Assign ranks
+    // Assign ranks AND quality based on final position
+    // This ensures consistent quality regardless of source
     options.forEach((opt, idx) => {
       opt.rank = idx + 1
+      
+      // If quality wasn't already set (patterns come in as Unknown), set by rank
+      if (opt.matchQuality === 'Unknown') {
+        // Rank-based quality for consistency
+        if (opt.rank === 1) opt.matchQuality = 'Excellent'
+        else if (opt.rank <= 3) opt.matchQuality = 'Strong'
+        else if (opt.rank <= 6) opt.matchQuality = 'Good'
+        else opt.matchQuality = 'Weak'
+      }
+      
+      // Boost pattern quality if it's in top 5 (patterns are valuable context)
+      if (opt.source === 'pattern' && opt.rank <= 5 && opt.matchQuality === 'Weak') {
+        opt.matchQuality = 'Good'
+      }
     })
     
     return options
