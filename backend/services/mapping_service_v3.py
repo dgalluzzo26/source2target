@@ -503,12 +503,18 @@ class MappingServiceV3:
                     set_parts.append(f"source_expression = '{self._escape_sql(data.source_expression)}'")
                 if data.source_tables is not None:
                     set_parts.append(f"source_tables = '{self._escape_sql(data.source_tables)}'")
+                if data.source_tables_physical is not None:
+                    set_parts.append(f"source_tables_physical = '{self._escape_sql(data.source_tables_physical)}'")
                 if data.source_columns is not None:
                     set_parts.append(f"source_columns = '{self._escape_sql(data.source_columns)}'")
+                if data.source_columns_physical is not None:
+                    set_parts.append(f"source_columns_physical = '{self._escape_sql(data.source_columns_physical)}'")
                 if data.source_descriptions is not None:
                     set_parts.append(f"source_descriptions = '{self._escape_sql(data.source_descriptions)}'")
                 if data.source_datatypes is not None:
                     set_parts.append(f"source_datatypes = '{self._escape_sql(data.source_datatypes)}'")
+                if data.source_domain is not None:
+                    set_parts.append(f"source_domain = '{self._escape_sql(data.source_domain)}'")
                 if data.source_relationship_type is not None:
                     set_parts.append(f"source_relationship_type = '{data.source_relationship_type}'")
                 if data.transformations_applied is not None:
@@ -580,7 +586,8 @@ class MappingServiceV3:
         
         # Sync vector search index if source info changed (best-effort)
         # The _update_mapping_sync rebuilds source_semantic_field when source info changes
-        if any([data.source_tables, data.source_columns, data.source_descriptions, data.transformations_applied]):
+        if any([data.source_tables, data.source_tables_physical, data.source_columns, 
+                data.source_columns_physical, data.source_descriptions, data.transformations_applied]):
             try:
                 await loop.run_in_executor(
                     executor,

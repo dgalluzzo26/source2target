@@ -245,8 +245,16 @@
               <div class="detail-value">{{ selectedMapping.source_tables || 'N/A' }}</div>
             </div>
             <div class="detail-item">
+              <label>Source Tables (Physical)</label>
+              <div class="detail-value code">{{ (selectedMapping as any).source_tables_physical || 'N/A' }}</div>
+            </div>
+            <div class="detail-item">
               <label>Source Column(s)</label>
               <div class="detail-value">{{ selectedMapping.source_columns || 'N/A' }}</div>
+            </div>
+            <div class="detail-item">
+              <label>Source Columns (Physical)</label>
+              <div class="detail-value code">{{ (selectedMapping as any).source_columns_physical || 'N/A' }}</div>
             </div>
             <div class="detail-item">
               <label>Relationship Type</label>
@@ -258,6 +266,14 @@
             <div class="detail-item" v-if="selectedMapping.transformations_applied">
               <label>Transformations</label>
               <div class="detail-value">{{ selectedMapping.transformations_applied }}</div>
+            </div>
+            <div class="detail-item" v-if="(selectedMapping as any).source_domain">
+              <label>Domain</label>
+              <Tag :value="(selectedMapping as any).source_domain" severity="secondary" />
+            </div>
+            <div class="detail-item" v-if="selectedMapping.source_datatypes">
+              <label>Source Data Types</label>
+              <div class="detail-value code">{{ selectedMapping.source_datatypes }}</div>
             </div>
           </div>
         </div>
@@ -392,18 +408,42 @@
           
           <div class="metadata-grid">
             <div class="field">
-              <label>Source Tables</label>
+              <label>Source Tables (Logical)</label>
               <InputText
                 v-model="editFormData.source_tables"
-                placeholder="Comma-separated table names"
+                placeholder="Pipe-separated table names (e.g., Table One | Table Two)"
                 class="w-full"
               />
             </div>
             <div class="field">
-              <label>Source Columns</label>
+              <label>Source Tables (Physical)</label>
+              <InputText
+                v-model="editFormData.source_tables_physical"
+                placeholder="Pipe-separated physical table names (e.g., table_one | table_two)"
+                class="w-full"
+              />
+            </div>
+            <div class="field">
+              <label>Source Columns (Logical)</label>
               <InputText
                 v-model="editFormData.source_columns"
-                placeholder="Comma-separated column names"
+                placeholder="Pipe-separated column names (e.g., Column One | Column Two)"
+                class="w-full"
+              />
+            </div>
+            <div class="field">
+              <label>Source Columns (Physical)</label>
+              <InputText
+                v-model="editFormData.source_columns_physical"
+                placeholder="Pipe-separated physical column names (e.g., col_one | col_two)"
+                class="w-full"
+              />
+            </div>
+            <div class="field">
+              <label>Source Domain</label>
+              <InputText
+                v-model="editFormData.source_domain"
+                placeholder="Domain category (e.g., member, claims, provider)"
                 class="w-full"
               />
             </div>
@@ -609,37 +649,60 @@ function exportMappings() {
     return
   }
   
-  // Define CSV headers
+  // Define CSV headers - includes all columns including physical names
   const headers = [
     'Target Table',
+    'Target Table Physical',
     'Target Column',
-    'Target Physical Name',
+    'Target Column Physical',
     'Source Tables',
+    'Source Tables Physical',
     'Source Columns',
+    'Source Columns Physical',
+    'Source Descriptions',
+    'Source Datatypes',
+    'Source Domain',
     'Source Expression',
     'Relationship Type',
     'Transformations',
     'Confidence Score',
     'Mapping Source',
+    'AI Reasoning',
     'Status',
     'Mapped By',
     'Mapped Date'
   ]
   
-  // Build CSV rows
+  // Build CSV rows - escape any field that might contain commas or quotes
+  const escapeCSV = (val: string | undefined | null) => {
+    if (!val) return ''
+    const str = String(val)
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`
+    }
+    return str
+  }
+  
   const rows = filteredMappings.value.map(m => [
-    m.tgt_table_name || '',
-    m.tgt_column_name || '',
-    m.tgt_column_physical_name || '',
-    m.source_tables || '',
-    m.source_columns || '',
-    `"${(m.source_expression || '').replace(/"/g, '""')}"`,  // Escape quotes in SQL
-    m.source_relationship_type || 'SINGLE',
-    m.transformations_applied || '',
-    m.confidence_score || '',
-    m.mapping_source || '',
-    m.mapping_status || '',
-    m.mapped_by || '',
+    escapeCSV(m.tgt_table_name),
+    escapeCSV(m.tgt_table_physical_name),
+    escapeCSV(m.tgt_column_name),
+    escapeCSV(m.tgt_column_physical_name),
+    escapeCSV(m.source_tables),
+    escapeCSV((m as any).source_tables_physical),
+    escapeCSV(m.source_columns),
+    escapeCSV((m as any).source_columns_physical),
+    escapeCSV(m.source_descriptions),
+    escapeCSV(m.source_datatypes),
+    escapeCSV((m as any).source_domain),
+    escapeCSV(m.source_expression),
+    escapeCSV(m.source_relationship_type || 'SINGLE'),
+    escapeCSV(m.transformations_applied),
+    m.confidence_score ? String(m.confidence_score) : '',
+    escapeCSV(m.mapping_source),
+    escapeCSV(m.ai_reasoning),
+    escapeCSV(m.mapping_status),
+    escapeCSV(m.mapped_by),
     m.mapped_ts ? new Date(m.mapped_ts).toISOString() : ''
   ])
   

@@ -130,10 +130,13 @@ class MappedFieldUpdateV3(BaseModel):
     source_expression: Optional[str] = None
     
     # Source metadata - can be updated
-    source_tables: Optional[str] = None
-    source_columns: Optional[str] = None
+    source_tables: Optional[str] = None  # Logical names
+    source_tables_physical: Optional[str] = None  # Physical names
+    source_columns: Optional[str] = None  # Logical names
+    source_columns_physical: Optional[str] = None  # Physical names
     source_descriptions: Optional[str] = None
     source_datatypes: Optional[str] = None
+    source_domain: Optional[str] = None
     source_relationship_type: Optional[str] = None
     transformations_applied: Optional[str] = None
     

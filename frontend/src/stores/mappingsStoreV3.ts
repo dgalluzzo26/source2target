@@ -25,11 +25,14 @@ export interface MappedFieldV3 {
   // Source expression - THE KEY V3 FIELD
   source_expression: string
   
-  // Source metadata for display
+  // Source metadata for display (logical names)
   source_tables?: string
+  source_tables_physical?: string  // Physical names for database/restore
   source_columns?: string
+  source_columns_physical?: string  // Physical names for database/restore
   source_descriptions?: string
   source_datatypes?: string
+  source_domain?: string  // Domain category for restore on delete
   source_relationship_type: 'SINGLE' | 'JOIN' | 'UNION'
   transformations_applied?: string
   
@@ -77,9 +80,12 @@ export interface MappedFieldCreateV3 {
 export interface MappedFieldUpdateV3 {
   source_expression?: string
   source_tables?: string
+  source_tables_physical?: string
   source_columns?: string
+  source_columns_physical?: string
   source_descriptions?: string
   source_datatypes?: string
+  source_domain?: string
   source_relationship_type?: string
   transformations_applied?: string
   ai_reasoning?: string
