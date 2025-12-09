@@ -3,6 +3,8 @@
  * 
  * Manages AI-powered mapping suggestions for source fields.
  * Uses V3 API with dual vector search (semantic + historical patterns).
+ * 
+ * Enhanced with pattern template detection for multi-field mappings.
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
@@ -19,6 +21,39 @@ export interface AISuggestion {
   match_quality: 'Excellent' | 'Strong' | 'Good' | 'Weak' | 'Unknown'
   ai_reasoning: string
   rank?: number  // UI-only: 1, 2, 3...
+  fromPattern?: boolean  // True if this suggestion comes from a pattern match
+  patternId?: number  // ID of the matching pattern if applicable
+}
+
+export interface HistoricalPattern {
+  mapped_field_id: number
+  tgt_table_name: string
+  tgt_column_name: string
+  tgt_table_physical_name?: string
+  tgt_column_physical_name?: string
+  source_expression?: string
+  source_tables?: string
+  source_columns?: string
+  source_descriptions?: string
+  source_relationship_type?: string
+  transformations_applied?: string
+  confidence_score?: number
+  search_score?: number
+  ai_reasoning?: string
+  // Enhanced properties for template matching
+  isMultiColumn?: boolean
+  columnCount?: number
+  matchedToCurrentSelection?: boolean
+  templateRelevance?: number  // 0-1 score of how well this pattern matches user's selection
+}
+
+export interface PatternTemplate {
+  pattern: HistoricalPattern
+  relevanceScore: number
+  missingFields: string[]  // Column names that user hasn't selected yet
+  selectedFields: string[]  // Column names user has selected
+  isComplete: boolean
+  suggestedSQL?: string
 }
 
 export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
@@ -28,14 +63,26 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const error = ref<string | null>(null)
   const sourceFieldsUsed = ref<UnmappedField[]>([])
   const selectedSuggestion = ref<AISuggestion | null>(null)
-  const historicalPatterns = ref<any[]>([])
+  const historicalPatterns = ref<HistoricalPattern[]>([])
+  const patternTemplates = ref<PatternTemplate[]>([])  // Templates that need additional fields
+  const recommendedExpression = ref<string>('')
+  const detectedPatternType = ref<string>('SINGLE')
 
   // Computed
   const hasSuggestions = computed(() => suggestions.value.length > 0)
   const topSuggestion = computed(() => suggestions.value[0] || null)
   
+  // Pattern templates that suggest the user should add more fields
+  const hasRelevantTemplates = computed(() => patternTemplates.value.length > 0)
+  const topTemplate = computed(() => patternTemplates.value[0] || null)
+  
+  // Multi-column patterns from historical data
+  const multiColumnPatterns = computed(() => {
+    return historicalPatterns.value.filter(p => p.isMultiColumn)
+  })
+  
   // Actions
-  async function generateSuggestions(sourceFields: UnmappedField[]) {
+  async function generateSuggestions(sourceFields: UnmappedField[], allAvailableFields?: UnmappedField[]) {
     // IMPORTANT: Clear ALL previous state first
     console.log('[AI Suggestions] === Starting new suggestion request ===')
     console.log('[AI Suggestions] Clearing previous state...')
@@ -43,7 +90,10 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     loading.value = true
     error.value = null
     suggestions.value = []
-    historicalPatterns.value = []  // Clear patterns BEFORE setting sourceFields
+    historicalPatterns.value = []
+    patternTemplates.value = []
+    recommendedExpression.value = ''
+    detectedPatternType.value = 'SINGLE'
     sourceFieldsUsed.value = [...sourceFields]
     
     console.log('[AI Suggestions] State cleared. Historical patterns:', historicalPatterns.value.length)
@@ -159,13 +209,31 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         }
       }
       
-      // Store historical patterns from API response
+      // Store recommended expression and pattern type from LLM
+      recommendedExpression.value = data.recommended_expression || ''
+      detectedPatternType.value = data.detected_pattern || 'SINGLE'
+      
+      // Process historical patterns with enhanced analysis
       const patternsFromApi = data.historical_patterns || []
       console.log('[AI Suggestions] Historical patterns received from API:', patternsFromApi.length)
-      if (patternsFromApi.length > 0) {
-        console.log('[AI Suggestions] Pattern targets:', patternsFromApi.map((p: any) => p.tgt_column_name))
+      
+      // Enhance patterns with analysis
+      const enhancedPatterns = processPatterns(patternsFromApi, sourceFields)
+      historicalPatterns.value = enhancedPatterns
+      
+      // Generate pattern templates for multi-column patterns
+      const templates = generatePatternTemplates(enhancedPatterns, sourceFields, allAvailableFields || [])
+      patternTemplates.value = templates
+      
+      console.log('[AI Suggestions] Enhanced patterns:', enhancedPatterns.length)
+      console.log('[AI Suggestions] Pattern templates generated:', templates.length)
+      
+      // BOOST: If historical patterns strongly match target columns, boost those suggestions
+      // This addresses the issue where vector search gives weak scores for combined fields
+      // but historical patterns show what target should be used
+      if (enhancedPatterns.length > 0 && suggestions.value.length > 0) {
+        boostPatternMatchingSuggestions(enhancedPatterns)
       }
-      historicalPatterns.value = patternsFromApi
       
       // Debug output
       console.log('[AI Suggestions] === Results Summary ===')
@@ -206,6 +274,201 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     if (normalizedScore > 0) return 'Weak'  // Any positive score is at least Weak
     return 'Unknown'
   }
+  
+  // Helper: Process historical patterns to detect multi-column mappings
+  function processPatterns(patterns: any[], selectedFields: UnmappedField[]): HistoricalPattern[] {
+    const selectedColNames = new Set(
+      selectedFields.map(f => (f.src_column_physical_name || f.src_column_name || '').toLowerCase())
+    )
+    const selectedColWords = new Set<string>()
+    selectedFields.forEach(f => {
+      const words = (f.src_column_physical_name || f.src_column_name || '').toLowerCase().split(/[_\s]+/)
+      words.forEach(w => selectedColWords.add(w))
+    })
+    
+    return patterns.map((p: any) => {
+      // Parse source columns to determine if multi-column
+      const sourceColsStr = p.source_columns || ''
+      const sourceCols = sourceColsStr.split(/[|,]/).map((c: string) => c.trim()).filter((c: string) => c)
+      const isMultiColumn = sourceCols.length > 1 || 
+                           p.source_relationship_type === 'CONCAT' ||
+                           p.source_relationship_type === 'JOIN' ||
+                           p.source_relationship_type === 'UNION' ||
+                           (p.source_expression && (
+                             p.source_expression.includes('CONCAT') ||
+                             p.source_expression.includes('||')
+                           ))
+      
+      // Calculate how well this pattern matches the current selection
+      let matchedCols = 0
+      let relevance = 0
+      
+      sourceCols.forEach((col: string) => {
+        const colLower = col.toLowerCase()
+        const colWords = colLower.split(/[_\s]+/)
+        
+        // Check direct match
+        if (selectedColNames.has(colLower)) {
+          matchedCols++
+          relevance += 1.0
+        } else {
+          // Check word overlap
+          const overlap = colWords.filter((w: string) => selectedColWords.has(w)).length
+          if (overlap > 0) {
+            relevance += overlap / Math.max(colWords.length, 1) * 0.5
+          }
+        }
+      })
+      
+      // Normalize relevance by total columns in pattern
+      const normalizedRelevance = sourceCols.length > 0 ? relevance / sourceCols.length : 0
+      
+      return {
+        ...p,
+        isMultiColumn,
+        columnCount: sourceCols.length,
+        matchedToCurrentSelection: matchedCols > 0,
+        templateRelevance: normalizedRelevance,
+        search_score: typeof p.search_score === 'number' ? p.search_score : parseFloat(p.search_score) || 0,
+        confidence_score: typeof p.confidence_score === 'number' ? p.confidence_score : parseFloat(p.confidence_score) || 0
+      } as HistoricalPattern
+    }).sort((a, b) => {
+      // Sort by relevance first, then by search score
+      if (b.templateRelevance !== a.templateRelevance) {
+        return (b.templateRelevance || 0) - (a.templateRelevance || 0)
+      }
+      return (b.search_score || 0) - (a.search_score || 0)
+    })
+  }
+  
+  // Helper: Boost suggestions that match high-relevance historical patterns
+  function boostPatternMatchingSuggestions(patterns: HistoricalPattern[]) {
+    // Get patterns that are highly relevant to the user's selection
+    const relevantPatterns = patterns.filter(p => (p.templateRelevance || 0) > 0.5)
+    
+    if (relevantPatterns.length === 0) {
+      console.log('[AI Suggestions] No highly relevant patterns to boost from')
+      return
+    }
+    
+    console.log('[AI Suggestions] Checking', relevantPatterns.length, 'relevant patterns for boosting')
+    
+    // For each relevant pattern, find matching suggestions
+    for (const pattern of relevantPatterns) {
+      const patternTarget = (pattern.tgt_column_name || '').toLowerCase()
+      const patternTable = (pattern.tgt_table_name || '').toLowerCase()
+      
+      const matchingIdx = suggestions.value.findIndex(s => {
+        const sugTarget = (s.tgt_column_name || '').toLowerCase()
+        const sugTable = (s.tgt_table_name || '').toLowerCase()
+        return sugTarget === patternTarget && (patternTable === '' || sugTable === patternTable)
+      })
+      
+      if (matchingIdx >= 0) {
+        const suggestion = suggestions.value[matchingIdx]
+        
+        // Boost this suggestion
+        const boosted = {
+          ...suggestion,
+          match_quality: 'Excellent' as const,
+          ai_reasoning: `Historical pattern match (${Math.round((pattern.templateRelevance || 0) * 100)}% relevance): This target has been successfully mapped ${pattern.columnCount || 1} time(s) with similar source fields using ${pattern.transformations_applied || 'direct mapping'}.`,
+          fromPattern: true,
+          patternId: pattern.mapped_field_id
+        }
+        
+        // If not already at top, move to position 0 or 1 (after LLM best if present)
+        if (matchingIdx > 1) {
+          suggestions.value.splice(matchingIdx, 1)
+          // Insert at position 1 (after LLM best) or 0 if LLM best isn't excellent
+          const insertIdx = suggestions.value[0]?.match_quality === 'Excellent' && !suggestions.value[0]?.fromPattern ? 1 : 0
+          suggestions.value.splice(insertIdx, 0, boosted)
+        } else {
+          // Just update in place
+          suggestions.value[matchingIdx] = boosted
+        }
+        
+        // Re-rank all suggestions
+        suggestions.value.forEach((s, i) => { s.rank = i + 1 })
+        
+        console.log('[AI Suggestions] Boosted pattern-matching suggestion:', patternTarget, 'to rank', suggestions.value.findIndex(s => s.tgt_column_name?.toLowerCase() === patternTarget) + 1)
+      }
+    }
+  }
+  
+  // Helper: Generate pattern templates for incomplete multi-column patterns
+  function generatePatternTemplates(
+    patterns: HistoricalPattern[], 
+    selectedFields: UnmappedField[],
+    availableFields: UnmappedField[]
+  ): PatternTemplate[] {
+    const templates: PatternTemplate[] = []
+    const selectedColNames = new Set(
+      selectedFields.map(f => (f.src_column_physical_name || f.src_column_name || '').toLowerCase())
+    )
+    
+    // Only consider multi-column patterns where user has selected some but not all fields
+    patterns
+      .filter(p => p.isMultiColumn && p.matchedToCurrentSelection)
+      .forEach(pattern => {
+        const sourceColsStr = pattern.source_columns || ''
+        const sourceCols = sourceColsStr.split(/[|,]/).map(c => c.trim()).filter(c => c)
+        
+        if (sourceCols.length <= 1) return
+        
+        const selectedInPattern: string[] = []
+        const missingInPattern: string[] = []
+        
+        sourceCols.forEach(col => {
+          const colLower = col.toLowerCase()
+          const colWords = colLower.split(/[_\s]+/)
+          
+          // Check if any selected field matches this column
+          const isSelected = selectedFields.some(f => {
+            const fCol = (f.src_column_physical_name || f.src_column_name || '').toLowerCase()
+            const fWords = fCol.split(/[_\s]+/)
+            
+            // Direct match
+            if (fCol === colLower) return true
+            
+            // Word overlap match (e.g., "street_num" matches "street_number")
+            const overlap = fWords.filter(w => colWords.some(cw => cw.includes(w) || w.includes(cw))).length
+            return overlap >= Math.min(fWords.length, colWords.length) * 0.6
+          })
+          
+          if (isSelected) {
+            selectedInPattern.push(col)
+          } else {
+            missingInPattern.push(col)
+          }
+        })
+        
+        // Only create template if user has some fields selected but not all
+        if (selectedInPattern.length > 0 && missingInPattern.length > 0) {
+          // Calculate how likely the missing fields exist in available fields
+          const hasPossibleMatches = missingInPattern.some(missing => {
+            const missingWords = missing.toLowerCase().split(/[_\s]+/)
+            return availableFields.some(f => {
+              const fCol = (f.src_column_physical_name || f.src_column_name || '').toLowerCase()
+              const fWords = fCol.split(/[_\s]+/)
+              const overlap = fWords.filter(w => missingWords.some(mw => mw.includes(w) || w.includes(mw))).length
+              return overlap > 0
+            })
+          })
+          
+          templates.push({
+            pattern,
+            relevanceScore: pattern.templateRelevance || 0,
+            selectedFields: selectedInPattern,
+            missingFields: missingInPattern,
+            isComplete: false,
+            suggestedSQL: pattern.source_expression || ''
+          })
+        }
+      })
+    
+    // Sort by relevance score
+    return templates.sort((a, b) => b.relevanceScore - a.relevanceScore)
+  }
 
   function selectSuggestion(suggestion: AISuggestion) {
     selectedSuggestion.value = suggestion
@@ -217,8 +480,25 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     sourceFieldsUsed.value = []
     selectedSuggestion.value = null
     historicalPatterns.value = []
+    patternTemplates.value = []
+    recommendedExpression.value = ''
+    detectedPatternType.value = 'SINGLE'
     error.value = null
     console.log('[AI Suggestions] Cleared suggestions')
+  }
+  
+  // Action: Update source fields (when user adds more fields via template)
+  function addSourceField(field: UnmappedField) {
+    if (!sourceFieldsUsed.value.find(f => f.id === field.id)) {
+      sourceFieldsUsed.value.push(field)
+      console.log('[AI Suggestions] Added source field:', field.src_column_name)
+    }
+  }
+  
+  // Action: Set multiple source fields (for template completion)
+  function setSourceFields(fields: UnmappedField[]) {
+    sourceFieldsUsed.value = [...fields]
+    console.log('[AI Suggestions] Set source fields:', fields.map(f => f.src_column_name))
   }
 
   return {
@@ -229,15 +509,23 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     sourceFieldsUsed,
     selectedSuggestion,
     historicalPatterns,
+    patternTemplates,
+    recommendedExpression,
+    detectedPatternType,
     
     // Computed
     hasSuggestions,
     topSuggestion,
+    hasRelevantTemplates,
+    topTemplate,
+    multiColumnPatterns,
     
     // Actions
     generateSuggestions,
     selectSuggestion,
-    clearSuggestions
+    clearSuggestions,
+    addSourceField,
+    setSourceFields
   }
 })
 

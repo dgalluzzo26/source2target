@@ -531,8 +531,20 @@ onMounted(async () => {
     // Auto-populate metadata
     initializeMetadata()
     
-    // Generate default expression
-    generateDefaultExpression()
+    // Check for template-generated SQL from sessionStorage
+    const templateSQL = sessionStorage.getItem('templateGeneratedSQL')
+    if (templateSQL) {
+      console.log('[Mapping Config V3] Using template-generated SQL:', templateSQL)
+      sqlExpression.value = templateSQL
+      // Clear the sessionStorage item
+      sessionStorage.removeItem('templateGeneratedSQL')
+      
+      // Parse transformations from the SQL
+      detectTransformations()
+    } else {
+      // Generate default expression
+      generateDefaultExpression()
+    }
     
     // Fetch historical patterns
     await fetchHistoricalPatterns()

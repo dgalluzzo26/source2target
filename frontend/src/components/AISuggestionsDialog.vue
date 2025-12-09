@@ -61,17 +61,30 @@
         {{ aiStore.error }}
       </Message>
 
-      <!-- Multi-Column Pattern Alert -->
-      <div v-if="!aiStore.loading && multiColumnPatterns.length > 0" class="multi-column-alert">
+      <!-- PATTERN TEMPLATE SECTION (Priority Display) -->
+      <!-- Show when we detect user needs to add more fields based on historical patterns -->
+      <div v-if="!aiStore.loading && aiStore.hasRelevantTemplates && !showManualSearch" class="pattern-template-section">
+        <PatternTemplateCard
+          v-if="aiStore.topTemplate"
+          :pattern="aiStore.topTemplate.pattern"
+          :currently-selected-fields="aiStore.sourceFieldsUsed"
+          :available-fields="availableUnmappedFields"
+          @skip="handleSkipTemplate"
+          @apply="handleApplyTemplate"
+        />
+      </div>
+
+      <!-- Multi-Column Pattern Alert (simplified - only when no template shown) -->
+      <div v-if="!aiStore.loading && !aiStore.hasRelevantTemplates && relevantMultiColumnPatterns.length > 0" class="multi-column-alert">
         <Message severity="warn" :closable="false">
           <template #icon>
             <i class="pi pi-exclamation-triangle" style="font-size: 1.5rem;"></i>
           </template>
           <div class="alert-content">
-            <strong>Multi-Column Mapping Detected!</strong>
-            <p>Based on {{ multiColumnPatterns.length }} similar past mapping(s), this target field typically uses <strong>multiple source columns</strong>.</p>
+            <strong>Multi-Column Mapping Pattern Found!</strong>
+            <p>Based on similar past mappings, this target field typically uses <strong>multiple source columns</strong>.</p>
             <div class="pattern-examples">
-              <div v-for="(pattern, idx) in multiColumnPatterns.slice(0, 2)" :key="idx" class="pattern-example">
+              <div v-for="(pattern, idx) in relevantMultiColumnPatterns.slice(0, 2)" :key="idx" class="pattern-example">
                 <i class="pi pi-history"></i>
                 <span>
                   <strong>{{ pattern.tgt_column_name }}</strong> used: 
@@ -90,8 +103,8 @@
         </Message>
       </div>
 
-      <!-- Historical Patterns Summary -->
-      <div v-if="!aiStore.loading && aiStore.historicalPatterns.length > 0" class="historical-patterns-section">
+      <!-- Historical Patterns Summary (shown when no template is displayed) -->
+      <div v-if="!aiStore.loading && !aiStore.hasRelevantTemplates && aiStore.historicalPatterns.length > 0" class="historical-patterns-section">
         <h3 @click="showPatternDetails = !showPatternDetails" class="collapsible-header">
           <i class="pi pi-history"></i>
           Similar Past Mappings Found ({{ aiStore.historicalPatterns.length }})
@@ -104,19 +117,25 @@
                    :severity="pattern.source_relationship_type === 'SINGLE' ? 'info' : 'warning'" 
                    size="small" />
               <span class="target-name">→ {{ pattern.tgt_table_name }}.{{ pattern.tgt_column_name }}</span>
+              <Tag 
+                v-if="pattern.templateRelevance && pattern.templateRelevance > 0.3" 
+                :value="`${Math.round((pattern.templateRelevance || 0) * 100)}% relevant`" 
+                severity="success" 
+                size="small" 
+              />
             </div>
             <div class="pattern-details">
               <div v-if="pattern.source_columns" class="detail-item">
                 <label>Source Columns:</label>
                 <code>{{ pattern.source_columns }}</code>
               </div>
-              <div v-if="pattern.source_expression" class="detail-item">
-                <label>Expression:</label>
-                <code>{{ truncateExpression(pattern.source_expression) }}</code>
-              </div>
               <div v-if="pattern.transformations_applied" class="detail-item">
                 <label>Transforms:</label>
                 <span class="transforms">{{ pattern.transformations_applied }}</span>
+              </div>
+              <div v-if="pattern.isMultiColumn" class="detail-item multi-column-badge">
+                <Tag value="Multi-Column" severity="warning" size="small" icon="pi pi-table" />
+                <span>{{ pattern.columnCount }} columns</span>
               </div>
             </div>
           </div>
@@ -426,7 +445,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useAISuggestionsStore } from '@/stores/aiSuggestionsStore'
+import { useUnmappedFieldsStore } from '@/stores/unmappedFieldsStore'
 import { useUserStore } from '@/stores/user'
+import { useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import Dialog from 'primevue/dialog'
 import DataTable from 'primevue/datatable'
@@ -438,7 +459,9 @@ import ProgressBar from 'primevue/progressbar'
 import ProgressSpinner from 'primevue/progressspinner'
 import Message from 'primevue/message'
 import Textarea from 'primevue/textarea'
-import type { AISuggestion } from '@/stores/aiSuggestionsStore'
+import PatternTemplateCard from '@/components/PatternTemplateCard.vue'
+import type { AISuggestion, HistoricalPattern, PatternTemplate } from '@/stores/aiSuggestionsStore'
+import type { UnmappedField } from '@/stores/unmappedFieldsStore'
 
 interface Props {
   visible: boolean
@@ -447,14 +470,28 @@ interface Props {
 interface Emits {
   (e: 'update:visible', value: boolean): void
   (e: 'suggestion-selected', suggestion: AISuggestion): void
+  (e: 'template-applied', data: { pattern: HistoricalPattern, selectedFields: UnmappedField[], generatedSQL: string }): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
+const router = useRouter()
 const aiStore = useAISuggestionsStore()
+const unmappedStore = useUnmappedFieldsStore()
 const userStore = useUserStore()
 const toast = useToast()
+
+// Available unmapped fields for template slot filling
+const availableUnmappedFields = computed(() => {
+  return unmappedStore.unmappedFields
+})
+
+// Multi-column patterns that are relevant to current selection
+// Only show patterns that actually match the user's selected fields
+const relevantMultiColumnPatterns = computed(() => {
+  return aiStore.multiColumnPatterns.filter(p => p.matchedToCurrentSelection)
+})
 
 // Rejection dialog state
 const showRejectionDialog = ref(false)
@@ -500,30 +537,61 @@ onUnmounted(() => {
   }
 })
 
-// Computed: patterns that indicate multi-column mapping
-const multiColumnPatterns = computed(() => {
-  return aiStore.historicalPatterns.filter(p => {
-    // Check if pattern has multiple columns or is a JOIN/UNION
-    const relationshipType = p.source_relationship_type?.toUpperCase()
-    if (relationshipType === 'JOIN' || relationshipType === 'UNION') {
-      return true
-    }
-    // Check if source_columns contains commas (multiple columns)
-    if (p.source_columns && p.source_columns.includes(',')) {
-      return true
-    }
-    // Check if expression contains multiple table references
-    if (p.source_expression && (
-      p.source_expression.includes('CONCAT') ||
-      p.source_expression.includes('||') ||
-      p.source_expression.includes('JOIN') ||
-      p.source_expression.includes('UNION')
-    )) {
-      return true
-    }
-    return false
+// Template handling
+function handleSkipTemplate() {
+  console.log('[AI Suggestions Dialog] User skipped template, showing vector search results')
+  // User chose to skip the template workflow, just continue with normal suggestions
+  // The suggestions are already loaded, so we don't need to do anything special
+}
+
+function handleApplyTemplate(data: { pattern: HistoricalPattern, selectedFields: UnmappedField[], generatedSQL: string }) {
+  console.log('[AI Suggestions Dialog] === Applying Template ===')
+  console.log('[AI Suggestions Dialog] Pattern:', data.pattern.tgt_column_name)
+  console.log('[AI Suggestions Dialog] Selected fields:', data.selectedFields.map(f => f.src_column_name))
+  console.log('[AI Suggestions Dialog] Generated SQL:', data.generatedSQL)
+  
+  // Mark as accepting to prevent store clear
+  acceptedSuggestion.value = true
+  
+  // Update the source fields in the store to include all template fields
+  aiStore.setSourceFields(data.selectedFields)
+  
+  // Also update the unmapped store selection
+  unmappedStore.selectedFields = data.selectedFields
+  
+  // Create a suggestion from the pattern for navigation
+  const suggestion: AISuggestion = {
+    semantic_field_id: 0, // Will need to look this up
+    tgt_table_name: data.pattern.tgt_table_name,
+    tgt_table_physical_name: data.pattern.tgt_table_physical_name || data.pattern.tgt_table_name,
+    tgt_column_name: data.pattern.tgt_column_name,
+    tgt_column_physical_name: data.pattern.tgt_column_physical_name || data.pattern.tgt_column_name,
+    tgt_comments: '',
+    search_score: data.pattern.search_score || 0.9,
+    match_quality: 'Excellent',
+    ai_reasoning: `Applied from historical pattern with ${data.selectedFields.length} fields`,
+    rank: 1,
+    fromPattern: true,
+    patternId: data.pattern.mapped_field_id
+  }
+  
+  aiStore.selectSuggestion(suggestion)
+  
+  // Store the generated SQL for use in mapping config
+  // We'll emit this so the parent can pass it along
+  emit('template-applied', data)
+  
+  toast.add({
+    severity: 'success',
+    summary: 'Template Applied',
+    detail: `Using pattern with ${data.selectedFields.length} source fields`,
+    life: 3000
   })
-})
+  
+  // Close dialog and navigate
+  isVisible.value = false
+  router.push({ name: 'mapping-config' })
+}
 
 // Helper: truncate long expressions
 function truncateExpression(expr: string, maxLen: number = 80): string {
@@ -1084,6 +1152,17 @@ function handleClose() {
 
 .pattern-details .transforms {
   color: var(--gainwell-accent);
+}
+
+.pattern-details .multi-column-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.pattern-template-section {
+  margin-bottom: 1.5rem;
 }
 
 .suggestions-section h3 {

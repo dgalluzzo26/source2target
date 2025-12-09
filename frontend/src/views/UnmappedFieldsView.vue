@@ -175,6 +175,7 @@
     <AISuggestionsDialog 
       v-model:visible="showAISuggestions"
       @suggestion-selected="handleSuggestionSelected"
+      @template-applied="handleTemplateApplied"
     />
 
     <!-- Upload Dialog -->
@@ -272,10 +273,11 @@ async function handleGetSuggestions() {
     return
   }
 
-  // Generate AI suggestions
-  await aiStore.generateSuggestions(unmappedStore.selectedFields)
+  // Generate AI suggestions - pass all available fields for template matching
+  await aiStore.generateSuggestions(unmappedStore.selectedFields, unmappedStore.unmappedFields)
   
-  if (aiStore.hasSuggestions) {
+  // Show dialog even if no suggestions - we might have pattern templates
+  if (aiStore.hasSuggestions || aiStore.hasRelevantTemplates) {
     showAISuggestions.value = true
   } else {
     toast.add({
@@ -296,6 +298,19 @@ function handleSuggestionSelected(suggestion: AISuggestion) {
   console.log('[Unmapped Fields] aiStore.sourceFieldsUsed:', aiStore.sourceFieldsUsed)
   console.log('[Unmapped Fields] Navigating to mapping-config...')
   router.push({ name: 'mapping-config' })
+}
+
+function handleTemplateApplied(data: { pattern: any, selectedFields: UnmappedField[], generatedSQL: string }) {
+  // Template was applied - this includes the generated SQL and all selected fields
+  console.log('[Unmapped Fields] === Template Applied ===')
+  console.log('[Unmapped Fields] Pattern target:', data.pattern.tgt_column_name)
+  console.log('[Unmapped Fields] Fields:', data.selectedFields.map(f => f.src_column_name))
+  console.log('[Unmapped Fields] Generated SQL:', data.generatedSQL)
+  
+  // Store the generated SQL in sessionStorage so MappingConfigView can use it
+  sessionStorage.setItem('templateGeneratedSQL', data.generatedSQL)
+  
+  // Navigation happens in the dialog
 }
 
 function handleDelete(field: UnmappedField) {
