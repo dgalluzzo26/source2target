@@ -137,11 +137,17 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       // Transform target candidates into suggestion format
       suggestions.value = targetCandidates.map((candidate: any, idx: number) => {
         // Parse score - might be number, string, or undefined
+        // Databricks vector search returns raw cosine similarity scores (typically 0.001-0.01 range)
+        // Multiply by 100 to get a more intuitive 0-1 scale (e.g., 0.00576 -> 0.576)
         let score = 0
         if (candidate.search_score !== undefined && candidate.search_score !== null) {
-          score = typeof candidate.search_score === 'string' 
+          const rawScore = typeof candidate.search_score === 'string' 
             ? parseFloat(candidate.search_score) 
             : Number(candidate.search_score)
+          
+          // If score is very small (< 0.1), multiply by 100 to normalize
+          // This handles Databricks vector search raw scores
+          score = rawScore < 0.1 ? rawScore * 100 : rawScore
         }
         
         // Check if this is the LLM's best target (case-insensitive comparison)
@@ -156,10 +162,12 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         
         // Debug first few candidates
         if (idx < 3) {
+          const rawScore = candidate.search_score
           console.log(`[AI Suggestions] Candidate ${idx + 1}:`, {
             column: candidate.tgt_column_name,
-            score: candidate.search_score,
-            parsedScore: score,
+            rawScore: rawScore,
+            normalizedScore: score,
+            wasNormalized: rawScore < 0.1,
             isBestTarget: isExactMatch,
             bestTargetCol
           })
@@ -255,8 +263,16 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     }
   }
   
+  // Helper: Normalize Databricks vector search scores
+  // Raw scores are typically 0.001-0.01 range, multiply by 100 to get 0-1 scale
+  function normalizeScore(rawScore: number): number {
+    if (!rawScore || isNaN(rawScore)) return 0
+    // If score is very small (< 0.1), it's a raw Databricks score - multiply by 100
+    return rawScore < 0.1 ? rawScore * 100 : rawScore
+  }
+  
   // Helper: Convert score to match quality
-  // Databricks vector search scores are cosine similarity (0-1) where:
+  // After normalization, scores should be in 0-1 range where:
   // - 0.5+ is typically a strong semantic match
   // - 0.3-0.5 is moderate similarity  
   // - Below 0.3 is weak
@@ -337,8 +353,9 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         columnCount: sourceCols.length,
         matchedToCurrentSelection: matchedCols > 0,
         templateRelevance: normalizedRelevance,
-        search_score: typeof p.search_score === 'number' ? p.search_score : parseFloat(p.search_score) || 0,
-        confidence_score: typeof p.confidence_score === 'number' ? p.confidence_score : parseFloat(p.confidence_score) || 0
+        // Normalize search scores - Databricks returns raw scores that need x100
+        search_score: normalizeScore(typeof p.search_score === 'number' ? p.search_score : parseFloat(p.search_score) || 0),
+        confidence_score: normalizeScore(typeof p.confidence_score === 'number' ? p.confidence_score : parseFloat(p.confidence_score) || 0)
       } as HistoricalPattern
     }).sort((a, b) => {
       // Sort by relevance first, then by search score

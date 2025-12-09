@@ -704,7 +704,7 @@ class MappingServiceV3:
                                     src_comments,
                                     domain,
                                     uploaded_by,
-                                    uploaded_at
+                                    uploaded_ts
                                 ) VALUES (
                                     '{self._escape_sql(table)}',
                                     '{self._escape_sql(table_phys)}',
