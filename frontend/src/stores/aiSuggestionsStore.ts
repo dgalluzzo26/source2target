@@ -343,11 +343,21 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   
   // Helper: Boost suggestions that match high-relevance historical patterns
   function boostPatternMatchingSuggestions(patterns: HistoricalPattern[]) {
-    // Get patterns that are highly relevant to the user's selection
-    const relevantPatterns = patterns.filter(p => (p.templateRelevance || 0) > 0.5)
+    // Get patterns - lower threshold to 0.1 to catch more matches
+    // Also include ANY multi-column pattern with decent search_score
+    const relevantPatterns = patterns.filter(p => 
+      (p.templateRelevance || 0) > 0.1 || 
+      (p.isMultiColumn && (p.search_score || 0) > 0.3)
+    )
     
     if (relevantPatterns.length === 0) {
-      console.log('[AI Suggestions] No highly relevant patterns to boost from')
+      console.log('[AI Suggestions] No relevant patterns to boost from')
+      console.log('[AI Suggestions] Pattern relevances:', patterns.map(p => ({
+        target: p.tgt_column_name,
+        relevance: p.templateRelevance,
+        isMultiColumn: p.isMultiColumn,
+        searchScore: p.search_score
+      })))
       return
     }
     
