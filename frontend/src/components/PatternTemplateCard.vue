@@ -474,8 +474,6 @@ function buildSQLForFields(fields: string[]): string {
   console.log('[PatternTemplate] Pattern transforms:', transforms)
   console.log('[PatternTemplate] Pattern expression:', props.pattern.source_expression)
   
-  const transforms = props.pattern.transformations_applied || ''
-  
   // If pattern has a source_expression, try to adapt it to the new field names
   if (props.pattern.source_expression && props.pattern.source_columns) {
     let adaptedSQL = props.pattern.source_expression
