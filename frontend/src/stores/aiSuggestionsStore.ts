@@ -256,6 +256,10 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   }
   
   // Helper: Convert score to match quality
+  // Databricks vector search scores are cosine similarity (0-1) where:
+  // - 0.5+ is typically a strong semantic match
+  // - 0.3-0.5 is moderate similarity  
+  // - Below 0.3 is weak
   function getMatchQuality(score: number, isBestTarget: boolean): 'Excellent' | 'Strong' | 'Good' | 'Weak' | 'Unknown' {
     // LLM's best target always gets Excellent
     if (isBestTarget) return 'Excellent'
@@ -266,15 +270,16 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       return 'Unknown'
     }
     
-    // Vector search scores are typically 0-1
-    // But some systems return 0-100, so normalize if needed
+    // Vector search scores are typically 0-1 (cosine similarity)
+    // Adjusted thresholds based on typical Databricks vector search ranges
     const normalizedScore = score > 1 ? score / 100 : score
     
-    if (normalizedScore >= 0.85) return 'Excellent'
-    if (normalizedScore >= 0.70) return 'Strong'
-    if (normalizedScore >= 0.50) return 'Good'
-    if (normalizedScore >= 0.30) return 'Weak'
-    if (normalizedScore > 0) return 'Weak'  // Any positive score is at least Weak
+    // More realistic thresholds for semantic search
+    if (normalizedScore >= 0.55) return 'Excellent'  // Strong semantic match
+    if (normalizedScore >= 0.45) return 'Strong'     // Good match
+    if (normalizedScore >= 0.35) return 'Good'       // Moderate match
+    if (normalizedScore >= 0.25) return 'Weak'       // Some relevance
+    if (normalizedScore > 0) return 'Weak'
     return 'Unknown'
   }
   
@@ -345,29 +350,23 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   }
   
   // Helper: Boost suggestions that match high-relevance historical patterns
+  // ONLY boost when we're confident the pattern is actually relevant
   function boostPatternMatchingSuggestions(patterns: HistoricalPattern[]) {
-    // Get patterns - lower threshold to 0.1 to catch more matches
-    // Also include ANY multi-column pattern with decent search_score
-    const relevantPatterns = patterns.filter(p => 
-      (p.templateRelevance || 0) > 0.1 || 
-      (p.isMultiColumn && (p.search_score || 0) > 0.3)
+    // STRICT: Only boost patterns with HIGH relevance (> 0.5)
+    // This prevents irrelevant patterns from polluting the suggestions
+    const highlyRelevantPatterns = patterns.filter(p => 
+      (p.templateRelevance || 0) >= 0.5 && p.matchedToCurrentSelection
     )
     
-    if (relevantPatterns.length === 0) {
-      console.log('[AI Suggestions] No relevant patterns to boost from')
-      console.log('[AI Suggestions] Pattern relevances:', patterns.map(p => ({
-        target: p.tgt_column_name,
-        relevance: p.templateRelevance,
-        isMultiColumn: p.isMultiColumn,
-        searchScore: p.search_score
-      })))
+    if (highlyRelevantPatterns.length === 0) {
+      console.log('[AI Suggestions] No highly relevant patterns to boost (need relevance >= 0.5 AND matchedToCurrentSelection)')
       return
     }
     
-    console.log('[AI Suggestions] Checking', relevantPatterns.length, 'relevant patterns for boosting')
+    console.log('[AI Suggestions] Boosting', highlyRelevantPatterns.length, 'highly relevant patterns')
     
-    // For each relevant pattern, find matching suggestions
-    for (const pattern of relevantPatterns) {
+    // For each highly relevant pattern, find matching suggestions
+    for (const pattern of highlyRelevantPatterns) {
       const patternTarget = (pattern.tgt_column_name || '').toLowerCase()
       const patternTable = (pattern.tgt_table_name || '').toLowerCase()
       
@@ -409,13 +408,20 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   }
   
   // Helper: Add suggestions based on historical patterns that aren't already in the list
+  // ONLY add if the pattern is highly relevant to the user's selection
   function addPatternBasedSuggestions(patterns: HistoricalPattern[]) {
-    // Get multi-column patterns with decent scores
-    const relevantPatterns = patterns.filter(p => 
-      p.isMultiColumn && (p.search_score || 0) > 0.2
-    ).slice(0, 3)  // Top 3 patterns
+    // STRICT: Only add patterns that are:
+    // 1. Multi-column AND
+    // 2. Have high relevance (actually match the user's selected fields)
+    const highlyRelevantPatterns = patterns.filter(p => 
+      p.isMultiColumn && 
+      p.matchedToCurrentSelection &&
+      (p.templateRelevance || 0) >= 0.4
+    ).slice(0, 2)  // Max 2 pattern suggestions
     
-    for (const pattern of relevantPatterns) {
+    console.log('[AI Suggestions] Adding pattern suggestions:', highlyRelevantPatterns.map(p => p.tgt_column_name))
+    
+    for (const pattern of highlyRelevantPatterns) {
       const patternTarget = (pattern.tgt_column_name || '').toLowerCase()
       
       // Check if already in suggestions
@@ -453,6 +459,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   }
   
   // Helper: Generate pattern templates for multi-column patterns
+  // ONLY show templates when the pattern is HIGHLY relevant to the user's selection
   function generatePatternTemplates(
     patterns: HistoricalPattern[], 
     selectedFields: UnmappedField[],
@@ -463,17 +470,43 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     console.log('[AI Suggestions] Generating templates from', patterns.length, 'patterns')
     console.log('[AI Suggestions] Selected fields:', selectedFields.map(f => f.src_column_name))
     
-    // Consider ANY multi-column pattern with decent search score
-    // Much more lenient - show template as an option even if we're not sure about slot matching
-    const multiColumnPatterns = patterns.filter(p => 
-      p.isMultiColumn || 
-      (p.source_relationship_type && ['CONCAT', 'JOIN', 'UNION'].includes(p.source_relationship_type.toUpperCase())) ||
-      (p.search_score && p.search_score > 0.2)
-    )
+    // Get words from the selected field names and descriptions for matching
+    const selectedFieldInfo = selectedFields.map(f => ({
+      name: (f.src_column_physical_name || f.src_column_name || '').toLowerCase(),
+      words: new Set((f.src_column_physical_name || f.src_column_name || '').toLowerCase().split(/[_\s]+/)),
+      descWords: new Set((f.src_comments || '').toLowerCase().split(/\s+/).filter(w => w.length > 2))
+    }))
     
-    console.log('[AI Suggestions] Multi-column patterns found:', multiColumnPatterns.length)
+    // STRICT filter: Only consider multi-column patterns where:
+    // 1. Pattern has high relevance score (templateRelevance > 0.4)
+    // 2. OR pattern's source columns have significant word overlap with selected field
+    const relevantPatterns = patterns.filter(p => {
+      if (!p.isMultiColumn) return false
+      
+      // Check if pattern columns have any word overlap with selected fields
+      const patternCols = (p.source_columns || '').toLowerCase().split(/[|,]/).map(c => c.trim()).filter(c => c)
+      const patternWords = new Set<string>()
+      patternCols.forEach(col => col.split(/[_\s]+/).forEach(w => patternWords.add(w)))
+      
+      // Calculate word overlap with selected fields
+      let overlap = 0
+      selectedFieldInfo.forEach(sf => {
+        sf.words.forEach(w => {
+          if (patternWords.has(w)) overlap++
+        })
+      })
+      
+      const hasSignificantOverlap = overlap >= 1 && overlap >= Math.min(patternWords.size, 2) * 0.3
+      const hasHighRelevance = (p.templateRelevance || 0) >= 0.4
+      
+      console.log(`[AI Suggestions] Pattern ${p.tgt_column_name}: overlap=${overlap}, relevance=${p.templateRelevance}, show=${hasSignificantOverlap || hasHighRelevance}`)
+      
+      return hasSignificantOverlap || hasHighRelevance
+    })
     
-    multiColumnPatterns.forEach(pattern => {
+    console.log('[AI Suggestions] Relevant multi-column patterns:', relevantPatterns.length)
+    
+    relevantPatterns.forEach(pattern => {
       const sourceColsStr = pattern.source_columns || ''
       const sourceCols = sourceColsStr.split(/[|,]/).map(c => c.trim()).filter(c => c)
       
