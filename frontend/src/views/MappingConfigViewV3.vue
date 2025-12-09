@@ -382,30 +382,46 @@ const hasMultipleTables = computed(() => {
 })
 
 // Filter historical patterns based on current selection
-// - 1 column: only show SINGLE patterns
-// - Multiple columns, same table: show SINGLE and UNION
-// - Multiple columns, different tables: show SINGLE, JOIN, and UNION
+// - 1 column: show SINGLE patterns and any pattern with transformations (user wants to see what transforms were used)
+// - Multiple columns, same table: show SINGLE, UNION, CONCAT
+// - Multiple columns, different tables: show all types
 const filteredHistoricalPatterns = computed(() => {
   if (!historicalPatterns.value || historicalPatterns.value.length === 0) {
+    console.log('[Mapping Config] No historical patterns to filter')
     return []
   }
   
-  return historicalPatterns.value.filter(pattern => {
+  console.log('[Mapping Config] Filtering', historicalPatterns.value.length, 'patterns')
+  console.log('[Mapping Config] hasMultipleFields:', hasMultipleFields.value)
+  console.log('[Mapping Config] hasMultipleTables:', hasMultipleTables.value)
+  
+  const filtered = historicalPatterns.value.filter(pattern => {
     const patternType = (pattern.source_relationship_type || 'SINGLE').toUpperCase()
+    const hasTransformations = pattern.transformations_applied && pattern.transformations_applied.trim() !== ''
     
-    // Single column selected - only show SINGLE patterns
+    // Single column selected:
+    // - Show SINGLE patterns
+    // - Show CONCAT patterns (might be combining later, useful to see transformations)
+    // - Show ANY pattern that has transformations (user wants to see what transforms are commonly used)
     if (!hasMultipleFields.value) {
-      return patternType === 'SINGLE'
+      const show = patternType === 'SINGLE' || patternType === 'CONCAT' || hasTransformations
+      if (show) {
+        console.log('[Mapping Config] Including pattern:', pattern.tgt_column_name, 'type:', patternType, 'transforms:', pattern.transformations_applied)
+      }
+      return show
     }
     
     // Multiple columns from different tables - show all types
     if (hasMultipleTables.value) {
-      return true // SINGLE, JOIN, UNION all allowed
+      return true // SINGLE, JOIN, UNION, CONCAT all allowed
     }
     
-    // Multiple columns from same table - show SINGLE and UNION (no JOIN)
-    return patternType === 'SINGLE' || patternType === 'UNION'
+    // Multiple columns from same table - show SINGLE, UNION, CONCAT (no JOIN since same table)
+    return patternType === 'SINGLE' || patternType === 'UNION' || patternType === 'CONCAT'
   })
+  
+  console.log('[Mapping Config] Filtered to', filtered.length, 'patterns')
+  return filtered
 })
 
 const relationshipOptions = computed(() => [
@@ -549,8 +565,8 @@ onMounted(async () => {
       // Clear sources
       sessionStorage.removeItem('templateGeneratedSQL')
       
-      // Parse transformations from the SQL
-      detectTransformations()
+      // Parse transformations from the SQL (updatePreview does this)
+      updatePreview()
     } else {
       console.log('[Mapping Config V3] ✗ No template SQL found, generating default')
       // Generate default expression
@@ -616,12 +632,15 @@ function generateDefaultExpression() {
 
 async function fetchHistoricalPatterns() {
   loadingPatterns.value = true
+  console.log('[Mapping Config V3] ========== FETCHING HISTORICAL PATTERNS ==========')
   
   try {
     // Build search query from source fields
     const descriptions = sourceFields.value
       .map(f => f.src_comments || f.src_column_name)
       .join(' | ')
+    
+    console.log('[Mapping Config V3] Source fields for pattern search:', sourceFields.value.map(f => f.src_column_name))
     
     // Call AI suggestions endpoint to get patterns
     const response = await api.post('/api/v3/ai/suggestions', {
@@ -634,18 +653,34 @@ async function fetchHistoricalPatterns() {
         src_physical_datatype: f.src_physical_datatype,
         src_comments: f.src_comments
       })),
-      num_suggestions: 3
+      num_suggestions: 5  // Get more patterns
     })
+    
+    console.log('[Mapping Config V3] API Response:', response.data)
     
     // Extract historical patterns from response
     if (response.data?.historical_patterns) {
       historicalPatterns.value = response.data.historical_patterns
+      console.log('[Mapping Config V3] ✓ Received', historicalPatterns.value.length, 'historical patterns')
+      
+      // Log details of each pattern
+      historicalPatterns.value.forEach((p, i) => {
+        console.log(`[Mapping Config V3] Pattern ${i + 1}:`, {
+          target: p.tgt_column_name,
+          type: p.source_relationship_type,
+          transforms: p.transformations_applied,
+          expression: p.source_expression?.substring(0, 50)
+        })
+      })
+    } else {
+      console.log('[Mapping Config V3] ✗ No historical_patterns in response')
     }
     
   } catch (e) {
     console.warn('[Mapping Config V3] Could not fetch historical patterns:', e)
   } finally {
     loadingPatterns.value = false
+    console.log('[Mapping Config V3] ========== END FETCH PATTERNS ==========')
   }
 }
 
