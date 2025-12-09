@@ -160,6 +160,9 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         const bestTargetTable = (bestTarget.tgt_table_name || '').toLowerCase().trim()
         const isExactMatch = isBestTarget && (bestTargetTable === '' || candidateTable === bestTargetTable)
         
+        // Determine match quality FIRST (before logging)
+        const matchQuality = getMatchQuality(score, isExactMatch)
+        
         // Debug first few candidates
         if (idx < 5) {
           const rawScore = candidate.search_score
@@ -172,9 +175,6 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
             isBestTarget: isExactMatch
           })
         }
-        
-        // Determine match quality
-        const matchQuality = getMatchQuality(score, isExactMatch)
         
         // Build reasoning
         let reasoning = ''
