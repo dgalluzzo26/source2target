@@ -191,20 +191,19 @@ CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.mapped_fields (
   -- VECTOR SEARCH: Semantic field for AI pattern matching (AUTO-GENERATED)
   -- =========================================================================
   source_semantic_field STRING GENERATED ALWAYS AS (
-    CONCAT_WS(' | ',
-      CONCAT('SOURCE TABLES: ', COALESCE(source_tables, '')),
-      CONCAT('SOURCE COLUMNS: ', COALESCE(source_columns, '')),
-      CONCAT('DESCRIPTIONS: ', COALESCE(source_descriptions, '')),
-      CONCAT('DATATYPES: ', COALESCE(source_datatypes, '')),
-      CONCAT('TRANSFORMS: ', COALESCE(transformations_applied, '')),
-      CONCAT('RELATIONSHIP: ', COALESCE(source_relationship_type, 'SINGLE'))
+    CONCAT_WS(' | ', 
+      COALESCE(source_tables, ''), 
+      COALESCE(source_columns, ''), 
+      COALESCE(source_descriptions, ''),
+      COALESCE(transformations_applied, ''),
+      COALESCE(source_relationship_type, 'SINGLE')
     )
   ) COMMENT 'Auto-generated concatenated field for vector embedding - enables AI pattern matching',
   
   CONSTRAINT pk_mapped_fields PRIMARY KEY (mapped_field_id),
   CONSTRAINT fk_mapped_semantic FOREIGN KEY (semantic_field_id) REFERENCES ${CATALOG_SCHEMA}.semantic_fields(semantic_field_id)
 )
-COMMENT 'Complete mappings with SQL expressions. One row = one mapping. source_semantic_field enables AI pattern learning.'
+COMMENT 'Complete mappings with SQL expressions. One row = one mapping. source_semantic_field auto-generates for AI pattern learning.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
@@ -264,11 +263,12 @@ CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.mapping_feedback (
   -- =========================================================================
   source_semantic_field STRING GENERATED ALWAYS AS (
     CONCAT_WS(' | ',
-      CONCAT('SOURCE: ', COALESCE(suggested_src_table, ''), '.', COALESCE(suggested_src_column, '')),
-      CONCAT('TARGET: ', COALESCE(suggested_tgt_table, ''), '.', COALESCE(suggested_tgt_column, '')),
-      CONCAT('SRC_DESC: ', COALESCE(src_comments, '')),
-      CONCAT('SRC_TYPE: ', COALESCE(src_datatype, '')),
-      CONCAT('REASON: ', COALESCE(user_comments, ''))
+      COALESCE(suggested_src_table, ''),
+      COALESCE(suggested_src_column, ''),
+      COALESCE(suggested_tgt_table, ''),
+      COALESCE(suggested_tgt_column, ''),
+      COALESCE(src_comments, ''),
+      COALESCE(user_comments, '')
     )
   ) COMMENT 'Auto-generated concatenated field for vector embedding - enables AI rejection avoidance',
   
