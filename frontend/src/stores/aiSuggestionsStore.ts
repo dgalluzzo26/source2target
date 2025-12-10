@@ -513,7 +513,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         const rawTop = typeof targetCandidates[0].search_score === 'string' 
           ? parseFloat(targetCandidates[0].search_score) 
           : Number(targetCandidates[0].search_score)
-        topVectorScore = normalizeScore(rawTop)
+        topVectorScore = parseScore(rawTop)
         console.log('[AI Suggestions] Top vector score (normalized):', topVectorScore)
       }
       
@@ -529,8 +529,8 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
             ? parseFloat(candidate.search_score) 
             : Number(candidate.search_score)
           
-          // If score is very small (< 0.1), multiply by 100 to normalize for display
-          score = rawScore < 0.1 ? rawScore * 100 : rawScore
+          // No normalization needed - new format gives good scores (0.006-0.050)
+          score = rawScore
         }
         
         // Check if this is the LLM's best target (case-insensitive comparison)
@@ -635,18 +635,14 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     }
   }
   
-  // Helper: Normalize Databricks vector search scores
-  // Raw scores from Databricks are typically in 0.001-0.01 range
-  // We multiply by 100 to get a more intuitive 0-1 scale
-  // BUT only for very small scores that are clearly raw Databricks scores
-  function normalizeScore(rawScore: number): number {
-    if (!rawScore || isNaN(rawScore)) return 0
-    // Only normalize if score is VERY small (< 0.02) - clearly a raw Databricks score
-    // Scores >= 0.02 are likely already in a reasonable range
-    if (rawScore < 0.02) {
-      return rawScore * 100
-    }
-    return rawScore
+  // Helper: Parse and validate score (no normalization needed with new semantic_field format)
+  // New format (DESCRIPTION + TYPE only) returns scores in 0.006-0.050 range
+  // which is perfect for our thresholds (Excellent: 0.035+, Strong: 0.020+, etc.)
+  function parseScore(rawScore: number | string | null | undefined): number {
+    if (rawScore === null || rawScore === undefined) return 0
+    const score = typeof rawScore === 'string' ? parseFloat(rawScore) : Number(rawScore)
+    if (isNaN(score)) return 0
+    return score
   }
   
   // Helper: Convert score to match quality using ABSOLUTE thresholds
@@ -743,9 +739,9 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         columnCount: sourceCols.length,
         matchedToCurrentSelection: matchedCols > 0,
         templateRelevance: normalizedRelevance,
-        // Normalize search scores for display - Databricks returns raw scores that need x100
-        search_score: normalizeScore(typeof p.search_score === 'number' ? p.search_score : parseFloat(p.search_score) || 0),
-        confidence_score: normalizeScore(typeof p.confidence_score === 'number' ? p.confidence_score : parseFloat(p.confidence_score) || 0)
+        // Parse search scores - no normalization needed with new semantic_field format
+        search_score: parseScore(p.search_score),
+        confidence_score: parseScore(p.confidence_score)
       } as HistoricalPattern
     }).sort((a, b) => {
       // Sort by search score (already filtered by backend)

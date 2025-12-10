@@ -266,10 +266,10 @@ class AIMappingServiceV3:
                     source_columns,
                     source_columns_physical,
                     source_descriptions,
+                    source_datatypes,
                     source_relationship_type,
                     transformations_applied,
                     confidence_score,
-                    ai_reasoning,
                     search_score
                 FROM vector_search(
                     index => '{index_name}',

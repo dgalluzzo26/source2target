@@ -79,62 +79,6 @@
         />
       </Dialog>
 
-      <!-- THRESHOLD FILTERS - Collapsible section -->
-      <div v-if="!aiStore.loading && aiStore.hasOptions" class="threshold-filters-section">
-        <Accordion>
-          <AccordionTab>
-            <template #header>
-              <i class="pi pi-sliders-h"></i>
-              <span class="accordion-label">Filter Results ({{ aiStore.unifiedOptions.length }} showing)</span>
-            </template>
-            <div class="threshold-controls">
-              <div class="threshold-field">
-                <label>
-                  Target Threshold: <strong>{{ (localTargetThreshold * 0.001).toFixed(3) }}</strong>
-                </label>
-                <div class="slider-row">
-                  <span class="slider-label">More</span>
-                  <Slider 
-                    v-model="localTargetThreshold"
-                    :min="0"
-                    :max="50"
-                    :step="1"
-                    class="threshold-slider"
-                  />
-                  <span class="slider-label">Fewer</span>
-                </div>
-                <small>0-50 (×0.001) | Excellent: ≥0.035 | Strong: ≥0.020 | Good: ≥0.012</small>
-              </div>
-              <div class="threshold-field">
-                <label>
-                  Pattern Threshold: <strong>{{ (localPatternThreshold * 0.001).toFixed(3) }}</strong>
-                </label>
-                <div class="slider-row">
-                  <span class="slider-label">More</span>
-                  <Slider 
-                    v-model="localPatternThreshold"
-                    :min="0"
-                    :max="40"
-                    :step="1"
-                    class="threshold-slider"
-                  />
-                  <span class="slider-label">Fewer</span>
-                </div>
-                <small>0-40 (×0.001) | Default: 10 (0.010) | Lower = more patterns</small>
-              </div>
-              <Button 
-                label="Reset to Defaults"
-                icon="pi pi-refresh"
-                severity="secondary"
-                text
-                size="small"
-                @click="resetLocalThresholds"
-              />
-            </div>
-          </AccordionTab>
-        </Accordion>
-      </div>
-
       <!-- UNIFIED RANKED LIST - All options in one place -->
       <div v-if="!aiStore.loading && aiStore.hasOptions" class="unified-options-section">
         <div class="section-header">
@@ -583,32 +527,6 @@ const aiStore = useAISuggestionsStore()
 const unmappedStore = useUnmappedFieldsStore()
 const userStore = useUserStore()
 const toast = useToast()
-
-// Local threshold values (integer slider for easier control)
-// Slider 0-50 for targets, 0-40 for patterns
-// Multiply by 0.001 to get actual threshold value
-const localTargetThreshold = ref(Math.round(aiStore.targetScoreThreshold * 1000))
-const localPatternThreshold = ref(Math.round(aiStore.patternScoreThreshold * 1000))
-
-// Watch local sliders and update store (which triggers filtering)
-watch(localTargetThreshold, (newVal) => {
-  const actualThreshold = newVal * 0.001
-  console.log(`[Threshold Filter] Target threshold changed: slider=${newVal}, actual=${actualThreshold.toFixed(3)}`)
-  aiStore.setTargetThreshold(actualThreshold)
-})
-
-watch(localPatternThreshold, (newVal) => {
-  const actualThreshold = newVal * 0.001
-  console.log(`[Threshold Filter] Pattern threshold changed: slider=${newVal}, actual=${actualThreshold.toFixed(3)}`)
-  aiStore.setPatternThreshold(actualThreshold)
-})
-
-// Reset local thresholds (calibrated for new semantic_field format)
-function resetLocalThresholds() {
-  localTargetThreshold.value = 15  // 0.015 default
-  localPatternThreshold.value = 10  // 0.010 default
-  aiStore.resetThresholds()
-}
 
 // Available unmapped fields for template slot filling
 const availableUnmappedFields = computed(() => {
@@ -1149,81 +1067,6 @@ function handleClose() {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-}
-
-/* Threshold Filters */
-.threshold-filters-section {
-  margin-bottom: 0.5rem;
-}
-
-.threshold-filters-section :deep(.p-accordion-header-link) {
-  padding: 0.75rem 1rem;
-  background: var(--surface-50);
-}
-
-.threshold-filters-section .accordion-label {
-  margin-left: 0.5rem;
-  font-weight: 500;
-}
-
-.threshold-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-  align-items: flex-start;
-  padding: 0.5rem 0;
-}
-
-.threshold-field {
-  flex: 1;
-  min-width: 250px;
-}
-
-.threshold-field label {
-  display: block;
-  font-weight: 500;
-  margin-bottom: 0.5rem;
-  color: var(--text-color);
-}
-
-.threshold-field label strong {
-  color: var(--gainwell-primary);
-  font-family: 'Courier New', monospace;
-}
-
-.threshold-field small {
-  display: block;
-  color: var(--text-color-secondary);
-  font-size: 0.8rem;
-  margin-top: 0.5rem;
-}
-
-.slider-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.slider-row .slider-label {
-  font-size: 0.8rem;
-  color: var(--text-color-secondary);
-  min-width: 40px;
-}
-
-.slider-row .slider-label:first-child {
-  text-align: right;
-}
-
-.threshold-slider {
-  flex: 1;
-}
-
-:deep(.threshold-slider .p-slider-range) {
-  background: linear-gradient(90deg, var(--green-500), var(--orange-500));
-}
-
-:deep(.threshold-slider .p-slider-handle) {
-  border-color: var(--gainwell-primary);
 }
 
 .source-fields-summary {
