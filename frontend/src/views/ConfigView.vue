@@ -306,6 +306,72 @@
                 />
               </div>
             </div>
+
+            <Divider />
+
+            <h4>Score Thresholds</h4>
+            <Message severity="info" :closable="false" class="threshold-info">
+              <strong>Tuning Guide:</strong> Higher threshold = fewer but more relevant results. 
+              Lower threshold = more results but may include noise.
+              <br/>
+              <span style="color: var(--green-600);">Typical good scores: 0.005-0.012</span> | 
+              <span style="color: var(--orange-600);">Borderline: 0.003-0.005</span> | 
+              <span style="color: var(--red-600);">Noise: &lt;0.003</span>
+            </Message>
+
+            <div class="field threshold-field">
+              <label for="target_threshold">
+                Target Field Threshold: <strong>{{ formatThreshold(config.vector_search.target_score_threshold) }}</strong>
+              </label>
+              <div class="slider-container">
+                <span class="slider-label">More Results</span>
+                <Slider 
+                  id="target_threshold"
+                  v-model="config.vector_search.target_score_threshold"
+                  :min="0.002"
+                  :max="0.010"
+                  :step="0.0005"
+                  class="threshold-slider"
+                />
+                <span class="slider-label">More Precise</span>
+              </div>
+              <small>
+                Controls filtering of TARGET field matches (semantic_fields search).
+                Default: 0.0055. Higher = fewer but more accurate matches.
+              </small>
+            </div>
+
+            <div class="field threshold-field">
+              <label for="pattern_threshold">
+                Pattern Threshold: <strong>{{ formatThreshold(config.vector_search.pattern_score_threshold) }}</strong>
+              </label>
+              <div class="slider-container">
+                <span class="slider-label">More Patterns</span>
+                <Slider 
+                  id="pattern_threshold"
+                  v-model="config.vector_search.pattern_score_threshold"
+                  :min="0.001"
+                  :max="0.008"
+                  :step="0.0005"
+                  class="threshold-slider"
+                />
+                <span class="slider-label">More Precise</span>
+              </div>
+              <small>
+                Controls filtering of historical PATTERNS (mapped_fields search).
+                Default: 0.0025. Lower allows multi-column patterns to be found.
+              </small>
+            </div>
+
+            <div class="threshold-actions">
+              <Button 
+                label="Reset to Defaults"
+                icon="pi pi-refresh"
+                severity="secondary"
+                outlined
+                @click="resetThresholds"
+              />
+            </div>
           </div>
         </div>
       </TabPanel>
@@ -548,7 +614,9 @@ const config = ref({
   vector_search: {
     semantic_fields_index: 'oztest_dev.smartmapper.semantic_fields_vs',
     mapped_fields_index: 'oztest_dev.smartmapper.mapped_fields_vs',
-    endpoint_name: 's2t_vsendpoint'
+    endpoint_name: 's2t_vsendpoint',
+    target_score_threshold: 0.0055,
+    pattern_score_threshold: 0.0025
   },
   security: {
     admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
@@ -685,7 +753,9 @@ const resetConfiguration = async () => {
       vector_search: {
         semantic_fields_index: 'oztest_dev.smartmapper.semantic_fields_vs',
         mapped_fields_index: 'oztest_dev.smartmapper.mapped_fields_vs',
-        endpoint_name: 's2t_vsendpoint'
+        endpoint_name: 's2t_vsendpoint',
+        target_score_threshold: 0.0055,
+        pattern_score_threshold: 0.0025
       },
       security: {
         admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
@@ -696,6 +766,19 @@ const resetConfiguration = async () => {
     console.log('Configuration reset to defaults')
     loading.value.reset = false
   }, 1000)
+}
+
+// Format threshold for display (e.g., 0.0055 -> "0.0055")
+const formatThreshold = (value: number | undefined): string => {
+  if (value === undefined || value === null) return '0.0000'
+  return value.toFixed(4)
+}
+
+// Reset thresholds to recommended defaults
+const resetThresholds = () => {
+  config.value.vector_search.target_score_threshold = 0.0055
+  config.value.vector_search.pattern_score_threshold = 0.0025
+  console.log('Thresholds reset to defaults: target=0.0055, pattern=0.0025')
 }
 
 onMounted(() => {
@@ -867,5 +950,69 @@ onMounted(() => {
   overflow-x: auto;
   max-height: 400px;
   overflow-y: auto;
+}
+
+/* Threshold sliders */
+.threshold-info {
+  margin-bottom: 1.5rem;
+}
+
+.threshold-field {
+  margin-bottom: 1.5rem;
+}
+
+.threshold-field label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.threshold-field label strong {
+  color: var(--gainwell-primary);
+  font-family: 'Courier New', monospace;
+  font-size: 1.1em;
+}
+
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  padding: 0 0.5rem;
+}
+
+.slider-label {
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+.slider-label:first-child {
+  text-align: right;
+}
+
+.slider-label:last-child {
+  text-align: left;
+}
+
+.threshold-slider {
+  flex: 1;
+}
+
+:deep(.threshold-slider .p-slider-range) {
+  background: linear-gradient(90deg, var(--green-500), var(--orange-500), var(--red-500));
+}
+
+:deep(.threshold-slider .p-slider-handle) {
+  border-color: var(--gainwell-primary);
+  background: white;
+}
+
+.threshold-actions {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--surface-border);
 }
 </style>

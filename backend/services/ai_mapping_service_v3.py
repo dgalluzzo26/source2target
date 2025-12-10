@@ -162,25 +162,9 @@ class AIMappingServiceV3:
     # VECTOR SEARCH: SEMANTIC FIELDS (Find matching targets)
     # =========================================================================
     
-    # Minimum score thresholds for filtering weak/irrelevant results
-    # Databricks vector search returns raw cosine similarity (typically 0.001-0.01 range)
-    # 
-    # TARGETS (semantic_fields): Need good semantic match to find the RIGHT target column
-    #   - Higher threshold = fewer results but more accurate
-    #   - Example: "first name" should match "first_name" target, not "address"
-    #
-    # PATTERNS (mapped_fields): Need to find SIMILAR historical mappings for templates
-    #   - Lower threshold = more results to catch multi-column patterns
-    #   - Example: "street number" should find "street_num + street_name → address" pattern
-    #
-    # Score ranges observed:
-    #   0.006+ = strong match (same semantic meaning)
-    #   0.004-0.006 = good match (related concepts)  
-    #   0.003-0.004 = weak match (some word overlap)
-    #   <0.003 = very weak (likely irrelevant)
-    #
-    MIN_TARGET_SCORE = 0.0050  # Targets: stricter - only keep scores > 0.005 (top ~30%)
-    MIN_PATTERN_SCORE = 0.0020  # Patterns: very low to catch multi-column patterns like street_num+street_name
+    # NOTE: No backend filtering - return all results to frontend
+    # Frontend applies user-configurable threshold filtering via UI sliders
+    # This allows real-time tuning without API calls
     
     def _vector_search_targets_sync(
         self,
@@ -192,7 +176,7 @@ class AIMappingServiceV3:
     ) -> List[Dict[str, Any]]:
         """
         Vector search on semantic_fields to find matching TARGET columns.
-        Filters results below MIN_TARGET_SCORE threshold.
+        Returns all results - frontend handles filtering via UI sliders.
         """
         print(f"[AI Mapping V3] Vector search TARGETS: {query_text[:100]}...")
         
@@ -230,20 +214,19 @@ class AIMappingServiceV3:
                 print(f"[AI Mapping V3] Query: {query_text[:200]}...")
                 print(f"[AI Mapping V3] Raw results: {len(all_results)}")
                 
-                # Log ALL results before filtering (for debugging)
-                print(f"[AI Mapping V3] ALL TARGET SCORES (before filter):")
+                # Log all results (no backend filtering - frontend handles via sliders)
+                print(f"[AI Mapping V3] ALL TARGET SCORES (returning all to frontend):")
                 for i, r in enumerate(all_results):
                     score = float(r.get('search_score', 0) or 0)
                     r['search_score'] = score  # Ensure float
                     col = r.get('tgt_column_name', 'unknown')
                     desc = (r.get('tgt_comments') or '')[:40]
-                    status = "✓ KEEP" if score >= self.MIN_TARGET_SCORE else "✗ FILTER"
-                    print(f"  {i+1}. [{status}] {col} - score: {score:.6f} - '{desc}'")
+                    print(f"  {i+1}. {col} - score: {score:.6f} - '{desc}'")
                 
-                # Filter by minimum threshold
-                results = [r for r in all_results if r.get('search_score', 0) >= self.MIN_TARGET_SCORE]
+                # Return all results - frontend filters based on user's threshold slider
+                results = all_results
                 
-                print(f"[AI Mapping V3] After filtering (>= {self.MIN_TARGET_SCORE}): {len(results)}/{len(all_results)} targets kept")
+                print(f"[AI Mapping V3] Returning {len(results)} targets to frontend")
                 print(f"[AI Mapping V3] ========================================")
                 
                 return results
@@ -269,7 +252,7 @@ class AIMappingServiceV3:
         """
         Vector search on mapped_fields to find similar HISTORICAL PATTERNS.
         Returns past mappings with their SQL expressions and transformations.
-        Filters results below MIN_PATTERN_SCORE threshold.
+        Returns all results - frontend handles filtering via UI sliders.
         """
         print(f"[AI Mapping V3] Vector search PATTERNS: {query_text[:100]}...")
         
@@ -314,8 +297,8 @@ class AIMappingServiceV3:
                 print(f"[AI Mapping V3] Query: {query_text[:200]}...")
                 print(f"[AI Mapping V3] Raw results: {len(all_results)}")
                 
-                # Log ALL patterns before filtering (for debugging)
-                print(f"[AI Mapping V3] ALL PATTERN SCORES (before filter):")
+                # Log all patterns (no backend filtering - frontend handles via sliders)
+                print(f"[AI Mapping V3] ALL PATTERN SCORES (returning all to frontend):")
                 for i, r in enumerate(all_results):
                     # Ensure scores are floats
                     if r.get('search_score') is not None:
@@ -329,13 +312,12 @@ class AIMappingServiceV3:
                     tgt = r.get('tgt_column_name', 'unknown')
                     src_cols = (r.get('source_columns') or '')[:30]
                     transforms = r.get('transformations_applied') or 'none'
-                    status = "✓ KEEP" if score >= self.MIN_PATTERN_SCORE else "✗ FILTER"
-                    print(f"  {i+1}. [{status}] {tgt} <- [{src_cols}] - score: {score:.6f} - transforms: {transforms}")
+                    print(f"  {i+1}. {tgt} <- [{src_cols}] - score: {score:.6f} - transforms: {transforms}")
                 
-                # Filter by minimum score threshold
-                results = [r for r in all_results if r.get('search_score', 0) >= self.MIN_PATTERN_SCORE]
+                # Return all results - frontend filters based on user's threshold slider
+                results = all_results
                 
-                print(f"[AI Mapping V3] After filtering (>= {self.MIN_PATTERN_SCORE}): {len(results)}/{len(all_results)} patterns kept")
+                print(f"[AI Mapping V3] Returning {len(results)} patterns to frontend")
                 print(f"[AI Mapping V3] ==========================================")
                 
                 return results
@@ -694,6 +676,8 @@ Generate valid Databricks SQL. Respond in JSON:
         - Merge and rank candidates
         - Exact lookup rejections for top candidates
         - LLM analysis with all context
+        
+        Returns all results - frontend filters based on user's threshold sliders.
         
         Returns:
             Dict with:

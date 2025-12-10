@@ -122,7 +122,7 @@ async def get_ai_suggestions(request: SuggestionsRequest):
         # Convert to dict for service
         source_fields = [field.model_dump() for field in request.source_fields]
         
-        # Call service
+        # Call service - returns all results, frontend filters via UI sliders
         result = await ai_service.generate_suggestions(
             source_fields=source_fields,
             num_results=request.num_results

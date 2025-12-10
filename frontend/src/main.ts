@@ -60,6 +60,7 @@ import Toast from 'primevue/toast'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Steps from 'primevue/steps'
 import RadioButton from 'primevue/radiobutton'
+import Slider from 'primevue/slider'
 
 // Create Vue application instance
 const app = createApp(App)
@@ -110,6 +111,7 @@ app.component('Toast', Toast)
 app.component('ConfirmDialog', ConfirmDialog)
 app.component('Steps', Steps)
 app.component('RadioButton', RadioButton)
+app.component('Slider', Slider)
 
 // Register PrimeVue directives globally
 app.directive('tooltip', Tooltip)

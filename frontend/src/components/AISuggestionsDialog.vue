@@ -79,6 +79,62 @@
         />
       </Dialog>
 
+      <!-- THRESHOLD FILTERS - Collapsible section -->
+      <div v-if="!aiStore.loading && aiStore.hasOptions" class="threshold-filters-section">
+        <Accordion>
+          <AccordionTab>
+            <template #header>
+              <i class="pi pi-sliders-h"></i>
+              <span class="accordion-label">Filter Results ({{ aiStore.unifiedOptions.length }} showing)</span>
+            </template>
+            <div class="threshold-controls">
+              <div class="threshold-field">
+                <label>
+                  Target Match Threshold: <strong>{{ aiStore.targetScoreThreshold.toFixed(4) }}</strong>
+                </label>
+                <div class="slider-row">
+                  <span class="slider-label">More</span>
+                  <Slider 
+                    v-model="aiStore.targetScoreThreshold"
+                    :min="0.002"
+                    :max="0.010"
+                    :step="0.0005"
+                    class="threshold-slider"
+                  />
+                  <span class="slider-label">Fewer</span>
+                </div>
+                <small>Controls target field matches from semantic search</small>
+              </div>
+              <div class="threshold-field">
+                <label>
+                  Pattern Threshold: <strong>{{ aiStore.patternScoreThreshold.toFixed(4) }}</strong>
+                </label>
+                <div class="slider-row">
+                  <span class="slider-label">More</span>
+                  <Slider 
+                    v-model="aiStore.patternScoreThreshold"
+                    :min="0.001"
+                    :max="0.008"
+                    :step="0.0005"
+                    class="threshold-slider"
+                  />
+                  <span class="slider-label">Fewer</span>
+                </div>
+                <small>Controls historical pattern matches (lower = more patterns)</small>
+              </div>
+              <Button 
+                label="Reset to Defaults"
+                icon="pi pi-refresh"
+                severity="secondary"
+                text
+                size="small"
+                @click="aiStore.resetThresholds()"
+              />
+            </div>
+          </AccordionTab>
+        </Accordion>
+      </div>
+
       <!-- UNIFIED RANKED LIST - All options in one place -->
       <div v-if="!aiStore.loading && aiStore.hasOptions" class="unified-options-section">
         <div class="section-header">
@@ -1067,6 +1123,81 @@ function handleClose() {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+/* Threshold Filters */
+.threshold-filters-section {
+  margin-bottom: 0.5rem;
+}
+
+.threshold-filters-section :deep(.p-accordion-header-link) {
+  padding: 0.75rem 1rem;
+  background: var(--surface-50);
+}
+
+.threshold-filters-section .accordion-label {
+  margin-left: 0.5rem;
+  font-weight: 500;
+}
+
+.threshold-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: flex-start;
+  padding: 0.5rem 0;
+}
+
+.threshold-field {
+  flex: 1;
+  min-width: 250px;
+}
+
+.threshold-field label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: var(--text-color);
+}
+
+.threshold-field label strong {
+  color: var(--gainwell-primary);
+  font-family: 'Courier New', monospace;
+}
+
+.threshold-field small {
+  display: block;
+  color: var(--text-color-secondary);
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.slider-row .slider-label {
+  font-size: 0.8rem;
+  color: var(--text-color-secondary);
+  min-width: 40px;
+}
+
+.slider-row .slider-label:first-child {
+  text-align: right;
+}
+
+.threshold-slider {
+  flex: 1;
+}
+
+:deep(.threshold-slider .p-slider-range) {
+  background: linear-gradient(90deg, var(--green-500), var(--orange-500));
+}
+
+:deep(.threshold-slider .p-slider-handle) {
+  border-color: var(--gainwell-primary);
 }
 
 .source-fields-summary {

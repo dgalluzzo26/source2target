@@ -112,16 +112,35 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const detectedPatternType = ref<string>('SINGLE')
   const selectedTemplatePattern = ref<HistoricalPattern | null>(null)  // User-selected pattern to use as template
   
+  // Threshold filters (adjustable via UI sliders)
+  // These filter the raw results in unifiedOptions computed property
+  const targetScoreThreshold = ref(0.0055)  // For semantic_fields (targets)
+  const patternScoreThreshold = ref(0.0025)  // For mapped_fields (patterns)
+  
   // Track top score for relative quality calculation (used by getMatchQuality)
   let topVectorScore = 0
 
-  // Computed
+  // Computed (thresholds are applied in unifiedOptions)
   const hasSuggestions = computed(() => suggestions.value.length > 0)
   const topSuggestion = computed(() => suggestions.value[0] || null)
   
   // Pattern templates that suggest the user should add more fields
   const hasRelevantTemplates = computed(() => patternTemplates.value.length > 0)
   const topTemplate = computed(() => patternTemplates.value[0] || null)
+  
+  // Threshold setters for UI sliders (unifiedOptions auto-updates via reactivity)
+  function setTargetThreshold(value: number) {
+    targetScoreThreshold.value = value
+  }
+  
+  function setPatternThreshold(value: number) {
+    patternScoreThreshold.value = value
+  }
+  
+  function resetThresholds() {
+    targetScoreThreshold.value = 0.0055
+    patternScoreThreshold.value = 0.0025
+  }
   
   // Multi-column patterns from historical data
   const multiColumnPatterns = computed(() => {
@@ -292,11 +311,25 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   }
   
   // Unified ranked list combining AI suggestions and historical patterns
+  // Applies threshold filtering from UI sliders
   const unifiedOptions = computed((): UnifiedMappingOption[] => {
     const options: UnifiedMappingOption[] = []
     
+    // Filter suggestions by target threshold
+    const filteredSuggestionsList = suggestions.value.filter(s => 
+      s.search_score >= targetScoreThreshold.value
+    )
+    
+    // Filter patterns by pattern threshold
+    const filteredPatternsList = historicalPatterns.value.filter(p => 
+      (p.search_score || 0) >= patternScoreThreshold.value
+    )
+    
+    console.log(`[Unified Options] Filtering - Targets: ${suggestions.value.length} -> ${filteredSuggestionsList.length} (threshold: ${targetScoreThreshold.value})`)
+    console.log(`[Unified Options] Filtering - Patterns: ${historicalPatterns.value.length} -> ${filteredPatternsList.length} (threshold: ${patternScoreThreshold.value})`)
+    
     // Add AI suggestions (from vector search on semantic_fields)
-    suggestions.value.forEach((s, idx) => {
+    filteredSuggestionsList.forEach((s, idx) => {
       // Determine source type based on properties
       let source: 'ai_pick' | 'pattern' | 'vector' = 'vector'
       if (s.match_quality === 'Excellent' && idx === 0) {
@@ -323,7 +356,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     
     // Add historical patterns that aren't already in suggestions
     // (patterns are from vector search on mapped_fields - similar SOURCE mappings)
-    historicalPatterns.value.forEach((p) => {
+    filteredPatternsList.forEach((p) => {
       // Check if this pattern's target is already in options
       const alreadyExists = options.some(o => 
         o.tgt_column_name.toLowerCase() === p.tgt_column_name.toLowerCase() &&
@@ -799,6 +832,10 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     detectedPatternType,
     selectedTemplatePattern,
     
+    // Threshold filters (for UI sliders)
+    targetScoreThreshold,
+    patternScoreThreshold,
+    
     // Computed
     hasSuggestions,
     hasOptions,
@@ -815,7 +852,10 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     clearSelectedTemplate,
     clearSuggestions,
     addSourceField,
-    setSourceFields
+    setSourceFields,
+    setTargetThreshold,
+    setPatternThreshold,
+    resetThresholds
   }
 })
 

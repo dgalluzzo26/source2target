@@ -87,10 +87,17 @@ class VectorSearchConfig(BaseModel):
         semantic_fields_index: Vector search index for target field matching (catalog.schema.index_name)
         mapped_fields_index: Vector search index for historical mapping patterns (catalog.schema.index_name)
         endpoint_name: Name of the vector search endpoint
+        target_score_threshold: Minimum score for target field matches (0.0-1.0, typically 0.004-0.008)
+        pattern_score_threshold: Minimum score for historical pattern matches (0.0-1.0, typically 0.002-0.005)
     """
     semantic_fields_index: str = Field(default="oztest_dev.smartmapper.semantic_fields_vs", description="Vector search index for target fields (fully qualified)")
     mapped_fields_index: str = Field(default="oztest_dev.smartmapper.mapped_fields_vs", description="Vector search index for mapping patterns (fully qualified)")
     endpoint_name: str = Field(default="s2t_vsendpoint", description="Vector search endpoint name")
+    
+    # Score thresholds for filtering vector search results
+    # These can be adjusted via UI sliders for real-time tuning
+    target_score_threshold: float = Field(default=0.0055, description="Minimum score for target matches (default 0.0055)")
+    pattern_score_threshold: float = Field(default=0.0025, description="Minimum score for pattern matches (default 0.0025)")
     
     # Legacy field for backward compatibility
     index_name: str = Field(default="oztest_dev.smartmapper.semantic_fields_vs", description="[DEPRECATED] Use semantic_fields_index instead")
