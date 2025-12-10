@@ -807,6 +807,13 @@ function handleReject(suggestion: AISuggestion) {
 
 // Handle accept from unified option
 function handleAcceptFromOption(option: UnifiedMappingOption) {
+  // "Accept Only" - explicitly clear any pre-filled SQL from prior runs
+  // User chose NOT to use transforms, so start with blank SQL
+  aiStore.recommendedExpression = ''
+  sessionStorage.removeItem('templateGeneratedSQL')
+  
+  console.log('[AI Suggestions Dialog] Accept Only - cleared recommendedExpression and sessionStorage')
+  
   // Convert unified option to AISuggestion format
   const suggestion: AISuggestion = {
     semantic_field_id: option.semantic_field_id || 0,
