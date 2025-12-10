@@ -97,35 +97,66 @@ class AIMappingServiceV3:
                 auth_type="databricks-oauth"
             )
     
-    def _build_source_query(self, source_fields: List[Dict[str, Any]]) -> str:
+    def _build_target_query(self, source_fields: List[Dict[str, Any]]) -> str:
         """
-        Build a combined query string from source fields for vector search.
+        Build query string for searching TARGETS (semantic_fields table).
         
-        Args:
-            source_fields: List of source field dictionaries
+        Must match the format of semantic_fields.semantic_field:
+        'TABLE: ... | COLUMN: ... | TYPE: ... | DESCRIPTION: ... | DOMAIN: ...'
         
-        Returns:
-            Formatted query string for vector search
+        We use the SOURCE field's description to find matching TARGET fields.
         """
-        parts = []
-        tables = set()
-        columns = []
+        # Extract source info - for target search, description is most important
         descriptions = []
         datatypes = []
         
         for field in source_fields:
-            # Use physical names for actual database references
-            tables.add(field.get('src_table_physical_name', field.get('src_table_name', '')))
-            columns.append(field.get('src_column_physical_name', field.get('src_column_name', '')))
-            descriptions.append(field.get('src_comments', '') or 'No description')
-            datatypes.append(field.get('src_physical_datatype', '') or 'UNKNOWN')
+            desc = field.get('src_comments', '') or field.get('src_column_name', '')
+            descriptions.append(desc)
+            datatypes.append(field.get('src_physical_datatype', '') or 'STRING')
         
-        return (
-            f"SOURCE TABLES: {', '.join(tables)} | "
-            f"SOURCE COLUMNS: {', '.join(columns)} | "
-            f"SOURCE DESCRIPTIONS: {' | '.join(descriptions)} | "
-            f"SOURCE TYPES: {', '.join(datatypes)}"
+        # Format to match semantic_fields.semantic_field structure
+        # The DESCRIPTION part is most important for semantic matching
+        combined_desc = ' '.join(descriptions)
+        combined_type = datatypes[0] if datatypes else 'STRING'
+        
+        query = (
+            f"DESCRIPTION: {combined_desc} | "
+            f"TYPE: {combined_type}"
         )
+        
+        print(f"[AI Mapping V3] Target query (matching semantic_field format): {query[:150]}...")
+        return query
+    
+    def _build_pattern_query(self, source_fields: List[Dict[str, Any]]) -> str:
+        """
+        Build query string for searching PATTERNS (mapped_fields table).
+        
+        Must match the format of mapped_fields.source_semantic_field:
+        'source_tables | source_columns | source_descriptions | transformations | relationship_type'
+        (No prefixes!)
+        """
+        tables = set()
+        columns = []
+        descriptions = []
+        
+        for field in source_fields:
+            # Use logical names (that's what's stored in mapped_fields)
+            tables.add(field.get('src_table_name', field.get('src_table_physical_name', '')))
+            columns.append(field.get('src_column_name', field.get('src_column_physical_name', '')))
+            descriptions.append(field.get('src_comments', '') or '')
+        
+        # Format to match mapped_fields.source_semantic_field structure (NO prefixes!)
+        query = ' | '.join([
+            ' | '.join(tables),
+            ' | '.join(columns),
+            ' | '.join(descriptions),
+            '',  # transformations - unknown for new fields
+            'SINGLE' if len(tables) == 1 else 'JOIN'
+        ])
+        
+        print(f"[AI Mapping V3] Pattern query (matching source_semantic_field format): {query[:150]}...")
+        return query
     
     # =========================================================================
     # VECTOR SEARCH: SEMANTIC FIELDS (Find matching targets)
@@ -148,8 +179,8 @@ class AIMappingServiceV3:
     #   0.003-0.004 = weak match (some word overlap)
     #   <0.003 = very weak (likely irrelevant)
     #
-    MIN_TARGET_SCORE = 0.0040  # Targets: filter weak matches, keep good+ 
-    MIN_PATTERN_SCORE = 0.0025  # Patterns: much lower to catch multi-column patterns
+    MIN_TARGET_SCORE = 0.0050  # Targets: stricter - only keep scores > 0.005 (top ~30%)
+    MIN_PATTERN_SCORE = 0.0020  # Patterns: very low to catch multi-column patterns like street_num+street_name
     
     def _vector_search_targets_sync(
         self,
@@ -681,9 +712,11 @@ Generate valid Databricks SQL. Respond in JSON:
         vs_config = self._get_vector_search_config()
         ai_config = self._get_ai_model_config()
         
-        # Build query for vector search
-        query_text = self._build_source_query(source_fields)
-        print(f"[AI Mapping V3] Query: {query_text[:100]}...")
+        # Build SEPARATE queries for each index (they have different formats!)
+        # Target query matches semantic_fields.semantic_field format
+        target_query = self._build_target_query(source_fields)
+        # Pattern query matches mapped_fields.source_semantic_field format
+        pattern_query = self._build_pattern_query(source_fields)
         
         loop = asyncio.get_event_loop()
         
@@ -692,7 +725,7 @@ Generate valid Databricks SQL. Respond in JSON:
         # =====================================================================
         print(f"[AI Mapping V3] --- Stage 1: Parallel Discovery ---")
         
-        # Vector search targets
+        # Vector search targets (using target-specific query format)
         targets_task = loop.run_in_executor(
             executor,
             functools.partial(
@@ -700,12 +733,12 @@ Generate valid Databricks SQL. Respond in JSON:
                 db_config['server_hostname'],
                 db_config['http_path'],
                 vs_config['semantic_fields_index'],
-                query_text,
+                target_query,  # Query matches semantic_fields.semantic_field format
                 num_results * 2
             )
         )
         
-        # Vector search patterns
+        # Vector search patterns (using pattern-specific query format)
         patterns_task = loop.run_in_executor(
             executor,
             functools.partial(
@@ -713,7 +746,7 @@ Generate valid Databricks SQL. Respond in JSON:
                 db_config['server_hostname'],
                 db_config['http_path'],
                 vs_config['mapped_fields_index'],
-                query_text,
+                pattern_query,  # Query matches mapped_fields.source_semantic_field format
                 num_results
             )
         )
