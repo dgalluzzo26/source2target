@@ -742,11 +742,18 @@ class MappingServiceV3:
         mapping_id: int,
         restore_to_unmapped: bool = False
     ) -> Dict[str, Any]:
-        """Delete a mapping (async wrapper)."""
+        """
+        Delete a mapping (async wrapper).
+        
+        After deleting, syncs the vector search index to remove the mapping
+        from AI pattern matching.
+        """
         db_config = self._get_db_config()
+        vs_config = self._get_vector_search_config()
         loop = asyncio.get_event_loop()
         
-        return await loop.run_in_executor(
+        # Delete the mapping
+        result = await loop.run_in_executor(
             executor,
             functools.partial(
                 self._delete_mapping_sync,
@@ -758,6 +765,20 @@ class MappingServiceV3:
                 restore_to_unmapped
             )
         )
+        
+        # Sync vector search index to remove deleted mapping from AI patterns (best-effort)
+        try:
+            await loop.run_in_executor(
+                executor,
+                functools.partial(
+                    self._sync_vector_search_index,
+                    vs_config["mapped_fields_index"]
+                )
+            )
+        except Exception as e:
+            print(f"[Mapping Service V3] VS sync after delete failed (non-fatal): {e}")
+        
+        return result
     
     # =========================================================================
     # RECORD FEEDBACK (REJECTION)
