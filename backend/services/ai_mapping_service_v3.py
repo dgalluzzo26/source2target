@@ -133,14 +133,23 @@ class AIMappingServiceV3:
     
     # Minimum score thresholds for filtering weak/irrelevant results
     # Databricks vector search returns raw cosine similarity (typically 0.001-0.01 range)
-    # Higher threshold = fewer but more relevant results
+    # 
+    # TARGETS (semantic_fields): Need good semantic match to find the RIGHT target column
+    #   - Higher threshold = fewer results but more accurate
+    #   - Example: "first name" should match "first_name" target, not "address"
+    #
+    # PATTERNS (mapped_fields): Need to find SIMILAR historical mappings for templates
+    #   - Lower threshold = more results to catch multi-column patterns
+    #   - Example: "street number" should find "street_num + street_name → address" pattern
+    #
     # Score ranges observed:
-    #   0.008+ = excellent match (same semantic meaning)
-    #   0.005-0.008 = good match (related concepts)
-    #   0.003-0.005 = weak match (some word overlap)
+    #   0.006+ = strong match (same semantic meaning)
+    #   0.004-0.006 = good match (related concepts)  
+    #   0.003-0.004 = weak match (some word overlap)
     #   <0.003 = very weak (likely irrelevant)
-    MIN_TARGET_SCORE = 0.0045  # Filter out bottom ~50% - keeps good/excellent matches
-    MIN_PATTERN_SCORE = 0.0040  # Slightly lower for patterns to catch more history
+    #
+    MIN_TARGET_SCORE = 0.0040  # Targets: filter weak matches, keep good+ 
+    MIN_PATTERN_SCORE = 0.0025  # Patterns: much lower to catch multi-column patterns
     
     def _vector_search_targets_sync(
         self,
@@ -186,29 +195,25 @@ class AIMappingServiceV3:
                 df = arrow_table.to_pandas()
                 all_results = df.to_dict('records')
                 
-                print(f"[AI Mapping V3] Vector search returned {len(all_results)} target candidates")
+                print(f"[AI Mapping V3] ========== TARGET VECTOR SEARCH ==========")
+                print(f"[AI Mapping V3] Query: {query_text[:200]}...")
+                print(f"[AI Mapping V3] Raw results: {len(all_results)}")
                 
-                # Ensure scores are floats and filter by minimum threshold
-                results = []
-                for r in all_results:
-                    if 'search_score' in r and r['search_score'] is not None:
-                        r['search_score'] = float(r['search_score'])
-                        # Only include results above minimum threshold
-                        if r['search_score'] >= self.MIN_TARGET_SCORE:
-                            results.append(r)
-                        else:
-                            print(f"[AI Mapping V3] Filtered out (low score): {r.get('tgt_column_name')} - score: {r['search_score']:.6f}")
-                    else:
-                        results.append(r)  # Include if no score (shouldn't happen)
+                # Log ALL results before filtering (for debugging)
+                print(f"[AI Mapping V3] ALL TARGET SCORES (before filter):")
+                for i, r in enumerate(all_results):
+                    score = float(r.get('search_score', 0) or 0)
+                    r['search_score'] = score  # Ensure float
+                    col = r.get('tgt_column_name', 'unknown')
+                    desc = (r.get('tgt_comments') or '')[:40]
+                    status = "✓ KEEP" if score >= self.MIN_TARGET_SCORE else "✗ FILTER"
+                    print(f"  {i+1}. [{status}] {col} - score: {score:.6f} - '{desc}'")
                 
-                print(f"[AI Mapping V3] After filtering (>= {self.MIN_TARGET_SCORE}): {len(results)} targets")
+                # Filter by minimum threshold
+                results = [r for r in all_results if r.get('search_score', 0) >= self.MIN_TARGET_SCORE]
                 
-                # Debug: print kept results with scores
-                if results:
-                    print(f"[AI Mapping V3] Top target results:")
-                    for i, r in enumerate(results[:5]):
-                        score = r.get('search_score')
-                        print(f"  {i+1}. {r.get('tgt_column_name')} - score: {score:.6f}")
+                print(f"[AI Mapping V3] After filtering (>= {self.MIN_TARGET_SCORE}): {len(results)}/{len(all_results)} targets kept")
+                print(f"[AI Mapping V3] ========================================")
                 
                 return results
                 
@@ -274,32 +279,33 @@ class AIMappingServiceV3:
                 df = arrow_table.to_pandas()
                 all_results = df.to_dict('records')
                 
-                print(f"[AI Mapping V3] Vector search returned {len(all_results)} historical patterns")
+                print(f"[AI Mapping V3] ========== PATTERN VECTOR SEARCH ==========")
+                print(f"[AI Mapping V3] Query: {query_text[:200]}...")
+                print(f"[AI Mapping V3] Raw results: {len(all_results)}")
                 
-                # Ensure scores are floats and filter by minimum threshold
-                results = []
-                for r in all_results:
-                    if 'search_score' in r and r['search_score'] is not None:
+                # Log ALL patterns before filtering (for debugging)
+                print(f"[AI Mapping V3] ALL PATTERN SCORES (before filter):")
+                for i, r in enumerate(all_results):
+                    # Ensure scores are floats
+                    if r.get('search_score') is not None:
                         r['search_score'] = float(r['search_score'])
-                    if 'confidence_score' in r and r['confidence_score'] is not None:
+                    else:
+                        r['search_score'] = 0.0
+                    if r.get('confidence_score') is not None:
                         r['confidence_score'] = float(r['confidence_score'])
                     
-                    # Filter by minimum score threshold
-                    score = r.get('search_score', 0) or 0
-                    if score >= self.MIN_PATTERN_SCORE:
-                        results.append(r)
-                    else:
-                        print(f"[AI Mapping V3] Filtered out pattern (low score): {r.get('tgt_column_name')} - score: {score:.6f}")
+                    score = r['search_score']
+                    tgt = r.get('tgt_column_name', 'unknown')
+                    src_cols = (r.get('source_columns') or '')[:30]
+                    transforms = r.get('transformations_applied') or 'none'
+                    status = "✓ KEEP" if score >= self.MIN_PATTERN_SCORE else "✗ FILTER"
+                    print(f"  {i+1}. [{status}] {tgt} <- [{src_cols}] - score: {score:.6f} - transforms: {transforms}")
                 
-                print(f"[AI Mapping V3] After filtering (>= {self.MIN_PATTERN_SCORE}): {len(results)} patterns")
+                # Filter by minimum score threshold
+                results = [r for r in all_results if r.get('search_score', 0) >= self.MIN_PATTERN_SCORE]
                 
-                # Debug: print kept pattern results
-                if results:
-                    print(f"[AI Mapping V3] Top pattern results:")
-                    for i, r in enumerate(results[:5]):
-                        score = r.get('search_score', 0)
-                        expr = (r.get('source_expression') or '')[:40]
-                        print(f"  {i+1}. {r.get('tgt_column_name')} - score: {score:.6f} - expr: {expr}")
+                print(f"[AI Mapping V3] After filtering (>= {self.MIN_PATTERN_SCORE}): {len(results)}/{len(all_results)} patterns kept")
+                print(f"[AI Mapping V3] ==========================================")
                 
                 return results
                 
