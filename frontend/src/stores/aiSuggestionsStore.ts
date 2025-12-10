@@ -236,6 +236,58 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     return { mappings, allMatched, generatedSQL }
   }
   
+  // Helper: Generate SQL directly from user's selected fields + transforms
+  // Used when merging pattern transforms onto a semantic target
+  function generateSQLForUserFields(userFields: UnmappedField[], transforms: string): string {
+    const fields = userFields.map(f => 
+      (f.src_column_physical_name || f.src_column_name || '').toLowerCase().replace(/\s+/g, '_')
+    ).filter(f => f)
+    
+    if (fields.length === 0) return ''
+    
+    const transformList = transforms.split(/[,\s]+/).map(t => t.trim().toUpperCase()).filter(t => t)
+    
+    console.log('[generateSQLForUserFields]', { fields, transformList })
+    
+    if (fields.length > 1 || transformList.includes('CONCAT')) {
+      // Multi-field: CONCAT
+      const fieldExpressions = fields.map(f => {
+        let expr = f
+        const appliedTransforms = transformList.filter(t => t !== 'CONCAT')
+        if (appliedTransforms.length === 0) {
+          expr = `TRIM(${expr})`
+        } else {
+          appliedTransforms.forEach(t => {
+            if (['TRIM', 'UPPER', 'LOWER', 'INITCAP'].includes(t)) {
+              expr = `${t}(${expr})`
+            }
+          })
+        }
+        return expr
+      })
+      return `CONCAT_WS(' ', ${fieldExpressions.join(', ')})`
+    } else {
+      // Single field
+      let expr = fields[0]
+      if (transformList.length === 0) {
+        expr = `TRIM(${expr})`
+      } else {
+        // Apply transforms in logical order: TRIM first, then case transforms
+        const orderedTransforms = [...transformList].sort((a, b) => {
+          if (a === 'TRIM') return -1
+          if (b === 'TRIM') return 1
+          return 0
+        })
+        orderedTransforms.forEach(t => {
+          if (['TRIM', 'UPPER', 'LOWER', 'INITCAP'].includes(t)) {
+            expr = `${t}(${expr})`
+          }
+        })
+      }
+      return expr
+    }
+  }
+  
   // Helper: Generate SQL from matched fields
   function generateSQLFromMappings(pattern: HistoricalPattern, mappings: SuggestedFieldMapping[]): string {
     const fields = mappings
@@ -401,10 +453,19 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       if (existingTargetIdx >= 0) {
         // MERGE: Enrich the existing target with pattern transform info
         const existing = options[existingTargetIdx]
+        
+        // For merged targets, generate SQL using USER's selected fields + pattern's transforms
+        // Don't rely on matching old pattern columns - user already selected their source!
+        let mergedSQL = ''
+        if (sourceFieldsUsed.value.length > 0 && p.transformations_applied) {
+          mergedSQL = generateSQLForUserFields(sourceFieldsUsed.value, p.transformations_applied)
+        }
+        
         console.log(`[Unified Options] MERGING pattern into target ${p.tgt_column_name}:`, {
           existingSource: existing.source,
           transforms: p.transformations_applied,
-          generatedSQL: generatedSQL?.substring(0, 50)
+          userFields: sourceFieldsUsed.value.map(f => f.src_column_physical_name),
+          generatedSQL: mergedSQL?.substring(0, 50)
         })
         
         // Add pattern info to the target
@@ -413,8 +474,8 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         existing.sourceColumns = p.source_columns
         existing.isMultiColumn = p.isMultiColumn
         existing.suggestedMappings = mappings
-        existing.allFieldsMatched = allMatched
-        existing.generatedSQL = generatedSQL
+        existing.allFieldsMatched = allMatched || sourceFieldsUsed.value.length > 0
+        existing.generatedSQL = mergedSQL || generatedSQL  // Prefer mergedSQL
         existing.hasMatchingPattern = true  // Flag to show transform info in UI
         
         // Update reasoning to include pattern info
