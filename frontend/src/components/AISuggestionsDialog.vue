@@ -86,13 +86,36 @@
             <i class="pi pi-list"></i>
             Recommended Mappings
           </h3>
-          <span class="options-count">{{ aiStore.unifiedOptions.length }} options found</span>
+          <div class="options-header-right">
+            <span class="options-count">{{ filteredOptions.length }} options shown</span>
+            
+            <!-- Weak Results Toggle -->
+            <div v-if="weakResultsCount > 0" class="weak-toggle">
+              <label class="weak-toggle-label" @click="showWeakResults = !showWeakResults">
+                <i :class="showWeakResults ? 'pi pi-eye' : 'pi pi-eye-slash'"></i>
+                <span v-if="showWeakResults">Hide {{ weakResultsCount }} weak</span>
+                <span v-else>Show {{ weakResultsCount }} weak</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <!-- No Strong Results Message -->
+        <div v-if="filteredOptions.length === 0 && weakResultsCount > 0" class="no-strong-results">
+          <i class="pi pi-info-circle"></i>
+          <span>
+            No strong matches found. 
+            <a href="#" @click.prevent="showWeakResults = true">
+              Show {{ weakResultsCount }} weak result{{ weakResultsCount > 1 ? 's' : '' }}
+            </a>
+            to see available options.
+          </span>
         </div>
         
         <!-- Options List -->
         <div class="options-list">
           <div 
-            v-for="option in aiStore.unifiedOptions.slice(0, 15)" 
+            v-for="option in filteredOptions.slice(0, 15)" 
             :key="option.id"
             class="option-card"
             :class="[
@@ -587,6 +610,28 @@ const showPatternDetails = ref(true)  // Default to expanded for better UX
 
 // Template dialog state
 const showTemplateDialog = ref(false)
+
+// Weak results filter - hide by default to reduce noise
+const showWeakResults = ref(false)
+
+// Filtered options - hide weak results unless user toggles to show them
+const filteredOptions = computed(() => {
+  const allOptions = aiStore.unifiedOptions
+  if (showWeakResults.value) {
+    return allOptions
+  }
+  return allOptions.filter(opt => opt.matchQuality !== 'Weak')
+})
+
+// Count of hidden weak results (to show in toggle)
+const weakResultsCount = computed(() => {
+  return aiStore.unifiedOptions.filter(opt => opt.matchQuality === 'Weak').length
+})
+
+// Count of visible (non-weak) results
+const visibleResultsCount = computed(() => {
+  return aiStore.unifiedOptions.filter(opt => opt.matchQuality !== 'Weak').length
+})
 
 // Loading stage simulation (1=targets, 2=patterns, 3=LLM)
 const loadingStage = ref(1)
@@ -1298,9 +1343,73 @@ function handleClose() {
   color: var(--gainwell-primary);
 }
 
+.unified-options-section .options-header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .unified-options-section .options-count {
   color: var(--text-color-secondary);
   font-size: 0.9rem;
+}
+
+/* Weak Results Toggle */
+.weak-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.weak-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--orange-600);
+  cursor: pointer;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  background: var(--orange-50);
+  border: 1px solid var(--orange-200);
+  transition: all 0.2s ease;
+}
+
+.weak-toggle-label:hover {
+  background: var(--orange-100);
+  border-color: var(--orange-300);
+}
+
+.weak-toggle-label i {
+  font-size: 0.9rem;
+}
+
+/* No Strong Results Message */
+.no-strong-results {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: var(--blue-50);
+  border: 1px solid var(--blue-200);
+  border-radius: 8px;
+  color: var(--blue-700);
+  margin-bottom: 1rem;
+}
+
+.no-strong-results i {
+  font-size: 1.25rem;
+  color: var(--blue-500);
+}
+
+.no-strong-results a {
+  color: var(--blue-600);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.no-strong-results a:hover {
+  color: var(--blue-800);
 }
 
 .options-list {
