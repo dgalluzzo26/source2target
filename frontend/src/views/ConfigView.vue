@@ -321,45 +321,43 @@
 
             <div class="field threshold-field">
               <label for="target_threshold">
-                Target Field Threshold: <strong>{{ formatThreshold(config.vector_search.target_score_threshold) }}</strong>
+                Target Threshold: <strong>{{ config.vector_search.target_score_threshold.toFixed(3) }}</strong>
               </label>
               <div class="slider-container">
                 <span class="slider-label">More Results</span>
                 <Slider 
                   id="target_threshold"
                   v-model="config.vector_search.target_score_threshold"
-                  :min="0.002"
-                  :max="0.010"
-                  :step="0.0005"
+                  :min="0"
+                  :max="0.050"
+                  :step="0.001"
                   class="threshold-slider"
                 />
                 <span class="slider-label">More Precise</span>
               </div>
               <small>
-                Controls filtering of TARGET field matches (semantic_fields search).
-                Default: 0.0055. Higher = fewer but more accurate matches.
+                0-0.050. Default: 0.015. Excellent: ≥0.035 | Strong: ≥0.020 | Good: ≥0.012
               </small>
             </div>
 
             <div class="field threshold-field">
               <label for="pattern_threshold">
-                Pattern Threshold: <strong>{{ formatThreshold(config.vector_search.pattern_score_threshold) }}</strong>
+                Pattern Threshold: <strong>{{ config.vector_search.pattern_score_threshold.toFixed(3) }}</strong>
               </label>
               <div class="slider-container">
                 <span class="slider-label">More Patterns</span>
                 <Slider 
                   id="pattern_threshold"
                   v-model="config.vector_search.pattern_score_threshold"
-                  :min="0.001"
-                  :max="0.008"
-                  :step="0.0005"
+                  :min="0"
+                  :max="0.040"
+                  :step="0.001"
                   class="threshold-slider"
                 />
                 <span class="slider-label">More Precise</span>
               </div>
               <small>
-                Controls filtering of historical PATTERNS (mapped_fields search).
-                Default: 0.0025. Lower allows multi-column patterns to be found.
+                0-0.040. Default: 0.010. Lower = more historical patterns shown.
               </small>
             </div>
 
@@ -615,8 +613,8 @@ const config = ref({
     semantic_fields_index: 'oztest_dev.smartmapper.semantic_fields_vs',
     mapped_fields_index: 'oztest_dev.smartmapper.mapped_fields_vs',
     endpoint_name: 's2t_vsendpoint',
-    target_score_threshold: 0.0055,
-    pattern_score_threshold: 0.0025
+    target_score_threshold: 0.015,
+    pattern_score_threshold: 0.010
   },
   security: {
     admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
@@ -754,8 +752,8 @@ const resetConfiguration = async () => {
         semantic_fields_index: 'oztest_dev.smartmapper.semantic_fields_vs',
         mapped_fields_index: 'oztest_dev.smartmapper.mapped_fields_vs',
         endpoint_name: 's2t_vsendpoint',
-        target_score_threshold: 0.0055,
-        pattern_score_threshold: 0.0025
+        target_score_threshold: 0.015,
+        pattern_score_threshold: 0.010
       },
       security: {
         admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
@@ -768,17 +766,11 @@ const resetConfiguration = async () => {
   }, 1000)
 }
 
-// Format threshold for display (e.g., 0.0055 -> "0.0055")
-const formatThreshold = (value: number | undefined): string => {
-  if (value === undefined || value === null) return '0.0000'
-  return value.toFixed(4)
-}
-
-// Reset thresholds to recommended defaults
+// Reset thresholds to recommended defaults (calibrated for new semantic_field format)
 const resetThresholds = () => {
-  config.value.vector_search.target_score_threshold = 0.0055
-  config.value.vector_search.pattern_score_threshold = 0.0025
-  console.log('Thresholds reset to defaults: target=0.0055, pattern=0.0025')
+  config.value.vector_search.target_score_threshold = 0.015
+  config.value.vector_search.pattern_score_threshold = 0.010
+  console.log('Thresholds reset to defaults: target=0.015, pattern=0.010')
 }
 
 onMounted(() => {

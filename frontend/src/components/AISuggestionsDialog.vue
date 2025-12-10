@@ -90,37 +90,37 @@
             <div class="threshold-controls">
               <div class="threshold-field">
                 <label>
-                  Target Match Threshold: <strong>{{ aiStore.targetScoreThreshold.toFixed(4) }}</strong>
+                  Target Threshold: <strong>{{ (localTargetThreshold * 0.001).toFixed(3) }}</strong>
                 </label>
                 <div class="slider-row">
                   <span class="slider-label">More</span>
                   <Slider 
-                    v-model="aiStore.targetScoreThreshold"
-                    :min="0.002"
-                    :max="0.010"
-                    :step="0.0005"
+                    v-model="localTargetThreshold"
+                    :min="0"
+                    :max="50"
+                    :step="1"
                     class="threshold-slider"
                   />
                   <span class="slider-label">Fewer</span>
                 </div>
-                <small>Controls target field matches from semantic search</small>
+                <small>0-50 (×0.001) | Excellent: ≥0.035 | Strong: ≥0.020 | Good: ≥0.012</small>
               </div>
               <div class="threshold-field">
                 <label>
-                  Pattern Threshold: <strong>{{ aiStore.patternScoreThreshold.toFixed(4) }}</strong>
+                  Pattern Threshold: <strong>{{ (localPatternThreshold * 0.001).toFixed(3) }}</strong>
                 </label>
                 <div class="slider-row">
                   <span class="slider-label">More</span>
                   <Slider 
-                    v-model="aiStore.patternScoreThreshold"
-                    :min="0.001"
-                    :max="0.008"
-                    :step="0.0005"
+                    v-model="localPatternThreshold"
+                    :min="0"
+                    :max="40"
+                    :step="1"
                     class="threshold-slider"
                   />
                   <span class="slider-label">Fewer</span>
                 </div>
-                <small>Controls historical pattern matches (lower = more patterns)</small>
+                <small>0-40 (×0.001) | Default: 10 (0.010) | Lower = more patterns</small>
               </div>
               <Button 
                 label="Reset to Defaults"
@@ -128,7 +128,7 @@
                 severity="secondary"
                 text
                 size="small"
-                @click="aiStore.resetThresholds()"
+                @click="resetLocalThresholds"
               />
             </div>
           </AccordionTab>
@@ -583,6 +583,32 @@ const aiStore = useAISuggestionsStore()
 const unmappedStore = useUnmappedFieldsStore()
 const userStore = useUserStore()
 const toast = useToast()
+
+// Local threshold values (integer slider for easier control)
+// Slider 0-50 for targets, 0-40 for patterns
+// Multiply by 0.001 to get actual threshold value
+const localTargetThreshold = ref(Math.round(aiStore.targetScoreThreshold * 1000))
+const localPatternThreshold = ref(Math.round(aiStore.patternScoreThreshold * 1000))
+
+// Watch local sliders and update store (which triggers filtering)
+watch(localTargetThreshold, (newVal) => {
+  const actualThreshold = newVal * 0.001
+  console.log(`[Threshold Filter] Target threshold changed: slider=${newVal}, actual=${actualThreshold.toFixed(3)}`)
+  aiStore.setTargetThreshold(actualThreshold)
+})
+
+watch(localPatternThreshold, (newVal) => {
+  const actualThreshold = newVal * 0.001
+  console.log(`[Threshold Filter] Pattern threshold changed: slider=${newVal}, actual=${actualThreshold.toFixed(3)}`)
+  aiStore.setPatternThreshold(actualThreshold)
+})
+
+// Reset local thresholds (calibrated for new semantic_field format)
+function resetLocalThresholds() {
+  localTargetThreshold.value = 15  // 0.015 default
+  localPatternThreshold.value = 10  // 0.010 default
+  aiStore.resetThresholds()
+}
 
 // Available unmapped fields for template slot filling
 const availableUnmappedFields = computed(() => {

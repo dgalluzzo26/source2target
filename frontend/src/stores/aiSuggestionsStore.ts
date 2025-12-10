@@ -114,8 +114,19 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   
   // Threshold filters (adjustable via UI sliders)
   // These filter the raw results in unifiedOptions computed property
-  const targetScoreThreshold = ref(0.0055)  // For semantic_fields (targets)
-  const patternScoreThreshold = ref(0.0025)  // For mapped_fields (patterns)
+  // NEW: With simplified semantic_field (DESCRIPTION + TYPE only), scores are 7-10x higher
+  // Slider range: 0-50 (x0.001) for targets, 0-40 (x0.001) for patterns
+  const targetScoreThreshold = ref(0.015)  // Default: slider=15, actual=0.015
+  const patternScoreThreshold = ref(0.010)  // Default: slider=10, actual=0.010
+  
+  // Match quality thresholds (calibrated for new semantic_field format)
+  // Based on observed scores: top=0.043, 2nd=0.012, noise=0.006
+  const QUALITY_THRESHOLDS = {
+    excellent: 0.035,  // Top-tier semantic match
+    strong: 0.020,     // Clear semantic match
+    good: 0.012,       // Related/secondary match
+    weak: 0.006        // Distant match (borderline)
+  }
   
   // Track top score for relative quality calculation (used by getMatchQuality)
   let topVectorScore = 0
@@ -138,8 +149,9 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   }
   
   function resetThresholds() {
-    targetScoreThreshold.value = 0.0055
-    patternScoreThreshold.value = 0.0025
+    targetScoreThreshold.value = 0.015  // slider=15
+    patternScoreThreshold.value = 0.010  // slider=10
+    console.log('[AI Suggestions] Thresholds reset to defaults: target=0.015, pattern=0.010')
   }
   
   // Multi-column patterns from historical data
@@ -420,18 +432,13 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     options.forEach((opt, idx) => {
       opt.rank = idx + 1
       
-      // If quality wasn't already set (patterns come in as Unknown), set by rank
+      // If quality wasn't already set (patterns come in as Unknown), set by score
       if (opt.matchQuality === 'Unknown') {
-        // Rank-based quality for consistency
-        if (opt.rank === 1) opt.matchQuality = 'Excellent'
-        else if (opt.rank <= 3) opt.matchQuality = 'Strong'
-        else if (opt.rank <= 6) opt.matchQuality = 'Good'
+        // Score-based quality using new calibrated thresholds
+        if (opt.score >= QUALITY_THRESHOLDS.excellent) opt.matchQuality = 'Excellent'
+        else if (opt.score >= QUALITY_THRESHOLDS.strong) opt.matchQuality = 'Strong'
+        else if (opt.score >= QUALITY_THRESHOLDS.good) opt.matchQuality = 'Good'
         else opt.matchQuality = 'Weak'
-      }
-      
-      // Boost pattern quality if it's in top 5 (patterns are valuable context)
-      if (opt.source === 'pattern' && opt.rank <= 5 && opt.matchQuality === 'Weak') {
-        opt.matchQuality = 'Good'
       }
     })
     
@@ -642,10 +649,9 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     return rawScore
   }
   
-  // Helper: Convert score to match quality using HYBRID scoring
-  // Combines:
-  // 1. ABSOLUTE threshold - if top score is low, cap quality levels
-  // 2. RELATIVE position - distance from top score determines tier within cap
+  // Helper: Convert score to match quality using ABSOLUTE thresholds
+  // Calibrated for NEW semantic_field format (DESCRIPTION + TYPE only)
+  // Observed scores: top=0.043, 2nd=0.012, noise=0.006
   function getMatchQuality(score: number, isBestTarget: boolean, rank?: number): 'Excellent' | 'Strong' | 'Good' | 'Weak' | 'Unknown' {
     // LLM's best target always gets Excellent (AI validated this match)
     if (isBestTarget) return 'Excellent'
@@ -656,53 +662,28 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       return 'Unknown'
     }
     
-    // Determine the quality CAP based on the absolute top score
-    // This ensures weak vector search results don't show misleading "Strong" ratings
-    let maxQuality: 'Strong' | 'Good' | 'Weak' = 'Weak'
-    if (topVectorScore >= 0.50) {
-      maxQuality = 'Strong'  // Top score is solid - allow Strong for rank 1
-    } else if (topVectorScore >= 0.35) {
-      maxQuality = 'Good'    // Top score is moderate - cap at Good
+    // ABSOLUTE thresholds based on new semantic_field format
+    // These are the RAW scores from vector search (not normalized)
+    let quality: 'Excellent' | 'Strong' | 'Good' | 'Weak' = 'Weak'
+    
+    if (score >= QUALITY_THRESHOLDS.excellent) {
+      quality = 'Excellent'  // 0.035+ = top-tier semantic match
+    } else if (score >= QUALITY_THRESHOLDS.strong) {
+      quality = 'Strong'     // 0.020+ = clear semantic match
+    } else if (score >= QUALITY_THRESHOLDS.good) {
+      quality = 'Good'       // 0.012+ = related/secondary match
+    } else if (score >= QUALITY_THRESHOLDS.weak) {
+      quality = 'Weak'       // 0.006+ = distant match
     } else {
-      maxQuality = 'Weak'    // Top score is weak - all results are Weak
+      quality = 'Weak'       // Below 0.006 = noise (should be filtered)
     }
-    
-    // Now determine quality within the cap using rank
-    let quality: 'Strong' | 'Good' | 'Weak' = 'Weak'
-    
-    if (rank !== undefined) {
-      // Rank-based quality (relative positioning)
-      if (rank === 1) {
-        quality = 'Strong'
-      } else if (rank <= 3) {
-        quality = 'Good'
-      } else {
-        quality = 'Weak'
-      }
-    } else if (topVectorScore > 0 && score > 0) {
-      // Fallback: Use score ratio
-      const relativeScore = score / topVectorScore
-      if (relativeScore >= 0.98) {
-        quality = 'Strong'
-      } else if (relativeScore >= 0.90) {
-        quality = 'Good'
-      } else {
-        quality = 'Weak'
-      }
-    }
-    
-    // Apply the cap - quality cannot exceed maxQuality
-    const qualityOrder = ['Weak', 'Good', 'Strong'] as const
-    const qualityIdx = qualityOrder.indexOf(quality)
-    const maxIdx = qualityOrder.indexOf(maxQuality)
-    const cappedQuality = qualityOrder[Math.min(qualityIdx, maxIdx)]
     
     // Debug log for first few
-    if (rank && rank <= 3) {
-      console.log(`[AI Suggestions] Quality for rank ${rank}: topScore=${topVectorScore.toFixed(3)}, maxQuality=${maxQuality}, rawQuality=${quality}, capped=${cappedQuality}`)
+    if (rank && rank <= 5) {
+      console.log(`[AI Suggestions] Quality for rank ${rank}: score=${score.toFixed(4)}, quality=${quality}`)
     }
     
-    return cappedQuality
+    return quality
   }
   
   // Helper: Process historical patterns to detect multi-column mappings

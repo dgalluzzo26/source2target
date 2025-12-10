@@ -96,8 +96,8 @@ class VectorSearchConfig(BaseModel):
     
     # Score thresholds for filtering vector search results
     # These can be adjusted via UI sliders for real-time tuning
-    target_score_threshold: float = Field(default=0.0055, description="Minimum score for target matches (default 0.0055)")
-    pattern_score_threshold: float = Field(default=0.0025, description="Minimum score for pattern matches (default 0.0025)")
+    target_score_threshold: float = Field(default=0.015, description="Minimum score for target matches (default 0.015)")
+    pattern_score_threshold: float = Field(default=0.010, description="Minimum score for pattern matches (default 0.010)")
     
     # Legacy field for backward compatibility
     index_name: str = Field(default="oztest_dev.smartmapper.semantic_fields_vs", description="[DEPRECATED] Use semantic_fields_index instead")

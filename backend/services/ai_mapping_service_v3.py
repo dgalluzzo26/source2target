@@ -101,12 +101,12 @@ class AIMappingServiceV3:
         """
         Build query string for searching TARGETS (semantic_fields table).
         
-        Must match the format of semantic_fields.semantic_field:
-        'TABLE: ... | COLUMN: ... | TYPE: ... | DESCRIPTION: ... | DOMAIN: ...'
+        NEW FORMAT: Must match semantic_fields.semantic_field:
+        'DESCRIPTION: ... | TYPE: ...'
         
-        We use the SOURCE field's description to find matching TARGET fields.
+        Simplified format removes TABLE/COLUMN/DOMAIN noise that hurts matching.
+        DESCRIPTION is the key for semantic similarity.
         """
-        # Extract source info - for target search, description is most important
         descriptions = []
         datatypes = []
         
@@ -115,47 +115,38 @@ class AIMappingServiceV3:
             descriptions.append(desc)
             datatypes.append(field.get('src_physical_datatype', '') or 'STRING')
         
-        # Format to match semantic_fields.semantic_field structure
-        # The DESCRIPTION part is most important for semantic matching
         combined_desc = ' '.join(descriptions)
         combined_type = datatypes[0] if datatypes else 'STRING'
         
-        query = (
-            f"DESCRIPTION: {combined_desc} | "
-            f"TYPE: {combined_type}"
-        )
+        query = f"DESCRIPTION: {combined_desc} | TYPE: {combined_type}"
         
-        print(f"[AI Mapping V3] Target query (matching semantic_field format): {query[:150]}...")
+        print(f"[AI Mapping V3] Target query: {query[:150]}...")
         return query
     
     def _build_pattern_query(self, source_fields: List[Dict[str, Any]]) -> str:
         """
         Build query string for searching PATTERNS (mapped_fields table).
         
-        Must match the format of mapped_fields.source_semantic_field:
-        'source_tables | source_columns | source_descriptions | transformations | relationship_type'
-        (No prefixes!)
+        NEW FORMAT: Must match mapped_fields.source_semantic_field:
+        'DESCRIPTION: ... | TYPE: ...'
+        
+        Simplified format - same as target search.
+        Finds similar source fields that were mapped before.
         """
-        tables = set()
-        columns = []
         descriptions = []
+        datatypes = []
         
         for field in source_fields:
-            # Use logical names (that's what's stored in mapped_fields)
-            tables.add(field.get('src_table_name', field.get('src_table_physical_name', '')))
-            columns.append(field.get('src_column_name', field.get('src_column_physical_name', '')))
-            descriptions.append(field.get('src_comments', '') or '')
+            desc = field.get('src_comments', '') or field.get('src_column_name', '')
+            descriptions.append(desc)
+            datatypes.append(field.get('src_physical_datatype', '') or 'STRING')
         
-        # Format to match mapped_fields.source_semantic_field structure (NO prefixes!)
-        query = ' | '.join([
-            ' | '.join(tables),
-            ' | '.join(columns),
-            ' | '.join(descriptions),
-            '',  # transformations - unknown for new fields
-            'SINGLE' if len(tables) == 1 else 'JOIN'
-        ])
+        combined_desc = ' '.join(descriptions)
+        combined_type = datatypes[0] if datatypes else 'STRING'
         
-        print(f"[AI Mapping V3] Pattern query (matching source_semantic_field format): {query[:150]}...")
+        query = f"DESCRIPTION: {combined_desc} | TYPE: {combined_type}"
+        
+        print(f"[AI Mapping V3] Pattern query: {query[:150]}...")
         return query
     
     # =========================================================================
