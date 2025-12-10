@@ -97,6 +97,9 @@ export interface UnifiedMappingOption {
   suggestedMappings?: SuggestedFieldMapping[]
   allFieldsMatched?: boolean
   generatedSQL?: string
+  
+  // Flag when a semantic target also has a matching pattern with transforms
+  hasMatchingPattern?: boolean
 }
 
 export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
@@ -382,24 +385,47 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       })
     })
     
-    // Add historical patterns that aren't already in suggestions
+    // Add historical patterns - either merge with existing target or add as new option
     // (patterns are from vector search on mapped_fields - similar SOURCE mappings)
     filteredPatternsList.forEach((p) => {
-      // Check if this pattern's target is already in options
-      const alreadyExists = options.some(o => 
+      // Check if this pattern's target already exists as a semantic target
+      const existingTargetIdx = options.findIndex(o => 
         o.tgt_column_name.toLowerCase() === p.tgt_column_name.toLowerCase() &&
-        o.tgt_table_name.toLowerCase() === p.tgt_table_name.toLowerCase()
+        o.tgt_table_name.toLowerCase() === p.tgt_table_name.toLowerCase() &&
+        o.source !== 'pattern'  // Only merge into non-pattern options (targets)
       )
       
-      if (!alreadyExists) {
-        // Use normalized search_score (already x100 from processPatterns)
-        // Combined with templateRelevance for better ranking
+      // Auto-match pattern fields to user's selected fields
+      const { mappings, allMatched, generatedSQL } = autoMatchPatternFields(p)
+      
+      if (existingTargetIdx >= 0) {
+        // MERGE: Enrich the existing target with pattern transform info
+        const existing = options[existingTargetIdx]
+        console.log(`[Unified Options] MERGING pattern into target ${p.tgt_column_name}:`, {
+          existingSource: existing.source,
+          transforms: p.transformations_applied,
+          generatedSQL: generatedSQL?.substring(0, 50)
+        })
+        
+        // Add pattern info to the target
+        existing.transformations = p.transformations_applied
+        existing.pattern = p
+        existing.sourceColumns = p.source_columns
+        existing.isMultiColumn = p.isMultiColumn
+        existing.suggestedMappings = mappings
+        existing.allFieldsMatched = allMatched
+        existing.generatedSQL = generatedSQL
+        existing.hasMatchingPattern = true  // Flag to show transform info in UI
+        
+        // Update reasoning to include pattern info
+        if (p.transformations_applied) {
+          existing.reasoning = `${existing.reasoning || ''} | Similar mappings typically use: ${p.transformations_applied}`.trim()
+        }
+      } else {
+        // ADD: New pattern-only option (no matching semantic target)
         const score = Math.max(p.search_score || 0, p.templateRelevance || 0)
         
-        // Auto-match pattern fields to user's selected fields
-        const { mappings, allMatched, generatedSQL } = autoMatchPatternFields(p)
-        
-        console.log(`[Unified Options] Adding pattern ${p.tgt_column_name}:`, {
+        console.log(`[Unified Options] Adding NEW pattern ${p.tgt_column_name}:`, {
           search_score: p.search_score,
           templateRelevance: p.templateRelevance,
           finalScore: score,

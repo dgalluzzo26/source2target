@@ -163,7 +163,28 @@
                 <span>{{ option.tgt_comments }}</span>
               </div>
               
-              <!-- Pattern details with suggested mappings -->
+              <!-- Pattern transforms for TARGETS that have a matching pattern -->
+              <div v-if="option.hasMatchingPattern && option.transformations" class="pattern-enrichment">
+                <div class="enrichment-header">
+                  <i class="pi pi-history"></i>
+                  <span>Similar past mappings use:</span>
+                </div>
+                <div class="enrichment-transforms">
+                  <Tag 
+                    v-for="transform in option.transformations.split(',').map(t => t.trim())" 
+                    :key="transform"
+                    :value="transform"
+                    severity="info"
+                    size="small"
+                    class="transform-tag"
+                  />
+                </div>
+                <div v-if="option.generatedSQL" class="enrichment-sql">
+                  <code>{{ truncateSQL(option.generatedSQL, 60) }}</code>
+                </div>
+              </div>
+              
+              <!-- Pattern details with suggested mappings (for pattern-only items) -->
               <div v-if="option.source === 'pattern' && option.pattern" class="pattern-info-enhanced">
                 <!-- Suggested Field Mappings -->
                 <div v-if="option.suggestedMappings && option.suggestedMappings.length > 0" class="suggested-mappings">
@@ -255,13 +276,24 @@
               
               <!-- For AI/Vector suggestions - Accept/Reject -->
               <template v-else>
+                <!-- Show "Apply with Transforms" if target has matching pattern -->
                 <Button
-                  label="Accept"
-                  icon="pi pi-check"
+                  v-if="option.hasMatchingPattern && option.generatedSQL"
+                  label="Apply with Transforms"
+                  icon="pi pi-bolt"
                   size="small"
                   severity="success"
+                  @click="handleApplyWithTransforms(option)"
+                  v-tooltip.top="`Apply using: ${option.transformations}`"
+                />
+                <Button
+                  :label="option.hasMatchingPattern ? 'Accept Only' : 'Accept'"
+                  icon="pi pi-check"
+                  size="small"
+                  :severity="option.hasMatchingPattern ? 'secondary' : 'success'"
+                  :outlined="option.hasMatchingPattern"
                   @click="handleAcceptFromOption(option)"
-                  v-tooltip.top="'Accept this suggestion and continue with mapping'"
+                  v-tooltip.top="option.hasMatchingPattern ? 'Accept without transforms' : 'Accept this suggestion'"
                 />
                 <Button
                   label="Reject"
@@ -855,6 +887,51 @@ function handleApplySuggestedMapping(option: UnifiedMappingOption) {
   router.push({ name: 'mapping-config' })
 }
 
+// Handle apply with transforms (for targets that have matching patterns)
+function handleApplyWithTransforms(option: UnifiedMappingOption) {
+  console.log('[AI Suggestions Dialog] === Applying Target with Transforms ===')
+  console.log('[AI Suggestions Dialog] Target:', option.tgt_column_name)
+  console.log('[AI Suggestions Dialog] Transforms:', option.transformations)
+  console.log('[AI Suggestions Dialog] Generated SQL:', option.generatedSQL)
+  
+  // Mark as accepting to prevent store clear
+  acceptedSuggestion.value = true
+  
+  // Create suggestion with transform info
+  const suggestion: AISuggestion = {
+    semantic_field_id: option.semantic_field_id || 0,
+    tgt_table_name: option.tgt_table_name,
+    tgt_table_physical_name: option.tgt_table_physical_name,
+    tgt_column_name: option.tgt_column_name,
+    tgt_column_physical_name: option.tgt_column_physical_name,
+    tgt_comments: option.tgt_comments,
+    search_score: option.score,
+    match_quality: option.matchQuality,
+    ai_reasoning: `${option.reasoning} | Transforms: ${option.transformations}`,
+    rank: option.rank,
+    fromPattern: true
+  }
+  
+  aiStore.selectSuggestion(suggestion)
+  
+  // Store the generated SQL from the pattern
+  aiStore.recommendedExpression = option.generatedSQL || ''
+  sessionStorage.setItem('templateGeneratedSQL', option.generatedSQL || '')
+  
+  console.log('[AI Suggestions Dialog] Stored SQL:', option.generatedSQL)
+  
+  toast.add({
+    severity: 'success',
+    summary: 'Transforms Applied',
+    detail: `Using: ${option.transformations}`,
+    life: 3000
+  })
+  
+  // Close and navigate
+  isVisible.value = false
+  router.push({ name: 'mapping-config' })
+}
+
 // Helper: Truncate SQL for preview
 function truncateSQL(sql: string, maxLen: number): string {
   if (!sql) return ''
@@ -1400,6 +1477,57 @@ function handleClose() {
   color: var(--gainwell-secondary);
   margin-top: 0.15rem;
   flex-shrink: 0;
+}
+
+/* Pattern Enrichment for Targets with matching patterns */
+.pattern-enrichment {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border-radius: 8px;
+  border: 1px solid #86efac;
+  margin-top: 0.5rem;
+}
+
+.enrichment-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #166534;
+  font-weight: 500;
+}
+
+.enrichment-header i {
+  color: #22c55e;
+}
+
+.enrichment-transforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.enrichment-transforms .transform-tag {
+  background: #22c55e;
+  color: white;
+}
+
+.enrichment-sql {
+  margin-top: 0.25rem;
+}
+
+.enrichment-sql code {
+  display: block;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: #166534;
+  border: 1px solid #bbf7d0;
 }
 
 /* Enhanced Pattern Info with Suggested Mappings */
