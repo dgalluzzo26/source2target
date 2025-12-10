@@ -112,12 +112,10 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const detectedPatternType = ref<string>('SINGLE')
   const selectedTemplatePattern = ref<HistoricalPattern | null>(null)  // User-selected pattern to use as template
   
-  // Threshold filters (adjustable via UI sliders)
-  // These filter the raw results in unifiedOptions computed property
-  // NEW: With simplified semantic_field (DESCRIPTION + TYPE only), scores are 7-10x higher
-  // Slider range: 0-50 (x0.001) for targets, 0-40 (x0.001) for patterns
-  const targetScoreThreshold = ref(0.015)  // Default: slider=15, actual=0.015
-  const patternScoreThreshold = ref(0.010)  // Default: slider=10, actual=0.010
+  // Threshold filters - set to 0 to show all results (no filtering)
+  // Quality labels (Excellent/Strong/Good/Weak) still indicate match quality
+  const targetScoreThreshold = ref(0)  // Show all target results
+  const patternScoreThreshold = ref(0)  // Show all pattern results
   
   // Match quality thresholds (calibrated for new semantic_field format)
   // Based on observed scores: top=0.043, 2nd=0.012, noise=0.006
@@ -149,9 +147,9 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   }
   
   function resetThresholds() {
-    targetScoreThreshold.value = 0.015  // slider=15
-    patternScoreThreshold.value = 0.010  // slider=10
-    console.log('[AI Suggestions] Thresholds reset to defaults: target=0.015, pattern=0.010')
+    targetScoreThreshold.value = 0  // Show all
+    patternScoreThreshold.value = 0  // Show all
+    console.log('[AI Suggestions] Thresholds reset to 0 (show all results)')
   }
   
   // Multi-column patterns from historical data
