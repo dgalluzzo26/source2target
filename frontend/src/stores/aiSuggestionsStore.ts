@@ -112,10 +112,11 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const detectedPatternType = ref<string>('SINGLE')
   const selectedTemplatePattern = ref<HistoricalPattern | null>(null)  // User-selected pattern to use as template
   
-  // Threshold filters - set to 0 to show all results (no filtering)
-  // Quality labels (Excellent/Strong/Good/Weak) still indicate match quality
-  const targetScoreThreshold = ref(0)  // Show all target results
-  const patternScoreThreshold = ref(0)  // Show all pattern results
+  // Hybrid filtering thresholds
+  // 1. Absolute minimum - filter obvious noise
+  // 2. Relative threshold - filter results too far from top score
+  const ABSOLUTE_MIN_SCORE = 0.003  // Minimum score to show
+  const RELATIVE_THRESHOLD = 0.25   // Must be at least 25% of top score
   
   // Match quality thresholds (calibrated for new semantic_field format)
   // Based on observed scores: top=0.043, 2nd=0.012, noise=0.006
@@ -137,20 +138,8 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const hasRelevantTemplates = computed(() => patternTemplates.value.length > 0)
   const topTemplate = computed(() => patternTemplates.value[0] || null)
   
-  // Threshold setters for UI sliders (unifiedOptions auto-updates via reactivity)
-  function setTargetThreshold(value: number) {
-    targetScoreThreshold.value = value
-  }
-  
-  function setPatternThreshold(value: number) {
-    patternScoreThreshold.value = value
-  }
-  
-  function resetThresholds() {
-    targetScoreThreshold.value = 0  // Show all
-    patternScoreThreshold.value = 0  // Show all
-    console.log('[AI Suggestions] Thresholds reset to 0 (show all results)')
-  }
+  // Hybrid filtering is automatic - no manual threshold setters needed
+  // Constants ABSOLUTE_MIN_SCORE (0.003) and RELATIVE_THRESHOLD (0.25) control filtering
   
   // Multi-column patterns from historical data
   const multiColumnPatterns = computed(() => {
@@ -321,22 +310,51 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   }
   
   // Unified ranked list combining AI suggestions and historical patterns
-  // Applies threshold filtering from UI sliders
+  // Uses HYBRID filtering: absolute minimum + relative to top score
   const unifiedOptions = computed((): UnifiedMappingOption[] => {
     const options: UnifiedMappingOption[] = []
     
-    // Filter suggestions by target threshold
-    const filteredSuggestionsList = suggestions.value.filter(s => 
-      s.search_score >= targetScoreThreshold.value
-    )
+    // Log raw counts
+    console.log(`[Unified Options] Raw suggestions: ${suggestions.value.length}, Raw patterns: ${historicalPatterns.value.length}`)
     
-    // Filter patterns by pattern threshold
-    const filteredPatternsList = historicalPatterns.value.filter(p => 
-      (p.search_score || 0) >= patternScoreThreshold.value
-    )
+    // Find top scores for relative filtering
+    const topTargetScore = suggestions.value.length > 0 
+      ? Math.max(...suggestions.value.map(s => s.search_score ?? 0))
+      : 0
+    const topPatternScore = historicalPatterns.value.length > 0
+      ? Math.max(...historicalPatterns.value.map(p => p.search_score ?? 0))
+      : 0
     
-    console.log(`[Unified Options] Filtering - Targets: ${suggestions.value.length} -> ${filteredSuggestionsList.length} (threshold: ${targetScoreThreshold.value})`)
-    console.log(`[Unified Options] Filtering - Patterns: ${historicalPatterns.value.length} -> ${filteredPatternsList.length} (threshold: ${patternScoreThreshold.value})`)
+    // Calculate relative thresholds (25% of top score)
+    const targetRelativeThreshold = topTargetScore * RELATIVE_THRESHOLD
+    const patternRelativeThreshold = topPatternScore * RELATIVE_THRESHOLD
+    
+    console.log(`[Unified Options] Top scores - Targets: ${topTargetScore.toFixed(4)}, Patterns: ${topPatternScore.toFixed(4)}`)
+    console.log(`[Unified Options] Hybrid thresholds - Targets: max(${ABSOLUTE_MIN_SCORE}, ${targetRelativeThreshold.toFixed(4)}), Patterns: max(${ABSOLUTE_MIN_SCORE}, ${patternRelativeThreshold.toFixed(4)})`)
+    
+    // HYBRID filter for targets: must pass BOTH absolute minimum AND relative threshold
+    const filteredSuggestionsList = suggestions.value.filter(s => {
+      const score = s.search_score ?? 0
+      const effectiveThreshold = Math.max(ABSOLUTE_MIN_SCORE, targetRelativeThreshold)
+      const passes = !isNaN(score) && score >= effectiveThreshold
+      if (!passes) {
+        console.log(`[Unified Options] Filtered target: ${s.tgt_column_name}, score=${score.toFixed(4)} < threshold=${effectiveThreshold.toFixed(4)}`)
+      }
+      return passes
+    })
+    
+    // HYBRID filter for patterns
+    const filteredPatternsList = historicalPatterns.value.filter(p => {
+      const score = p.search_score ?? 0
+      const effectiveThreshold = Math.max(ABSOLUTE_MIN_SCORE, patternRelativeThreshold)
+      const passes = !isNaN(score) && score >= effectiveThreshold
+      if (!passes) {
+        console.log(`[Unified Options] Filtered pattern: ${p.tgt_column_name}, score=${score.toFixed(4)} < threshold=${effectiveThreshold.toFixed(4)}`)
+      }
+      return passes
+    })
+    
+    console.log(`[Unified Options] After hybrid filter - Targets: ${filteredSuggestionsList.length}, Patterns: ${filteredPatternsList.length}`)
     
     // Add AI suggestions (from vector search on semantic_fields)
     filteredSuggestionsList.forEach((s, idx) => {
@@ -807,10 +825,6 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     detectedPatternType,
     selectedTemplatePattern,
     
-    // Threshold filters (for UI sliders)
-    targetScoreThreshold,
-    patternScoreThreshold,
-    
     // Computed
     hasSuggestions,
     hasOptions,
@@ -827,10 +841,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     clearSelectedTemplate,
     clearSuggestions,
     addSourceField,
-    setSourceFields,
-    setTargetThreshold,
-    setPatternThreshold,
-    resetThresholds
+    setSourceFields
   }
 })
 
