@@ -124,10 +124,10 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   // Match quality thresholds (calibrated for new semantic_field format)
   // Based on observed scores: top=0.043, 2nd=0.012, noise=0.006
   const QUALITY_THRESHOLDS = {
-    excellent: 0.035,  // Top-tier semantic match
-    strong: 0.020,     // Clear semantic match
-    good: 0.012,       // Related/secondary match
-    weak: 0.006        // Distant match (borderline)
+    excellent: 0.010,  // Top-tier semantic match
+    strong: 0.006,     // Clear semantic match
+    good: 0.004,       // Related/secondary match
+    weak: 0.003        // Distant match (borderline)
   }
   
   // Track top score for relative quality calculation (used by getMatchQuality)
@@ -766,15 +766,15 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     let quality: 'Excellent' | 'Strong' | 'Good' | 'Weak' = 'Weak'
     
     if (score >= QUALITY_THRESHOLDS.excellent) {
-      quality = 'Excellent'  // 0.035+ = top-tier semantic match
+      quality = 'Excellent'  // 0.010+ = top-tier semantic match
     } else if (score >= QUALITY_THRESHOLDS.strong) {
-      quality = 'Strong'     // 0.020+ = clear semantic match
+      quality = 'Strong'     // 0.006+ = clear semantic match
     } else if (score >= QUALITY_THRESHOLDS.good) {
-      quality = 'Good'       // 0.012+ = related/secondary match
+      quality = 'Good'       // 0.004+ = related/secondary match
     } else if (score >= QUALITY_THRESHOLDS.weak) {
-      quality = 'Weak'       // 0.006+ = distant match
+      quality = 'Weak'       // 0.003+ = distant match
     } else {
-      quality = 'Weak'       // Below 0.006 = noise (should be filtered)
+      quality = 'Weak'       // Below 0.003 = noise (should be filtered)
     }
     
     // Debug log for first few

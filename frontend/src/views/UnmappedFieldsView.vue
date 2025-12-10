@@ -102,7 +102,6 @@
         <Column field="src_column_name" header="Source Column" :sortable="true" style="min-width: 12rem">
           <template #body="{ data }">
             <div class="column-name">
-              <Tag :value="data.src_physical_datatype" severity="info" />
               <strong>{{ data.src_column_name }}</strong>
             </div>
           </template>
