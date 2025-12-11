@@ -732,24 +732,56 @@ function applyQuickTransform() {
   if (!selectedTransformation.value) return
   
   const template = selectedTransformation.value
+  const existingExpr = sourceExpression.value.trim()
   
-  if (sourceFields.value.length === 1) {
-    // Single field: replace {field} with column name
-    const col = sourceFields.value[0].src_column_physical_name
-    sourceExpression.value = template.replace('{field}', col)
+  // If there's already an expression (like CONCAT), wrap it with the transform
+  // Instead of replacing it entirely
+  if (existingExpr) {
+    // Extract the function name from template (e.g., "TRIM" from "TRIM({field})")
+    const funcMatch = template.match(/^(\w+)\(/)
+    if (funcMatch) {
+      const funcName = funcMatch[1]
+      // Wrap the existing expression: TRIM(existing_expression)
+      sourceExpression.value = `${funcName}(${existingExpr})`
+    }
   } else {
-    // Multi-field: apply to first field or show as example
-    const col = sourceFields.value[0].src_column_physical_name
-    sourceExpression.value = template.replace('{field}', col)
+    // No existing expression - build from selected fields
+    if (sourceFields.value.length === 1) {
+      // Single field: replace {field} with column name
+      const col = sourceFields.value[0].src_column_physical_name
+      sourceExpression.value = template.replace('{field}', col)
+    } else if (sourceFields.value.length >= 2) {
+      // Multi-field: build appropriate expression
+      const cols = sourceFields.value.map(f => f.src_column_physical_name)
+      
+      // Check if this is a CONCAT template
+      if (template.includes('{field2}')) {
+        sourceExpression.value = template
+          .replace('{field}', cols[0])
+          .replace('{field2}', cols[1])
+      } else {
+        // Apply transform to a CONCAT of all fields
+        const concatExpr = `CONCAT_WS(' ', ${cols.join(', ')})`
+        const funcMatch = template.match(/^(\w+)\(/)
+        if (funcMatch) {
+          sourceExpression.value = `${funcMatch[1]}(${concatExpr})`
+        } else {
+          sourceExpression.value = concatExpr
+        }
+      }
+    }
   }
   
-  // Parse transformation name
+  // Parse transformation name and add to list
   const match = template.match(/^(\w+)\(/)?.[1]
   if (match && !transformationsApplied.value.includes(match)) {
     transformationsApplied.value = transformationsApplied.value 
       ? `${transformationsApplied.value}, ${match}`
       : match
   }
+  
+  // Update preview to detect all transforms
+  updatePreview()
   
   // Reset dropdown
   selectedTransformation.value = null
