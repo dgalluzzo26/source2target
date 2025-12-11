@@ -216,12 +216,26 @@ function parsePatternSlots() {
   // If pattern has columns defined, create slots for ONLY those columns
   // Try to match user's selected fields to each pattern slot
   if (columns.length > 0) {
+    // SPECIAL CASE: For SINGLE field patterns with 1 slot and user has 1 selected field,
+    // auto-assign the user's field regardless of name matching - they already chose what to map!
+    const isSingleMapping = columns.length === 1 && props.currentlySelectedFields.length === 1
+    const relationshipType = props.pattern.source_relationship_type?.toUpperCase() || ''
+    const isSinglePattern = isSingleMapping || relationshipType === 'SINGLE'
+    
     columns.forEach((col, idx) => {
-      // Try to match currently selected fields to this slot
-      // Use broader matching to catch variations like "street_num" vs "Street Number"
-      const alreadySelected = props.currentlySelectedFields.find(
-        f => !assignedFieldIds.has(f.id) && matchesColumn(f, col, tables[idx])
-      )
+      let alreadySelected: UnmappedField | undefined
+      
+      // For single-field patterns: use the user's selected field directly
+      if (isSinglePattern && columns.length === 1 && props.currentlySelectedFields.length >= 1) {
+        alreadySelected = props.currentlySelectedFields[0]
+        console.log('[PatternTemplate] SINGLE pattern - auto-assigning user selected field:', alreadySelected.src_column_name)
+      } else {
+        // For multi-field patterns: try to match currently selected fields to this slot
+        // Use broader matching to catch variations like "street_num" vs "Street Number"
+        alreadySelected = props.currentlySelectedFields.find(
+          f => !assignedFieldIds.has(f.id) && matchesColumn(f, col, tables[idx])
+        )
+      }
       
       if (alreadySelected) {
         assignedFieldIds.add(alreadySelected.id)

@@ -140,6 +140,11 @@
                 <div class="target-physical">
                   {{ option.tgt_table_physical_name }}.{{ option.tgt_column_physical_name }}
                 </div>
+                <!-- Target Comments in Header (for both vector and pattern) -->
+                <div v-if="option.tgt_comments" class="target-comments">
+                  <i class="pi pi-info-circle"></i>
+                  <span>{{ option.tgt_comments }}</span>
+                </div>
               </div>
               <div class="option-badges">
                 <!-- Source badge -->
@@ -179,16 +184,10 @@
             
             <!-- Card Body -->
             <div class="option-body">
-              <!-- Description/Reasoning -->
-              <div class="option-reasoning">
-                <i class="pi pi-comment"></i>
+              <!-- Why this match (AI reasoning, if different from comments) -->
+              <div v-if="option.reasoning && option.reasoning !== option.tgt_comments" class="option-reasoning">
+                <i class="pi pi-lightbulb"></i>
                 <span>{{ option.reasoning }}</span>
-              </div>
-              
-              <!-- Target Comments (if available) -->
-              <div v-if="option.tgt_comments" class="option-description">
-                <i class="pi pi-info-circle"></i>
-                <span>{{ option.tgt_comments }}</span>
               </div>
               
               <!-- Pattern transforms for TARGETS that have a matching pattern -->
@@ -1548,6 +1547,31 @@ function handleClose() {
   font-size: 0.8rem;
   color: var(--text-color-secondary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.option-header .target-comments {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  margin-top: 0.25rem;
+  line-height: 1.3;
+}
+
+.option-header .target-comments i {
+  color: var(--primary-color);
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+
+.option-header .target-comments span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
 }

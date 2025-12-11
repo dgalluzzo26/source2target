@@ -507,6 +507,13 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
           generatedSQL: generatedSQL?.substring(0, 50)
         })
         
+        // Try to get target description from vector search results if available
+        const matchingTarget = this.targetSuggestions.find(
+          t => t.tgt_column_physical_name === (p.tgt_column_physical_name || p.tgt_column_name) &&
+               t.tgt_table_physical_name === (p.tgt_table_physical_name || p.tgt_table_name)
+        )
+        const tgtComments = matchingTarget?.tgt_comments || ''
+        
         options.push({
           id: `pattern-${p.mapped_field_id}`,
           rank: 0,
@@ -515,7 +522,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
           tgt_table_physical_name: p.tgt_table_physical_name || p.tgt_table_name,
           tgt_column_name: p.tgt_column_name,
           tgt_column_physical_name: p.tgt_column_physical_name || p.tgt_column_name,
-          tgt_comments: '',
+          tgt_comments: tgtComments,
           matchQuality: 'Unknown',  // Will be set after sorting by rank
           score: score,
           suggestedMappings: mappings,
