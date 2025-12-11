@@ -173,12 +173,6 @@
                 <strong>Invalid SQL:</strong> {{ sqlValidation.error }}
               </Message>
               
-              <!-- SQL Preview -->
-              <div class="sql-preview-section">
-                <h4>Preview</h4>
-                <pre class="sql-preview">{{ previewSQL }}</pre>
-              </div>
-              
               <!-- Relationship Type -->
               <div class="relationship-section">
                 <label>Relationship Type</label>
@@ -503,15 +497,6 @@ const fullSQLExpression = computed({
   }
 })
 
-// Preview SQL (same as fullSQLExpression for display)
-const previewSQL = computed(() => {
-  if (!sourceExpression.value) {
-    return '-- Enter SQL expression above'
-  }
-  
-  const targetCol = targetField.value?.tgt_column_physical_name || 'target_column'
-  return `SELECT ${sourceExpression.value} AS ${targetCol}`
-})
 
 // Validation - includes SQL validation
 const isValid = computed(() => {
@@ -1534,33 +1519,6 @@ async function handleSave() {
   overflow-wrap: break-word !important;
 }
 
-.sql-preview-section {
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.sql-preview-section h4 {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.9rem;
-  color: var(--text-color-secondary);
-}
-
-.sql-preview {
-  background: var(--surface-50);
-  padding: 1rem;
-  border-radius: 6px;
-  font-family: 'Courier New', monospace;
-  font-size: 0.9rem;
-  margin: 0;
-  overflow-x: auto;
-  overflow-y: auto;
-  max-height: 200px;
-  border: 1px solid var(--surface-border);
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  max-width: 100%;
-}
 
 .relationship-section {
   display: flex;
