@@ -156,7 +156,7 @@
             <div class="editor-content">
               <Textarea
                 v-model="fullSQLExpression"
-                :rows="8"
+                :rows="12"
                 class="sql-editor"
                 :class="{ 'sql-error': !sqlValidation.valid && sourceExpression.trim() }"
                 :placeholder="sqlPlaceholder"
@@ -184,21 +184,6 @@
                   optionDisabled="disabled"
                   @change="handleRelationshipChange"
                 />
-                <div class="relationship-help">
-                  <Message v-if="relationshipType === 'JOIN'" severity="info" :closable="false">
-                    <strong>JOIN Example:</strong>
-                    <pre>SELECT t1.field1, t2.field2 
-FROM table1 t1 
-JOIN table2 t2 ON t1.id = t2.id</pre>
-                  </Message>
-                  <Message v-else-if="relationshipType === 'UNION'" severity="info" :closable="false">
-                    <strong>UNION Example:</strong>
-                    <pre>SELECT field1 FROM table1
-UNION ALL
-SELECT field1 FROM table2</pre>
-                  </Message>
-                  <small v-else class="help-text">Single source field, optionally with transformations</small>
-                </div>
               </div>
 
               <!-- Metadata (auto-populated, read-only) -->
@@ -1530,20 +1515,6 @@ async function handleSave() {
 .relationship-section label {
   font-weight: 600;
   color: var(--text-color);
-}
-
-.relationship-help {
-  margin-top: 0.5rem;
-}
-
-.relationship-help pre {
-  background: var(--surface-100);
-  padding: 0.5rem;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  margin: 0.5rem 0 0 0;
-  white-space: pre-wrap;
-  font-family: 'Courier New', monospace;
 }
 
 .help-text {
