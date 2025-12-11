@@ -155,12 +155,11 @@
           <template #content>
             <div class="editor-content">
               <Textarea
-                v-model="sourceExpression"
+                v-model="fullSQLExpression"
                 :rows="8"
                 class="sql-editor"
                 :class="{ 'sql-error': !sqlValidation.valid && sourceExpression.trim() }"
                 :placeholder="sqlPlaceholder"
-                @input="updatePreview"
               />
               
               <!-- SQL Validation Error -->
@@ -456,25 +455,55 @@ const transformationOptions = [
 // SQL placeholder
 const sqlPlaceholder = computed(() => {
   const fields = sourceFields.value
+  const targetCol = targetField.value?.tgt_column_physical_name || 'target_column'
+  
   if (fields.length === 0) {
-    return 'Enter SQL expression...'
+    return `SELECT <expression> AS ${targetCol}`
   }
   
   const col1 = fields[0]?.src_column_physical_name || 'column1'
   const cols = fields.map(f => f.src_column_physical_name).join(', ')
   
   if (relationshipType.value === 'JOIN') {
-    return `-- JOIN Example:\nSELECT t1.${col1}, t2.field2\nFROM table1 t1\nJOIN table2 t2 ON t1.id = t2.id`
+    return `-- JOIN Example:\nSELECT t1.${col1}, t2.field2\nFROM table1 t1\nJOIN table2 t2 ON t1.id = t2.id AS ${targetCol}`
   } else if (relationshipType.value === 'UNION') {
     return `-- UNION Example:\nSELECT ${col1} FROM table1\nUNION ALL\nSELECT ${col1} FROM table2`
   } else if (fields.length === 1) {
-    return `Enter SQL expression, e.g.:\n  ${col1}\n  TRIM(${col1})\n  UPPER(TRIM(${col1}))`
+    return `SELECT ${col1} AS ${targetCol}\n-- Or with transform:\nSELECT TRIM(${col1}) AS ${targetCol}`
   } else {
-    return `Enter SQL expression, e.g.:\n  CONCAT(${cols})\n  CONCAT_WS(' ', ${cols})`
+    return `SELECT CONCAT(${cols}) AS ${targetCol}\n-- Or:\nSELECT CONCAT_WS(' ', ${cols}) AS ${targetCol}`
   }
 })
 
-// Preview SQL
+// Full SQL for textarea (with SELECT...AS) - this is what users see and edit
+const fullSQLExpression = computed({
+  get: () => {
+    if (!sourceExpression.value) return ''
+    const targetCol = targetField.value?.tgt_column_physical_name || 'target_column'
+    return `SELECT ${sourceExpression.value} AS ${targetCol}`
+  },
+  set: (val: string) => {
+    // Parse out just the expression part from full SQL
+    // Expected format: SELECT <expression> AS <target>
+    const trimmed = val.trim()
+    
+    // Try to extract expression from SELECT...AS pattern
+    const selectMatch = trimmed.match(/^SELECT\s+(.+?)\s+AS\s+\w+$/i)
+    if (selectMatch) {
+      sourceExpression.value = selectMatch[1].trim()
+    } else if (trimmed.toUpperCase().startsWith('SELECT ')) {
+      // Has SELECT but no AS - take everything after SELECT
+      sourceExpression.value = trimmed.substring(7).trim()
+    } else {
+      // No SELECT prefix - treat as raw expression
+      sourceExpression.value = trimmed
+    }
+    
+    updatePreview()
+  }
+})
+
+// Preview SQL (same as fullSQLExpression for display)
 const previewSQL = computed(() => {
   if (!sourceExpression.value) {
     return '-- Enter SQL expression above'
