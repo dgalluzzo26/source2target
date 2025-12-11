@@ -1153,7 +1153,8 @@ async function handleSave() {
         tgt_column_name: targetField.value.tgt_column_name,
         tgt_column_physical_name: targetField.value.tgt_column_physical_name,
         tgt_comments: targetField.value.tgt_comments,
-        source_expression: sourceExpression.value,
+        // Save full SQL with SELECT...AS target_column (same as preview)
+        source_expression: `SELECT ${sourceExpression.value} AS ${targetField.value.tgt_column_physical_name}`,
         source_tables: sourceTables.value || undefined,
         source_tables_physical: sourceTablesPhysical.value || undefined,
         source_columns: sourceColumns.value || undefined,
