@@ -121,12 +121,16 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const ABSOLUTE_MIN_SCORE = 0.003  // Minimum score to show
   const RELATIVE_THRESHOLD = 0.25   // Must be at least 25% of top score
   
-  // Match quality thresholds (calibrated for new semantic_field format)
-  // Based on observed scores: top=0.043, 2nd=0.012, noise=0.006
+  // Combo boost: when a target has BOTH semantic match AND historical pattern
+  // This rewards validated mappings with semantic relevance
+  const COMBO_BOOST_MULTIPLIER = 1.5  // 50% score boost for combo matches
+  
+  // Match quality thresholds (calibrated for observed score ranges)
+  // Top matches: ~0.005-0.006, Lower matches: ~0.003-0.004
   const QUALITY_THRESHOLDS = {
-    excellent: 0.010,  // Top-tier semantic match
-    strong: 0.006,     // Clear semantic match
-    good: 0.004,       // Related/secondary match
+    excellent: 0.007,  // Top-tier semantic match (or combo boosted)
+    strong: 0.005,     // Clear semantic match
+    good: 0.0035,      // Related/secondary match
     weak: 0.003        // Distant match (borderline)
   }
   
@@ -461,8 +465,16 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
           mergedSQL = generateSQLForUserFields(sourceFieldsUsed.value, p.transformations_applied)
         }
         
+        // COMBO BOOST: This target has BOTH semantic match AND historical pattern
+        // Boost the score to prioritize validated mappings with semantic relevance
+        const originalScore = existing.score
+        existing.score = existing.score * COMBO_BOOST_MULTIPLIER
+        
         console.log(`[Unified Options] MERGING pattern into target ${p.tgt_column_name}:`, {
           existingSource: existing.source,
+          originalScore: originalScore?.toFixed(4),
+          boostedScore: existing.score?.toFixed(4),
+          boostMultiplier: COMBO_BOOST_MULTIPLIER,
           transforms: p.transformations_applied,
           userFields: sourceFieldsUsed.value.map(f => f.src_column_physical_name),
           generatedSQL: mergedSQL?.substring(0, 50)
@@ -766,11 +778,11 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     let quality: 'Excellent' | 'Strong' | 'Good' | 'Weak' = 'Weak'
     
     if (score >= QUALITY_THRESHOLDS.excellent) {
-      quality = 'Excellent'  // 0.010+ = top-tier semantic match
+      quality = 'Excellent'  // 0.007+ = top-tier match (or combo boosted)
     } else if (score >= QUALITY_THRESHOLDS.strong) {
-      quality = 'Strong'     // 0.006+ = clear semantic match
+      quality = 'Strong'     // 0.005+ = clear semantic match
     } else if (score >= QUALITY_THRESHOLDS.good) {
-      quality = 'Good'       // 0.004+ = related/secondary match
+      quality = 'Good'       // 0.0035+ = related/secondary match
     } else if (score >= QUALITY_THRESHOLDS.weak) {
       quality = 'Weak'       // 0.003+ = distant match
     } else {
