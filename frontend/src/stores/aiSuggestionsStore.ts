@@ -508,7 +508,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         })
         
         // Try to get target description from vector search results if available
-        const matchingTarget = this.targetSuggestions.find(
+        const matchingTarget = suggestions.value.find(
           t => t.tgt_column_physical_name === (p.tgt_column_physical_name || p.tgt_column_name) &&
                t.tgt_table_physical_name === (p.tgt_table_physical_name || p.tgt_table_name)
         )
