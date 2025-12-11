@@ -87,14 +87,19 @@
             Recommended Mappings
           </h3>
           <div class="options-header-right">
-            <span class="options-count">{{ filteredOptions.length }} options shown</span>
+            <span class="options-count">
+              {{ filteredOptions.length }} shown
+              <span v-if="!showWeakResults && weakResultsCount > 0" class="hidden-count">
+                ({{ aiStore.unifiedOptions.length }} total)
+              </span>
+            </span>
             
             <!-- Weak Results Toggle -->
             <div v-if="weakResultsCount > 0" class="weak-toggle">
               <label class="weak-toggle-label" @click="showWeakResults = !showWeakResults">
                 <i :class="showWeakResults ? 'pi pi-eye' : 'pi pi-eye-slash'"></i>
                 <span v-if="showWeakResults">Hide {{ weakResultsCount }} weak</span>
-                <span v-else>Show {{ weakResultsCount }} weak</span>
+                <span v-else>+{{ weakResultsCount }} weak</span>
               </label>
             </div>
           </div>
@@ -115,7 +120,7 @@
         <!-- Options List -->
         <div class="options-list">
           <div 
-            v-for="option in filteredOptions.slice(0, 15)" 
+            v-for="option in filteredOptions" 
             :key="option.id"
             class="option-card"
             :class="[
