@@ -126,11 +126,11 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const COMBO_BOOST_MULTIPLIER = 1.5  // 50% score boost for combo matches
   
   // Match quality thresholds (calibrated for observed score ranges)
-  // Top matches: ~0.005-0.006, Lower matches: ~0.003-0.004
+  // Raised thresholds to reduce noise - fewer Strong/Good, more Weak
   const QUALITY_THRESHOLDS = {
-    excellent: 0.007,  // Top-tier semantic match (or combo boosted)
-    strong: 0.005,     // Clear semantic match
-    good: 0.0035,      // Related/secondary match
+    excellent: 0.010,  // Top-tier match (combo boosted or very high semantic)
+    strong: 0.007,     // Clear semantic match
+    good: 0.005,       // Related/secondary match
     weak: 0.003        // Distant match (borderline)
   }
   
@@ -778,11 +778,11 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     let quality: 'Excellent' | 'Strong' | 'Good' | 'Weak' = 'Weak'
     
     if (score >= QUALITY_THRESHOLDS.excellent) {
-      quality = 'Excellent'  // 0.007+ = top-tier match (or combo boosted)
+      quality = 'Excellent'  // 0.010+ = top-tier match (combo boosted or very high)
     } else if (score >= QUALITY_THRESHOLDS.strong) {
-      quality = 'Strong'     // 0.005+ = clear semantic match
+      quality = 'Strong'     // 0.007+ = clear semantic match
     } else if (score >= QUALITY_THRESHOLDS.good) {
-      quality = 'Good'       // 0.0035+ = related/secondary match
+      quality = 'Good'       // 0.005+ = related/secondary match
     } else if (score >= QUALITY_THRESHOLDS.weak) {
       quality = 'Weak'       // 0.003+ = distant match
     } else {
