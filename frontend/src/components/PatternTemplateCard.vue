@@ -363,12 +363,17 @@ const userSelectedMultipleTables = computed(() => {
   return tablesSelectedInTemplate.value.size > 1
 })
 
-// Pattern has join metadata AND user selected multiple tables → show join section
+// Show join section when user selected fields from multiple tables
+// (regardless of whether pattern has join_metadata - they'll need to join anyway)
 const isSourceJoinPattern = computed(() => {
-  // Only show join section if BOTH:
-  // 1. Pattern has join metadata (historical pattern used joins)
-  // 2. User has selected fields from 2+ different tables in the template
-  return parsedJoinMetadata.value?.is_source_join === true && userSelectedMultipleTables.value
+  // Show join section if user selected fields from 2+ different tables
+  // This is needed even without join_metadata because tables must be joined
+  return userSelectedMultipleTables.value
+})
+
+// Does the pattern have join_metadata we can use as template?
+const hasJoinMetadata = computed(() => {
+  return parsedJoinMetadata.value?.is_source_join === true
 })
 
 // Get the tables involved in the join
@@ -383,39 +388,66 @@ const allJoinFieldsFilled = computed(() => {
   return joinFieldSlots.value.every(slot => slot.selectedField !== null)
 })
 
-// Initialize join field slots from join_metadata
+// Initialize join field slots - either from join_metadata or dynamically from selected tables
 function parseJoinFieldSlots() {
   const slots: JoinFieldSlot[] = []
   const metadata = parsedJoinMetadata.value
+  const tables = [...tablesSelectedInTemplate.value]
   
-  if (!metadata?.is_source_join || !metadata.join_conditions) {
+  // If less than 2 tables, no join needed
+  if (tables.length < 2) {
     joinFieldSlots.value = []
     return
   }
   
-  console.log('[PatternTemplate] Parsing JOIN conditions:', metadata.join_conditions)
+  console.log('[PatternTemplate] Creating join slots for tables:', tables)
   
-  metadata.join_conditions.forEach((cond, idx) => {
-    // Left side of join (e.g., employees.title_cd)
-    slots.push({
-      joinIndex: idx,
-      side: 'left',
-      tableName: cond.left_table,
-      originalColumn: cond.left_column,
-      selectedField: null,
-      selectedFieldId: null
+  // Option 1: Use join_metadata from pattern if available
+  if (metadata?.is_source_join && metadata.join_conditions) {
+    console.log('[PatternTemplate] Using join conditions from pattern metadata')
+    metadata.join_conditions.forEach((cond, idx) => {
+      slots.push({
+        joinIndex: idx,
+        side: 'left',
+        tableName: cond.left_table,
+        originalColumn: cond.left_column,
+        selectedField: null,
+        selectedFieldId: null
+      })
+      slots.push({
+        joinIndex: idx,
+        side: 'right',
+        tableName: cond.right_table,
+        originalColumn: cond.right_column,
+        selectedField: null,
+        selectedFieldId: null
+      })
     })
+  } else {
+    // Option 2: Create join slots dynamically from selected tables
+    // Each additional table needs a join to the first table
+    console.log('[PatternTemplate] Creating dynamic join slots (no pattern metadata)')
+    const primaryTable = tables[0]
     
-    // Right side of join (e.g., title_ref.title_cd)
-    slots.push({
-      joinIndex: idx,
-      side: 'right',
-      tableName: cond.right_table,
-      originalColumn: cond.right_column,
-      selectedField: null,
-      selectedFieldId: null
+    tables.slice(1).forEach((secondaryTable, idx) => {
+      slots.push({
+        joinIndex: idx,
+        side: 'left',
+        tableName: primaryTable,
+        originalColumn: 'join_key',  // User will select
+        selectedField: null,
+        selectedFieldId: null
+      })
+      slots.push({
+        joinIndex: idx,
+        side: 'right',
+        tableName: secondaryTable,
+        originalColumn: 'join_key',  // User will select
+        selectedField: null,
+        selectedFieldId: null
+      })
     })
-  })
+  }
   
   // Try to auto-match join fields from available fields
   slots.forEach(slot => {
@@ -423,7 +455,7 @@ function parseJoinFieldSlots() {
     if (bestMatch && bestMatch.matchScore > 0.5) {
       slot.selectedField = bestMatch.field
       slot.selectedFieldId = bestMatch.field.id
-      console.log('[PatternTemplate] Auto-matched join field:', slot.originalColumn, '->', bestMatch.field.src_column_name)
+      console.log('[PatternTemplate] Auto-matched join field:', slot.tableName, '->', bestMatch.field.src_column_name, `(score: ${bestMatch.matchScore})`)
     }
   })
   
@@ -950,44 +982,83 @@ function buildSQLForFields(fields: string[]): string {
 // Build SQL for source-to-source JOIN patterns
 function buildJoinSQL(): string {
   const metadata = parsedJoinMetadata.value
-  if (!metadata || !metadata.join_conditions) return ''
-  
-  console.log('[PatternTemplate] ========== BUILDING JOIN SQL ==========')
-  
-  // Get the first (primary) table from slots
-  const primarySlot = templateSlots.value.find(s => s.selectedField)
-  const primaryTable = primarySlot?.selectedField?.src_table_physical_name || 
-                       primarySlot?.selectedField?.src_table_name || 'source_table'
-  const primaryAlias = 'a'
-  
-  // Get the selected field for the SELECT clause
-  const selectField = primarySlot?.selectedField
-  let selectColumn = selectField?.src_column_physical_name || selectField?.src_column_name || 'column'
-  
-  // If pattern has a specific select column from a lookup table, use that
-  if (metadata.select_column) {
-    // Find the join slot for the right side of first join
-    const lookupSlot = getJoinSlot(0, 'right')
-    const lookupTable = lookupSlot?.selectedField?.src_table_physical_name || 
-                        lookupSlot?.selectedField?.src_table_name || metadata.select_column.table
-    const lookupAlias = 'b'
-    
-    // Find the actual column to select from the lookup table
-    // We need to find an unmapped field from the lookup table that matches the select pattern
-    const lookupField = props.availableFields.find(f => 
-      (f.src_table_physical_name || f.src_table_name || '').toLowerCase() === lookupTable.toLowerCase() &&
-      !joinFieldSlots.value.some(js => js.selectedField?.id === f.id) // Not used as join key
-    )
-    
-    selectColumn = lookupField 
-      ? `${lookupAlias}.${lookupField.src_column_physical_name || lookupField.src_column_name}`
-      : `${lookupAlias}.${metadata.select_column.column}`
+  if (!metadata || !metadata.join_conditions) {
+    console.log('[PatternTemplate] No join metadata or conditions - falling back to regular SQL')
+    return ''
   }
   
-  // Build the JOIN clauses
+  console.log('[PatternTemplate] ========== BUILDING JOIN SQL ==========')
+  console.log('[PatternTemplate] isSourceJoinPattern:', isSourceJoinPattern.value)
+  console.log('[PatternTemplate] allJoinFieldsFilled:', allJoinFieldsFilled.value)
+  console.log('[PatternTemplate] joinFieldSlots:', joinFieldSlots.value.length)
+  
+  // Build table alias map from selected fields in template slots
+  const tableAliasMap: { [key: string]: string } = {}
+  let aliasCounter = 0
+  
+  // First, get all tables from template slots (the columns we're selecting)
+  const filledSlots = templateSlots.value.filter(s => s.selectedField)
+  filledSlots.forEach(slot => {
+    const table = (slot.selectedField?.src_table_physical_name || slot.selectedField?.src_table_name || '').toLowerCase()
+    if (table && !tableAliasMap[table]) {
+      tableAliasMap[table] = String.fromCharCode(97 + aliasCounter) // 'a', 'b', 'c', etc.
+      aliasCounter++
+    }
+  })
+  
+  console.log('[PatternTemplate] Table alias map:', tableAliasMap)
+  
+  // Build SELECT columns with table aliases
+  const selectColumns: string[] = []
+  filledSlots.forEach(slot => {
+    const field = slot.selectedField!
+    const table = (field.src_table_physical_name || field.src_table_name || '').toLowerCase()
+    const col = (field.src_column_physical_name || field.src_column_name || '').toLowerCase().replace(/\s+/g, '_')
+    const alias = tableAliasMap[table] || 'a'
+    selectColumns.push(`${alias}.${col}`)
+  })
+  
+  console.log('[PatternTemplate] Select columns:', selectColumns)
+  
+  // Apply transforms to each column
+  const transforms = props.pattern.transformations_applied || ''
+  const transformList = transforms.split(/[,\s]+/).map(t => t.trim().toUpperCase()).filter(t => t && t !== 'CONCAT' && t !== 'JOIN' && t !== 'LOOKUP')
+  
+  const transformedColumns = selectColumns.map(col => {
+    let expr = col
+    if (transformList.length === 0) {
+      expr = `TRIM(${expr})`
+    } else {
+      transformList.forEach(t => {
+        if (['TRIM', 'UPPER', 'LOWER', 'INITCAP'].includes(t)) {
+          expr = `${t}(${expr})`
+        }
+      })
+    }
+    return expr
+  })
+  
+  // Build SELECT expression - CONCAT if multiple columns
+  let selectExpr: string
+  if (transformedColumns.length > 1) {
+    selectExpr = `CONCAT_WS(' ', ${transformedColumns.join(', ')})`
+  } else if (transformedColumns.length === 1) {
+    selectExpr = transformedColumns[0]
+  } else {
+    console.log('[PatternTemplate] ERROR: No columns to select')
+    return ''
+  }
+  
+  // Get target column name
+  const targetCol = props.pattern.tgt_column_physical_name || props.pattern.tgt_column_name || 'target'
+  
+  // Get primary table (first table in alias map)
+  const tables = Object.keys(tableAliasMap)
+  const primaryTable = tables[0] || 'source_table'
+  const primaryAlias = tableAliasMap[primaryTable] || 'a'
+  
+  // Build the JOIN clauses from user-selected join fields
   const joinClauses: string[] = []
-  let tableAliasMap: { [key: string]: string } = { [primaryTable.toLowerCase()]: primaryAlias }
-  let aliasCounter = 1  // Start with 'b' for first join
   
   metadata.join_conditions.forEach((cond, idx) => {
     const leftSlot = getJoinSlot(idx, 'left')
@@ -1020,29 +1091,28 @@ function buildJoinSQL(): string {
     )
   })
   
-  // Apply transforms to select column if specified
-  const transforms = props.pattern.transformations_applied || ''
-  const transformList = transforms.split(/[,\s]+/).map(t => t.trim().toUpperCase()).filter(t => t)
-  
-  let selectExpr = selectColumn
-  
-  // Check for COALESCE with default value
-  if (transformList.includes('COALESCE') && metadata.default_value) {
-    selectExpr = `COALESCE(${selectExpr}, '${metadata.default_value}')`
-  }
-  
-  // Apply other transforms
-  transformList.filter(t => !['COALESCE', 'LOOKUP', 'JOIN'].includes(t)).forEach(t => {
-    if (['TRIM', 'UPPER', 'LOWER', 'INITCAP'].includes(t)) {
-      selectExpr = `${t}(${selectExpr})`
-    }
-  })
-  
-  // Get target column name
-  const targetCol = props.pattern.tgt_column_physical_name || props.pattern.tgt_column_name || 'target'
+  // Get proper table name for FROM clause (use the actual table name, not lowercase key)
+  const fromTable = filledSlots[0]?.selectedField?.src_table_physical_name || 
+                    filledSlots[0]?.selectedField?.src_table_name || primaryTable
   
   // Build final SQL
-  const sql = `SELECT ${selectExpr} AS ${targetCol}\nFROM ${primaryTable} ${primaryAlias}\n${joinClauses.join('\n')}`
+  let sql: string
+  if (joinClauses.length > 0) {
+    sql = `SELECT ${selectExpr} AS ${targetCol}\nFROM ${fromTable} ${primaryAlias}\n${joinClauses.join('\n')}`
+  } else {
+    // No join clauses from join slots - build join from table alias map
+    const otherTables = tables.slice(1)
+    const autoJoins = otherTables.map(t => {
+      const tAlias = tableAliasMap[t]
+      // Find the actual table name
+      const slot = filledSlots.find(s => 
+        (s.selectedField?.src_table_physical_name || s.selectedField?.src_table_name || '').toLowerCase() === t
+      )
+      const tName = slot?.selectedField?.src_table_physical_name || slot?.selectedField?.src_table_name || t
+      return `JOIN ${tName} ${tAlias} ON /* specify join condition */`
+    })
+    sql = `SELECT ${selectExpr} AS ${targetCol}\nFROM ${fromTable} ${primaryAlias}\n${autoJoins.join('\n')}`
+  }
   
   console.log('[PatternTemplate] Generated JOIN SQL:', sql)
   console.log('[PatternTemplate] ========== END JOIN SQL ==========')

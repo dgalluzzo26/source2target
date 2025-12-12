@@ -695,7 +695,39 @@ function usePattern(pattern: any) {
   const currentFields = sourceFields.value.map(f => f.src_column_physical_name || f.src_column_name)
   
   // Extract transformations from the pattern
-  const transforms = pattern.transformations_applied?.split(',').map((t: string) => t.trim()) || []
+  const transforms = pattern.transformations_applied?.split(',').map((t: string) => t.trim()).filter((t: string) => t) || []
+  
+  // Check if current expression already has a JOIN - if so, try to update transforms within it
+  const existingExpr = sourceExpression.value.trim()
+  const hasExistingJoin = existingExpr.toUpperCase().includes(' JOIN ')
+  
+  if (hasExistingJoin) {
+    console.log('[usePattern] Existing SQL has JOIN - updating transforms in place')
+    // Try to update transforms within existing SQL
+    const updatedSQL = updateTransformsInSQL(existingExpr, transforms)
+    if (updatedSQL) {
+      sourceExpression.value = updatedSQL
+      if (pattern.transformations_applied) {
+        transformationsApplied.value = pattern.transformations_applied
+      }
+      updatePreview()
+      toast.add({
+        severity: 'success',
+        summary: 'Transforms Updated',
+        detail: `Applied ${transforms.join(', ') || 'transforms'} to existing SQL (JOIN preserved)`,
+        life: 3000
+      })
+      return
+    }
+    // If update failed, warn user and don't overwrite
+    toast.add({
+      severity: 'warn',
+      summary: 'Cannot Apply',
+      detail: 'Cannot apply pattern - would lose your JOIN configuration. Edit SQL manually.',
+      life: 5000
+    })
+    return
+  }
   
   // Build new expression using CURRENT field names with the pattern's transformations
   let newExpression = ''
@@ -707,12 +739,51 @@ function usePattern(pattern: any) {
       newExpression = `${transform}(${newExpression})`
     }
   } else if (pattern.source_relationship_type === 'JOIN') {
-    // Multiple fields with JOIN - user needs to customize
-    const fieldsStr = currentFields.join(', ')
-    newExpression = `-- Apply ${transforms.join(', ')} to: ${fieldsStr}\n-- Customize the JOIN expression below:\nSELECT ${currentFields[0]}\nFROM ${sourceFields.value[0]?.src_table_physical_name || 'table1'}\nJOIN table2 ON condition`
+    // Multiple fields with JOIN - build proper SQL with transforms applied
+    // Get tables from source fields
+    const tables = [...new Set(sourceFields.value.map(f => f.src_table_physical_name || f.src_table_name))]
+    const primaryTable = tables[0] || 'table1'
+    
+    // Build transformed field expressions
+    const transformedFields = currentFields.map((f, i) => {
+      const table = sourceFields.value[i]?.src_table_physical_name || sourceFields.value[i]?.src_table_name || primaryTable
+      const alias = String.fromCharCode(97 + Math.min(i, tables.indexOf(table.toString())))
+      let expr = `${alias}.${f}`
+      for (const transform of [...transforms].reverse()) {
+        expr = `${transform}(${expr})`
+      }
+      return expr
+    })
+    
+    // Build CONCAT if multiple fields
+    const selectExpr = transformedFields.length > 1 
+      ? `CONCAT_WS(' ', ${transformedFields.join(', ')})`
+      : transformedFields[0] || currentFields[0]
+    
+    const targetCol = targetField.value?.tgt_column_physical_name || 'target'
+    
+    // Build full SQL - user will need to specify join condition
+    if (tables.length > 1) {
+      const joinTables = tables.slice(1).map((t, i) => 
+        `JOIN ${t} ${String.fromCharCode(98 + i)} ON /* specify join condition */`
+      ).join('\n')
+      newExpression = `SELECT ${selectExpr} AS ${targetCol}\nFROM ${primaryTable} a\n${joinTables}`
+    } else {
+      newExpression = `SELECT ${selectExpr} AS ${targetCol}\nFROM ${primaryTable}`
+    }
   } else if (pattern.source_relationship_type === 'UNION') {
-    // UNION pattern
-    newExpression = currentFields.map((f, i) => `SELECT ${transforms.length > 0 ? `${transforms[0]}(${f})` : f} FROM table${i + 1}`).join('\nUNION ALL\n')
+    // UNION pattern - each field from its respective table
+    const targetCol = targetField.value?.tgt_column_physical_name || 'target'
+    const unionParts = sourceFields.value.map((field, i) => {
+      const table = field.src_table_physical_name || field.src_table_name || `table${i + 1}`
+      const col = field.src_column_physical_name || field.src_column_name
+      let expr = col
+      for (const transform of [...transforms].reverse()) {
+        expr = `${transform}(${expr})`
+      }
+      return `SELECT ${expr} AS ${targetCol} FROM ${table}`
+    })
+    newExpression = unionParts.join('\nUNION ALL\n')
   } else {
     // Multiple fields - concatenate with transformations
     const transformedFields = currentFields.map(f => {
@@ -801,6 +872,61 @@ function applyQuickTransform() {
   
   // Reset dropdown
   selectedTransformation.value = null
+}
+
+// Update transforms within existing SQL (preserving JOIN structure)
+function updateTransformsInSQL(sql: string, transforms: string[]): string | null {
+  try {
+    // Find the SELECT clause
+    const selectMatch = sql.match(/SELECT\s+(.+?)\s+AS\s+(\w+)/i)
+    if (!selectMatch) return null
+    
+    const [, selectExpr, targetCol] = selectMatch
+    
+    // Find columns in the select expression (look for aliases like a.col, b.col)
+    const columnRefs = selectExpr.match(/[a-z]\.\w+/gi) || []
+    if (columnRefs.length === 0) return null
+    
+    // Apply transforms to each column reference
+    const transformedCols = columnRefs.map(col => {
+      let expr = col
+      // Apply transforms in reverse order (innermost first)
+      for (const t of [...transforms].reverse()) {
+        const upper = t.toUpperCase()
+        if (['TRIM', 'UPPER', 'LOWER', 'INITCAP'].includes(upper)) {
+          expr = `${upper}(${expr})`
+        }
+      }
+      return expr
+    })
+    
+    // Build new select expression
+    let newSelectExpr: string
+    if (transformedCols.length > 1) {
+      // Check if it was a CONCAT
+      if (selectExpr.toUpperCase().includes('CONCAT')) {
+        newSelectExpr = `CONCAT_WS(' ', ${transformedCols.join(', ')})`
+      } else {
+        newSelectExpr = transformedCols.join(', ')
+      }
+    } else {
+      newSelectExpr = transformedCols[0]
+    }
+    
+    // Replace the select expression in the original SQL
+    const newSQL = sql.replace(
+      /SELECT\s+.+?\s+AS\s+(\w+)/i,
+      `SELECT ${newSelectExpr} AS ${targetCol}`
+    )
+    
+    console.log('[updateTransformsInSQL] Original:', selectExpr)
+    console.log('[updateTransformsInSQL] Transformed:', newSelectExpr)
+    
+    return newSQL
+  } catch (e) {
+    console.error('[updateTransformsInSQL] Failed:', e)
+    return null
+  }
 }
 
 function updatePreview() {
