@@ -218,9 +218,10 @@ class AIMappingServiceV3:
                 for i, r in enumerate(all_results):
                     score = float(r.get('search_score', 0) or 0)
                     r['search_score'] = score  # Ensure float
+                    tgt_table = r.get('tgt_table_physical_name') or r.get('tgt_table_name') or '?'
                     col = r.get('tgt_column_name', 'unknown')
                     desc = (r.get('tgt_comments') or '')[:40]
-                    print(f"  {i+1}. {col} - score: {score:.6f} - '{desc}'")
+                    print(f"  {i+1}. {tgt_table}.{col} - score: {score:.6f} - '{desc}'")
                 
                 # Return all results - frontend filters based on user's threshold slider
                 results = all_results
@@ -311,10 +312,12 @@ class AIMappingServiceV3:
                         r['confidence_score'] = float(r['confidence_score'])
                     
                     score = r['search_score']
-                    tgt = r.get('tgt_column_name', 'unknown')
+                    tgt_table = r.get('tgt_table_physical_name') or r.get('tgt_table_name') or '?'
+                    tgt_col = r.get('tgt_column_name', 'unknown')
                     src_cols = (r.get('source_columns') or '')[:30]
                     transforms = r.get('transformations_applied') or 'none'
-                    print(f"  {i+1}. {tgt} <- [{src_cols}] - score: {score:.6f} - transforms: {transforms}")
+                    has_join_meta = 'YES' if r.get('join_metadata') else 'no'
+                    print(f"  {i+1}. {tgt_table}.{tgt_col} <- [{src_cols}] - score: {score:.6f} - transforms: {transforms} - join_metadata: {has_join_meta}")
                 
                 # Return all results - frontend filters based on user's threshold slider
                 results = all_results
