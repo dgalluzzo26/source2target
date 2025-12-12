@@ -455,22 +455,39 @@ const sqlPlaceholder = computed(() => {
 })
 
 // Full SQL for textarea (with SELECT...AS) - this is what users see and edit
+// Handles both simple expressions and full SELECT statements (JOIN/UNION patterns)
 const fullSQLExpression = computed({
   get: () => {
     if (!sourceExpression.value) return ''
     const targetCol = targetField.value?.tgt_column_physical_name || 'target_column'
-    return `SELECT ${sourceExpression.value} AS ${targetCol}`
+    const expr = sourceExpression.value.trim()
+    
+    // If expression already starts with SELECT, don't wrap it again
+    // This handles JOIN/UNION patterns that contain full SQL
+    if (expr.toUpperCase().startsWith('SELECT ')) {
+      return expr
+    }
+    
+    // Simple expression - wrap with SELECT...AS
+    return `SELECT ${expr} AS ${targetCol}`
   },
   set: (val: string) => {
     // Parse out just the expression part from full SQL
-    // Expected format: SELECT <expression> AS <target>
     const trimmed = val.trim()
+    const upperTrimmed = trimmed.toUpperCase()
     
-    // Try to extract expression from SELECT...AS pattern
+    // Check if it's a complex SELECT (JOIN/UNION) - store as-is
+    if (upperTrimmed.includes(' JOIN ') || upperTrimmed.includes(' UNION ')) {
+      sourceExpression.value = trimmed
+      updatePreview()
+      return
+    }
+    
+    // Try to extract expression from simple SELECT...AS pattern
     const selectMatch = trimmed.match(/^SELECT\s+(.+?)\s+AS\s+\w+$/i)
     if (selectMatch) {
       sourceExpression.value = selectMatch[1].trim()
-    } else if (trimmed.toUpperCase().startsWith('SELECT ')) {
+    } else if (upperTrimmed.startsWith('SELECT ')) {
       // Has SELECT but no AS - take everything after SELECT
       sourceExpression.value = trimmed.substring(7).trim()
     } else {

@@ -33,7 +33,7 @@ INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
 )
 SELECT 
   semantic_field_id, 'CASE', 'CASE', 'First Name', 'FIRST_NM', 'Member first name or given name',
-  'TRIM(NAM_FIRST)', 'Recipient Base', 't_re_base', 'First Name', 'NAM_FIRST',
+  'SELECT TRIM(NAM_FIRST) AS FIRST_NM', 'Recipient Base', 't_re_base', 'First Name', 'NAM_FIRST',
   'The first name of the recipient member', 'STRING', 'member', 'member',
   'SINGLE', 'TRIM', 0.95, 'MANUAL', 'test_client_a'
 FROM ${CATALOG_SCHEMA}.semantic_fields 
@@ -48,7 +48,7 @@ INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
 )
 SELECT 
   semantic_field_id, 'CASE', 'CASE', 'First Name', 'FIRST_NM', 'Member first name or given name',
-  'INITCAP(TRIM(FIRST_NAME))', 'Patient Demographics', 'patient_demo', 'Given Name', 'FIRST_NAME',
+  'SELECT INITCAP(TRIM(FIRST_NAME)) AS FIRST_NM', 'Patient Demographics', 'patient_demo', 'Given Name', 'FIRST_NAME',
   'Patient given name from demographics file', 'STRING', 'member', 'member',
   'SINGLE', 'TRIM, INITCAP', 0.92, 'MANUAL', 'test_client_b'
 FROM ${CATALOG_SCHEMA}.semantic_fields 
@@ -63,7 +63,7 @@ INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
 )
 SELECT 
   semantic_field_id, 'CASE', 'CASE', 'First Name', 'FIRST_NM', 'Member first name or given name',
-  'INITCAP(TRIM(mbr_fname))', 'Member File', 'mbr_file', 'Member First', 'mbr_fname',
+  'SELECT INITCAP(TRIM(mbr_fname)) AS FIRST_NM', 'Member File', 'mbr_file', 'Member First', 'mbr_fname',
   'First name of the member from member file', 'STRING', 'member', 'member',
   'SINGLE', 'TRIM, INITCAP', 0.90, 'MANUAL', 'test_client_c'
 FROM ${CATALOG_SCHEMA}.semantic_fields 
@@ -755,13 +755,108 @@ INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
 
 
 -- ============================================================================
+-- SCENARIO H: SOURCE-TO-SOURCE JOIN PATTERNS - Employee Title Lookup
+-- ============================================================================
+-- Target: MNGN_EMP.TITLE (Title of the managing employee)
+-- These patterns JOIN TWO SOURCE TABLES (not silver lookup)
+-- Employee table + Title Reference table
+-- join_metadata includes is_source_join: true
+
+-- Client A: Join employee to title_ref on title_cd
+INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
+  semantic_field_id, tgt_table_name, tgt_table_physical_name, tgt_column_name, tgt_column_physical_name, tgt_comments,
+  source_expression, source_tables, source_tables_physical, source_columns, source_columns_physical,
+  source_descriptions, source_datatypes, source_domain, target_domain,
+  source_relationship_type, transformations_applied, confidence_score, mapping_source, mapped_by,
+  join_metadata
+)
+SELECT 
+  semantic_field_id, 'MANAGING EMPLOYEE', 'MNGN_EMP', 'Title', 'TITLE', 'The title of the managing employee.',
+  'SELECT COALESCE(t.title_desc, ''Unknown'') AS TITLE FROM employees e LEFT JOIN title_ref t ON e.title_cd = t.title_cd',
+  'Employees | Title Ref', 'employees | title_ref',
+  'Employee Title Code | Title Description', 'title_cd | title_desc',
+  'Code field linking to title reference | Description of job title', 'VARCHAR(5) | VARCHAR(50)', 'employee', 'managing',
+  'JOIN', 'COALESCE, LOOKUP', 0.92, 'MANUAL', 'test_client_a',
+  '{"is_source_join": true, "join_type": "LEFT", "source_tables": ["employees", "title_ref"], "primary_table": "employees", "join_conditions": [{"left_table": "employees", "left_alias": "e", "left_column": "title_cd", "right_table": "title_ref", "right_alias": "t", "right_column": "title_cd"}], "select_column": {"table": "title_ref", "alias": "t", "column": "title_desc"}, "default_value": "Unknown"}'
+FROM ${CATALOG_SCHEMA}.semantic_fields 
+WHERE tgt_column_physical_name = 'TITLE' AND tgt_table_physical_name = 'MNGN_EMP' LIMIT 1;
+
+-- Client B: Different source table names but same pattern
+INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
+  semantic_field_id, tgt_table_name, tgt_table_physical_name, tgt_column_name, tgt_column_physical_name, tgt_comments,
+  source_expression, source_tables, source_tables_physical, source_columns, source_columns_physical,
+  source_descriptions, source_datatypes, source_domain, target_domain,
+  source_relationship_type, transformations_applied, confidence_score, mapping_source, mapped_by,
+  join_metadata
+)
+SELECT 
+  semantic_field_id, 'MANAGING EMPLOYEE', 'MNGN_EMP', 'Title', 'TITLE', 'The title of the managing employee.',
+  'SELECT COALESCE(tr.job_title, ''Not Specified'') AS TITLE FROM staff_members sm LEFT JOIN job_titles tr ON sm.job_code = tr.job_code',
+  'Staff Members | Job Titles', 'staff_members | job_titles',
+  'Staff Job Code | Job Title Name', 'job_code | job_title',
+  'Code linking to job titles reference | Full job title description', 'VARCHAR(10) | VARCHAR(100)', 'employee', 'managing',
+  'JOIN', 'COALESCE, LOOKUP', 0.89, 'MANUAL', 'test_client_b',
+  '{"is_source_join": true, "join_type": "LEFT", "source_tables": ["staff_members", "job_titles"], "primary_table": "staff_members", "join_conditions": [{"left_table": "staff_members", "left_alias": "sm", "left_column": "job_code", "right_table": "job_titles", "right_alias": "tr", "right_column": "job_code"}], "select_column": {"table": "job_titles", "alias": "tr", "column": "job_title"}, "default_value": "Not Specified"}'
+FROM ${CATALOG_SCHEMA}.semantic_fields 
+WHERE tgt_column_physical_name = 'TITLE' AND tgt_table_physical_name = 'MNGN_EMP' LIMIT 1;
+
+-- Client C: Three-way join (employee + department + title)
+INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
+  semantic_field_id, tgt_table_name, tgt_table_physical_name, tgt_column_name, tgt_column_physical_name, tgt_comments,
+  source_expression, source_tables, source_tables_physical, source_columns, source_columns_physical,
+  source_descriptions, source_datatypes, source_domain, target_domain,
+  source_relationship_type, transformations_applied, confidence_score, mapping_source, mapped_by,
+  join_metadata
+)
+SELECT 
+  semantic_field_id, 'MANAGING EMPLOYEE', 'MNGN_EMP', 'Title', 'TITLE', 'The title of the managing employee.',
+  'SELECT CONCAT(d.dept_name, '' - '', t.role_name) AS TITLE FROM hr_emp e JOIN departments d ON e.dept_id = d.dept_id JOIN roles t ON e.role_id = t.role_id',
+  'HR Employees | Departments | Roles', 'hr_emp | departments | roles',
+  'Employee Dept ID | Department Name | Role ID | Role Name', 'dept_id | dept_name | role_id | role_name',
+  'Department ID link | Department name | Role ID link | Role title', 'INT | VARCHAR(50) | INT | VARCHAR(50)', 'employee', 'managing',
+  'JOIN', 'CONCAT, LOOKUP', 0.85, 'MANUAL', 'test_client_c',
+  '{"is_source_join": true, "join_type": "INNER", "source_tables": ["hr_emp", "departments", "roles"], "primary_table": "hr_emp", "join_conditions": [{"left_table": "hr_emp", "left_alias": "e", "left_column": "dept_id", "right_table": "departments", "right_alias": "d", "right_column": "dept_id"}, {"left_table": "hr_emp", "left_alias": "e", "left_column": "role_id", "right_table": "roles", "right_alias": "t", "right_column": "role_id"}], "select_columns": [{"table": "departments", "alias": "d", "column": "dept_name"}, {"table": "roles", "alias": "t", "column": "role_name"}]}'
+FROM ${CATALOG_SCHEMA}.semantic_fields 
+WHERE tgt_column_physical_name = 'TITLE' AND tgt_table_physical_name = 'MNGN_EMP' LIMIT 1;
+
+
+-- ============================================================================
+-- TEST CASE SET 7: Source-to-Source JOIN Test Fields
+-- ============================================================================
+-- These unmapped fields should match the TITLE source-to-source JOIN patterns
+-- The template should ask the user to specify join fields
+
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_table_physical_name, src_column_name, src_column_physical_name,
+  src_physical_datatype, src_comments, domain, uploaded_by
+) VALUES
+-- Primary employee table - has a title/job code that needs lookup
+('Employee Records', 'emp_records', 'Job Title Code', 'job_title_cd', 'VARCHAR(10)',
+ 'Code representing employee job title - requires lookup to get description', 'employee', 'test_user'),
+-- The reference/lookup table for titles
+('Title Lookup', 'title_lookup', 'Title Description', 'title_desc', 'VARCHAR(100)',
+ 'Full description of the job title', 'employee', 'test_user'),
+-- Join key field on employee side
+('Employee Records', 'emp_records', 'Employee ID', 'emp_id', 'BIGINT',
+ 'Unique identifier for the employee', 'employee', 'test_user'),
+-- A manager table that needs join
+('Manager Assignments', 'mgr_assign', 'Manager Title', 'mgr_title_cd', 'VARCHAR(10)',
+ 'Title code for the manager position', 'employee', 'test_user'),
+('Manager Assignments', 'mgr_assign', 'Manager Employee ID', 'mgr_emp_id', 'BIGINT',
+ 'Employee ID of the manager', 'employee', 'test_user'),
+('Manager Assignments', 'mgr_assign', 'Department ID', 'mgr_dept_id', 'INT',
+ 'Department the manager is assigned to', 'employee', 'test_user');
+
+
+-- ============================================================================
 -- VERIFICATION QUERIES
 -- ============================================================================
 
 -- Check mapped_fields patterns by target
 -- SELECT tgt_column_physical_name, tgt_table_physical_name, 
 --        COUNT(*) as pattern_count,
---        COLLECT_LIST(transformations_applied) as transforms
+--        COLLECT_LIST(transformations_applied) as transforms,
+--        COLLECT_LIST(join_metadata IS NOT NULL) as has_join_meta
 -- FROM ${CATALOG_SCHEMA}.mapped_fields 
 -- WHERE mapped_by LIKE 'test_client_%'
 -- GROUP BY tgt_column_physical_name, tgt_table_physical_name
@@ -772,3 +867,8 @@ INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
 -- FROM ${CATALOG_SCHEMA}.unmapped_fields
 -- WHERE uploaded_by = 'test_user'
 -- ORDER BY domain, src_table_physical_name;
+
+-- Check source-to-source JOIN patterns
+-- SELECT tgt_column_physical_name, source_tables, join_metadata
+-- FROM ${CATALOG_SCHEMA}.mapped_fields
+-- WHERE join_metadata LIKE '%is_source_join%';

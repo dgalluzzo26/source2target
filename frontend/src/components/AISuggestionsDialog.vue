@@ -191,21 +191,42 @@
               </div>
               
               <!-- Pattern transforms for TARGETS that have a matching pattern -->
-              <div v-if="option.hasMatchingPattern && option.transformations" class="pattern-enrichment">
+              <div v-if="option.hasMatchingPattern" class="pattern-enrichment">
                 <div class="enrichment-header">
                   <i class="pi pi-history"></i>
-                  <span v-if="option.patternCount && option.patternCount > 1">
-                    {{ option.patternCount }} similar mappings use:
-                    <Tag 
-                      :value="`${option.frequencyBoost?.toFixed(1)}x boost`" 
-                      severity="success" 
-                      size="small" 
-                      style="margin-left: 0.5rem;"
-                    />
-                  </span>
-                  <span v-else>Similar past mapping uses:</span>
+                  <span>{{ option.patternCount || 1 }} past mapping{{ (option.patternCount || 1) > 1 ? 's' : '' }} to this target:</span>
+                  <Tag 
+                    v-if="option.frequencyBoost && option.frequencyBoost > 1.5"
+                    :value="`${option.frequencyBoost?.toFixed(1)}x boost`" 
+                    severity="success" 
+                    size="small" 
+                    style="margin-left: 0.5rem;"
+                  />
                 </div>
-                <div class="enrichment-transforms">
+                <!-- Unique transform combinations - scrollable if many -->
+                <div v-if="option.uniqueTransformCombos && option.uniqueTransformCombos.length > 0" class="transform-combos-list">
+                  <div 
+                    v-for="combo in option.uniqueTransformCombos" 
+                    :key="combo.transforms"
+                    class="transform-combo-item"
+                    :class="{ 'selected': selectedTransformCombo[option.id] === combo.transforms }"
+                    @click="selectTransformCombo(option.id, combo.transforms)"
+                  >
+                    <span class="combo-count">({{ combo.count }})</span>
+                    <div class="combo-tags">
+                      <Tag 
+                        v-for="t in combo.transforms.split(',').map(x => x.trim()).filter(x => x && x !== 'NONE')" 
+                        :key="t"
+                        :value="t"
+                        severity="info"
+                        size="small"
+                      />
+                      <span v-if="combo.transforms === 'NONE'" class="no-transforms">No transforms</span>
+                    </div>
+                  </div>
+                </div>
+                <!-- Fallback: show voted transforms if no unique combos -->
+                <div v-else-if="option.transformations" class="enrichment-transforms">
                   <Tag 
                     v-for="transform in option.transformations.split(',').map(t => t.trim())" 
                     :key="transform"
@@ -629,6 +650,14 @@ const manualSearchLoading = ref(false)
 
 // Historical patterns state
 const showPatternDetails = ref(true)  // Default to expanded for better UX
+
+// Track selected transform combo per option (for unique combos feature)
+const selectedTransformCombo = ref<Record<string, string>>({})
+
+// Select a transform combo for an option
+function selectTransformCombo(optionId: string, transforms: string) {
+  selectedTransformCombo.value[optionId] = transforms
+}
 
 // Template dialog state
 const showTemplateDialog = ref(false)
@@ -1691,6 +1720,57 @@ function handleClose() {
   font-family: 'JetBrains Mono', monospace;
   color: #166534;
   border: 1px solid #bbf7d0;
+}
+
+/* Unique transform combos list - scrollable */
+.transform-combos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 100px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.transform-combo-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.transform-combo-item:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #86efac;
+}
+
+.transform-combo-item.selected {
+  background: #dcfce7;
+  border-color: #22c55e;
+}
+
+.combo-count {
+  font-size: 0.75rem;
+  color: #166534;
+  font-weight: 600;
+  min-width: 24px;
+}
+
+.combo-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.no-transforms {
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-style: italic;
 }
 
 /* Enhanced Pattern Info with Suggested Mappings */

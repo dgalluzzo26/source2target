@@ -106,8 +106,109 @@
         </div>
       </div>
 
+      <!-- JOIN Fields Section (for source-to-source joins) -->
+      <div v-if="isSourceJoinPattern && joinFieldSlots.length > 0" class="join-fields-section">
+        <h4>
+          <i class="pi pi-link"></i>
+          Join Fields Required
+          <Tag :value="parsedJoinMetadata?.join_type || 'JOIN'" severity="warning" size="small" class="ml-2" />
+        </h4>
+        <p class="join-help-text">
+          This pattern joins multiple source tables. Select the fields to use for each join condition.
+        </p>
+        
+        <div class="join-conditions-list">
+          <div 
+            v-for="(cond, condIdx) in parsedJoinMetadata?.join_conditions || []" 
+            :key="condIdx"
+            class="join-condition-row"
+          >
+            <div class="join-condition-header">
+              <Tag :value="`Join ${condIdx + 1}`" severity="secondary" size="small" />
+              <span class="join-arrow">
+                {{ cond.left_table }} <i class="pi pi-arrow-right"></i> {{ cond.right_table }}
+              </span>
+            </div>
+            
+            <div class="join-fields-row">
+              <!-- Left side field -->
+              <div class="join-field-slot">
+                <label>{{ cond.left_table }}.{{ cond.left_column }}</label>
+                <Dropdown
+                  v-model="getJoinSlot(condIdx, 'left')!.selectedFieldId"
+                  :options="getMatchingFieldsForJoinSlot(getJoinSlot(condIdx, 'left')!)"
+                  optionLabel="label"
+                  optionValue="id"
+                  placeholder="Select join key..."
+                  class="join-dropdown"
+                  :showClear="true"
+                  filter
+                  @change="handleJoinFieldSelection(getJoinSlot(condIdx, 'left')!, $event.value)"
+                >
+                  <template #option="{ option }">
+                    <div class="dropdown-option">
+                      <div class="option-main">
+                        <Tag :value="option.datatype" severity="info" size="small" />
+                        <strong>{{ option.column }}</strong>
+                      </div>
+                      <div class="option-details">
+                        <span class="option-table">{{ option.table }}</span>
+                      </div>
+                      <div v-if="option.matchScore > 0" class="option-match">
+                        <Tag 
+                          :value="`${Math.round(option.matchScore * 100)}%`" 
+                          :severity="option.matchScore > 0.5 ? 'success' : 'secondary'" 
+                          size="small"
+                        />
+                      </div>
+                    </div>
+                  </template>
+                </Dropdown>
+              </div>
+              
+              <div class="join-equals">=</div>
+              
+              <!-- Right side field -->
+              <div class="join-field-slot">
+                <label>{{ cond.right_table }}.{{ cond.right_column }}</label>
+                <Dropdown
+                  v-model="getJoinSlot(condIdx, 'right')!.selectedFieldId"
+                  :options="getMatchingFieldsForJoinSlot(getJoinSlot(condIdx, 'right')!)"
+                  optionLabel="label"
+                  optionValue="id"
+                  placeholder="Select join key..."
+                  class="join-dropdown"
+                  :showClear="true"
+                  filter
+                  @change="handleJoinFieldSelection(getJoinSlot(condIdx, 'right')!, $event.value)"
+                >
+                  <template #option="{ option }">
+                    <div class="dropdown-option">
+                      <div class="option-main">
+                        <Tag :value="option.datatype" severity="info" size="small" />
+                        <strong>{{ option.column }}</strong>
+                      </div>
+                      <div class="option-details">
+                        <span class="option-table">{{ option.table }}</span>
+                      </div>
+                      <div v-if="option.matchScore > 0" class="option-match">
+                        <Tag 
+                          :value="`${Math.round(option.matchScore * 100)}%`" 
+                          :severity="option.matchScore > 0.5 ? 'success' : 'secondary'" 
+                          size="small"
+                        />
+                      </div>
+                    </div>
+                  </template>
+                </Dropdown>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- SQL Preview (if all slots filled) -->
-      <div v-if="allSlotsFilled" class="sql-preview">
+      <div v-if="allSlotsFilled && allJoinFieldsFilled" class="sql-preview">
         <h4>
           <i class="pi pi-code"></i>
           Generated SQL Expression
@@ -119,8 +220,9 @@
     <div class="template-footer">
       <div class="footer-info">
         <i class="pi pi-info-circle"></i>
-        <span v-if="!allSlotsFilled">Fill all slots to apply this pattern</span>
-        <span v-else>Ready to apply template with {{ filledSlotCount }} fields</span>
+        <span v-if="!allSlotsFilled">Fill all source field slots to apply this pattern</span>
+        <span v-else-if="isSourceJoinPattern && !allJoinFieldsFilled">Select all join fields to apply this pattern</span>
+        <span v-else>Ready to apply template with {{ filledSlotCount }} fields{{ isSourceJoinPattern ? ' + JOIN' : '' }}</span>
       </div>
       <div class="footer-actions">
         <Button 
@@ -134,7 +236,7 @@
           label="Apply Template" 
           severity="success"
           icon="pi pi-check"
-          :disabled="!allSlotsFilled"
+          :disabled="!allSlotsFilled || (isSourceJoinPattern && !allJoinFieldsFilled)"
           @click="handleApplyTemplate"
         />
       </div>
@@ -163,6 +265,38 @@ interface HistoricalPattern {
   source_relationship_type?: string
   transformations_applied?: string
   search_score?: number
+  join_metadata?: string  // JSON for source-to-source joins
+}
+
+// Parsed join metadata structure
+interface JoinCondition {
+  left_table: string
+  left_alias: string
+  left_column: string
+  right_table: string
+  right_alias: string
+  right_column: string
+}
+
+interface ParsedJoinMetadata {
+  is_source_join?: boolean
+  join_type?: string
+  source_tables?: string[]
+  primary_table?: string
+  join_conditions?: JoinCondition[]
+  select_column?: { table: string; alias: string; column: string }
+  select_columns?: { table: string; alias: string; column: string }[]
+  default_value?: string
+}
+
+// Join field selection for user input
+interface JoinFieldSlot {
+  joinIndex: number
+  side: 'left' | 'right'
+  tableName: string
+  originalColumn: string  // From the pattern
+  selectedField: UnmappedField | null
+  selectedFieldId: number | null
 }
 
 interface TemplateSlot {
@@ -193,6 +327,159 @@ const emit = defineEmits<Emits>()
 
 // Parse pattern to extract slot information
 const templateSlots = ref<TemplateSlot[]>([])
+
+// Join field slots for source-to-source joins
+const joinFieldSlots = ref<JoinFieldSlot[]>([])
+
+// Parse join_metadata JSON
+const parsedJoinMetadata = computed((): ParsedJoinMetadata | null => {
+  if (!props.pattern.join_metadata) return null
+  try {
+    return JSON.parse(props.pattern.join_metadata)
+  } catch (e) {
+    console.error('[PatternTemplate] Failed to parse join_metadata:', e)
+    return null
+  }
+})
+
+// Is this a source-to-source join pattern?
+const isSourceJoinPattern = computed(() => {
+  return parsedJoinMetadata.value?.is_source_join === true
+})
+
+// Get the tables involved in the join
+const joinTables = computed(() => {
+  return parsedJoinMetadata.value?.source_tables || []
+})
+
+// Check if all join fields are filled
+const allJoinFieldsFilled = computed(() => {
+  if (!isSourceJoinPattern.value) return true
+  return joinFieldSlots.value.every(slot => slot.selectedField !== null)
+})
+
+// Initialize join field slots from join_metadata
+function parseJoinFieldSlots() {
+  const slots: JoinFieldSlot[] = []
+  const metadata = parsedJoinMetadata.value
+  
+  if (!metadata?.is_source_join || !metadata.join_conditions) {
+    joinFieldSlots.value = []
+    return
+  }
+  
+  console.log('[PatternTemplate] Parsing JOIN conditions:', metadata.join_conditions)
+  
+  metadata.join_conditions.forEach((cond, idx) => {
+    // Left side of join (e.g., employees.title_cd)
+    slots.push({
+      joinIndex: idx,
+      side: 'left',
+      tableName: cond.left_table,
+      originalColumn: cond.left_column,
+      selectedField: null,
+      selectedFieldId: null
+    })
+    
+    // Right side of join (e.g., title_ref.title_cd)
+    slots.push({
+      joinIndex: idx,
+      side: 'right',
+      tableName: cond.right_table,
+      originalColumn: cond.right_column,
+      selectedField: null,
+      selectedFieldId: null
+    })
+  })
+  
+  // Try to auto-match join fields from available fields
+  slots.forEach(slot => {
+    const bestMatch = findBestJoinFieldMatch(slot)
+    if (bestMatch && bestMatch.matchScore > 0.5) {
+      slot.selectedField = bestMatch.field
+      slot.selectedFieldId = bestMatch.field.id
+      console.log('[PatternTemplate] Auto-matched join field:', slot.originalColumn, '->', bestMatch.field.src_column_name)
+    }
+  })
+  
+  joinFieldSlots.value = slots
+}
+
+// Find best matching field for a join slot
+function findBestJoinFieldMatch(slot: JoinFieldSlot): { field: UnmappedField; matchScore: number } | null {
+  let bestMatch: { field: UnmappedField; matchScore: number } | null = null
+  
+  for (const field of props.availableFields) {
+    const score = calculateJoinFieldMatchScore(field, slot)
+    if (score > (bestMatch?.matchScore || 0)) {
+      bestMatch = { field, matchScore: score }
+    }
+  }
+  
+  return bestMatch
+}
+
+// Calculate match score for a field against a join slot
+function calculateJoinFieldMatchScore(field: UnmappedField, slot: JoinFieldSlot): number {
+  let score = 0
+  
+  const fieldCol = (field.src_column_physical_name || field.src_column_name || '').toLowerCase()
+  const fieldTable = (field.src_table_physical_name || field.src_table_name || '').toLowerCase()
+  const slotCol = slot.originalColumn.toLowerCase()
+  const slotTable = slot.tableName.toLowerCase()
+  
+  // Exact column match
+  if (fieldCol === slotCol) score += 0.5
+  // Partial column match
+  else if (fieldCol.includes(slotCol) || slotCol.includes(fieldCol)) score += 0.3
+  
+  // Table name match (soft signal)
+  if (fieldTable === slotTable) score += 0.3
+  else if (fieldTable.includes(slotTable) || slotTable.includes(fieldTable)) score += 0.1
+  
+  // Check for common join key patterns
+  const joinKeyPatterns = ['_id', '_key', '_sk', '_cd', '_code', 'id_']
+  if (joinKeyPatterns.some(p => fieldCol.includes(p) && slotCol.includes(p))) {
+    score += 0.2
+  }
+  
+  return Math.min(score, 1)
+}
+
+// Get matching fields for a join slot dropdown
+function getMatchingFieldsForJoinSlot(slot: JoinFieldSlot) {
+  return props.availableFields
+    .map(f => {
+      const score = calculateJoinFieldMatchScore(f, slot)
+      return {
+        id: f.id,
+        label: `${f.src_column_name} (${f.src_table_name})`,
+        column: f.src_column_name,
+        table: f.src_table_name,
+        datatype: f.src_physical_datatype,
+        description: f.src_comments,
+        matchScore: score,
+        field: f
+      }
+    })
+    .sort((a, b) => b.matchScore - a.matchScore)
+}
+
+// Handle join field selection
+function handleJoinFieldSelection(slot: JoinFieldSlot, fieldId: number | null) {
+  if (fieldId === null) {
+    slot.selectedField = null
+    return
+  }
+  
+  const field = props.availableFields.find(f => f.id === fieldId)
+  slot.selectedField = field || null
+}
+
+// Get a specific join slot by index and side
+function getJoinSlot(condIdx: number, side: 'left' | 'right'): JoinFieldSlot | undefined {
+  return joinFieldSlots.value.find(s => s.joinIndex === condIdx && s.side === side)
+}
 
 function parsePatternSlots() {
   const slots: TemplateSlot[] = []
@@ -444,6 +731,11 @@ const filledSlotCount = computed(() => {
 
 // Generate SQL based on filled slots and pattern transformations
 function buildSQLExpression(): string {
+  // Check for source-to-source JOIN pattern
+  if (isSourceJoinPattern.value && allJoinFieldsFilled.value) {
+    return buildJoinSQL()
+  }
+  
   // Get all filled fields (use physical names for SQL)
   const filledSlots = templateSlots.value.filter(s => s.selectedField)
   
@@ -612,6 +904,109 @@ function buildSQLForFields(fields: string[]): string {
   }
 }
 
+// Build SQL for source-to-source JOIN patterns
+function buildJoinSQL(): string {
+  const metadata = parsedJoinMetadata.value
+  if (!metadata || !metadata.join_conditions) return ''
+  
+  console.log('[PatternTemplate] ========== BUILDING JOIN SQL ==========')
+  
+  // Get the first (primary) table from slots
+  const primarySlot = templateSlots.value.find(s => s.selectedField)
+  const primaryTable = primarySlot?.selectedField?.src_table_physical_name || 
+                       primarySlot?.selectedField?.src_table_name || 'source_table'
+  const primaryAlias = 'a'
+  
+  // Get the selected field for the SELECT clause
+  const selectField = primarySlot?.selectedField
+  let selectColumn = selectField?.src_column_physical_name || selectField?.src_column_name || 'column'
+  
+  // If pattern has a specific select column from a lookup table, use that
+  if (metadata.select_column) {
+    // Find the join slot for the right side of first join
+    const lookupSlot = getJoinSlot(0, 'right')
+    const lookupTable = lookupSlot?.selectedField?.src_table_physical_name || 
+                        lookupSlot?.selectedField?.src_table_name || metadata.select_column.table
+    const lookupAlias = 'b'
+    
+    // Find the actual column to select from the lookup table
+    // We need to find an unmapped field from the lookup table that matches the select pattern
+    const lookupField = props.availableFields.find(f => 
+      (f.src_table_physical_name || f.src_table_name || '').toLowerCase() === lookupTable.toLowerCase() &&
+      !joinFieldSlots.value.some(js => js.selectedField?.id === f.id) // Not used as join key
+    )
+    
+    selectColumn = lookupField 
+      ? `${lookupAlias}.${lookupField.src_column_physical_name || lookupField.src_column_name}`
+      : `${lookupAlias}.${metadata.select_column.column}`
+  }
+  
+  // Build the JOIN clauses
+  const joinClauses: string[] = []
+  let tableAliasMap: { [key: string]: string } = { [primaryTable.toLowerCase()]: primaryAlias }
+  let aliasCounter = 1  // Start with 'b' for first join
+  
+  metadata.join_conditions.forEach((cond, idx) => {
+    const leftSlot = getJoinSlot(idx, 'left')
+    const rightSlot = getJoinSlot(idx, 'right')
+    
+    if (!leftSlot?.selectedField || !rightSlot?.selectedField) return
+    
+    const leftTable = leftSlot.selectedField.src_table_physical_name || 
+                      leftSlot.selectedField.src_table_name || ''
+    const leftCol = leftSlot.selectedField.src_column_physical_name || 
+                    leftSlot.selectedField.src_column_name || ''
+    
+    const rightTable = rightSlot.selectedField.src_table_physical_name || 
+                       rightSlot.selectedField.src_table_name || ''
+    const rightCol = rightSlot.selectedField.src_column_physical_name || 
+                     rightSlot.selectedField.src_column_name || ''
+    
+    // Assign alias for right table if not already assigned
+    if (!tableAliasMap[rightTable.toLowerCase()]) {
+      tableAliasMap[rightTable.toLowerCase()] = String.fromCharCode(97 + aliasCounter) // 'b', 'c', 'd', etc.
+      aliasCounter++
+    }
+    
+    const leftAlias = tableAliasMap[leftTable.toLowerCase()] || primaryAlias
+    const rightAlias = tableAliasMap[rightTable.toLowerCase()]
+    
+    const joinType = metadata.join_type || 'LEFT'
+    joinClauses.push(
+      `${joinType} JOIN ${rightTable} ${rightAlias} ON ${leftAlias}.${leftCol} = ${rightAlias}.${rightCol}`
+    )
+  })
+  
+  // Apply transforms to select column if specified
+  const transforms = props.pattern.transformations_applied || ''
+  const transformList = transforms.split(/[,\s]+/).map(t => t.trim().toUpperCase()).filter(t => t)
+  
+  let selectExpr = selectColumn
+  
+  // Check for COALESCE with default value
+  if (transformList.includes('COALESCE') && metadata.default_value) {
+    selectExpr = `COALESCE(${selectExpr}, '${metadata.default_value}')`
+  }
+  
+  // Apply other transforms
+  transformList.filter(t => !['COALESCE', 'LOOKUP', 'JOIN'].includes(t)).forEach(t => {
+    if (['TRIM', 'UPPER', 'LOWER', 'INITCAP'].includes(t)) {
+      selectExpr = `${t}(${selectExpr})`
+    }
+  })
+  
+  // Get target column name
+  const targetCol = props.pattern.tgt_column_physical_name || props.pattern.tgt_column_name || 'target'
+  
+  // Build final SQL
+  const sql = `SELECT ${selectExpr} AS ${targetCol}\nFROM ${primaryTable} ${primaryAlias}\n${joinClauses.join('\n')}`
+  
+  console.log('[PatternTemplate] Generated JOIN SQL:', sql)
+  console.log('[PatternTemplate] ========== END JOIN SQL ==========')
+  
+  return sql
+}
+
 // Helper to escape regex special characters
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -655,14 +1050,17 @@ function handleApplyTemplate() {
 // Initialize on mount and when pattern changes
 onMounted(() => {
   parsePatternSlots()
+  parseJoinFieldSlots()
 })
 
 watch(() => props.pattern, () => {
   parsePatternSlots()
+  parseJoinFieldSlots()
 }, { deep: true })
 
 watch(() => props.currentlySelectedFields, () => {
   parsePatternSlots()
+  parseJoinFieldSlots()
 }, { deep: true })
 </script>
 
@@ -968,6 +1366,92 @@ watch(() => props.currentlySelectedFields, () => {
 .footer-actions {
   display: flex;
   gap: 0.75rem;
+}
+
+/* Join Fields Section */
+.join-fields-section {
+  padding: 1rem;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-radius: 8px;
+  border: 1px solid #f59e0b;
+}
+
+.join-fields-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem 0;
+  color: #92400e;
+  font-size: 0.95rem;
+}
+
+.join-fields-section h4 i {
+  color: #f59e0b;
+}
+
+.join-help-text {
+  font-size: 0.85rem;
+  color: #78350f;
+  margin-bottom: 1rem;
+}
+
+.join-conditions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.join-condition-row {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.join-condition-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.join-arrow {
+  font-size: 0.85rem;
+  color: #92400e;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.join-arrow i {
+  font-size: 0.75rem;
+}
+
+.join-fields-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.join-field-slot {
+  flex: 1;
+}
+
+.join-field-slot label {
+  display: block;
+  font-size: 0.75rem;
+  color: #78350f;
+  margin-bottom: 0.25rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.join-dropdown {
+  width: 100%;
+}
+
+.join-equals {
+  font-weight: bold;
+  color: #92400e;
+  padding: 0 0.5rem;
 }
 
 /* Responsive */

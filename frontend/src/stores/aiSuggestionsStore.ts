@@ -108,6 +108,16 @@ export interface UnifiedMappingOption {
   // Frequency boosting info
   patternCount?: number  // How many similar patterns were aggregated
   frequencyBoost?: number  // The boost multiplier applied
+  
+  // Unique transform combinations for user selection
+  uniqueTransformCombos?: TransformCombo[]
+}
+
+// Unique transformation combination with count
+export interface TransformCombo {
+  transforms: string  // e.g., "TRIM, INITCAP"
+  count: number       // How many patterns use this exact combo
+  patterns: HistoricalPattern[]  // The patterns with this combo
 }
 
 // Aggregated pattern group - patterns grouped by target + column count
@@ -127,6 +137,9 @@ export interface AggregatedPatternGroup {
   // Voted transformations (majority wins)
   votedTransformations: string[]
   transformationVotes: Map<string, number>
+  
+  // Unique transform combinations (for UI selection)
+  uniqueTransformCombos: TransformCombo[]
   
   // Boost multiplier based on frequency
   frequencyBoost: number
@@ -501,13 +514,17 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       // Vote on transformations
       const { votedTransforms, votes } = voteOnTransformations(groupPatterns)
       
+      // Calculate unique transform combinations
+      const uniqueTransformCombos = getUniqueTransformCombos(groupPatterns)
+      
       // Calculate frequency boost
       const frequencyBoost = calculateFrequencyBoost(groupPatterns.length)
       const boostedScore = aggregatedScore * frequencyBoost
       
       console.log(`[Pattern Group] ${targetKey} (${columnCount} cols): ${groupPatterns.length} patterns, ` +
         `score=${aggregatedScore.toFixed(4)} * ${frequencyBoost.toFixed(2)} = ${boostedScore.toFixed(4)}, ` +
-        `transforms=[${votedTransforms.join(', ')}]`)
+        `transforms=[${votedTransforms.join(', ')}], ` +
+        `unique combos: ${uniqueTransformCombos.map(c => `${c.transforms}(${c.count})`).join(', ')}`)
       
       aggregatedGroups.push({
         targetKey,
@@ -518,6 +535,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         aggregatedScore,
         votedTransformations: votedTransforms,
         transformationVotes: votes,
+        uniqueTransformCombos,
         frequencyBoost,
         boostedScore
       })
@@ -529,6 +547,39 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     console.log(`[Pattern Aggregation] ${patterns.length} patterns -> ${aggregatedGroups.length} groups`)
     
     return aggregatedGroups
+  }
+  
+  // Get unique transformation combinations with counts
+  function getUniqueTransformCombos(patterns: HistoricalPattern[]): TransformCombo[] {
+    const comboMap = new Map<string, HistoricalPattern[]>()
+    
+    patterns.forEach(p => {
+      // Normalize: uppercase, sort, deduplicate
+      const transforms = (p.transformations_applied || '')
+        .split(',')
+        .map(t => t.trim().toUpperCase())
+        .filter(t => t.length > 0)
+        .sort()
+      const comboKey = transforms.join(', ') || 'NONE'
+      
+      if (!comboMap.has(comboKey)) {
+        comboMap.set(comboKey, [])
+      }
+      comboMap.get(comboKey)!.push(p)
+    })
+    
+    // Convert to array and sort by count (most common first)
+    const combos: TransformCombo[] = []
+    comboMap.forEach((pats, transforms) => {
+      combos.push({
+        transforms,
+        count: pats.length,
+        patterns: pats
+      })
+    })
+    
+    combos.sort((a, b) => b.count - a.count)
+    return combos
   }
   
   // Unified ranked list combining AI suggestions and historical patterns
@@ -664,6 +715,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         existing.hasMatchingPattern = true
         existing.patternCount = group.patternCount
         existing.frequencyBoost = group.frequencyBoost
+        existing.uniqueTransformCombos = group.uniqueTransformCombos
         
         // Update reasoning to include pattern frequency info
         const patternInfo = group.patternCount > 1 
@@ -717,7 +769,8 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
           transformations: votedTransformsStr,
           isMultiColumn: p.isMultiColumn || group.columnCount > 1,
           patternCount: group.patternCount,
-          frequencyBoost: group.frequencyBoost
+          frequencyBoost: group.frequencyBoost,
+          uniqueTransformCombos: group.uniqueTransformCombos
         })
       }
     })
