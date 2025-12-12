@@ -66,11 +66,18 @@ class MappedFieldV3(BaseModel):
     
     # Source metadata for display and AI learning
     source_tables: Optional[str] = Field(None, description="Comma-separated source table names")
+    source_tables_physical: Optional[str] = Field(None, description="Comma-separated source table physical names")
     source_columns: Optional[str] = Field(None, description="Comma-separated source column names")
+    source_columns_physical: Optional[str] = Field(None, description="Comma-separated source column physical names")
     source_descriptions: Optional[str] = Field(None, description="Pipe-separated source column descriptions")
     source_datatypes: Optional[str] = Field(None, description="Comma-separated source data types")
+    source_domain: Optional[str] = Field(None, description="Source domain category")
+    target_domain: Optional[str] = Field(None, description="Target domain category")
     source_relationship_type: str = Field(default="SINGLE", description="SINGLE, JOIN, or UNION")
     transformations_applied: Optional[str] = Field(None, description="Comma-separated transformations")
+    
+    # JOIN metadata for complex patterns
+    join_metadata: Optional[str] = Field(None, description="JSON metadata for JOIN/UNION patterns")
     
     # AI/Confidence metadata
     confidence_score: Optional[float] = Field(None, description="AI confidence (0.0-1.0)")
@@ -111,8 +118,12 @@ class MappedFieldCreateV3(BaseModel):
     source_descriptions: Optional[str] = None
     source_datatypes: Optional[str] = None
     source_domain: Optional[str] = None  # Preserve domain for restore on delete
+    target_domain: Optional[str] = None  # Target domain category
     source_relationship_type: str = "SINGLE"
     transformations_applied: Optional[str] = None
+    
+    # JOIN metadata for complex patterns
+    join_metadata: Optional[str] = None  # JSON metadata for JOIN/UNION patterns
     
     # AI metadata
     confidence_score: Optional[float] = None
@@ -137,8 +148,12 @@ class MappedFieldUpdateV3(BaseModel):
     source_descriptions: Optional[str] = None
     source_datatypes: Optional[str] = None
     source_domain: Optional[str] = None
+    target_domain: Optional[str] = None
     source_relationship_type: Optional[str] = None
     transformations_applied: Optional[str] = None
+    
+    # JOIN metadata for complex patterns
+    join_metadata: Optional[str] = None
     
     # AI metadata - can be updated
     ai_reasoning: Optional[str] = None

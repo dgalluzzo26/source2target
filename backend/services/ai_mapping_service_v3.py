@@ -275,8 +275,11 @@ class AIMappingServiceV3:
                     source_columns_physical,
                     source_descriptions,
                     source_datatypes,
+                    source_domain,
+                    target_domain,
                     source_relationship_type,
                     transformations_applied,
+                    join_metadata,
                     confidence_score,
                     search_score
                 FROM vector_search(

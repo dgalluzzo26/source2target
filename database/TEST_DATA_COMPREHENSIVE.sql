@@ -427,6 +427,226 @@ WHERE tgt_column_physical_name = 'SRC_KEY_ID' AND tgt_table_physical_name = 'MBR
 
 
 -- ============================================================================
+-- SCENARIO G: JOIN/LOOKUP PATTERNS - 3 Historical Patterns with join_metadata
+-- ============================================================================
+-- Target: MBR_CNTCT.MBR_SK (lookup to member foundation)
+-- These patterns include join_metadata for template UI testing
+
+-- Client A: Simple lookup join
+INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
+  semantic_field_id, tgt_table_name, tgt_table_physical_name, tgt_column_name, tgt_column_physical_name, tgt_comments,
+  source_expression, source_tables, source_tables_physical, source_columns, source_columns_physical,
+  source_descriptions, source_datatypes, source_domain, target_domain,
+  source_relationship_type, transformations_applied, confidence_score, mapping_source, mapped_by,
+  join_metadata
+)
+SELECT 
+  semantic_field_id, 'MEMBER CONTACT', 'MBR_CNTCT', 'Member SK', 'MBR_SK', 'Unique identifier for a given member',
+  'SELECT mf.MBR_SK FROM t_re_base b JOIN mbr_fndtn mf ON b.SAK_RECIP = mf.SRC_KEY_ID WHERE mf.CURR_REC_IND=''1''',
+  'Recipient Base | Member Foundation', 't_re_base | mbr_fndtn',
+  'Recipient Key', 'SAK_RECIP',
+  'Surrogate key for the recipient to join to member foundation', 'BIGINT', 'member', 'member',
+  'JOIN', 'LOOKUP, JOIN', 0.92, 'MANUAL', 'test_client_a',
+  '{
+    "patternType": "JOIN_LOOKUP",
+    "outputColumn": "MBR_SK",
+    "outputTable": "mbr_fndtn",
+    "outputAlias": "mf",
+    "userSourceTable": {
+      "originalName": "t_re_base",
+      "alias": "b",
+      "description": "Primary recipient base table"
+    },
+    "joins": [
+      {
+        "joinType": "INNER",
+        "targetTable": {
+          "name": "mbr_fndtn",
+          "alias": "mf",
+          "isSharedSilver": true
+        },
+        "conditions": [
+          {
+            "type": "column_match",
+            "sourceColumn": "SAK_RECIP",
+            "sourceDescription": "Recipient surrogate key",
+            "targetColumn": "SRC_KEY_ID",
+            "targetDescription": "Source system key ID"
+          }
+        ]
+      }
+    ],
+    "whereFilters": ["mf.CURR_REC_IND=''1''"],
+    "userColumnsToMap": [
+      {
+        "placeholder": "SAK_RECIP",
+        "description": "Recipient key to join to mbr_fndtn.SRC_KEY_ID",
+        "required": true,
+        "joinTarget": "mbr_fndtn.SRC_KEY_ID"
+      }
+    ],
+    "userTablesToMap": [
+      {
+        "placeholder": "t_re_base",
+        "description": "Primary source table with member info",
+        "required": true
+      }
+    ],
+    "sharedSilverTables": [
+      {
+        "name": "mbr_fndtn",
+        "description": "Member Foundation lookup",
+        "keyColumn": "SRC_KEY_ID"
+      }
+    ]
+  }'
+FROM ${CATALOG_SCHEMA}.semantic_fields 
+WHERE tgt_column_physical_name = 'MBR_SK' AND tgt_table_physical_name = 'MBR_CNTCT' LIMIT 1;
+
+-- Client B: Similar lookup join
+INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
+  semantic_field_id, tgt_table_name, tgt_table_physical_name, tgt_column_name, tgt_column_physical_name, tgt_comments,
+  source_expression, source_tables, source_tables_physical, source_columns, source_columns_physical,
+  source_descriptions, source_datatypes, source_domain, target_domain,
+  source_relationship_type, transformations_applied, confidence_score, mapping_source, mapped_by,
+  join_metadata
+)
+SELECT 
+  semantic_field_id, 'MEMBER CONTACT', 'MBR_CNTCT', 'Member SK', 'MBR_SK', 'Unique identifier for a given member',
+  'SELECT mf.MBR_SK FROM patient_demo p JOIN mbr_fndtn mf ON p.patient_id = mf.SRC_KEY_ID WHERE mf.CURR_REC_IND=''1''',
+  'Patient Demographics | Member Foundation', 'patient_demo | mbr_fndtn',
+  'Patient ID', 'patient_id',
+  'Patient identifier to join to member foundation', 'BIGINT', 'member', 'member',
+  'JOIN', 'LOOKUP, JOIN', 0.90, 'MANUAL', 'test_client_b',
+  '{
+    "patternType": "JOIN_LOOKUP",
+    "outputColumn": "MBR_SK",
+    "outputTable": "mbr_fndtn",
+    "outputAlias": "mf",
+    "userSourceTable": {
+      "originalName": "patient_demo",
+      "alias": "p",
+      "description": "Patient demographics table"
+    },
+    "joins": [
+      {
+        "joinType": "INNER",
+        "targetTable": {
+          "name": "mbr_fndtn",
+          "alias": "mf",
+          "isSharedSilver": true
+        },
+        "conditions": [
+          {
+            "type": "column_match",
+            "sourceColumn": "patient_id",
+            "sourceDescription": "Patient identifier",
+            "targetColumn": "SRC_KEY_ID",
+            "targetDescription": "Source system key ID"
+          }
+        ]
+      }
+    ],
+    "whereFilters": ["mf.CURR_REC_IND=''1''"],
+    "userColumnsToMap": [
+      {
+        "placeholder": "patient_id",
+        "description": "Patient key to join to mbr_fndtn.SRC_KEY_ID",
+        "required": true,
+        "joinTarget": "mbr_fndtn.SRC_KEY_ID"
+      }
+    ],
+    "userTablesToMap": [
+      {
+        "placeholder": "patient_demo",
+        "description": "Patient demographics source table",
+        "required": true
+      }
+    ],
+    "sharedSilverTables": [
+      {
+        "name": "mbr_fndtn",
+        "description": "Member Foundation lookup",
+        "keyColumn": "SRC_KEY_ID"
+      }
+    ]
+  }'
+FROM ${CATALOG_SCHEMA}.semantic_fields 
+WHERE tgt_column_physical_name = 'MBR_SK' AND tgt_table_physical_name = 'MBR_CNTCT' LIMIT 1;
+
+-- Client C: Lookup join with additional filter
+INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
+  semantic_field_id, tgt_table_name, tgt_table_physical_name, tgt_column_name, tgt_column_physical_name, tgt_comments,
+  source_expression, source_tables, source_tables_physical, source_columns, source_columns_physical,
+  source_descriptions, source_datatypes, source_domain, target_domain,
+  source_relationship_type, transformations_applied, confidence_score, mapping_source, mapped_by,
+  join_metadata
+)
+SELECT 
+  semantic_field_id, 'MEMBER CONTACT', 'MBR_CNTCT', 'Member SK', 'MBR_SK', 'Unique identifier for a given member',
+  'SELECT mf.MBR_SK FROM enrollee_file e JOIN mbr_fndtn mf ON e.mbr_key = mf.SRC_KEY_ID WHERE mf.CURR_REC_IND=''1''',
+  'Enrollee File | Member Foundation', 'enrollee_file | mbr_fndtn',
+  'Member Key', 'mbr_key',
+  'Member key identifier to join to member foundation', 'BIGINT', 'member', 'member',
+  'JOIN', 'LOOKUP, JOIN', 0.88, 'MANUAL', 'test_client_c',
+  '{
+    "patternType": "JOIN_LOOKUP",
+    "outputColumn": "MBR_SK",
+    "outputTable": "mbr_fndtn",
+    "outputAlias": "mf",
+    "userSourceTable": {
+      "originalName": "enrollee_file",
+      "alias": "e",
+      "description": "Enrollee file table"
+    },
+    "joins": [
+      {
+        "joinType": "INNER",
+        "targetTable": {
+          "name": "mbr_fndtn",
+          "alias": "mf",
+          "isSharedSilver": true
+        },
+        "conditions": [
+          {
+            "type": "column_match",
+            "sourceColumn": "mbr_key",
+            "sourceDescription": "Member key identifier",
+            "targetColumn": "SRC_KEY_ID",
+            "targetDescription": "Source system key ID"
+          }
+        ]
+      }
+    ],
+    "whereFilters": ["mf.CURR_REC_IND=''1''"],
+    "userColumnsToMap": [
+      {
+        "placeholder": "mbr_key",
+        "description": "Member key to join to mbr_fndtn.SRC_KEY_ID",
+        "required": true,
+        "joinTarget": "mbr_fndtn.SRC_KEY_ID"
+      }
+    ],
+    "userTablesToMap": [
+      {
+        "placeholder": "enrollee_file",
+        "description": "Enrollee source table",
+        "required": true
+      }
+    ],
+    "sharedSilverTables": [
+      {
+        "name": "mbr_fndtn",
+        "description": "Member Foundation lookup",
+        "keyColumn": "SRC_KEY_ID"
+      }
+    ]
+  }'
+FROM ${CATALOG_SCHEMA}.semantic_fields 
+WHERE tgt_column_physical_name = 'MBR_SK' AND tgt_table_physical_name = 'MBR_CNTCT' LIMIT 1;
+
+
+-- ============================================================================
 -- PART 2: UNMAPPED_FIELDS - Test Cases to Match Against Patterns
 -- ============================================================================
 
@@ -488,7 +708,22 @@ INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
 
 
 -- ============================================================================
--- TEST CASE SET 4: Different Domain (Claims)
+-- TEST CASE SET 4: JOIN/LOOKUP Mappings
+-- ============================================================================
+
+INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
+  src_table_name, src_table_physical_name, src_column_name, src_column_physical_name,
+  src_physical_datatype, src_comments, domain, uploaded_by
+) VALUES
+-- Should match MBR_SK JOIN patterns (3 historical with join_metadata)
+('Member Base', 'member_base', 'Recipient Key', 'recip_key', 'BIGINT',
+ 'Recipient surrogate key used to join to member foundation tables', 'member', 'test_user'),
+('Member Base', 'member_base', 'Current Record Flag', 'curr_rec_ind', 'STRING',
+ 'Indicator for current record status', 'member', 'test_user');
+
+
+-- ============================================================================
+-- TEST CASE SET 5: Different Domain (Claims)
 -- ============================================================================
 
 INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
@@ -504,7 +739,7 @@ INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
 
 
 -- ============================================================================
--- TEST CASE SET 5: Edge Cases
+-- TEST CASE SET 6: Edge Cases
 -- ============================================================================
 
 INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (

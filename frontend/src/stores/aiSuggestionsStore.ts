@@ -37,8 +37,12 @@ export interface HistoricalPattern {
   source_columns?: string
   source_columns_physical?: string
   source_descriptions?: string
+  source_datatypes?: string
+  source_domain?: string
+  target_domain?: string
   source_relationship_type?: string
   transformations_applied?: string
+  join_metadata?: string  // JSON metadata for JOIN/UNION patterns
   confidence_score?: number
   search_score?: number
   ai_reasoning?: string

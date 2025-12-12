@@ -192,7 +192,7 @@ class MappingServiceV3:
         
         try:
             with connection.cursor() as cursor:
-                # Insert into mapped_fields (without source_semantic_field - it may be a generated column)
+                # Insert into mapped_fields (without source_semantic_field - it's a generated column)
                 insert_sql = f"""
                 INSERT INTO {mapped_fields_table} (
                     semantic_field_id,
@@ -209,8 +209,10 @@ class MappingServiceV3:
                     source_descriptions,
                     source_datatypes,
                     source_domain,
+                    target_domain,
                     source_relationship_type,
                     transformations_applied,
+                    join_metadata,
                     confidence_score,
                     mapping_source,
                     ai_reasoning,
@@ -232,8 +234,10 @@ class MappingServiceV3:
                     {f"'{self._escape_sql(data.source_descriptions)}'" if data.source_descriptions else 'NULL'},
                     {f"'{self._escape_sql(data.source_datatypes)}'" if data.source_datatypes else 'NULL'},
                     {f"'{self._escape_sql(data.source_domain)}'" if data.source_domain else 'NULL'},
+                    {f"'{self._escape_sql(data.target_domain)}'" if hasattr(data, 'target_domain') and data.target_domain else 'NULL'},
                     '{data.source_relationship_type}',
                     {f"'{self._escape_sql(data.transformations_applied)}'" if data.transformations_applied else 'NULL'},
+                    {f"'{self._escape_sql(data.join_metadata)}'" if hasattr(data, 'join_metadata') and data.join_metadata else 'NULL'},
                     {data.confidence_score if data.confidence_score is not None else 'NULL'},
                     '{data.mapping_source}',
                     {f"'{self._escape_sql(data.ai_reasoning)}'" if data.ai_reasoning else 'NULL'},
@@ -357,8 +361,10 @@ class MappingServiceV3:
                         source_descriptions,
                         source_datatypes,
                         source_domain,
+                        target_domain,
                         source_relationship_type,
                         transformations_applied,
+                        join_metadata,
                         confidence_score,
                         mapping_source,
                         ai_reasoning,
@@ -440,8 +446,10 @@ class MappingServiceV3:
                         source_descriptions,
                         source_datatypes,
                         source_domain,
+                        target_domain,
                         source_relationship_type,
                         transformations_applied,
+                        join_metadata,
                         confidence_score,
                         mapping_source,
                         ai_reasoning,
