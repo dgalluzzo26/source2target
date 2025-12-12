@@ -343,8 +343,32 @@ const parsedJoinMetadata = computed((): ParsedJoinMetadata | null => {
 })
 
 // Is this a source-to-source join pattern?
+// Get the tables selected by user IN THE TEMPLATE (not original search)
+const tablesSelectedInTemplate = computed(() => {
+  const tables = new Set<string>()
+  
+  // ONLY from templateSlots - what user selected in the template
+  templateSlots.value.forEach(slot => {
+    if (slot.selectedField) {
+      const table = (slot.selectedField.src_table_physical_name || slot.selectedField.src_table_name || '').toLowerCase()
+      if (table) tables.add(table)
+    }
+  })
+  
+  return tables
+})
+
+// Did user select fields from multiple different tables in the template?
+const userSelectedMultipleTables = computed(() => {
+  return tablesSelectedInTemplate.value.size > 1
+})
+
+// Pattern has join metadata AND user selected multiple tables → show join section
 const isSourceJoinPattern = computed(() => {
-  return parsedJoinMetadata.value?.is_source_join === true
+  // Only show join section if BOTH:
+  // 1. Pattern has join metadata (historical pattern used joins)
+  // 2. User has selected fields from 2+ different tables in the template
+  return parsedJoinMetadata.value?.is_source_join === true && userSelectedMultipleTables.value
 })
 
 // Get the tables involved in the join
@@ -355,6 +379,7 @@ const joinTables = computed(() => {
 // Check if all join fields are filled
 const allJoinFieldsFilled = computed(() => {
   if (!isSourceJoinPattern.value) return true
+  if (joinFieldSlots.value.length === 0) return true  // No join slots yet
   return joinFieldSlots.value.every(slot => slot.selectedField !== null)
 })
 
@@ -405,11 +430,17 @@ function parseJoinFieldSlots() {
   joinFieldSlots.value = slots
 }
 
-// Find best matching field for a join slot
+// Find best matching field for a join slot - ONLY from tables in the mapping
 function findBestJoinFieldMatch(slot: JoinFieldSlot): { field: UnmappedField; matchScore: number } | null {
   let bestMatch: { field: UnmappedField; matchScore: number } | null = null
   
-  for (const field of props.availableFields) {
+  // Filter to only fields from tables in the mapping
+  const eligibleFields = props.availableFields.filter(f => {
+    const fieldTable = (f.src_table_physical_name || f.src_table_name || '').toLowerCase()
+    return tablesInMapping.value.has(fieldTable)
+  })
+  
+  for (const field of eligibleFields) {
     const score = calculateJoinFieldMatchScore(field, slot)
     if (score > (bestMatch?.matchScore || 0)) {
       bestMatch = { field, matchScore: score }
@@ -446,9 +477,21 @@ function calculateJoinFieldMatchScore(field: UnmappedField, slot: JoinFieldSlot)
   return Math.min(score, 1)
 }
 
-// Get matching fields for a join slot dropdown
+// Tables for join dropdown = ONLY tables selected in template slots (not original search)
+const tablesInMapping = computed(() => {
+  // Reuse the same set as tablesSelectedInTemplate
+  return tablesSelectedInTemplate.value
+})
+
+// Get matching fields for a join slot dropdown - ONLY from tables in the mapping
 function getMatchingFieldsForJoinSlot(slot: JoinFieldSlot) {
-  return props.availableFields
+  // Filter to ONLY fields from tables that are part of this mapping
+  const eligibleFields = props.availableFields.filter(f => {
+    const fieldTable = (f.src_table_physical_name || f.src_table_name || '').toLowerCase()
+    return tablesInMapping.value.has(fieldTable)
+  })
+  
+  return eligibleFields
     .map(f => {
       const score = calculateJoinFieldMatchScore(f, slot)
       return {
@@ -1061,6 +1104,15 @@ watch(() => props.pattern, () => {
 watch(() => props.currentlySelectedFields, () => {
   parsePatternSlots()
   parseJoinFieldSlots()
+}, { deep: true })
+
+// Re-parse join fields when user changes template slot selections (selects different tables)
+watch(tablesSelectedInTemplate, (newTables, oldTables) => {
+  // Only re-parse if tables changed (user selected field from different table)
+  if (newTables.size !== oldTables?.size || ![...newTables].every(t => oldTables?.has(t))) {
+    console.log('[PatternTemplate] Tables changed:', [...newTables], '- re-parsing join fields')
+    parseJoinFieldSlots()
+  }
 }, { deep: true })
 </script>
 

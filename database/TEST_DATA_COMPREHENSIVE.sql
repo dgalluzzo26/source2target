@@ -755,14 +755,14 @@ INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
 
 
 -- ============================================================================
--- SCENARIO H: SOURCE-TO-SOURCE JOIN PATTERNS - Employee Title Lookup
+-- SCENARIO H: SOURCE-TO-SOURCE JOIN PATTERNS - Multi-Table CONCAT
 -- ============================================================================
--- Target: MNGN_EMP.TITLE (Title of the managing employee)
--- These patterns JOIN TWO SOURCE TABLES (not silver lookup)
--- Employee table + Title Reference table
+-- Target: MNGN_EMP.TITLE (combining data from multiple source tables)
+-- These patterns CONCAT columns from DIFFERENT source tables, requiring a JOIN
+-- Example: CONCAT(department.name, ' - ', role.title) from two source tables
 -- join_metadata includes is_source_join: true
 
--- Client A: Join employee to title_ref on title_cd
+-- Client A: CONCAT department name + role name from two tables
 INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
   semantic_field_id, tgt_table_name, tgt_table_physical_name, tgt_column_name, tgt_column_physical_name, tgt_comments,
   source_expression, source_tables, source_tables_physical, source_columns, source_columns_physical,
@@ -772,16 +772,16 @@ INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
 )
 SELECT 
   semantic_field_id, 'MANAGING EMPLOYEE', 'MNGN_EMP', 'Title', 'TITLE', 'The title of the managing employee.',
-  'SELECT COALESCE(t.title_desc, ''Unknown'') AS TITLE FROM employees e LEFT JOIN title_ref t ON e.title_cd = t.title_cd',
-  'Employees | Title Ref', 'employees | title_ref',
-  'Employee Title Code | Title Description', 'title_cd | title_desc',
-  'Code field linking to title reference | Description of job title', 'VARCHAR(5) | VARCHAR(50)', 'employee', 'managing',
-  'JOIN', 'COALESCE, LOOKUP', 0.92, 'MANUAL', 'test_client_a',
-  '{"is_source_join": true, "join_type": "LEFT", "source_tables": ["employees", "title_ref"], "primary_table": "employees", "join_conditions": [{"left_table": "employees", "left_alias": "e", "left_column": "title_cd", "right_table": "title_ref", "right_alias": "t", "right_column": "title_cd"}], "select_column": {"table": "title_ref", "alias": "t", "column": "title_desc"}, "default_value": "Unknown"}'
+  'SELECT CONCAT(d.dept_name, '' - '', r.role_title) AS TITLE FROM departments d JOIN roles r ON d.dept_id = r.dept_id',
+  'Departments | Roles', 'departments | roles',
+  'Department Name | Role Title', 'dept_name | role_title',
+  'Name of the department | Title of the role within department', 'VARCHAR(100) | VARCHAR(100)', 'employee', 'managing',
+  'JOIN', 'CONCAT, TRIM', 0.92, 'MANUAL', 'test_client_a',
+  '{"is_source_join": true, "join_type": "INNER", "source_tables": ["departments", "roles"], "primary_table": "departments", "join_conditions": [{"left_table": "departments", "left_alias": "d", "left_column": "dept_id", "right_table": "roles", "right_alias": "r", "right_column": "dept_id"}], "select_columns": [{"table": "departments", "alias": "d", "column": "dept_name"}, {"table": "roles", "alias": "r", "column": "role_title"}]}'
 FROM ${CATALOG_SCHEMA}.semantic_fields 
 WHERE tgt_column_physical_name = 'TITLE' AND tgt_table_physical_name = 'MNGN_EMP' LIMIT 1;
 
--- Client B: Different source table names but same pattern
+-- Client B: CONCAT org unit + position from two different tables
 INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
   semantic_field_id, tgt_table_name, tgt_table_physical_name, tgt_column_name, tgt_column_physical_name, tgt_comments,
   source_expression, source_tables, source_tables_physical, source_columns, source_columns_physical,
@@ -791,16 +791,16 @@ INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
 )
 SELECT 
   semantic_field_id, 'MANAGING EMPLOYEE', 'MNGN_EMP', 'Title', 'TITLE', 'The title of the managing employee.',
-  'SELECT COALESCE(tr.job_title, ''Not Specified'') AS TITLE FROM staff_members sm LEFT JOIN job_titles tr ON sm.job_code = tr.job_code',
-  'Staff Members | Job Titles', 'staff_members | job_titles',
-  'Staff Job Code | Job Title Name', 'job_code | job_title',
-  'Code linking to job titles reference | Full job title description', 'VARCHAR(10) | VARCHAR(100)', 'employee', 'managing',
-  'JOIN', 'COALESCE, LOOKUP', 0.89, 'MANUAL', 'test_client_b',
-  '{"is_source_join": true, "join_type": "LEFT", "source_tables": ["staff_members", "job_titles"], "primary_table": "staff_members", "join_conditions": [{"left_table": "staff_members", "left_alias": "sm", "left_column": "job_code", "right_table": "job_titles", "right_alias": "tr", "right_column": "job_code"}], "select_column": {"table": "job_titles", "alias": "tr", "column": "job_title"}, "default_value": "Not Specified"}'
+  'SELECT CONCAT(o.org_unit_name, '' '', p.position_name) AS TITLE FROM org_units o JOIN positions p ON o.org_id = p.org_id',
+  'Org Units | Positions', 'org_units | positions',
+  'Organization Unit Name | Position Name', 'org_unit_name | position_name',
+  'Name of the organizational unit | Name of the position', 'VARCHAR(100) | VARCHAR(100)', 'employee', 'managing',
+  'JOIN', 'CONCAT, TRIM', 0.89, 'MANUAL', 'test_client_b',
+  '{"is_source_join": true, "join_type": "INNER", "source_tables": ["org_units", "positions"], "primary_table": "org_units", "join_conditions": [{"left_table": "org_units", "left_alias": "o", "left_column": "org_id", "right_table": "positions", "right_alias": "p", "right_column": "org_id"}], "select_columns": [{"table": "org_units", "alias": "o", "column": "org_unit_name"}, {"table": "positions", "alias": "p", "column": "position_name"}]}'
 FROM ${CATALOG_SCHEMA}.semantic_fields 
 WHERE tgt_column_physical_name = 'TITLE' AND tgt_table_physical_name = 'MNGN_EMP' LIMIT 1;
 
--- Client C: Three-way join (employee + department + title)
+-- Client C: Three-way join - CONCAT from 3 tables (employee + department + role)
 INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
   semantic_field_id, tgt_table_name, tgt_table_physical_name, tgt_column_name, tgt_column_physical_name, tgt_comments,
   source_expression, source_tables, source_tables_physical, source_columns, source_columns_physical,
@@ -810,12 +810,12 @@ INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
 )
 SELECT 
   semantic_field_id, 'MANAGING EMPLOYEE', 'MNGN_EMP', 'Title', 'TITLE', 'The title of the managing employee.',
-  'SELECT CONCAT(d.dept_name, '' - '', t.role_name) AS TITLE FROM hr_emp e JOIN departments d ON e.dept_id = d.dept_id JOIN roles t ON e.role_id = t.role_id',
-  'HR Employees | Departments | Roles', 'hr_emp | departments | roles',
-  'Employee Dept ID | Department Name | Role ID | Role Name', 'dept_id | dept_name | role_id | role_name',
-  'Department ID link | Department name | Role ID link | Role title', 'INT | VARCHAR(50) | INT | VARCHAR(50)', 'employee', 'managing',
-  'JOIN', 'CONCAT, LOOKUP', 0.85, 'MANUAL', 'test_client_c',
-  '{"is_source_join": true, "join_type": "INNER", "source_tables": ["hr_emp", "departments", "roles"], "primary_table": "hr_emp", "join_conditions": [{"left_table": "hr_emp", "left_alias": "e", "left_column": "dept_id", "right_table": "departments", "right_alias": "d", "right_column": "dept_id"}, {"left_table": "hr_emp", "left_alias": "e", "left_column": "role_id", "right_table": "roles", "right_alias": "t", "right_column": "role_id"}], "select_columns": [{"table": "departments", "alias": "d", "column": "dept_name"}, {"table": "roles", "alias": "t", "column": "role_name"}]}'
+  'SELECT CONCAT(e.emp_name, '' - '', d.dept_name, '' - '', r.role_name) AS TITLE FROM hr_emp e JOIN hr_dept d ON e.dept_id = d.dept_id JOIN hr_roles r ON e.role_id = r.role_id',
+  'HR Employees | HR Departments | HR Roles', 'hr_emp | hr_dept | hr_roles',
+  'Employee Name | Department Name | Role Name', 'emp_name | dept_name | role_name',
+  'Employee full name | Department name | Role title', 'VARCHAR(100) | VARCHAR(50) | VARCHAR(50)', 'employee', 'managing',
+  'JOIN', 'CONCAT, TRIM', 0.85, 'MANUAL', 'test_client_c',
+  '{"is_source_join": true, "join_type": "INNER", "source_tables": ["hr_emp", "hr_dept", "hr_roles"], "primary_table": "hr_emp", "join_conditions": [{"left_table": "hr_emp", "left_alias": "e", "left_column": "dept_id", "right_table": "hr_dept", "right_alias": "d", "right_column": "dept_id"}, {"left_table": "hr_emp", "left_alias": "e", "left_column": "role_id", "right_table": "hr_roles", "right_alias": "r", "right_column": "role_id"}], "select_columns": [{"table": "hr_emp", "alias": "e", "column": "emp_name"}, {"table": "hr_dept", "alias": "d", "column": "dept_name"}, {"table": "hr_roles", "alias": "r", "column": "role_name"}]}'
 FROM ${CATALOG_SCHEMA}.semantic_fields 
 WHERE tgt_column_physical_name = 'TITLE' AND tgt_table_physical_name = 'MNGN_EMP' LIMIT 1;
 
@@ -823,29 +823,28 @@ WHERE tgt_column_physical_name = 'TITLE' AND tgt_table_physical_name = 'MNGN_EMP
 -- ============================================================================
 -- TEST CASE SET 7: Source-to-Source JOIN Test Fields
 -- ============================================================================
--- These unmapped fields should match the TITLE source-to-source JOIN patterns
--- The template should ask the user to specify join fields
+-- User selects columns from TWO DIFFERENT tables → pattern detects JOIN needed
+-- The template shows join field dropdowns ONLY for fields from selected tables
 
 INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
   src_table_name, src_table_physical_name, src_column_name, src_column_physical_name,
   src_physical_datatype, src_comments, domain, uploaded_by
 ) VALUES
--- Primary employee table - has a title/job code that needs lookup
-('Employee Records', 'emp_records', 'Job Title Code', 'job_title_cd', 'VARCHAR(10)',
- 'Code representing employee job title - requires lookup to get description', 'employee', 'test_user'),
--- The reference/lookup table for titles
-('Title Lookup', 'title_lookup', 'Title Description', 'title_desc', 'VARCHAR(100)',
- 'Full description of the job title', 'employee', 'test_user'),
--- Join key field on employee side
-('Employee Records', 'emp_records', 'Employee ID', 'emp_id', 'BIGINT',
- 'Unique identifier for the employee', 'employee', 'test_user'),
--- A manager table that needs join
-('Manager Assignments', 'mgr_assign', 'Manager Title', 'mgr_title_cd', 'VARCHAR(10)',
- 'Title code for the manager position', 'employee', 'test_user'),
-('Manager Assignments', 'mgr_assign', 'Manager Employee ID', 'mgr_emp_id', 'BIGINT',
- 'Employee ID of the manager', 'employee', 'test_user'),
-('Manager Assignments', 'mgr_assign', 'Department ID', 'mgr_dept_id', 'INT',
- 'Department the manager is assigned to', 'employee', 'test_user');
+-- Table 1: Division table with division name (user selects this)
+('Division Master', 'div_master', 'Division Name', 'div_name', 'VARCHAR(100)',
+ 'Name of the organizational division', 'employee', 'test_user'),
+-- Table 1: Join key field (available for join selection)
+('Division Master', 'div_master', 'Division ID', 'div_id', 'INT',
+ 'Unique identifier for the division', 'employee', 'test_user'),
+-- Table 2: Job Level table with level name (user selects this)
+('Job Level', 'job_level', 'Level Title', 'level_title', 'VARCHAR(100)',
+ 'Title of the job level', 'employee', 'test_user'),
+-- Table 2: Join key field (available for join selection)
+('Job Level', 'job_level', 'Division ID', 'div_id', 'INT',
+ 'Division this job level belongs to', 'employee', 'test_user'),
+-- Table 2: Another potential join key
+('Job Level', 'job_level', 'Level Code', 'level_cd', 'VARCHAR(10)',
+ 'Code for the job level', 'employee', 'test_user');
 
 
 -- ============================================================================
