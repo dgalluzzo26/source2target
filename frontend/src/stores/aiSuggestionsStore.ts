@@ -100,6 +100,33 @@ export interface UnifiedMappingOption {
   
   // Flag when a semantic target also has a matching pattern with transforms
   hasMatchingPattern?: boolean
+  
+  // Frequency boosting info
+  patternCount?: number  // How many similar patterns were aggregated
+  frequencyBoost?: number  // The boost multiplier applied
+}
+
+// Aggregated pattern group - patterns grouped by target + column count
+export interface AggregatedPatternGroup {
+  // Grouping key
+  targetKey: string  // "TABLE.COLUMN"
+  columnCount: number
+  
+  // Aggregated info
+  patterns: HistoricalPattern[]
+  patternCount: number
+  
+  // Best pattern in group (highest score)
+  bestPattern: HistoricalPattern
+  aggregatedScore: number
+  
+  // Voted transformations (majority wins)
+  votedTransformations: string[]
+  transformationVotes: Map<string, number>
+  
+  // Boost multiplier based on frequency
+  frequencyBoost: number
+  boostedScore: number
 }
 
 export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
@@ -121,9 +148,14 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const ABSOLUTE_MIN_SCORE = 0.003  // Minimum score to show
   const RELATIVE_THRESHOLD = 0.25   // Must be at least 25% of top score
   
-  // Combo boost: when a target has BOTH semantic match AND historical pattern
+  // Base combo boost: when a target has BOTH semantic match AND historical pattern
   // This rewards validated mappings with semantic relevance
-  const COMBO_BOOST_MULTIPLIER = 1.5  // 50% score boost for combo matches
+  const BASE_COMBO_BOOST = 1.5  // Base 50% score boost for combo matches
+  
+  // Frequency boost constants
+  // Formula: BASE_COMBO_BOOST * (1 + min(1.0, log2(count) * FREQUENCY_BOOST_FACTOR))
+  const FREQUENCY_BOOST_FACTOR = 0.3  // How much each doubling of patterns adds
+  const MAX_FREQUENCY_BOOST = 1.0     // Cap the frequency component at +100%
   
   // Match quality thresholds (calibrated for observed score ranges)
   // Raised thresholds to reduce noise - fewer Strong/Good, more Weak
@@ -368,6 +400,133 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     }
   }
   
+  // Helper: Calculate frequency boost based on pattern count
+  // Formula: BASE_COMBO_BOOST * (1 + min(MAX_FREQUENCY_BOOST, log2(count) * FREQUENCY_BOOST_FACTOR))
+  // Examples: 1 pattern = 1.5x, 2 patterns = 1.8x, 3 patterns = 1.98x, 5 patterns = 2.2x
+  function calculateFrequencyBoost(patternCount: number): number {
+    if (patternCount <= 0) return 1.0
+    if (patternCount === 1) return BASE_COMBO_BOOST
+    
+    const frequencyComponent = Math.min(MAX_FREQUENCY_BOOST, Math.log2(patternCount) * FREQUENCY_BOOST_FACTOR)
+    const boost = BASE_COMBO_BOOST * (1 + frequencyComponent)
+    
+    console.log(`[Frequency Boost] ${patternCount} patterns -> ${boost.toFixed(2)}x boost`)
+    return boost
+  }
+  
+  // Helper: Vote on transformations within a pattern group
+  // Returns transforms that appear in >50% of patterns
+  function voteOnTransformations(patterns: HistoricalPattern[]): { 
+    votedTransforms: string[], 
+    votes: Map<string, number> 
+  } {
+    const votes = new Map<string, number>()
+    const threshold = patterns.length / 2  // >50% required
+    
+    // Count votes for each transformation
+    patterns.forEach(p => {
+      const transforms = (p.transformations_applied || '')
+        .split(/[,\s]+/)
+        .map(t => t.trim().toUpperCase())
+        .filter(t => t)
+      
+      const seen = new Set<string>()  // Avoid double-counting same transform in one pattern
+      transforms.forEach(t => {
+        if (!seen.has(t)) {
+          seen.add(t)
+          votes.set(t, (votes.get(t) || 0) + 1)
+        }
+      })
+    })
+    
+    // Filter to transforms with >50% votes
+    const votedTransforms: string[] = []
+    votes.forEach((count, transform) => {
+      if (count > threshold) {
+        votedTransforms.push(transform)
+      }
+    })
+    
+    // Order: TRIM first, then case transforms
+    const transformOrder = ['TRIM', 'UPPER', 'LOWER', 'INITCAP', 'PROPER_CASE', 'CONCAT']
+    votedTransforms.sort((a, b) => {
+      const aIdx = transformOrder.indexOf(a)
+      const bIdx = transformOrder.indexOf(b)
+      if (aIdx === -1 && bIdx === -1) return 0
+      if (aIdx === -1) return 1
+      if (bIdx === -1) return -1
+      return aIdx - bIdx
+    })
+    
+    console.log(`[Transform Voting] ${patterns.length} patterns, threshold=${threshold.toFixed(1)}`, 
+      Object.fromEntries(votes), `-> Winners: [${votedTransforms.join(', ')}]`)
+    
+    return { votedTransforms, votes }
+  }
+  
+  // Helper: Aggregate patterns into groups by target + column count
+  function aggregatePatternGroups(patterns: HistoricalPattern[]): AggregatedPatternGroup[] {
+    const groups = new Map<string, HistoricalPattern[]>()
+    
+    // Group patterns by target + column count
+    patterns.forEach(p => {
+      const targetKey = `${(p.tgt_table_name || '').toLowerCase()}.${(p.tgt_column_name || '').toLowerCase()}`
+      const columnCount = p.columnCount || 1
+      const groupKey = `${targetKey}|${columnCount}`
+      
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, [])
+      }
+      groups.get(groupKey)!.push(p)
+    })
+    
+    // Convert to AggregatedPatternGroup array
+    const aggregatedGroups: AggregatedPatternGroup[] = []
+    
+    groups.forEach((groupPatterns, groupKey) => {
+      const [targetKey, colCountStr] = groupKey.split('|')
+      const columnCount = parseInt(colCountStr) || 1
+      
+      // Find best pattern (highest score)
+      const sortedPatterns = [...groupPatterns].sort((a, b) => 
+        (b.search_score || 0) - (a.search_score || 0)
+      )
+      const bestPattern = sortedPatterns[0]
+      const aggregatedScore = bestPattern.search_score || 0
+      
+      // Vote on transformations
+      const { votedTransforms, votes } = voteOnTransformations(groupPatterns)
+      
+      // Calculate frequency boost
+      const frequencyBoost = calculateFrequencyBoost(groupPatterns.length)
+      const boostedScore = aggregatedScore * frequencyBoost
+      
+      console.log(`[Pattern Group] ${targetKey} (${columnCount} cols): ${groupPatterns.length} patterns, ` +
+        `score=${aggregatedScore.toFixed(4)} * ${frequencyBoost.toFixed(2)} = ${boostedScore.toFixed(4)}, ` +
+        `transforms=[${votedTransforms.join(', ')}]`)
+      
+      aggregatedGroups.push({
+        targetKey,
+        columnCount,
+        patterns: groupPatterns,
+        patternCount: groupPatterns.length,
+        bestPattern,
+        aggregatedScore,
+        votedTransformations: votedTransforms,
+        transformationVotes: votes,
+        frequencyBoost,
+        boostedScore
+      })
+    })
+    
+    // Sort by boosted score descending
+    aggregatedGroups.sort((a, b) => b.boostedScore - a.boostedScore)
+    
+    console.log(`[Pattern Aggregation] ${patterns.length} patterns -> ${aggregatedGroups.length} groups`)
+    
+    return aggregatedGroups
+  }
+  
   // Unified ranked list combining AI suggestions and historical patterns
   // Uses HYBRID filtering: absolute minimum + relative to top score
   const unifiedOptions = computed((): UnifiedMappingOption[] => {
@@ -441,9 +600,16 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       })
     })
     
-    // Add historical patterns - either merge with existing target or add as new option
-    // (patterns are from vector search on mapped_fields - similar SOURCE mappings)
-    filteredPatternsList.forEach((p) => {
+    // AGGREGATE historical patterns by target + column count
+    // This groups similar patterns and applies frequency-based boosting
+    const aggregatedGroups = aggregatePatternGroups(filteredPatternsList)
+    
+    console.log(`[Unified Options] Aggregated ${filteredPatternsList.length} patterns into ${aggregatedGroups.length} groups`)
+    
+    // Process each aggregated pattern group
+    aggregatedGroups.forEach((group) => {
+      const p = group.bestPattern  // Use best pattern in group as representative
+      
       // Check if this pattern's target already exists as a semantic target
       const existingTargetIdx = options.findIndex(o => 
         o.tgt_column_name.toLowerCase() === p.tgt_column_name.toLowerCase() &&
@@ -454,57 +620,66 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       // Auto-match pattern fields to user's selected fields
       const { mappings, allMatched, generatedSQL } = autoMatchPatternFields(p)
       
+      // Use voted transformations instead of single pattern's transforms
+      const votedTransformsStr = group.votedTransformations.join(', ')
+      
       if (existingTargetIdx >= 0) {
-        // MERGE: Enrich the existing target with pattern transform info
+        // MERGE: Enrich the existing target with aggregated pattern info
         const existing = options[existingTargetIdx]
         
-        // For merged targets, generate SQL using USER's selected fields + pattern's transforms
-        // Don't rely on matching old pattern columns - user already selected their source!
+        // For merged targets, generate SQL using USER's selected fields + VOTED transforms
         let mergedSQL = ''
-        if (sourceFieldsUsed.value.length > 0 && p.transformations_applied) {
-          mergedSQL = generateSQLForUserFields(sourceFieldsUsed.value, p.transformations_applied)
+        if (sourceFieldsUsed.value.length > 0 && votedTransformsStr) {
+          mergedSQL = generateSQLForUserFields(sourceFieldsUsed.value, votedTransformsStr)
         }
         
-        // COMBO BOOST: This target has BOTH semantic match AND historical pattern
-        // Boost the score to prioritize validated mappings with semantic relevance
+        // FREQUENCY BOOST: Apply boost based on pattern count
+        // More patterns = higher confidence = bigger boost
         const originalScore = existing.score
-        existing.score = existing.score * COMBO_BOOST_MULTIPLIER
+        existing.score = existing.score * group.frequencyBoost
         
-        console.log(`[Unified Options] MERGING pattern into target ${p.tgt_column_name}:`, {
+        console.log(`[Unified Options] MERGING ${group.patternCount} patterns into target ${p.tgt_column_name}:`, {
           existingSource: existing.source,
           originalScore: originalScore?.toFixed(4),
           boostedScore: existing.score?.toFixed(4),
-          boostMultiplier: COMBO_BOOST_MULTIPLIER,
-          transforms: p.transformations_applied,
+          boostMultiplier: group.frequencyBoost.toFixed(2),
+          patternCount: group.patternCount,
+          votedTransforms: votedTransformsStr,
           userFields: sourceFieldsUsed.value.map(f => f.src_column_physical_name),
           generatedSQL: mergedSQL?.substring(0, 50)
         })
         
-        // Add pattern info to the target
-        existing.transformations = p.transformations_applied
+        // Add aggregated pattern info to the target
+        existing.transformations = votedTransformsStr  // Use voted transforms
         existing.pattern = p
         existing.sourceColumns = p.source_columns
-        existing.isMultiColumn = p.isMultiColumn
+        existing.isMultiColumn = p.isMultiColumn || group.columnCount > 1
         existing.suggestedMappings = mappings
         existing.allFieldsMatched = allMatched || sourceFieldsUsed.value.length > 0
-        existing.generatedSQL = mergedSQL || generatedSQL  // Prefer mergedSQL
-        existing.hasMatchingPattern = true  // Flag to show transform info in UI
+        existing.generatedSQL = mergedSQL || generatedSQL
+        existing.hasMatchingPattern = true
+        existing.patternCount = group.patternCount
+        existing.frequencyBoost = group.frequencyBoost
         
-        // Update reasoning to include pattern info
-        if (p.transformations_applied) {
-          existing.reasoning = `${existing.reasoning || ''} | Similar mappings typically use: ${p.transformations_applied}`.trim()
-        }
+        // Update reasoning to include pattern frequency info
+        const patternInfo = group.patternCount > 1 
+          ? `${group.patternCount} similar mappings typically use: ${votedTransformsStr}`
+          : `Similar mapping uses: ${votedTransformsStr}`
+        existing.reasoning = `${existing.reasoning || ''} | ${patternInfo}`.trim()
       } else {
         // ADD: New pattern-only option (no matching semantic target)
-        const score = Math.max(p.search_score || 0, p.templateRelevance || 0)
+        // Use the boosted score from aggregation
+        const score = group.boostedScore
         
-        console.log(`[Unified Options] Adding NEW pattern ${p.tgt_column_name}:`, {
-          search_score: p.search_score,
-          templateRelevance: p.templateRelevance,
-          finalScore: score,
+        console.log(`[Unified Options] Adding NEW pattern group ${p.tgt_column_name}:`, {
+          patternCount: group.patternCount,
+          aggregatedScore: group.aggregatedScore.toFixed(4),
+          frequencyBoost: group.frequencyBoost.toFixed(2),
+          boostedScore: score.toFixed(4),
+          columnCount: group.columnCount,
+          votedTransforms: votedTransformsStr,
           mappingsCount: mappings.length,
-          allMatched,
-          generatedSQL: generatedSQL?.substring(0, 50)
+          allMatched
         })
         
         // Try to get target description from vector search results if available
@@ -514,8 +689,12 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         )
         const tgtComments = matchingTarget?.tgt_comments || ''
         
+        const patternInfo = group.patternCount > 1 
+          ? `${group.patternCount} similar mappings using ${votedTransformsStr}`
+          : `Historical pattern using ${votedTransformsStr || 'direct mapping'}`
+        
         options.push({
-          id: `pattern-${p.mapped_field_id}`,
+          id: `pattern-group-${group.targetKey}-${group.columnCount}`,
           rank: 0,
           source: 'pattern',
           tgt_table_name: p.tgt_table_name,
@@ -528,13 +707,13 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
           suggestedMappings: mappings,
           allFieldsMatched: allMatched,
           generatedSQL: generatedSQL,
-          reasoning: p.transformations_applied 
-            ? `Historical pattern using ${p.transformations_applied}`
-            : 'Based on similar past mapping',
+          reasoning: patternInfo,
           pattern: p,
           sourceColumns: p.source_columns,
-          transformations: p.transformations_applied,
-          isMultiColumn: p.isMultiColumn
+          transformations: votedTransformsStr,
+          isMultiColumn: p.isMultiColumn || group.columnCount > 1,
+          patternCount: group.patternCount,
+          frequencyBoost: group.frequencyBoost
         })
       }
     })

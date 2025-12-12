@@ -101,24 +101,28 @@ class AIMappingServiceV3:
         """
         Build query string for searching TARGETS (semantic_fields table).
         
-        NEW FORMAT: Must match semantic_fields.semantic_field:
-        'DESCRIPTION: ... | TYPE: ...'
+        FORMAT: Must match semantic_fields.semantic_field:
+        'DESCRIPTION: ... | TYPE: ... | DOMAIN: ...'
         
-        Simplified format removes TABLE/COLUMN/DOMAIN noise that hurts matching.
-        DESCRIPTION is the key for semantic similarity.
+        Domain is a soft signal - helps disambiguate similar descriptions.
+        Empty string if domain is not provided.
         """
         descriptions = []
         datatypes = []
+        domains = []
         
         for field in source_fields:
             desc = field.get('src_comments', '') or field.get('src_column_name', '')
             descriptions.append(desc)
             datatypes.append(field.get('src_physical_datatype', '') or 'STRING')
+            domains.append(field.get('domain', '') or '')
         
         combined_desc = ' '.join(descriptions)
         combined_type = datatypes[0] if datatypes else 'STRING'
+        # Use first non-empty domain, or empty string
+        combined_domain = next((d for d in domains if d), '')
         
-        query = f"DESCRIPTION: {combined_desc} | TYPE: {combined_type}"
+        query = f"DESCRIPTION: {combined_desc} | TYPE: {combined_type} | DOMAIN: {combined_domain}"
         
         print(f"[AI Mapping V3] Target query: {query[:150]}...")
         return query
@@ -127,24 +131,28 @@ class AIMappingServiceV3:
         """
         Build query string for searching PATTERNS (mapped_fields table).
         
-        NEW FORMAT: Must match mapped_fields.source_semantic_field:
-        'DESCRIPTION: ... | TYPE: ...'
+        FORMAT: Must match mapped_fields.source_semantic_field:
+        'DESCRIPTION: ... | TYPE: ... | DOMAIN: ...'
         
-        Simplified format - same as target search.
-        Finds similar source fields that were mapped before.
+        Domain helps find patterns from the same domain.
+        Empty string if domain is not provided.
         """
         descriptions = []
         datatypes = []
+        domains = []
         
         for field in source_fields:
             desc = field.get('src_comments', '') or field.get('src_column_name', '')
             descriptions.append(desc)
             datatypes.append(field.get('src_physical_datatype', '') or 'STRING')
+            domains.append(field.get('domain', '') or '')
         
         combined_desc = ' '.join(descriptions)
         combined_type = datatypes[0] if datatypes else 'STRING'
+        # Use first non-empty domain, or empty string
+        combined_domain = next((d for d in domains if d), '')
         
-        query = f"DESCRIPTION: {combined_desc} | TYPE: {combined_type}"
+        query = f"DESCRIPTION: {combined_desc} | TYPE: {combined_type} | DOMAIN: {combined_domain}"
         
         print(f"[AI Mapping V3] Pattern query: {query[:150]}...")
         return query

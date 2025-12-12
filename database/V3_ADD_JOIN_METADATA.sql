@@ -1,0 +1,96 @@
+-- ============================================================================
+-- Smart Mapper V3 - Add join_metadata Column to mapped_fields
+-- ============================================================================
+-- 
+-- Purpose: Store structured join/union metadata for complex SQL patterns
+-- This enables the template UI to understand and adapt JOIN/UNION patterns
+-- without parsing the SQL expression each time.
+--
+-- The source_expression still contains the full SQL - this is just structured
+-- metadata for the UI to render the template wizard.
+--
+-- ============================================================================
+-- REPLACE ${CATALOG_SCHEMA} with your catalog.schema
+-- ============================================================================
+
+-- Add join_metadata column to mapped_fields
+ALTER TABLE ${CATALOG_SCHEMA}.mapped_fields
+ADD COLUMN join_metadata STRING COMMENT 'JSON metadata for JOIN/UNION patterns - enables template UI to understand complex SQL structure';
+
+-- ============================================================================
+-- COLUMN DOCUMENTATION
+-- ============================================================================
+-- 
+-- join_metadata stores a JSON object with the following structure:
+--
+-- {
+--   "patternType": "SINGLE" | "CONCAT" | "JOIN_LOOKUP" | "JOIN_MULTI" | "UNION" | "UNION_WITH_JOINS",
+--   "outputColumn": "MBR_SK",           -- The column being selected
+--   "outputTable": "mbr_fndtn",         -- The table the output comes from
+--   
+--   "unionBranches": [                   -- For UNION patterns (array of branches)
+--     {
+--       "branchIndex": 1,
+--       "branchName": "Base Records",
+--       
+--       "userSourceTable": {             -- Table the user provides (client-specific)
+--         "originalName": "t_re_base",
+--         "alias": "b",
+--         "schema": "bronze_dmes_de",
+--         "description": "Primary recipient base table",
+--         "subqueryFilter": null         -- Optional: filter if this is a subquery
+--       },
+--       
+--       "joins": [                       -- Joins within this branch
+--         {
+--           "joinType": "INNER" | "LEFT" | "RIGHT",
+--           "targetTable": {
+--             "name": "mbr_fndtn",
+--             "alias": "mf",
+--             "schema": "silver_dmes_de",
+--             "isSharedSilver": true     -- True if this is a shared target table
+--           },
+--           "conditions": [
+--             {
+--               "type": "column_match",
+--               "sourceColumn": "SAK_RECIP",
+--               "sourceDescription": "Recipient key",
+--               "targetColumn": "SRC_KEY_ID",
+--               "targetDescription": "Source key ID"
+--             },
+--             {
+--               "type": "filter",
+--               "column": "CURR_REC_IND",
+--               "operator": "=",
+--               "value": "'1'"
+--             }
+--           ]
+--         }
+--       ],
+--       
+--       "whereFilters": ["mf.CURR_REC_IND='1'"]
+--     }
+--   ],
+--   
+--   "userColumnsToMap": [                -- Columns the user needs to provide
+--     {
+--       "placeholder": "SAK_RECIP",
+--       "description": "Recipient/Member key to join to mbr_fndtn",
+--       "usedInBranches": [1, 2],
+--       "required": true,
+--       "joinTarget": "mbr_fndtn.SRC_KEY_ID"
+--     }
+--   ],
+--   
+--   "userTablesToMap": [                 -- Tables the user needs to provide
+--     {
+--       "placeholder": "t_re_base",
+--       "description": "Primary source table",
+--       "usedInBranch": 1,
+--       "required": true
+--     }
+--   ]
+-- }
+--
+-- ============================================================================
+

@@ -709,6 +709,155 @@
             </div>
         </section>
         
+        <!-- Pattern Aggregation & Frequency Boosting -->
+        <section class="section">
+            <h2 class="section-title">Pattern Aggregation & Frequency Boosting</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                When multiple clients have mapped similar source fields to the same target, the system 
+                <strong>aggregates patterns</strong> and applies <strong>frequency-based boosting</strong> 
+                to prioritize well-validated mappings.
+            </p>
+            
+            <div class="flow-container">
+                <!-- Step 1: Grouping -->
+                <div class="flow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>Pattern Grouping</h4>
+                        <p>Historical patterns are grouped by <strong>target field + column count</strong></p>
+                        <div class="step-visual">
+                            <strong>Grouping Criteria (what makes patterns "the same"):</strong><br>
+                            ✓ Same target field (e.g., MBR_FNDTN.FIRST_NM)<br>
+                            ✓ Same source column count (1 col vs 2 cols = different patterns)<br><br>
+                            <strong>NOT required to match:</strong><br>
+                            ✗ Source column names (can differ across clients)<br>
+                            ✗ Source table names (can differ)<br>
+                            ✗ Exact transformation syntax (we vote on this)
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="arrow-down">↓</div>
+                
+                <!-- Step 2: Example -->
+                <div class="flow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>Example: 5 Patterns for FIRST_NM</h4>
+                        <p>Different clients mapped different source columns to the same target</p>
+                        <div class="step-visual">
+                            <table style="width: 100%; font-size: 0.85rem;">
+                                <tr style="background: var(--bg-card);">
+                                    <th style="padding: 0.5rem;">Pattern</th>
+                                    <th style="padding: 0.5rem;">Source Cols</th>
+                                    <th style="padding: 0.5rem;">Col Count</th>
+                                    <th style="padding: 0.5rem;">Transforms</th>
+                                </tr>
+                                <tr><td>A</td><td>NAM_FIRST</td><td>1</td><td>TRIM</td></tr>
+                                <tr><td>B</td><td>FIRST_NAME</td><td>1</td><td>TRIM, PROPER_CASE</td></tr>
+                                <tr><td>C</td><td>FNAME, MNAME</td><td>2</td><td>CONCAT, TRIM</td></tr>
+                                <tr><td>D</td><td>GIVEN_NM</td><td>1</td><td>TRIM, PROPER_CASE</td></tr>
+                                <tr><td>E</td><td>NM_FIRST, NM_MID</td><td>2</td><td>CONCAT, UPPER</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="arrow-down">↓</div>
+                
+                <!-- Step 3: Aggregation -->
+                <div class="flow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>Aggregation Result</h4>
+                        <p>Patterns grouped into 2 distinct options, ranked by frequency</p>
+                        <div class="parallel-searches">
+                            <div class="search-box" style="border-color: var(--primary); background: rgba(16, 185, 129, 0.1);">
+                                <h5>⭐ Group 1: Single-Field (3 patterns)</h5>
+                                <p style="font-size: 0.8rem; color: var(--primary);">HIGHER RANK</p>
+                                <ul style="text-align: left;">
+                                    <li>Column Count: 1</li>
+                                    <li>TRIM: 3/3 votes ✓</li>
+                                    <li>PROPER_CASE: 2/3 votes ✓</li>
+                                    <li>Boost: 1.98x</li>
+                                </ul>
+                            </div>
+                            <div class="search-box" style="border-color: var(--secondary);">
+                                <h5>Group 2: Multi-Field (2 patterns)</h5>
+                                <p style="font-size: 0.8rem; color: var(--text-secondary);">Lower rank</p>
+                                <ul style="text-align: left;">
+                                    <li>Column Count: 2</li>
+                                    <li>CONCAT: 2/2 votes ✓</li>
+                                    <li>TRIM: 1/2 votes ✗</li>
+                                    <li>Boost: 1.8x</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="arrow-down">↓</div>
+                
+                <!-- Step 4: Boost Formula -->
+                <div class="flow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>Frequency Boost Formula</h4>
+                        <p>More historical patterns = higher confidence = bigger boost</p>
+                        <div class="step-visual">
+                            <strong>Formula:</strong> <code>boost = 1.5 × (1 + min(1.0, log₂(count) × 0.3))</code><br><br>
+                            <table style="width: 100%; font-size: 0.9rem;">
+                                <tr style="background: var(--bg-card);">
+                                    <th style="padding: 0.5rem;">Pattern Count</th>
+                                    <th style="padding: 0.5rem;">Boost Multiplier</th>
+                                    <th style="padding: 0.5rem;">Effect</th>
+                                </tr>
+                                <tr><td>1 pattern</td><td>1.5x</td><td>Base combo boost</td></tr>
+                                <tr><td>2 patterns</td><td>1.8x</td><td>+20% confidence</td></tr>
+                                <tr><td>3 patterns</td><td>1.98x</td><td>+32% confidence</td></tr>
+                                <tr><td>5 patterns</td><td>2.2x</td><td>+47% confidence</td></tr>
+                                <tr><td>10+ patterns</td><td>2.5x (cap)</td><td>Maximum boost</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="arrow-down">↓</div>
+                
+                <!-- Step 5: Transform Voting -->
+                <div class="flow-step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <h4>Transformation Voting</h4>
+                        <p>Within each group, transformations are voted on individually</p>
+                        <div class="step-visual">
+                            <strong>Voting Rules:</strong><br>
+                            • Each transformation is voted on independently<br>
+                            • Include if it appears in <strong>&gt;50%</strong> of patterns in the group<br>
+                            • Order: TRIM first, then case transforms (UPPER, LOWER, PROPER_CASE)<br><br>
+                            
+                            <strong>Example (3 single-field patterns):</strong><br>
+                            • TRIM appears in 3/3 → <span style="color: var(--primary);">✓ INCLUDED</span><br>
+                            • PROPER_CASE appears in 2/3 → <span style="color: var(--primary);">✓ INCLUDED</span><br>
+                            • UPPER appears in 0/3 → <span style="color: #ef4444;">✗ NOT INCLUDED</span><br><br>
+                            
+                            <strong>Winning Expression:</strong> <code>PROPER_CASE(TRIM(source_column))</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="highlight-box" style="margin-top: 2rem;">
+                <h4 style="margin-bottom: 0.5rem;">🎯 Why This Matters</h4>
+                <p style="color: var(--text-secondary);">
+                    As more clients are onboarded and more mappings are created, the AI becomes increasingly 
+                    confident about common patterns. A mapping validated by 5 different clients is much more 
+                    reliable than one from a single client. The frequency boost ensures these well-validated 
+                    patterns rise to the top of suggestions.
+                </p>
+            </div>
+        </section>
+        
         <!-- Why Hybrid? -->
         <section class="section">
             <h2 class="section-title">Why the Hybrid Approach?</h2>
@@ -803,7 +952,7 @@
                         <tr>
                             <td><code>semantic_field</code></td>
                             <td>STRING (computed)</td>
-                            <td>🔍 Vector-searchable concatenated field</td>
+                            <td>🔍 Vector-searchable: DESCRIPTION + TYPE + DOMAIN</td>
                         </tr>
                     </tbody>
                 </table>
@@ -962,7 +1111,7 @@
                         <tr style="background: rgba(99, 102, 241, 0.1);">
                             <td><code>source_semantic_field</code></td>
                             <td>STRING (computed)</td>
-                            <td>🔍 Vector-searchable field for AI learning</td>
+                            <td>🔍 Vector-searchable: DESCRIPTION + TYPE + DOMAIN</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1195,7 +1344,8 @@ SQL expression is source of truth</pre>
                     <h4>semantic_fields.semantic_field</h4>
                     <p><strong>Purpose:</strong> Find target fields matching source descriptions</p>
                     <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
-                        Query: "Find targets similar to 'Patient social security number'"
+                        Format: DESCRIPTION + TYPE + DOMAIN<br>
+                        Query: "Find targets similar to 'Patient SSN' in 'member' domain"
                     </p>
                 </div>
                 <div class="benefit" style="border-left: 4px solid var(--secondary);">
@@ -1203,7 +1353,8 @@ SQL expression is source of truth</pre>
                     <h4>mapped_fields.source_semantic_field</h4>
                     <p><strong>Purpose:</strong> Find similar past mappings for AI pattern learning</p>
                     <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
-                        Query: "Find mappings with similar source characteristics"
+                        Format: DESCRIPTION + TYPE + DOMAIN<br>
+                        Query: "Find patterns with similar source in same domain"
                     </p>
                 </div>
             </div>

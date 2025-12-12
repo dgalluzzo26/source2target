@@ -53,15 +53,16 @@ CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.semantic_fields (
   updated_by STRING COMMENT 'User who last updated this record',
   updated_ts TIMESTAMP COMMENT 'Timestamp when record was last updated',
   
-  -- VECTOR SEARCH: Simplified semantic field for embedding
-  -- Only DESCRIPTION + TYPE - removes TABLE/COLUMN/DOMAIN noise that hurts source-to-target matching
-  -- Observed improvement: scores went from 0.005 to 0.043 (8x better differentiation)
+  -- VECTOR SEARCH: Semantic field for embedding with domain context
+  -- DESCRIPTION + TYPE + DOMAIN - domain helps disambiguate similar descriptions across domains
+  -- Domain is a soft signal (empty string if NULL) - helps but doesn't strictly filter
   semantic_field STRING GENERATED ALWAYS AS (
     CONCAT(
       'DESCRIPTION: ', COALESCE(tgt_comments, tgt_column_name, ''),
-      ' | TYPE: ', COALESCE(tgt_physical_datatype, 'STRING')
+      ' | TYPE: ', COALESCE(tgt_physical_datatype, 'STRING'),
+      ' | DOMAIN: ', COALESCE(domain, '')
     )
-  ) COMMENT 'Simplified semantic field for vector embedding - DESCRIPTION + TYPE only for better matching',
+  ) COMMENT 'Semantic field for vector embedding - DESCRIPTION + TYPE + DOMAIN for context-aware matching',
   
   CONSTRAINT pk_semantic_fields PRIMARY KEY (semantic_field_id)
 ) 
@@ -162,12 +163,20 @@ CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.mapped_fields (
   source_descriptions STRING COMMENT 'Pipe-separated source column descriptions for AI learning',
   source_datatypes STRING COMMENT 'Pipe-separated source data types',
   source_domain STRING COMMENT 'Domain category from original unmapped fields (for restore on delete)',
+  target_domain STRING COMMENT 'Target domain category (denormalized from semantic_fields for pattern learning)',
   
   -- How sources relate
   source_relationship_type STRING DEFAULT 'SINGLE' COMMENT 'SINGLE (one table), JOIN (multiple tables joined), UNION (multiple tables unioned)',
   
   -- What transformations were applied (for AI to learn patterns)
   transformations_applied STRING COMMENT 'Comma-separated list of transformations (e.g., "TRIM, UPPER, CONCAT")',
+  
+  -- =========================================================================
+  -- JOIN METADATA - Structured info for complex JOIN/UNION patterns
+  -- =========================================================================
+  -- Stores parsed join structure as JSON for template UI to render wizards
+  -- See V3_ADD_JOIN_METADATA.sql for full JSON schema documentation
+  join_metadata STRING COMMENT 'JSON metadata for JOIN/UNION patterns - enables template UI to understand complex SQL structure',
   
   -- =========================================================================
   -- AI/CONFIDENCE METADATA
@@ -187,15 +196,16 @@ CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.mapped_fields (
   updated_ts TIMESTAMP COMMENT 'Timestamp when mapping was last updated',
   
   -- =========================================================================
-  -- VECTOR SEARCH: Simplified semantic field for AI pattern matching (AUTO-GENERATED)
-  -- Only DESCRIPTION + TYPE - transformations/relationship are RESULTS, not search criteria
+  -- VECTOR SEARCH: Semantic field for AI pattern matching (AUTO-GENERATED)
+  -- DESCRIPTION + TYPE + DOMAIN - domain helps find patterns from same domain
   -- =========================================================================
   source_semantic_field STRING GENERATED ALWAYS AS (
     CONCAT(
       'DESCRIPTION: ', COALESCE(source_descriptions, source_columns, ''),
-      ' | TYPE: ', COALESCE(source_datatypes, 'STRING')
+      ' | TYPE: ', COALESCE(source_datatypes, 'STRING'),
+      ' | DOMAIN: ', COALESCE(source_domain, '')
     )
-  ) COMMENT 'Simplified semantic field for pattern matching - DESCRIPTION + TYPE only',
+  ) COMMENT 'Semantic field for pattern matching - DESCRIPTION + TYPE + DOMAIN for context-aware matching',
   
   CONSTRAINT pk_mapped_fields PRIMARY KEY (mapped_field_id),
   CONSTRAINT fk_mapped_semantic FOREIGN KEY (semantic_field_id) REFERENCES ${CATALOG_SCHEMA}.semantic_fields(semantic_field_id)

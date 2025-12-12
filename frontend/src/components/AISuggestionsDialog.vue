@@ -194,7 +194,16 @@
               <div v-if="option.hasMatchingPattern && option.transformations" class="pattern-enrichment">
                 <div class="enrichment-header">
                   <i class="pi pi-history"></i>
-                  <span>Similar past mappings use:</span>
+                  <span v-if="option.patternCount && option.patternCount > 1">
+                    {{ option.patternCount }} similar mappings use:
+                    <Tag 
+                      :value="`${option.frequencyBoost?.toFixed(1)}x boost`" 
+                      severity="success" 
+                      size="small" 
+                      style="margin-left: 0.5rem;"
+                    />
+                  </span>
+                  <span v-else>Similar past mapping uses:</span>
                 </div>
                 <div class="enrichment-transforms">
                   <Tag 
@@ -252,8 +261,17 @@
                   </div>
                 </div>
                 
-                <!-- Transforms -->
+                <!-- Pattern Count & Transforms -->
                 <div v-if="option.transformations" class="pattern-transforms">
+                  <span v-if="option.patternCount && option.patternCount > 1" class="pattern-count-badge">
+                    📊 {{ option.patternCount }} similar patterns
+                    <Tag 
+                      :value="`${option.frequencyBoost?.toFixed(1)}x`" 
+                      severity="success" 
+                      size="small" 
+                      style="margin-left: 0.25rem;"
+                    />
+                  </span>
                   <span class="transforms-label">🔧 Transforms:</span>
                   <span class="transforms-value">{{ option.transformations }}</span>
                 </div>
@@ -1773,6 +1791,17 @@ function handleClose() {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.pattern-transforms .pattern-count-badge {
+  display: inline-flex;
+  align-items: center;
+  color: #10b981;
+  font-weight: 600;
+  margin-right: 0.5rem;
+  padding-right: 0.5rem;
+  border-right: 1px solid #374151;
 }
 
 .pattern-transforms .transforms-label {
