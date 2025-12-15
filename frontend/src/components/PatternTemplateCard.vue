@@ -816,9 +816,27 @@ function getMatchingFieldsForSlot(slot: TemplateSlot) {
   // Get vector search results for this slot if available
   const vsResults = vectorSearchResults.value.get(slot.originalColumn) || []
   const vsScoreMap = new Map<number, number>()
+  
+  // Debug: log vector search results
+  if (vsResults.length > 0) {
+    console.log('[PatternTemplate] VS results for slot', slot.originalColumn, ':', vsResults.length)
+    vsResults.slice(0, 3).forEach(r => {
+      console.log('  VS result:', r.id, r.src_column_name, 'score:', (r as any).match_score)
+    })
+  }
+  
   vsResults.forEach(r => {
-    if (r.id) vsScoreMap.set(r.id, r.match_score || 0)
+    // The vector search returns unmapped_field_id which is mapped to 'id' in the store
+    const fieldId = r.id
+    const score = (r as any).match_score || 0
+    if (fieldId) vsScoreMap.set(fieldId, score)
   })
+  
+  // Debug: log available field IDs
+  if (vsResults.length > 0 && props.availableFields.length > 0) {
+    console.log('[PatternTemplate] Available field IDs:', props.availableFields.slice(0, 5).map(f => f.id))
+    console.log('[PatternTemplate] VS score map keys:', [...vsScoreMap.keys()].slice(0, 5))
+  }
   
   return props.availableFields
     .filter(f => !alreadySelectedIds.has(f.id))
@@ -831,6 +849,11 @@ function getMatchingFieldsForSlot(slot: TemplateSlot) {
       // Use higher of VS (normalized) or fuzzy score
       const normalizedVsScore = vsScore ? Math.min(vsScore * 20, 1.0) : 0
       const matchScore = Math.max(normalizedVsScore, fuzzyScore)
+      
+      // Debug: log when VS score is used
+      if (vsScore && vsScore > 0) {
+        console.log('[PatternTemplate] Field', field.src_column_name, 'VS:', vsScore.toFixed(4), 'normalized:', normalizedVsScore.toFixed(2), 'fuzzy:', fuzzyScore.toFixed(2), 'final:', matchScore.toFixed(2))
+      }
       
       return {
         id: field.id,
