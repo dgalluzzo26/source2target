@@ -78,7 +78,10 @@ class VectorSearchConfig(BaseModel):
     Vector search configuration for semantic similarity matching (V3).
     
     Defines the Databricks Vector Search indexes and endpoint used for AI mapping.
-    V3 uses two indexes: semantic_fields for target discovery, mapped_fields for pattern learning.
+    V3 uses three indexes:
+    - semantic_fields: Target field discovery
+    - mapped_fields: Historical pattern learning  
+    - unmapped_fields: Source field matching for templates/joins
     
     NOTE: Vector search index names must be fully qualified (catalog.schema.index_name)
     because they are managed separately from SQL tables.
@@ -86,12 +89,14 @@ class VectorSearchConfig(BaseModel):
     Attributes:
         semantic_fields_index: Vector search index for target field matching (catalog.schema.index_name)
         mapped_fields_index: Vector search index for historical mapping patterns (catalog.schema.index_name)
+        unmapped_fields_index: Vector search index for source field matching (catalog.schema.index_name)
         endpoint_name: Name of the vector search endpoint
         target_score_threshold: Minimum score for target field matches (0.0-1.0, typically 0.004-0.008)
         pattern_score_threshold: Minimum score for historical pattern matches (0.0-1.0, typically 0.002-0.005)
     """
     semantic_fields_index: str = Field(default="oztest_dev.smartmapper.semantic_fields_vs", description="Vector search index for target fields (fully qualified)")
     mapped_fields_index: str = Field(default="oztest_dev.smartmapper.mapped_fields_vs", description="Vector search index for mapping patterns (fully qualified)")
+    unmapped_fields_index: str = Field(default="oztest_dev.smartmapper.unmapped_fields_vs", description="Vector search index for source field matching (fully qualified)")
     endpoint_name: str = Field(default="s2t_vsendpoint", description="Vector search endpoint name")
     
     # Score thresholds for filtering vector search results

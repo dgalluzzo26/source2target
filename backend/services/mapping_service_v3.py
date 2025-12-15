@@ -70,7 +70,8 @@ class MappingServiceV3:
         return {
             "endpoint_name": config.vector_search.endpoint_name,
             "mapped_fields_index": config.vector_search.mapped_fields_index,
-            "semantic_fields_index": config.vector_search.semantic_fields_index
+            "semantic_fields_index": config.vector_search.semantic_fields_index,
+            "unmapped_fields_index": config.vector_search.unmapped_fields_index
         }
     
     def _sync_vector_search_index(self, index_name: str) -> bool:
@@ -261,15 +262,19 @@ class MappingServiceV3:
                 
                 print(f"[Mapping Service V3] Created mapping ID: {mapping_id}")
                 
-                # Delete from unmapped_fields if IDs provided
+                # V3: Update status to MAPPED instead of deleting
+                # Fields stay in table for join key suggestions
                 if unmapped_field_ids and len(unmapped_field_ids) > 0:
                     ids_str = ", ".join(str(id) for id in unmapped_field_ids)
-                    delete_sql = f"""
-                        DELETE FROM {unmapped_fields_table}
+                    update_sql = f"""
+                        UPDATE {unmapped_fields_table}
+                        SET mapping_status = 'MAPPED',
+                            mapped_field_id = {mapping_id if mapping_id else 'NULL'},
+                            updated_ts = CURRENT_TIMESTAMP()
                         WHERE unmapped_field_id IN ({ids_str})
                     """
-                    print(f"[Mapping Service V3] Deleting {len(unmapped_field_ids)} unmapped fields...")
-                    cursor.execute(delete_sql)
+                    print(f"[Mapping Service V3] Marking {len(unmapped_field_ids)} unmapped fields as MAPPED...")
+                    cursor.execute(update_sql)
                 
                 return {
                     "mapping_id": mapping_id,
@@ -287,8 +292,9 @@ class MappingServiceV3:
         """
         Create a V3 mapping (async wrapper).
         
-        After creating the mapping, syncs the vector search index to make
-        the new mapping immediately available for AI pattern matching.
+        After creating the mapping, syncs both vector search indexes:
+        - mapped_fields: new mapping available for AI pattern matching
+        - unmapped_fields: status changed to MAPPED for updated searchability
         """
         db_config = self._get_db_config()
         vs_config = self._get_vector_search_config()
@@ -308,7 +314,7 @@ class MappingServiceV3:
             )
         )
         
-        # Sync vector search index (best-effort, non-blocking)
+        # Sync mapped_fields vector search index (best-effort, non-blocking)
         try:
             await loop.run_in_executor(
                 executor,
@@ -318,7 +324,20 @@ class MappingServiceV3:
                 )
             )
         except Exception as e:
-            print(f"[Mapping Service V3] VS sync failed (non-fatal): {e}")
+            print(f"[Mapping Service V3] mapped_fields VS sync failed (non-fatal): {e}")
+        
+        # Sync unmapped_fields vector search index if fields were updated
+        if unmapped_field_ids and len(unmapped_field_ids) > 0:
+            try:
+                await loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._sync_vector_search_index,
+                        vs_config["unmapped_fields_index"]
+                    )
+                )
+            except Exception as e:
+                print(f"[Mapping Service V3] unmapped_fields VS sync failed (non-fatal): {e}")
         
         return result
     
@@ -635,100 +654,17 @@ class MappingServiceV3:
         
         try:
             with connection.cursor() as cursor:
-                # Optionally restore source fields to unmapped
+                # V3: Restore source fields by updating status instead of re-inserting
                 if restore_to_unmapped:
-                    # Get the mapping's full source info including physical names, mapped_by and domain
-                    cursor.execute(f"""
-                        SELECT 
-                            source_tables, 
-                            source_tables_physical,
-                            source_columns, 
-                            source_columns_physical,
-                            source_datatypes, 
-                            source_descriptions,
-                            mapped_by,
-                            source_domain
-                        FROM {mapped_fields_table}
+                    restore_sql = f"""
+                        UPDATE {unmapped_fields_table}
+                        SET mapping_status = 'PENDING',
+                            mapped_field_id = NULL,
+                            updated_ts = CURRENT_TIMESTAMP()
                         WHERE mapped_field_id = {mapping_id}
-                    """)
-                    row = cursor.fetchone()
-                    
-                    if row and row[0] and row[2]:  # source_tables and source_columns
-                        # Helper to parse pipe or comma delimited strings
-                        def parse_delimited(val):
-                            if not val:
-                                return []
-                            return [v.strip() for v in val.split(" | ")] if " | " in val else [v.strip() for v in val.split(", ")]
-                        
-                        # Logical names (for display)
-                        tables = parse_delimited(row[0])
-                        # Physical names (for database) - REQUIRED
-                        tables_physical = parse_delimited(row[1]) if row[1] else []
-                        # Logical column names
-                        columns = parse_delimited(row[2])
-                        # Physical column names - REQUIRED
-                        columns_physical = parse_delimited(row[3]) if row[3] else []
-                        # Data types
-                        datatypes = parse_delimited(row[4]) if row[4] else ["STRING"] * len(columns)
-                        # Descriptions
-                        descriptions = row[5].split(" | ") if row[5] else [""] * len(columns)
-                        mapped_by = row[6] if row[6] else None
-                        source_domain = row[7] if len(row) > 7 and row[7] else None
-                        
-                        # Infer domain from table name if not stored
-                        if not source_domain and tables_physical:
-                            table_lower = tables_physical[0].lower()
-                            if 'member' in table_lower:
-                                source_domain = 'member'
-                            elif 'claim' in table_lower:
-                                source_domain = 'claims'
-                            elif 'provider' in table_lower:
-                                source_domain = 'provider'
-                            elif 'pharmacy' in table_lower or 'drug' in table_lower:
-                                source_domain = 'pharmacy'
-                            elif 'finance' in table_lower or 'payment' in table_lower:
-                                source_domain = 'finance'
-                        
-                        # Skip restore if physical names not available
-                        if not tables_physical or not columns_physical:
-                            print(f"[Mapping Service V3] WARNING: Cannot restore - physical names not stored for mapping {mapping_id}")
-                        
-                        for i in range(len(columns)):
-                            table = tables[min(i, len(tables)-1)]
-                            table_phys = tables_physical[min(i, len(tables_physical)-1)]
-                            column = columns[i]
-                            column_phys = columns_physical[i] if i < len(columns_physical) else column
-                            datatype = datatypes[i] if i < len(datatypes) else "STRING"
-                            desc = descriptions[i] if i < len(descriptions) else ""
-                            
-                            insert_sql = f"""
-                                INSERT INTO {unmapped_fields_table} (
-                                    src_table_name,
-                                    src_table_physical_name,
-                                    src_column_name,
-                                    src_column_physical_name,
-                                    src_nullable,
-                                    src_physical_datatype,
-                                    src_comments,
-                                    domain,
-                                    uploaded_by,
-                                    uploaded_ts
-                                ) VALUES (
-                                    '{self._escape_sql(table)}',
-                                    '{self._escape_sql(table_phys)}',
-                                    '{self._escape_sql(column)}',
-                                    '{self._escape_sql(column_phys)}',
-                                    'YES',
-                                    '{self._escape_sql(datatype)}',
-                                    '{self._escape_sql(desc)}',
-                                    {f"'{self._escape_sql(source_domain)}'" if source_domain else 'NULL'},
-                                    {f"'{self._escape_sql(mapped_by)}'" if mapped_by else 'NULL'},
-                                    CURRENT_TIMESTAMP()
-                                )
-                            """
-                            cursor.execute(insert_sql)
-                        
-                        print(f"[Mapping Service V3] Restored {len(columns)} fields to unmapped with domain={source_domain}, uploaded_by={mapped_by}")
+                    """
+                    cursor.execute(restore_sql)
+                    print(f"[Mapping Service V3] Restored unmapped fields for mapping {mapping_id}")
                 
                 # Delete the mapping
                 delete_sql = f"""
@@ -753,8 +689,9 @@ class MappingServiceV3:
         """
         Delete a mapping (async wrapper).
         
-        After deleting, syncs the vector search index to remove the mapping
-        from AI pattern matching.
+        After deleting, syncs both vector search indexes:
+        - mapped_fields: remove mapping from AI pattern matching
+        - unmapped_fields: restored fields now searchable as PENDING
         """
         db_config = self._get_db_config()
         vs_config = self._get_vector_search_config()
@@ -774,7 +711,7 @@ class MappingServiceV3:
             )
         )
         
-        # Sync vector search index to remove deleted mapping from AI patterns (best-effort)
+        # Sync mapped_fields vector search index (best-effort)
         try:
             await loop.run_in_executor(
                 executor,
@@ -784,7 +721,20 @@ class MappingServiceV3:
                 )
             )
         except Exception as e:
-            print(f"[Mapping Service V3] VS sync after delete failed (non-fatal): {e}")
+            print(f"[Mapping Service V3] mapped_fields VS sync after delete failed (non-fatal): {e}")
+        
+        # Sync unmapped_fields vector search index if fields were restored
+        if restore_to_unmapped:
+            try:
+                await loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._sync_vector_search_index,
+                        vs_config["unmapped_fields_index"]
+                    )
+                )
+            except Exception as e:
+                print(f"[Mapping Service V3] unmapped_fields VS sync after restore failed (non-fatal): {e}")
         
         return result
     

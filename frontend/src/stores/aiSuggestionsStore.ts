@@ -1153,6 +1153,62 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     sourceFieldsUsed.value = [...fields]
     console.log('[AI Suggestions] Set source fields:', fields.map(f => f.src_column_name))
   }
+  
+  // Action: Search unmapped fields via vector search
+  // Used for template slot suggestions and join key matching
+  async function searchUnmappedFields(
+    description: string,
+    options: {
+      datatype?: string
+      domain?: string
+      tableFilter?: string[]
+      userEmail?: string
+      numResults?: number
+    } = {}
+  ): Promise<UnmappedField[]> {
+    console.log('[AI Suggestions] Searching unmapped fields:', description, options)
+    
+    try {
+      const response = await fetch('/api/v3/ai/search-unmapped-fields', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description,
+          datatype: options.datatype || 'STRING',
+          domain: options.domain || '',
+          table_filter: options.tableFilter || null,
+          user_email: options.userEmail || null,
+          num_results: options.numResults || 10
+        })
+      })
+      
+      if (!response.ok) {
+        console.error('[AI Suggestions] Unmapped search failed:', response.status)
+        return []
+      }
+      
+      const data = await response.json()
+      console.log('[AI Suggestions] Unmapped search returned', data.count, 'results')
+      
+      // Convert to UnmappedField format
+      return (data.results || []).map((r: any) => ({
+        id: r.unmapped_field_id,
+        src_table_name: r.src_table_name,
+        src_table_physical_name: r.src_table_physical_name,
+        src_column_name: r.src_column_name,
+        src_column_physical_name: r.src_column_physical_name,
+        src_physical_datatype: r.src_physical_datatype,
+        src_comments: r.src_comments,
+        domain: r.domain,
+        mapping_status: r.mapping_status,
+        match_score: r.match_score
+      } as UnmappedField & { match_score: number }))
+      
+    } catch (err) {
+      console.error('[AI Suggestions] Unmapped search error:', err)
+      return []
+    }
+  }
 
   return {
     // State
@@ -1183,7 +1239,8 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     clearSelectedTemplate,
     clearSuggestions,
     addSourceField,
-    setSourceFields
+    setSourceFields,
+    searchUnmappedFields
   }
 })
 

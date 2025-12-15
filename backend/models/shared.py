@@ -13,7 +13,10 @@ from datetime import datetime
 
 class UnmappedField(BaseModel):
     """
-    A source field awaiting mapping to a target field.
+    A source field for mapping to a target field.
+    
+    Fields are NOT deleted when mapped - their status changes to MAPPED.
+    This allows them to still be found for join key suggestions.
     
     Attributes:
         id: Auto-generated unique identifier
@@ -25,6 +28,8 @@ class UnmappedField(BaseModel):
         src_physical_datatype: Physical data type of the column
         src_comments: Description or comments about the column
         domain: Domain category
+        mapping_status: PENDING (to map), MAPPED (used), ARCHIVED (removed)
+        mapped_field_id: Reference to mapped_fields if status is MAPPED
         uploaded_at: Timestamp when field was added
         uploaded_by: User who uploaded this field
     """
@@ -39,6 +44,8 @@ class UnmappedField(BaseModel):
     src_physical_datatype: str = Field(..., description="Physical data type")
     src_comments: Optional[str] = Field(None, description="Column description")
     domain: Optional[str] = Field(None, description="Domain category")
+    mapping_status: str = Field(default="PENDING", description="Status: PENDING, MAPPED, ARCHIVED")
+    mapped_field_id: Optional[int] = Field(None, description="FK to mapped_fields when MAPPED")
     uploaded_at: Optional[datetime] = Field(None, description="Upload timestamp")
     uploaded_by: Optional[str] = Field(None, description="User who uploaded")
 
@@ -53,7 +60,14 @@ class UnmappedFieldCreate(BaseModel):
     src_physical_datatype: str
     src_comments: Optional[str] = None
     domain: Optional[str] = None
+    mapping_status: str = "PENDING"  # Default to PENDING for new fields
     uploaded_by: Optional[str] = None
+
+
+class UnmappedFieldStatusUpdate(BaseModel):
+    """Update request for unmapped field status (used when mapping/unmapping)."""
+    mapping_status: str = Field(..., description="New status: PENDING, MAPPED, ARCHIVED")
+    mapped_field_id: Optional[int] = Field(None, description="FK to mapped_fields when MAPPED")
 
 
 class MappingFeedback(BaseModel):

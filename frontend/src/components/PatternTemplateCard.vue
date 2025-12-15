@@ -250,6 +250,14 @@ import Tag from 'primevue/tag'
 import Dropdown from 'primevue/dropdown'
 import Button from 'primevue/button'
 import type { UnmappedField } from '@/stores/unmappedFieldsStore'
+import { useAISuggestionsStore } from '@/stores/aiSuggestionsStore'
+
+// AI store for vector search on unmapped fields
+const aiStore = useAISuggestionsStore()
+
+// Cache vector search results per slot (keyed by slot column name)
+const vectorSearchResults = ref<Map<string, Array<UnmappedField & { match_score: number }>>>(new Map())
+const vectorSearchLoading = ref<Set<string>>(new Set())
 
 interface HistoricalPattern {
   mapped_field_id?: number
@@ -460,6 +468,11 @@ function parseJoinFieldSlots() {
   })
   
   joinFieldSlots.value = slots
+  
+  // Trigger vector search for unfilled join slots in background
+  slots.filter(s => !s.selectedField).forEach(slot => {
+    triggerVectorSearchForJoinSlot(slot)
+  })
 }
 
 // Find best matching field for a join slot - ONLY from tables in the mapping
@@ -515,7 +528,34 @@ const tablesInMapping = computed(() => {
   return tablesSelectedInTemplate.value
 })
 
+// Vector search cache for join fields (keyed by "table:column")
+const joinVectorSearchResults = ref<Map<string, Array<UnmappedField & { match_score: number }>>>(new Map())
+
+// Trigger vector search for a join slot
+async function triggerVectorSearchForJoinSlot(slot: JoinFieldSlot) {
+  // Search for fields that could be join keys in this table
+  const searchDesc = `${slot.originalColumn} identifier key ${slot.tableName}`.trim()
+  const slotKey = `${slot.tableName}:${slot.side}:${slot.joinIndex}`
+  
+  console.log('[PatternTemplate] Vector search for join slot:', slotKey, searchDesc)
+  
+  try {
+    // Filter to tables in the mapping
+    const tableFilter = Array.from(tablesInMapping.value)
+    
+    const results = await aiStore.searchUnmappedFields(searchDesc, {
+      tableFilter,
+      numResults: 10
+    })
+    joinVectorSearchResults.value.set(slotKey, results as any)
+    console.log('[PatternTemplate] Join vector search results for', slotKey, ':', results.length)
+  } catch (err) {
+    console.error('[PatternTemplate] Join vector search error:', err)
+  }
+}
+
 // Get matching fields for a join slot dropdown - ONLY from tables in the mapping
+// Enhanced with vector search
 function getMatchingFieldsForJoinSlot(slot: JoinFieldSlot) {
   // Filter to ONLY fields from tables that are part of this mapping
   const eligibleFields = props.availableFields.filter(f => {
@@ -523,9 +563,24 @@ function getMatchingFieldsForJoinSlot(slot: JoinFieldSlot) {
     return tablesInMapping.value.has(fieldTable)
   })
   
+  // Get vector search results for this slot if available
+  const slotKey = `${slot.tableName}:${slot.side}:${slot.joinIndex}`
+  const vsResults = joinVectorSearchResults.value.get(slotKey) || []
+  const vsScoreMap = new Map<number, number>()
+  vsResults.forEach(r => {
+    if (r.id) vsScoreMap.set(r.id, r.match_score || 0)
+  })
+  
   return eligibleFields
     .map(f => {
-      const score = calculateJoinFieldMatchScore(f, slot)
+      // Use vector search score if available, otherwise fall back to fuzzy match
+      const vsScore = vsScoreMap.get(f.id)
+      const fuzzyScore = calculateJoinFieldMatchScore(f, slot)
+      
+      // Normalize VS score and use higher of the two
+      const normalizedVsScore = vsScore ? Math.min(vsScore * 20, 1.0) : 0
+      const score = Math.max(normalizedVsScore, fuzzyScore)
+      
       return {
         id: f.id,
         label: `${f.src_column_name} (${f.src_table_name})`,
@@ -534,6 +589,7 @@ function getMatchingFieldsForJoinSlot(slot: JoinFieldSlot) {
         datatype: f.src_physical_datatype,
         description: f.src_comments,
         matchScore: score,
+        vsScore: vsScore || 0,
         field: f
       }
     })
@@ -715,7 +771,41 @@ function generateLabel(column: string): string {
     .trim() || 'Field'
 }
 
-// Get available fields that might match a slot
+// Trigger vector search for a slot's description
+async function triggerVectorSearchForSlot(slot: TemplateSlot) {
+  const slotKey = slot.originalColumn
+  if (vectorSearchLoading.value.has(slotKey)) return // Already loading
+  
+  // Build a search description from the slot label and column name
+  const searchDesc = `${slot.label} ${slot.originalColumn}`.trim()
+  if (!searchDesc) return
+  
+  console.log('[PatternTemplate] Vector search for slot:', slotKey, searchDesc)
+  vectorSearchLoading.value.add(slotKey)
+  
+  try {
+    const results = await aiStore.searchUnmappedFields(searchDesc, {
+      numResults: 10
+    })
+    vectorSearchResults.value.set(slotKey, results as any)
+    console.log('[PatternTemplate] Vector search results for', slotKey, ':', results.length)
+  } catch (err) {
+    console.error('[PatternTemplate] Vector search error:', err)
+  } finally {
+    vectorSearchLoading.value.delete(slotKey)
+  }
+}
+
+// Trigger vector search for all unfilled slots
+async function triggerVectorSearchForUnfilledSlots() {
+  const unfilledSlots = templateSlots.value.filter(s => !s.selectedField)
+  for (const slot of unfilledSlots) {
+    // Don't await - run in parallel
+    triggerVectorSearchForSlot(slot)
+  }
+}
+
+// Get available fields that might match a slot - now enhanced with vector search
 function getMatchingFieldsForSlot(slot: TemplateSlot) {
   const alreadySelectedIds = new Set(
     templateSlots.value
@@ -723,10 +813,25 @@ function getMatchingFieldsForSlot(slot: TemplateSlot) {
       .map(s => s.selectedFieldId)
   )
   
+  // Get vector search results for this slot if available
+  const vsResults = vectorSearchResults.value.get(slot.originalColumn) || []
+  const vsScoreMap = new Map<number, number>()
+  vsResults.forEach(r => {
+    if (r.id) vsScoreMap.set(r.id, r.match_score || 0)
+  })
+  
   return props.availableFields
     .filter(f => !alreadySelectedIds.has(f.id))
     .map(field => {
-      const matchScore = calculateMatchScore(field, slot)
+      // Use vector search score if available, otherwise fall back to fuzzy match
+      const vsScore = vsScoreMap.get(field.id)
+      const fuzzyScore = calculateMatchScore(field, slot)
+      
+      // Vector search scores are typically 0.01-0.05, normalize to 0-1 range
+      // Use higher of VS (normalized) or fuzzy score
+      const normalizedVsScore = vsScore ? Math.min(vsScore * 20, 1.0) : 0
+      const matchScore = Math.max(normalizedVsScore, fuzzyScore)
+      
       return {
         id: field.id,
         column: field.src_column_name,
@@ -735,6 +840,7 @@ function getMatchingFieldsForSlot(slot: TemplateSlot) {
         description: field.src_comments,
         label: `${field.src_table_name}.${field.src_column_name}`,
         matchScore,
+        vsScore: vsScore || 0, // Raw vector search score for debugging
         field
       }
     })
@@ -1164,11 +1270,15 @@ function handleApplyTemplate() {
 onMounted(() => {
   parsePatternSlots()
   parseJoinFieldSlots()
+  // Trigger vector search for unfilled slots in background
+  setTimeout(() => triggerVectorSearchForUnfilledSlots(), 100)
 })
 
 watch(() => props.pattern, () => {
   parsePatternSlots()
   parseJoinFieldSlots()
+  // Trigger vector search for unfilled slots in background
+  setTimeout(() => triggerVectorSearchForUnfilledSlots(), 100)
 }, { deep: true })
 
 watch(() => props.currentlySelectedFields, () => {

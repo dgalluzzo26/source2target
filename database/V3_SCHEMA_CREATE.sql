@@ -76,10 +76,11 @@ TBLPROPERTIES (
 
 
 -- ============================================================================
--- TABLE 2: unmapped_fields (Source Fields Awaiting Mapping)
+-- TABLE 2: unmapped_fields (Source Fields for Mapping)
 -- ============================================================================
--- Purpose: Store source fields that need to be mapped to target fields
--- Vector Search: No - but src_comments is critical for AI matching
+-- Purpose: Store source fields - both pending and mapped (not deleted when used)
+-- Vector Search: Yes - source_semantic_field column for AI matching
+-- Key Design: Fields are marked MAPPED, not deleted, to preserve join key searchability
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.unmapped_fields (
@@ -96,10 +97,29 @@ CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.unmapped_fields (
   -- Metadata - CRITICAL: src_comments drives AI matching
   src_nullable STRING DEFAULT 'YES' COMMENT 'Whether source field allows NULL values (YES/NO)',
   src_physical_datatype STRING COMMENT 'Physical data type (e.g., STRING, INT, DATE)',
-  src_comments STRING COMMENT 'Description/comments for source field - CRITICAL for AI matching when names differ',
+  src_comments STRING COMMENT 'Description/comments for source field - CRITICAL for AI matching',
   
   -- Domain classification
   domain STRING COMMENT 'Domain category (e.g., claims, member, provider, finance, pharmacy)',
+  
+  -- Mapping Status - tracks whether field has been used in a mapping
+  -- PENDING  = Field is available for mapping (shown in UI)
+  -- MAPPED   = Field has been used in a mapping (hidden from "to map" list, but searchable for joins)
+  -- ARCHIVED = Field removed by user (not shown, not searchable)
+  mapping_status STRING DEFAULT 'PENDING' COMMENT 'Status: PENDING (to map), MAPPED (used), ARCHIVED (removed)',
+  
+  -- Reference to mapped_field if this field was mapped
+  mapped_field_id BIGINT COMMENT 'Reference to mapped_fields.mapped_field_id if status is MAPPED',
+  
+  -- Vector Search: Auto-generated semantic field for AI matching
+  -- Format matches mapped_fields.source_semantic_field for consistent vector search
+  source_semantic_field STRING GENERATED ALWAYS AS (
+    CONCAT(
+      'DESCRIPTION: ', COALESCE(src_comments, src_column_name, ''),
+      ' | TYPE: ', COALESCE(src_physical_datatype, 'STRING'),
+      ' | DOMAIN: ', COALESCE(domain, '')
+    )
+  ) COMMENT 'Auto-generated semantic field for vector search - DESCRIPTION + TYPE + DOMAIN',
   
   -- Audit fields
   uploaded_by STRING COMMENT 'User who uploaded this field',
@@ -111,7 +131,7 @@ CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.unmapped_fields (
   
   CONSTRAINT pk_unmapped_fields PRIMARY KEY (unmapped_field_id)
 )
-COMMENT 'Source fields awaiting mapping. src_comments is critical for AI matching when column names differ from targets.'
+COMMENT 'Source fields for mapping. Vector search enabled. Fields marked MAPPED when used but not deleted.'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true',
   'delta.autoOptimize.optimizeWrite' = 'true',
@@ -320,6 +340,14 @@ CLUSTER BY (feedback_action, suggested_tgt_table);
 --   - Purpose: Find similar past mappings for AI pattern learning
 --   - Query: "Find mappings with similar source characteristics"
 --
+-- Index 3: unmapped_fields.source_semantic_field (NEW)
+--   - Purpose: Find unmapped source fields for template slot filling
+--   - Query: "Find unmapped fields similar to 'Position title description'"
+--   - Use cases:
+--     a) Suggest additional columns when completing multi-field patterns
+--     b) Suggest join key fields from user's selected tables
+--   - Filter support: Filter by src_table_physical_name for join field matching
+--
 -- Index 3: mapping_feedback.source_semantic_field
 --   - Purpose: Find similar past rejections to avoid
 --   - Query: "Has this source→target combination been rejected before?"
@@ -337,9 +365,15 @@ CLUSTER BY (feedback_action, suggested_tgt_table);
 -- 
 -- Summary of tables:
 -- 1. semantic_fields     - 12 columns (target definitions, vector indexed)
--- 2. unmapped_fields     - 13 columns (source fields to map)
+-- 2. unmapped_fields     - 14 columns (source fields to map, vector indexed)
 -- 3. mapped_fields       - 24 columns (complete mappings, vector indexed) - includes source_domain
 -- 4. mapping_feedback    - 18 columns (rejections, vector indexed)
+--
+-- Vector Search Indexes Required:
+-- 1. semantic_fields_vs_index       on semantic_field column
+-- 2. mapped_fields_vs_index         on source_semantic_field column
+-- 3. unmapped_fields_vs_index       on source_semantic_field column (NEW)
+-- 4. mapping_feedback_vs_index      on embedding column
 --
 -- Eliminated from V2:
 -- - mapping_details (info now in mapped_fields.source_* columns)

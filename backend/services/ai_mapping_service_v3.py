@@ -58,11 +58,12 @@ class AIMappingServiceV3:
         }
     
     def _get_vector_search_config(self) -> Dict[str, str]:
-        """Get vector search configuration for V3 (dual indexes)."""
+        """Get vector search configuration for V3 (three indexes)."""
         config = self.config_service.get_config()
         return {
             "semantic_fields_index": config.vector_search.semantic_fields_index,
             "mapped_fields_index": config.vector_search.mapped_fields_index,
+            "unmapped_fields_index": config.vector_search.unmapped_fields_index,
             "endpoint_name": config.vector_search.endpoint_name
         }
     
@@ -804,6 +805,174 @@ Generate valid Databricks SQL. Respond in JSON:
         
         print(f"[AI Mapping V3] === Hybrid AI Flow Complete ===")
         return response
+    
+    # =========================================================================
+    # UNMAPPED FIELDS VECTOR SEARCH
+    # =========================================================================
+    
+    def _build_unmapped_query(
+        self,
+        description: str,
+        datatype: str = "STRING",
+        domain: str = ""
+    ) -> str:
+        """
+        Build query string for searching UNMAPPED FIELDS.
+        
+        FORMAT: Must match unmapped_fields.source_semantic_field:
+        'DESCRIPTION: ... | TYPE: ... | DOMAIN: ...'
+        """
+        query = f"DESCRIPTION: {description} | TYPE: {datatype} | DOMAIN: {domain}"
+        print(f"[AI Mapping V3] Unmapped query: {query[:100]}...")
+        return query
+    
+    def _vector_search_unmapped_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        unmapped_index: str,
+        query: str,
+        num_results: int = 10,
+        table_filter: Optional[List[str]] = None,
+        user_filter: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Vector search on unmapped_fields for template slot and join key suggestions.
+        
+        Args:
+            server_hostname: Databricks server
+            http_path: SQL warehouse path
+            unmapped_index: Full index name (catalog.schema.index)
+            query: Query string matching source_semantic_field format
+            num_results: Max results
+            table_filter: Optional list of table names to filter to
+            user_filter: Optional uploaded_by user to filter to
+            
+        Returns:
+            List of matching unmapped fields with scores
+        """
+        print(f"[AI Mapping V3] Vector search unmapped_fields...")
+        print(f"[AI Mapping V3]   Query: {query[:80]}...")
+        print(f"[AI Mapping V3]   Tables: {table_filter}")
+        print(f"[AI Mapping V3]   User: {user_filter}")
+        
+        connection = self._get_sql_connection(server_hostname, http_path)
+        
+        try:
+            with connection.cursor() as cursor:
+                # Build filter clause
+                filters = []
+                if table_filter and len(table_filter) > 0:
+                    # Filter to specific tables (case-insensitive)
+                    tables_lower = [t.lower().replace("'", "''") for t in table_filter]
+                    tables_str = ", ".join(f"'{t}'" for t in tables_lower)
+                    filters.append(f"LOWER(src_table_physical_name) IN ({tables_str})")
+                
+                if user_filter:
+                    filters.append(f"uploaded_by = '{user_filter.replace(chr(39), chr(39)+chr(39))}'")
+                
+                # Only include PENDING and MAPPED (not ARCHIVED)
+                filters.append("COALESCE(mapping_status, 'PENDING') IN ('PENDING', 'MAPPED')")
+                
+                filter_clause = " AND ".join(filters) if filters else None
+                
+                # Escape query for SQL
+                escaped_query = query.replace("'", "''")
+                
+                # Build vector search query
+                search_query = f"""
+                    SELECT 
+                        unmapped_field_id,
+                        src_table_name,
+                        src_table_physical_name,
+                        src_column_name,
+                        src_column_physical_name,
+                        src_physical_datatype,
+                        src_comments,
+                        domain,
+                        mapping_status,
+                        uploaded_by,
+                        _score
+                    FROM VECTOR_SEARCH(
+                        index => '{unmapped_index}',
+                        query => '{escaped_query}',
+                        num_results => {num_results * 2}
+                        {f", filters => '{filter_clause}'" if filter_clause else ""}
+                    )
+                    ORDER BY _score DESC
+                    LIMIT {num_results}
+                """
+                
+                print(f"[AI Mapping V3] Executing unmapped vector search...")
+                cursor.execute(search_query)
+                
+                columns = [desc[0] for desc in cursor.description]
+                rows = cursor.fetchall()
+                
+                results = []
+                for row in rows:
+                    result = dict(zip(columns, row))
+                    # Rename _score to match_score for frontend
+                    result['match_score'] = result.pop('_score', 0)
+                    results.append(result)
+                
+                print(f"[AI Mapping V3] Unmapped search returned {len(results)} results")
+                for i, r in enumerate(results[:5]):
+                    print(f"  {i+1}. {r.get('src_table_name', '?')}.{r.get('src_column_name', '?')} - score: {r.get('match_score', 0):.4f}")
+                
+                return results
+                
+        except Exception as e:
+            print(f"[AI Mapping V3] Unmapped vector search error: {e}")
+            return []
+        finally:
+            connection.close()
+    
+    async def search_unmapped_fields(
+        self,
+        description: str,
+        datatype: str = "STRING",
+        domain: str = "",
+        table_filter: Optional[List[str]] = None,
+        user_email: Optional[str] = None,
+        num_results: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Search unmapped fields using vector search for template slot and join key suggestions.
+        
+        Args:
+            description: Description or column name to search for
+            datatype: Expected data type (default STRING)
+            domain: Optional domain for boosting relevance
+            table_filter: Optional list of table names to restrict search to
+            user_email: Optional user email to filter by uploaded_by
+            num_results: Max results to return
+            
+        Returns:
+            List of matching unmapped fields with match_score
+        """
+        db_config = self._get_db_config()
+        vs_config = self._get_vector_search_config()
+        
+        # Build query in the format matching source_semantic_field
+        query = self._build_unmapped_query(description, datatype, domain)
+        
+        loop = asyncio.get_event_loop()
+        results = await loop.run_in_executor(
+            executor,
+            functools.partial(
+                self._vector_search_unmapped_sync,
+                db_config['server_hostname'],
+                db_config['http_path'],
+                vs_config['unmapped_fields_index'],
+                query,
+                num_results,
+                table_filter,
+                user_email
+            )
+        )
+        
+        return results
     
     # =========================================================================
     # SQL GENERATION ENDPOINT

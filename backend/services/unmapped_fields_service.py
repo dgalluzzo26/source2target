@@ -10,7 +10,7 @@ import functools
 from typing import List, Dict, Any, Optional
 from databricks import sql
 from databricks.sdk import WorkspaceClient
-from backend.models.shared import UnmappedFieldV2, UnmappedFieldCreateV2
+from backend.models.shared import UnmappedFieldV2, UnmappedFieldCreateV2, UnmappedFieldStatusUpdate
 from backend.services.config_service import ConfigService
 
 
@@ -19,7 +19,7 @@ executor = ThreadPoolExecutor(max_workers=3)
 
 
 class UnmappedFieldsService:
-    """Service for managing unmapped source fields (V2 schema)."""
+    """Service for managing unmapped source fields (V3 schema with vector search)."""
     
     def __init__(self):
         """Initialize the unmapped fields service."""
@@ -46,6 +46,42 @@ class UnmappedFieldsService:
             "http_path": config.database.http_path,
             "unmapped_fields_table": self.config_service.get_fully_qualified_table_name(config.database.unmapped_fields_table)
         }
+    
+    def _get_vector_search_config(self) -> Dict[str, str]:
+        """Get vector search configuration."""
+        config = self.config_service.get_config()
+        return {
+            "endpoint_name": config.vector_search.endpoint_name,
+            "unmapped_fields_index": config.vector_search.unmapped_fields_index
+        }
+    
+    def _sync_vector_search_index(self, index_name: str) -> bool:
+        """
+        Sync/refresh the unmapped_fields vector search index after data changes.
+        
+        This ensures new/updated fields are immediately searchable for 
+        template slot matching and join key suggestions.
+        
+        Args:
+            index_name: Fully qualified index name (catalog.schema.index_name)
+            
+        Returns:
+            True if sync was successful, False otherwise
+        """
+        try:
+            print(f"[Unmapped Fields Service] Syncing vector search index: {index_name}")
+            
+            self.workspace_client.vector_search_indexes.sync_index(
+                index_name=index_name
+            )
+            
+            print(f"[Unmapped Fields Service] Vector search index sync initiated: {index_name}")
+            return True
+            
+        except Exception as e:
+            # Log but don't fail - VS sync is best-effort
+            print(f"[Unmapped Fields Service] Warning: Could not sync vector search index: {e}")
+            return False
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):
         """
@@ -87,13 +123,15 @@ class UnmappedFieldsService:
         http_path: str,
         unmapped_fields_table: str,
         current_user: str,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        include_mapped: bool = False
     ) -> List[Dict[str, Any]]:
         """
         Read unmapped fields from the database for the current user (synchronous, for thread pool).
         
-        In V3, unmapped fields are deleted when they get mapped, so we just query
-        the unmapped_fields table directly - no join needed.
+        V3 Change: Fields are NOT deleted when mapped - they stay in the table with 
+        mapping_status = 'MAPPED'. By default, only PENDING fields are returned for 
+        the mapping UI. Set include_mapped=True to get all fields (for join key search).
         
         Args:
             server_hostname: Databricks workspace hostname
@@ -101,6 +139,7 @@ class UnmappedFieldsService:
             unmapped_fields_table: Fully qualified table name
             current_user: Email of the current user (for filtering)
             limit: Optional limit on number of records to return
+            include_mapped: If True, include MAPPED fields (for join key search)
             
         Returns:
             List of unmapped field dictionaries for the current user
@@ -109,13 +148,16 @@ class UnmappedFieldsService:
         print(f"[Unmapped Fields Service] Server: {server_hostname}")
         print(f"[Unmapped Fields Service] HTTP Path: {http_path}")
         print(f"[Unmapped Fields Service] Current User: {current_user}")
+        print(f"[Unmapped Fields Service] Include Mapped: {include_mapped}")
         
         connection = self._get_sql_connection(server_hostname, http_path)
         
         try:
             with connection.cursor() as cursor:
                 # V3: Query unmapped fields for current user
-                # Fields are deleted from this table when mapped, so no join needed
+                # Filter by mapping_status unless include_mapped is True
+                status_filter = "IN ('PENDING', 'MAPPED')" if include_mapped else "= 'PENDING'"
+                
                 query = f"""
                 SELECT 
                     unmapped_field_id as id,
@@ -127,10 +169,13 @@ class UnmappedFieldsService:
                     src_physical_datatype,
                     src_comments,
                     domain,
+                    COALESCE(mapping_status, 'PENDING') as mapping_status,
+                    mapped_field_id,
                     uploaded_ts as uploaded_at,
                     uploaded_by
                 FROM {unmapped_fields_table}
                 WHERE uploaded_by = '{current_user.replace("'", "''")}'
+                  AND COALESCE(mapping_status, 'PENDING') {status_filter}
                 ORDER BY src_table_name, src_column_name
                 """
                 
@@ -143,7 +188,7 @@ class UnmappedFieldsService:
                 print(f"[Unmapped Fields Service] Fetching results...")
                 rows = cursor.fetchall()
                 
-                print(f"[Unmapped Fields Service] Found {len(rows)} unmapped fields for user {current_user}")
+                print(f"[Unmapped Fields Service] Found {len(rows)} fields for user {current_user} (include_mapped={include_mapped})")
                 
                 # Convert to list of dictionaries
                 columns = [desc[0] for desc in cursor.description]
@@ -259,7 +304,8 @@ class UnmappedFieldsService:
         """
         Delete an unmapped field by ID (synchronous, for thread pool).
         
-        This is typically called after a field has been successfully mapped.
+        Note: In V3, prefer using update_status to set ARCHIVED instead of deleting.
+        This preserves the field for join key search history.
         
         Args:
             server_hostname: Databricks workspace hostname
@@ -293,13 +339,149 @@ class UnmappedFieldsService:
         finally:
             connection.close()
     
-    async def get_all_unmapped_fields(self, current_user: str, limit: Optional[int] = None) -> List[UnmappedFieldV2]:
+    def _update_status_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        unmapped_fields_table: str,
+        field_ids: List[int],
+        new_status: str,
+        mapped_field_id: Optional[int] = None
+    ) -> Dict[str, Any]:
         """
-        Get all unmapped fields from the database for the current user.
+        Update mapping_status for one or more unmapped fields (synchronous).
+        
+        This is the V3 way to mark fields as mapped instead of deleting them.
+        Fields stay in the table and can still be found for join key suggestions.
+        
+        Args:
+            server_hostname: Databricks workspace hostname
+            http_path: SQL warehouse HTTP path
+            unmapped_fields_table: Fully qualified table name
+            field_ids: List of field IDs to update
+            new_status: New status (PENDING, MAPPED, ARCHIVED)
+            mapped_field_id: FK to mapped_fields table (required when status is MAPPED)
+            
+        Returns:
+            Dictionary with status message and count of updated records
+        """
+        if not field_ids:
+            return {"status": "success", "message": "No fields to update", "updated_count": 0}
+        
+        print(f"[Unmapped Fields Service] Updating status to {new_status} for {len(field_ids)} fields")
+        
+        connection = self._get_sql_connection(server_hostname, http_path)
+        
+        try:
+            with connection.cursor() as cursor:
+                ids_str = ", ".join(str(id) for id in field_ids)
+                
+                # Build SET clause
+                set_parts = [
+                    f"mapping_status = '{new_status}'",
+                    "updated_ts = CURRENT_TIMESTAMP()"
+                ]
+                
+                if new_status == 'MAPPED' and mapped_field_id is not None:
+                    set_parts.append(f"mapped_field_id = {mapped_field_id}")
+                elif new_status == 'PENDING':
+                    set_parts.append("mapped_field_id = NULL")
+                
+                set_clause = ", ".join(set_parts)
+                
+                query = f"""
+                    UPDATE {unmapped_fields_table}
+                    SET {set_clause}
+                    WHERE unmapped_field_id IN ({ids_str})
+                """
+                
+                cursor.execute(query)
+                
+                print(f"[Unmapped Fields Service] Updated {len(field_ids)} fields to status {new_status}")
+                return {
+                    "status": "success",
+                    "message": f"Updated {len(field_ids)} fields to {new_status}",
+                    "updated_count": len(field_ids)
+                }
+                
+        except Exception as e:
+            print(f"[Unmapped Fields Service] Error updating status: {str(e)}")
+            raise
+        finally:
+            connection.close()
+    
+    def _restore_by_mapped_field_id_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        unmapped_fields_table: str,
+        mapped_field_id: int
+    ) -> Dict[str, Any]:
+        """
+        Restore fields to PENDING status when a mapping is deleted (synchronous).
+        
+        Finds all unmapped fields that reference the given mapped_field_id
+        and sets their status back to PENDING.
+        
+        Args:
+            server_hostname: Databricks workspace hostname
+            http_path: SQL warehouse HTTP path
+            unmapped_fields_table: Fully qualified table name
+            mapped_field_id: The mapped_field_id to search for
+            
+        Returns:
+            Dictionary with status and count of restored fields
+        """
+        print(f"[Unmapped Fields Service] Restoring fields for mapped_field_id: {mapped_field_id}")
+        
+        connection = self._get_sql_connection(server_hostname, http_path)
+        
+        try:
+            with connection.cursor() as cursor:
+                query = f"""
+                    UPDATE {unmapped_fields_table}
+                    SET mapping_status = 'PENDING',
+                        mapped_field_id = NULL,
+                        updated_ts = CURRENT_TIMESTAMP()
+                    WHERE mapped_field_id = {mapped_field_id}
+                """
+                
+                cursor.execute(query)
+                
+                # Count how many were updated
+                cursor.execute(f"""
+                    SELECT COUNT(*) FROM {unmapped_fields_table}
+                    WHERE mapped_field_id = {mapped_field_id} OR mapping_status = 'PENDING'
+                """)
+                
+                print(f"[Unmapped Fields Service] Restored fields for mapped_field_id {mapped_field_id}")
+                return {
+                    "status": "success",
+                    "message": f"Restored fields for mapping {mapped_field_id}"
+                }
+                
+        except Exception as e:
+            print(f"[Unmapped Fields Service] Error restoring fields: {str(e)}")
+            raise
+        finally:
+            connection.close()
+    
+    async def get_all_unmapped_fields(
+        self,
+        current_user: str,
+        limit: Optional[int] = None,
+        include_mapped: bool = False
+    ) -> List[UnmappedFieldV2]:
+        """
+        Get unmapped fields from the database for the current user.
+        
+        V3: By default only returns PENDING fields. Set include_mapped=True
+        to also get MAPPED fields (useful for join key suggestions).
         
         Args:
             current_user: Email of the current user (for filtering)
             limit: Optional limit on number of records to return
+            include_mapped: If True, include MAPPED fields too
             
         Returns:
             List of UnmappedFieldV2 models for the current user
@@ -323,7 +505,8 @@ class UnmappedFieldsService:
                         db_config['http_path'],
                         db_config['unmapped_fields_table'],
                         current_user,
-                        limit
+                        limit,
+                        include_mapped
                     )
                 ),
                 timeout=30.0
@@ -343,6 +526,9 @@ class UnmappedFieldsService:
         """
         Create a new unmapped field record.
         
+        After creating, syncs the vector search index to make the field
+        immediately available for template matching and join suggestions.
+        
         Args:
             field_data: Unmapped field data to insert
             
@@ -350,6 +536,7 @@ class UnmappedFieldsService:
             UnmappedFieldV2 model with inserted data
         """
         db_config = self._get_db_config()
+        vs_config = self._get_vector_search_config()
         
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
@@ -363,11 +550,27 @@ class UnmappedFieldsService:
             )
         )
         
+        # Sync vector search index (best-effort, non-blocking)
+        try:
+            await loop.run_in_executor(
+                executor,
+                functools.partial(
+                    self._sync_vector_search_index,
+                    vs_config['unmapped_fields_index']
+                )
+            )
+        except Exception as e:
+            print(f"[Unmapped Fields Service] VS sync after create failed (non-fatal): {e}")
+        
         return UnmappedFieldV2(**result)
     
     async def delete_unmapped_field(self, field_id: int) -> Dict[str, str]:
         """
         Delete an unmapped field by ID.
+        
+        Note: In V3, prefer using update_status to set ARCHIVED instead.
+        
+        After deleting, syncs the vector search index.
         
         Args:
             field_id: ID of the field to delete
@@ -376,9 +579,10 @@ class UnmappedFieldsService:
             Dictionary with status message
         """
         db_config = self._get_db_config()
+        vs_config = self._get_vector_search_config()
         
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
+        result = await loop.run_in_executor(
             executor,
             functools.partial(
                 self._delete_unmapped_field_sync,
@@ -388,6 +592,145 @@ class UnmappedFieldsService:
                 field_id
             )
         )
+        
+        # Sync vector search index (best-effort)
+        try:
+            await loop.run_in_executor(
+                executor,
+                functools.partial(
+                    self._sync_vector_search_index,
+                    vs_config['unmapped_fields_index']
+                )
+            )
+        except Exception as e:
+            print(f"[Unmapped Fields Service] VS sync after delete failed (non-fatal): {e}")
+        
+        return result
+    
+    async def update_status(
+        self,
+        field_ids: List[int],
+        new_status: str,
+        mapped_field_id: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Update mapping_status for one or more unmapped fields.
+        
+        V3: This is the preferred way to mark fields as mapped.
+        Fields stay in the table for join key suggestions.
+        
+        After updating, syncs the vector search index.
+        
+        Args:
+            field_ids: List of field IDs to update
+            new_status: New status (PENDING, MAPPED, ARCHIVED)
+            mapped_field_id: FK to mapped_fields (required when MAPPED)
+            
+        Returns:
+            Dictionary with status and updated count
+        """
+        db_config = self._get_db_config()
+        vs_config = self._get_vector_search_config()
+        
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor,
+            functools.partial(
+                self._update_status_sync,
+                db_config['server_hostname'],
+                db_config['http_path'],
+                db_config['unmapped_fields_table'],
+                field_ids,
+                new_status,
+                mapped_field_id
+            )
+        )
+        
+        # Sync vector search index (best-effort)
+        try:
+            await loop.run_in_executor(
+                executor,
+                functools.partial(
+                    self._sync_vector_search_index,
+                    vs_config['unmapped_fields_index']
+                )
+            )
+        except Exception as e:
+            print(f"[Unmapped Fields Service] VS sync after status update failed (non-fatal): {e}")
+        
+        return result
+    
+    async def restore_by_mapped_field_id(self, mapped_field_id: int) -> Dict[str, Any]:
+        """
+        Restore fields to PENDING when a mapping is deleted.
+        
+        Finds all unmapped fields that reference the given mapped_field_id
+        and sets their status back to PENDING.
+        
+        After restoring, syncs the vector search index.
+        
+        Args:
+            mapped_field_id: The mapped_field_id being deleted
+            
+        Returns:
+            Dictionary with status
+        """
+        db_config = self._get_db_config()
+        vs_config = self._get_vector_search_config()
+        
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor,
+            functools.partial(
+                self._restore_by_mapped_field_id_sync,
+                db_config['server_hostname'],
+                db_config['http_path'],
+                db_config['unmapped_fields_table'],
+                mapped_field_id
+            )
+        )
+        
+        # Sync vector search index (best-effort)
+        try:
+            await loop.run_in_executor(
+                executor,
+                functools.partial(
+                    self._sync_vector_search_index,
+                    vs_config['unmapped_fields_index']
+                )
+            )
+        except Exception as e:
+            print(f"[Unmapped Fields Service] VS sync after restore failed (non-fatal): {e}")
+        
+        return result
+    
+    async def get_all_fields_for_tables(
+        self,
+        current_user: str,
+        table_names: List[str]
+    ) -> List[UnmappedFieldV2]:
+        """
+        Get all fields (PENDING and MAPPED) for specific tables.
+        
+        Used for join key selection - returns all known columns for the
+        given tables regardless of mapping status.
+        
+        Args:
+            current_user: Email of the current user
+            table_names: List of table names to filter by
+            
+        Returns:
+            List of UnmappedFieldV2 for the specified tables
+        """
+        # Get all fields including mapped ones
+        all_fields = await self.get_all_unmapped_fields(current_user, include_mapped=True)
+        
+        # Filter to requested tables
+        table_set = set(t.lower() for t in table_names)
+        return [
+            f for f in all_fields 
+            if (f.src_table_physical_name or f.src_table_name or '').lower() in table_set
+        ]
     
     async def get_columns_by_table(self, current_user: str) -> Dict[str, List[str]]:
         """

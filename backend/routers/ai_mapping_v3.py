@@ -102,6 +102,36 @@ class GenerateSQLResponse(BaseModel):
     error: Optional[str] = None
 
 
+class SearchUnmappedRequest(BaseModel):
+    """Request for searching unmapped fields via vector search."""
+    description: str
+    datatype: Optional[str] = "STRING"
+    domain: Optional[str] = ""
+    table_filter: Optional[List[str]] = None
+    user_email: Optional[str] = None
+    num_results: Optional[int] = 10
+
+
+class UnmappedFieldResult(BaseModel):
+    """Result from unmapped fields vector search."""
+    unmapped_field_id: int
+    src_table_name: str
+    src_table_physical_name: str
+    src_column_name: str
+    src_column_physical_name: str
+    src_physical_datatype: Optional[str] = None
+    src_comments: Optional[str] = None
+    domain: Optional[str] = None
+    mapping_status: Optional[str] = None
+    match_score: float
+
+
+class SearchUnmappedResponse(BaseModel):
+    """Response with matching unmapped fields."""
+    results: List[Dict[str, Any]]
+    count: int
+
+
 # ============================================================================
 # Endpoints
 # ============================================================================
@@ -180,8 +210,51 @@ async def generate_sql_expression(request: GenerateSQLRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/search-unmapped-fields", response_model=SearchUnmappedResponse)
+async def search_unmapped_fields(request: SearchUnmappedRequest):
+    """
+    Search unmapped fields using vector search.
+    
+    Used for:
+    - Template slot field suggestions (finding fields that match a pattern column description)
+    - Join key suggestions (finding potential join columns in selected tables)
+    
+    The search uses the source_semantic_field column which contains:
+    DESCRIPTION + TYPE + DOMAIN
+    
+    Args:
+        description: The description or column name to search for
+        datatype: Expected data type (helps narrow results)
+        domain: Domain for relevance boosting
+        table_filter: Optional list of tables to restrict search to
+        user_email: Filter by uploaded_by user
+        num_results: Max results (default 10)
+        
+    Returns:
+        List of matching unmapped fields with match_score
+    """
+    try:
+        results = await ai_service.search_unmapped_fields(
+            description=request.description,
+            datatype=request.datatype or "STRING",
+            domain=request.domain or "",
+            table_filter=request.table_filter,
+            user_email=request.user_email,
+            num_results=request.num_results or 10
+        )
+        
+        return SearchUnmappedResponse(
+            results=results,
+            count=len(results)
+        )
+        
+    except Exception as e:
+        print(f"[AI Mapping V3 Router] Unmapped search error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/health")
 async def health_check():
     """Health check for AI Mapping V3 service."""
-    return {"status": "ok", "version": "v3", "features": ["dual_vector_search", "sql_generation"]}
+    return {"status": "ok", "version": "v3", "features": ["dual_vector_search", "sql_generation", "unmapped_search"]}
 
