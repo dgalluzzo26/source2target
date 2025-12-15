@@ -788,12 +788,14 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
           allMatched
         })
         
-        // Try to get target description from vector search results if available
+        // Try to get target description from:
+        // 1. Pattern's own tgt_comments (set by backend for pattern-only targets)
+        // 2. Matching suggestion from vector search
         const matchingTarget = suggestions.value.find(
           t => t.tgt_column_physical_name === (p.tgt_column_physical_name || p.tgt_column_name) &&
                t.tgt_table_physical_name === (p.tgt_table_physical_name || p.tgt_table_name)
         )
-        const tgtComments = matchingTarget?.tgt_comments || ''
+        const tgtComments = p.tgt_comments || matchingTarget?.tgt_comments || p.source_descriptions || ''
         
         // Check if this pattern is the LLM's best target
         const isPatternAIPick = isLLMBestTarget(p.tgt_table_name, p.tgt_column_name)

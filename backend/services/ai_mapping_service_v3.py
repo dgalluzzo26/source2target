@@ -916,45 +916,58 @@ Generate valid Databricks SQL. Respond in JSON:
         )
         
         # =====================================================================
-        # BUILD RESPONSE - Include pattern-only targets in candidates
+        # BUILD RESPONSE - Only add LLM's best target if not in semantic results
         # =====================================================================
         
-        # Group historical patterns by target
-        patterns_by_target = {}
-        for p in historical_patterns:
-            key = (p.get('tgt_table_name', '').lower(), p.get('tgt_column_name', '').lower())
-            if key not in patterns_by_target:
-                patterns_by_target[key] = []
-            patterns_by_target[key].append(p)
-        
-        # Find which targets from semantic search
-        semantic_target_keys = set()
-        for t in target_candidates:
-            key = (t.get('tgt_table_name', '').lower(), t.get('tgt_column_name', '').lower())
-            semantic_target_keys.add(key)
-        
-        # Add pattern-only targets to candidates (they weren't in semantic search)
         enhanced_candidates = list(target_candidates[:num_results])
-        for pattern_key, patterns in patterns_by_target.items():
-            if pattern_key not in semantic_target_keys:
-                # This pattern target wasn't in semantic results - add it!
-                p = patterns[0]  # Use first pattern as template
-                pattern_count = len(patterns)
-                avg_confidence = sum(pt.get('confidence_score', 0) for pt in patterns) / pattern_count
+        
+        # Check if LLM's best target is already in semantic results
+        best_target = llm_result.get("best_target", {})
+        best_table = (best_target.get('tgt_table_name', '') or '').lower().strip()
+        best_col = (best_target.get('tgt_column_name', '') or '').lower().strip()
+        
+        if best_table and best_col:
+            # Check if already in candidates
+            already_in_candidates = any(
+                (t.get('tgt_table_name', '').lower().strip() == best_table or 
+                 t.get('tgt_table_name', '').lower().replace(' ', '_').strip() == best_table) and
+                t.get('tgt_column_name', '').lower().strip() == best_col
+                for t in enhanced_candidates
+            )
+            
+            if not already_in_candidates:
+                # Find patterns for this target to get description and confidence
+                matching_patterns = [
+                    p for p in historical_patterns
+                    if (p.get('tgt_table_name', '').lower().strip() == best_table or
+                        p.get('tgt_table_name', '').lower().replace(' ', '_').strip() == best_table) and
+                       p.get('tgt_column_name', '').lower().strip() == best_col
+                ]
                 
-                print(f"[AI Mapping V3] Adding pattern-only target to response: {pattern_key} with {pattern_count} patterns")
-                
-                enhanced_candidates.append({
-                    'tgt_table_name': p.get('tgt_table_name', ''),
-                    'tgt_table_physical_name': p.get('tgt_table_physical_name', ''),
-                    'tgt_column_name': p.get('tgt_column_name', ''),
-                    'tgt_column_physical_name': p.get('tgt_column_physical_name', ''),
-                    'tgt_comments': p.get('tgt_comments', 'Target from historical patterns'),
-                    'search_score': avg_confidence,  # Use confidence as score
-                    'from_patterns': True,  # Flag this as pattern-derived
-                    'pattern_count': pattern_count,
-                    'semantic_field_id': 0  # No semantic field ID for pattern-only targets
-                })
+                if matching_patterns:
+                    p = matching_patterns[0]
+                    pattern_count = len(matching_patterns)
+                    avg_confidence = sum(pt.get('confidence_score', 0) for pt in matching_patterns) / pattern_count
+                    
+                    print(f"[AI Mapping V3] Adding LLM best target to candidates: {best_table}.{best_col} with {pattern_count} patterns")
+                    
+                    # Insert at beginning since this is the LLM's recommendation
+                    enhanced_candidates.insert(0, {
+                        'tgt_table_name': p.get('tgt_table_name', ''),
+                        'tgt_table_physical_name': p.get('tgt_table_physical_name', ''),
+                        'tgt_column_name': p.get('tgt_column_name', ''),
+                        'tgt_column_physical_name': p.get('tgt_column_physical_name', ''),
+                        'tgt_comments': p.get('tgt_comments', '') or best_target.get('reasoning', 'LLM recommended target'),
+                        'search_score': max(avg_confidence, 0.95),  # High score for LLM pick
+                        'from_patterns': True,
+                        'pattern_count': pattern_count,
+                        'semantic_field_id': 0,
+                        'is_llm_pick': True  # Flag as LLM's recommendation
+                    })
+                else:
+                    print(f"[AI Mapping V3] LLM best target {best_table}.{best_col} has no matching patterns - not adding")
+            else:
+                print(f"[AI Mapping V3] LLM best target {best_table}.{best_col} already in semantic candidates")
         
         response = {
             "target_candidates": enhanced_candidates,
