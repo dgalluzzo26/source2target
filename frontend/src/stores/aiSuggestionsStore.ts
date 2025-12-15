@@ -159,6 +159,9 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const detectedPatternType = ref<string>('SINGLE')
   const selectedTemplatePattern = ref<HistoricalPattern | null>(null)  // User-selected pattern to use as template
   
+  // LLM's recommended best target - stored for use in unifiedOptions
+  const llmBestTarget = ref<{ tgt_table_name: string; tgt_column_name: string; reasoning: string } | null>(null)
+  
   // Hybrid filtering thresholds
   // 1. Absolute minimum - filter obvious noise
   // 2. Relative threshold - filter results too far from top score
@@ -633,14 +636,38 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     
     console.log(`[Unified Options] After hybrid filter - Targets: ${filteredSuggestionsList.length}, Patterns: ${filteredPatternsList.length}`)
     
+    // Helper to check if a suggestion matches the LLM's best target
+    const normalizeTableName = (name: string) => (name || '').toLowerCase().trim().replace(/[_\s]+/g, '')
+    const normalizeColName = (name: string) => (name || '').toLowerCase().trim()
+    
+    const isLLMBestTarget = (tableName: string, colName: string): boolean => {
+      if (!llmBestTarget.value) return false
+      const targetTable = normalizeTableName(llmBestTarget.value.tgt_table_name)
+      const targetCol = normalizeColName(llmBestTarget.value.tgt_column_name)
+      const sTable = normalizeTableName(tableName)
+      const sCol = normalizeColName(colName)
+      return sCol === targetCol && (targetTable === '' || sTable === targetTable)
+    }
+    
     // Add AI suggestions (from vector search on semantic_fields)
     filteredSuggestionsList.forEach((s, idx) => {
-      // Determine source type based on properties
+      // Determine source type - check if this is the LLM's recommended target
       let source: 'ai_pick' | 'pattern' | 'vector' = 'vector'
-      if (s.match_quality === 'Excellent' && idx === 0) {
-        source = 'ai_pick'  // LLM's best pick
+      const isAIPick = isLLMBestTarget(s.tgt_table_name, s.tgt_column_name)
+      
+      if (isAIPick) {
+        source = 'ai_pick'
+        console.log('[Unified Options] Found LLM best target in suggestions:', s.tgt_table_name, s.tgt_column_name)
       } else if (s.fromPattern) {
         source = 'pattern'
+      }
+      
+      // Apply massive boost to AI Pick so it sorts first
+      const aiPickBoost = isAIPick ? 10.0 : 1.0  // 10x boost for LLM's recommendation
+      const finalScore = s.search_score * aiPickBoost
+      
+      if (isAIPick) {
+        console.log(`[Unified Options] AI Pick boost: ${s.tgt_column_name} ${s.search_score} * ${aiPickBoost} = ${finalScore}`)
       }
       
       options.push({
@@ -652,9 +679,9 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         tgt_column_name: s.tgt_column_name,
         tgt_column_physical_name: s.tgt_column_physical_name,
         tgt_comments: s.tgt_comments,
-        matchQuality: s.match_quality,
-        score: s.search_score,
-        reasoning: s.ai_reasoning,
+        matchQuality: isAIPick ? 'Excellent' : s.match_quality,  // AI Pick is always Excellent
+        score: finalScore,
+        reasoning: isAIPick ? (llmBestTarget.value?.reasoning || s.ai_reasoning) : s.ai_reasoning,
         semantic_field_id: s.semantic_field_id
       })
     })
@@ -768,6 +795,18 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         )
         const tgtComments = matchingTarget?.tgt_comments || ''
         
+        // Check if this pattern is the LLM's best target
+        const isPatternAIPick = isLLMBestTarget(p.tgt_table_name, p.tgt_column_name)
+        const patternSource: 'ai_pick' | 'pattern' = isPatternAIPick ? 'ai_pick' : 'pattern'
+        
+        // Apply AI Pick boost if this pattern matches LLM recommendation
+        const aiPickBoost = isPatternAIPick ? 10.0 : 1.0
+        const finalPatternScore = score * aiPickBoost
+        
+        if (isPatternAIPick) {
+          console.log(`[Unified Options] AI Pick (pattern): ${p.tgt_table_name}.${p.tgt_column_name} score ${score} * ${aiPickBoost} = ${finalPatternScore}`)
+        }
+        
         const patternInfo = group.patternCount > 1 
           ? `${group.patternCount} similar mappings using ${votedTransformsStr}`
           : `Historical pattern using ${votedTransformsStr || 'direct mapping'}`
@@ -775,18 +814,18 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         options.push({
           id: `pattern-group-${group.targetKey}-${group.columnCount}`,
           rank: 0,
-          source: 'pattern',
+          source: patternSource,
           tgt_table_name: p.tgt_table_name,
           tgt_table_physical_name: p.tgt_table_physical_name || p.tgt_table_name,
           tgt_column_name: p.tgt_column_name,
           tgt_column_physical_name: p.tgt_column_physical_name || p.tgt_column_name,
           tgt_comments: tgtComments,
-          matchQuality: 'Unknown',  // Will be set after sorting by rank
-          score: score,
+          matchQuality: isPatternAIPick ? 'Excellent' : 'Unknown',
+          score: finalPatternScore,
           suggestedMappings: mappings,
           allFieldsMatched: allMatched,
           generatedSQL: generatedSQL,
-          reasoning: patternInfo,
+          reasoning: isPatternAIPick ? (llmBestTarget.value?.reasoning || patternInfo) : patternInfo,
           pattern: p,
           sourceColumns: p.source_columns,
           transformations: votedTransformsStr,
@@ -851,6 +890,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     detectedPatternType.value = 'SINGLE'
     sourceFieldsUsed.value = [...sourceFields]
     topVectorScore = 0  // Reset for new request
+    llmBestTarget.value = null  // Clear LLM recommendation
     
     console.log('[AI Suggestions] State cleared. Historical patterns:', historicalPatterns.value.length)
     console.log('[AI Suggestions] Source fields for this query:', sourceFields.map(f => f.src_column_name))
@@ -886,6 +926,18 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       const targetCandidates = data.target_candidates || []
       const bestTarget = data.best_target || {}
       const llmReasoning = bestTarget.reasoning || data.recommended_expression || ''
+      
+      // Store LLM's best target for use in unifiedOptions
+      if (bestTarget.tgt_column_name) {
+        llmBestTarget.value = {
+          tgt_table_name: bestTarget.tgt_table_name || '',
+          tgt_column_name: bestTarget.tgt_column_name || '',
+          reasoning: llmReasoning
+        }
+        console.log('[AI Suggestions] Stored LLM best target:', llmBestTarget.value)
+      } else {
+        llmBestTarget.value = null
+      }
       
       console.log('[AI Suggestions] Best target from LLM:', bestTarget)
       console.log('[AI Suggestions] Target candidates count:', targetCandidates.length)
@@ -1191,6 +1243,7 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
     selectedTemplatePattern.value = null
     recommendedExpression.value = ''
     detectedPatternType.value = 'SINGLE'
+    llmBestTarget.value = null
     error.value = null
     console.log('[AI Suggestions] Cleared suggestions')
   }
