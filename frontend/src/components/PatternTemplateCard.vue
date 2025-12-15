@@ -371,12 +371,21 @@ const userSelectedMultipleTables = computed(() => {
   return tablesSelectedInTemplate.value.size > 1
 })
 
-// Show join section when user selected fields from multiple tables
-// (regardless of whether pattern has join_metadata - they'll need to join anyway)
+// Show join section when:
+// 1. Pattern is explicitly a JOIN (not UNION)
+// 2. AND user selected fields from multiple tables
+// UNION patterns combine tables but don't require join conditions
 const isSourceJoinPattern = computed(() => {
-  // Show join section if user selected fields from 2+ different tables
-  // This is needed even without join_metadata because tables must be joined
-  return userSelectedMultipleTables.value
+  const relationshipType = (props.pattern.source_relationship_type || '').toUpperCase()
+  
+  // UNION patterns don't need join fields - tables are combined, not joined
+  if (relationshipType === 'UNION') {
+    console.log('[PatternTemplate] UNION pattern - no join fields needed')
+    return false
+  }
+  
+  // For JOIN or multi-table patterns, show join section if user selected multiple tables
+  return userSelectedMultipleTables.value && relationshipType !== 'UNION'
 })
 
 // Does the pattern have join_metadata we can use as template?
