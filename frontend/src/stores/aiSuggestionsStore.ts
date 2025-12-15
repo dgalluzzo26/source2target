@@ -714,7 +714,26 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
         existing.sourceColumns = p.source_columns
         existing.isMultiColumn = p.isMultiColumn || group.columnCount > 1
         existing.suggestedMappings = mappings
-        existing.allFieldsMatched = allMatched || sourceFieldsUsed.value.length > 0
+        
+        // For multi-column or JOIN patterns, require proper matching
+        // Don't just assume allFieldsMatched if user has any fields selected
+        const isJoinPattern = (p.source_relationship_type || '').toUpperCase() === 'JOIN' ||
+                              (p.join_metadata && p.join_metadata.includes('is_source_join'))
+        const requiredFieldCount = group.columnCount || 1
+        const userFieldCount = sourceFieldsUsed.value.length
+        
+        // allFieldsMatched only if:
+        // 1. For SINGLE patterns: user has at least 1 field
+        // 2. For multi-column/JOIN: autoMatch succeeded OR user has enough fields from different tables
+        if (isJoinPattern || requiredFieldCount > 1) {
+          // Multi-column/JOIN: need proper auto-matching or manual completion
+          existing.allFieldsMatched = allMatched && userFieldCount >= requiredFieldCount
+          console.log(`[Unified Options] Multi-column pattern check: required=${requiredFieldCount}, user=${userFieldCount}, autoMatched=${allMatched}, result=${existing.allFieldsMatched}`)
+        } else {
+          // Single field pattern: user just needs 1 field
+          existing.allFieldsMatched = userFieldCount >= 1
+        }
+        
         existing.generatedSQL = mergedSQL || generatedSQL
         existing.hasMatchingPattern = true
         existing.patternCount = group.patternCount

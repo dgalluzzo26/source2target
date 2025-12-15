@@ -443,26 +443,61 @@ class AIMappingServiceV3:
             ]
             qualified_field_names_str = ', '.join(qualified_field_names)
             
-            # Build target candidates context - use PHYSICAL names
+            # First, group historical patterns by target for enrichment
+            patterns_by_target = {}
+            for p in historical_patterns:
+                target_key = (p.get('tgt_table_name', '').lower(), p.get('tgt_column_name', '').lower())
+                if target_key not in patterns_by_target:
+                    patterns_by_target[target_key] = []
+                patterns_by_target[target_key].append(p)
+            
+            # Build target candidates context - ENRICHED with pattern support info
             target_info = []
             for i, t in enumerate(target_candidates[:5], 1):
                 tgt_table = t.get('tgt_table_physical_name', t.get('tgt_table_name', 'unknown'))
                 tgt_column = t.get('tgt_column_physical_name', t.get('tgt_column_name', 'unknown'))
+                tgt_table_display = t.get('tgt_table_name', tgt_table)
+                tgt_column_display = t.get('tgt_column_name', tgt_column)
+                
+                # Check for matching historical patterns
+                target_key = (tgt_table_display.lower(), tgt_column_display.lower())
+                matching_patterns = patterns_by_target.get(target_key, [])
+                pattern_count = len(matching_patterns)
+                
+                pattern_note = ""
+                if pattern_count > 0:
+                    avg_confidence = sum(p.get('confidence_score', 0) for p in matching_patterns) / pattern_count
+                    transforms = matching_patterns[0].get('transformations_applied', 'None')
+                    pattern_note = f" [⚡ {pattern_count} HISTORICAL PATTERNS, confidence: {avg_confidence:.0%}, transforms: {transforms}]"
+                
                 target_info.append(
                     f"{i}. {tgt_table}.{tgt_column} "
-                    f"(Score: {t.get('search_score', 0):.4f}) - {t.get('tgt_comments', 'No description')}"
+                    f"(Semantic Score: {t.get('search_score', 0):.4f}){pattern_note}\n"
+                    f"   Description: {t.get('tgt_comments', 'No description')}"
                 )
             
-            # Build historical patterns context - emphasize TRANSFORMATIONS only
+            # Build historical patterns context - GROUPED BY TARGET with counts
             pattern_info = []
-            for p in historical_patterns[:5]:
-                transforms = p.get('transformations_applied', 'None')
-                rel_type = p.get('source_relationship_type', 'SINGLE')
+            for target_key, patterns in patterns_by_target.items():
+                tgt_table, tgt_col = target_key
+                pattern_count = len(patterns)
+                avg_confidence = sum(p.get('confidence_score', 0) for p in patterns) / pattern_count
+                
+                # Get unique transformations across patterns
+                all_transforms = set()
+                rel_types = set()
+                for p in patterns:
+                    transforms = p.get('transformations_applied', '')
+                    if transforms:
+                        all_transforms.update(t.strip() for t in transforms.split(','))
+                    rel_types.add(p.get('source_relationship_type', 'SINGLE'))
+                
                 pattern_info.append(
-                    f"- Target: {p['tgt_column_name']}\n"
-                    f"  Transformations Used: {transforms}\n"
-                    f"  Relationship Type: {rel_type}\n"
-                    f"  (Note: Field names in original were different - only use the transformation pattern)"
+                    f"- Target: {tgt_col.upper()} (table: {tgt_table})\n"
+                    f"  ★ Pattern Count: {pattern_count} (STRONG historical evidence)\n"
+                    f"  ★ Average Confidence: {avg_confidence:.0%}\n"
+                    f"  Transformations Used: {', '.join(sorted(all_transforms)) if all_transforms else 'None'}\n"
+                    f"  Relationship Types: {', '.join(sorted(rel_types))}"
                 )
             
             # Build rejection context
@@ -481,24 +516,30 @@ CURRENT SOURCE FIELDS TO MAP (use THESE EXACT PHYSICAL names in your SQL):
 PHYSICAL COLUMN NAMES FOR SQL: {current_field_names_str}
 FULLY QUALIFIED NAMES (table.column): {qualified_field_names_str}
 
-TARGET CANDIDATES (from vector search):
+TARGET CANDIDATES (from vector search, enriched with pattern info):
 {chr(10).join(target_info) if target_info else 'No candidates found'}
 
-HISTORICAL PATTERNS (learn TRANSFORMATIONS from these, but use CURRENT PHYSICAL field names above):
+HISTORICAL PATTERNS GROUPED BY TARGET:
 {chr(10).join(pattern_info) if pattern_info else 'No historical patterns found'}
 
-CRITICAL: 
+IMPORTANT - TARGET SELECTION PRIORITY:
+1. ⚡ PREFER targets with historical patterns - these represent PROVEN successful mappings
+2. A target with 2+ patterns and >80% confidence should be STRONGLY preferred over purely semantic matches
+3. Pattern count matters: 3 patterns = very reliable, 1 pattern = somewhat reliable
+4. Only choose a pure semantic match (no patterns) if NO pattern-backed targets are available
+5. The semantic score is just text similarity - patterns are actual validated mappings!
+
+CRITICAL SQL GENERATION RULES: 
 - Use ONLY the PHYSICAL column names listed above in any SQL expressions
 - Physical names are: {current_field_names_str}
 - For multi-table joins, use qualified names: {qualified_field_names_str}
-- The historical patterns show what transformations (TRIM, UPPER, INITCAP, etc.) were typically applied
-- Apply those same transformations but with the CURRENT PHYSICAL field names - NOT old field names
+- Apply transformations from patterns but with the CURRENT PHYSICAL field names
 
 REJECTED MAPPINGS (avoid these):
 {chr(10).join(rejection_info) if rejection_info else 'No rejections'}
 
 Based on this analysis, provide:
-1. The BEST target field match (use physical names)
+1. The BEST target field match - PREFER targets with historical patterns over pure semantic matches
 2. A SQL expression using ONLY these PHYSICAL field names: {current_field_names_str}
 3. Recommended transformations based on historical patterns
 4. Whether this should be SINGLE, JOIN, or UNION based on sources
