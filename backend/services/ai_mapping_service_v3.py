@@ -444,25 +444,61 @@ class AIMappingServiceV3:
             qualified_field_names_str = ', '.join(qualified_field_names)
             
             # First, group historical patterns by target for enrichment
+            # Use BOTH full key (table, column) AND normalized versions for matching
             patterns_by_target = {}
+            patterns_by_table_col = {}  # Exact match
+            patterns_by_physical = {}   # Physical name match
+            
             for p in historical_patterns:
-                target_key = (p.get('tgt_table_name', '').lower(), p.get('tgt_column_name', '').lower())
-                if target_key not in patterns_by_target:
-                    patterns_by_target[target_key] = []
-                patterns_by_target[target_key].append(p)
+                tgt_table = p.get('tgt_table_name', '').lower().strip()
+                tgt_col = p.get('tgt_column_name', '').lower().strip()
+                tgt_table_phys = p.get('tgt_table_physical_name', tgt_table).lower().strip()
+                tgt_col_phys = p.get('tgt_column_physical_name', tgt_col).lower().strip()
+                
+                # Store by display name
+                key1 = (tgt_table, tgt_col)
+                if key1 not in patterns_by_table_col:
+                    patterns_by_table_col[key1] = []
+                patterns_by_table_col[key1].append(p)
+                
+                # Store by physical name
+                key2 = (tgt_table_phys, tgt_col_phys)
+                if key2 not in patterns_by_physical:
+                    patterns_by_physical[key2] = []
+                patterns_by_physical[key2].append(p)
+            
+            print(f"[AI Mapping V3] Pattern groups (display): {list(patterns_by_table_col.keys())}")
+            print(f"[AI Mapping V3] Pattern groups (physical): {list(patterns_by_physical.keys())}")
             
             # Build target candidates context - ENRICHED with pattern support info
             target_info = []
             for i, t in enumerate(target_candidates[:5], 1):
-                tgt_table = t.get('tgt_table_physical_name', t.get('tgt_table_name', 'unknown'))
-                tgt_column = t.get('tgt_column_physical_name', t.get('tgt_column_name', 'unknown'))
-                tgt_table_display = t.get('tgt_table_name', tgt_table)
-                tgt_column_display = t.get('tgt_column_name', tgt_column)
+                tgt_table_phys = t.get('tgt_table_physical_name', t.get('tgt_table_name', 'unknown')).lower().strip()
+                tgt_column_phys = t.get('tgt_column_physical_name', t.get('tgt_column_name', 'unknown')).lower().strip()
+                tgt_table_display = t.get('tgt_table_name', tgt_table_phys).lower().strip()
+                tgt_column_display = t.get('tgt_column_name', tgt_column_phys).lower().strip()
                 
-                # Check for matching historical patterns
-                target_key = (tgt_table_display.lower(), tgt_column_display.lower())
-                matching_patterns = patterns_by_target.get(target_key, [])
+                # Try multiple matching strategies
+                matching_patterns = []
+                
+                # 1. Try exact display name match
+                key1 = (tgt_table_display, tgt_column_display)
+                if key1 in patterns_by_table_col:
+                    matching_patterns = patterns_by_table_col[key1]
+                    print(f"[AI Mapping V3] Display name match for {key1}: {len(matching_patterns)} patterns")
+                
+                # 2. Try physical name match
+                if not matching_patterns:
+                    key2 = (tgt_table_phys, tgt_column_phys)
+                    if key2 in patterns_by_physical:
+                        matching_patterns = patterns_by_physical[key2]
+                        print(f"[AI Mapping V3] Physical name match for {key2}: {len(matching_patterns)} patterns")
+                
                 pattern_count = len(matching_patterns)
+                
+                # Use original case for display
+                tgt_table_out = t.get('tgt_table_physical_name', t.get('tgt_table_name', 'unknown'))
+                tgt_column_out = t.get('tgt_column_physical_name', t.get('tgt_column_name', 'unknown'))
                 
                 pattern_note = ""
                 if pattern_count > 0:
@@ -471,31 +507,31 @@ class AIMappingServiceV3:
                     pattern_note = f" [⚡ {pattern_count} HISTORICAL PATTERNS, confidence: {avg_confidence:.0%}, transforms: {transforms}]"
                 
                 target_info.append(
-                    f"{i}. {tgt_table}.{tgt_column} "
+                    f"{i}. {tgt_table_out}.{tgt_column_out} "
                     f"(Semantic Score: {t.get('search_score', 0):.4f}){pattern_note}\n"
                     f"   Description: {t.get('tgt_comments', 'No description')}"
                 )
             
             # Build historical patterns context - GROUPED BY TARGET with counts
             pattern_info = []
-            for target_key, patterns in patterns_by_target.items():
-                tgt_table, tgt_col = target_key
-                pattern_count = len(patterns)
-                avg_confidence = sum(p.get('confidence_score', 0) for p in patterns) / pattern_count
+            for target_key, patterns in patterns_by_table_col.items():
+                pattern_tgt_table, pattern_tgt_col = target_key
+                grp_pattern_count = len(patterns)
+                grp_avg_confidence = sum(p.get('confidence_score', 0) for p in patterns) / grp_pattern_count
                 
                 # Get unique transformations across patterns
                 all_transforms = set()
                 rel_types = set()
                 for p in patterns:
-                    transforms = p.get('transformations_applied', '')
-                    if transforms:
-                        all_transforms.update(t.strip() for t in transforms.split(','))
+                    p_transforms = p.get('transformations_applied', '')
+                    if p_transforms:
+                        all_transforms.update(tr.strip() for tr in p_transforms.split(','))
                     rel_types.add(p.get('source_relationship_type', 'SINGLE'))
                 
                 pattern_info.append(
-                    f"- Target: {tgt_col.upper()} (table: {tgt_table})\n"
-                    f"  ★ Pattern Count: {pattern_count} (STRONG historical evidence)\n"
-                    f"  ★ Average Confidence: {avg_confidence:.0%}\n"
+                    f"- Target: {pattern_tgt_col.upper()} (table: {pattern_tgt_table})\n"
+                    f"  ★ Pattern Count: {grp_pattern_count} (STRONG historical evidence)\n"
+                    f"  ★ Average Confidence: {grp_avg_confidence:.0%}\n"
                     f"  Transformations Used: {', '.join(sorted(all_transforms)) if all_transforms else 'None'}\n"
                     f"  Relationship Types: {', '.join(sorted(rel_types))}"
                 )
