@@ -972,19 +972,43 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       
       console.log(`[AI Suggestions] Displaying ${suggestions.value.length} suggestions (backend already filtered)`)
       
-      // If we have a best target but it's not in top candidates, move it to top
+      // If we have a best target but it's not in top position, move it to top
+      // Must match BOTH table AND column (case-insensitive, handle underscores/spaces)
       if (bestTarget.tgt_column_name && suggestions.value.length > 0) {
-        const bestIdx = suggestions.value.findIndex(
-          s => s.tgt_column_name.toLowerCase() === bestTarget.tgt_column_name?.toLowerCase()
-        )
-        if (bestIdx > 0) {
-          // Move best target to position 0
-          const best = suggestions.value.splice(bestIdx, 1)[0]
-          best.match_quality = 'Excellent'
-          best.ai_reasoning = llmReasoning || best.ai_reasoning
-          suggestions.value.unshift(best)
+        const normalizeTableName = (name: string) => (name || '').toLowerCase().trim().replace(/[_\s]+/g, '')
+        const normalizeColName = (name: string) => (name || '').toLowerCase().trim()
+        
+        const bestTargetTable = normalizeTableName(bestTarget.tgt_table_name || '')
+        const bestTargetCol = normalizeColName(bestTarget.tgt_column_name || '')
+        
+        console.log('[AI Suggestions] Looking for best target:', bestTargetTable, '.', bestTargetCol)
+        
+        const bestIdx = suggestions.value.findIndex(s => {
+          const sTable = normalizeTableName(s.tgt_table_name)
+          const sCol = normalizeColName(s.tgt_column_name)
+          const matches = sCol === bestTargetCol && (bestTargetTable === '' || sTable === bestTargetTable)
+          if (matches) {
+            console.log('[AI Suggestions] Found best target match at index:', suggestions.value.indexOf(s), s.tgt_table_name, s.tgt_column_name)
+          }
+          return matches
+        })
+        
+        if (bestIdx >= 0) {
+          // Move best target to position 0 if not already there
+          if (bestIdx > 0) {
+            const best = suggestions.value.splice(bestIdx, 1)[0]
+            best.match_quality = 'Excellent'
+            best.ai_reasoning = llmReasoning || best.ai_reasoning
+            suggestions.value.unshift(best)
+            console.log('[AI Suggestions] Moved LLM best target to position 0:', best.tgt_table_name, best.tgt_column_name)
+          } else {
+            suggestions.value[0].match_quality = 'Excellent'
+            suggestions.value[0].ai_reasoning = llmReasoning || suggestions.value[0].ai_reasoning
+          }
           // Re-rank
           suggestions.value.forEach((s, i) => { s.rank = i + 1 })
+        } else {
+          console.log('[AI Suggestions] Could not find LLM best target in suggestions list!')
         }
       }
       

@@ -916,10 +916,48 @@ Generate valid Databricks SQL. Respond in JSON:
         )
         
         # =====================================================================
-        # BUILD RESPONSE
+        # BUILD RESPONSE - Include pattern-only targets in candidates
         # =====================================================================
+        
+        # Group historical patterns by target
+        patterns_by_target = {}
+        for p in historical_patterns:
+            key = (p.get('tgt_table_name', '').lower(), p.get('tgt_column_name', '').lower())
+            if key not in patterns_by_target:
+                patterns_by_target[key] = []
+            patterns_by_target[key].append(p)
+        
+        # Find which targets from semantic search
+        semantic_target_keys = set()
+        for t in target_candidates:
+            key = (t.get('tgt_table_name', '').lower(), t.get('tgt_column_name', '').lower())
+            semantic_target_keys.add(key)
+        
+        # Add pattern-only targets to candidates (they weren't in semantic search)
+        enhanced_candidates = list(target_candidates[:num_results])
+        for pattern_key, patterns in patterns_by_target.items():
+            if pattern_key not in semantic_target_keys:
+                # This pattern target wasn't in semantic results - add it!
+                p = patterns[0]  # Use first pattern as template
+                pattern_count = len(patterns)
+                avg_confidence = sum(pt.get('confidence_score', 0) for pt in patterns) / pattern_count
+                
+                print(f"[AI Mapping V3] Adding pattern-only target to response: {pattern_key} with {pattern_count} patterns")
+                
+                enhanced_candidates.append({
+                    'tgt_table_name': p.get('tgt_table_name', ''),
+                    'tgt_table_physical_name': p.get('tgt_table_physical_name', ''),
+                    'tgt_column_name': p.get('tgt_column_name', ''),
+                    'tgt_column_physical_name': p.get('tgt_column_physical_name', ''),
+                    'tgt_comments': p.get('tgt_comments', 'Target from historical patterns'),
+                    'search_score': avg_confidence,  # Use confidence as score
+                    'from_patterns': True,  # Flag this as pattern-derived
+                    'pattern_count': pattern_count,
+                    'semantic_field_id': 0  # No semantic field ID for pattern-only targets
+                })
+        
         response = {
-            "target_candidates": target_candidates[:num_results],
+            "target_candidates": enhanced_candidates,
             "historical_patterns": historical_patterns,
             "rejections_to_avoid": rejections,
             "llm_analysis": llm_result,
