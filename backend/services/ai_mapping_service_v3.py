@@ -504,7 +504,10 @@ class AIMappingServiceV3:
                 if pattern_count > 0:
                     avg_confidence = sum(p.get('confidence_score', 0) for p in matching_patterns) / pattern_count
                     transforms = matching_patterns[0].get('transformations_applied', 'None')
-                    pattern_note = f" [⚡ {pattern_count} HISTORICAL PATTERNS, confidence: {avg_confidence:.0%}, transforms: {transforms}]"
+                    pattern_note = f" [⚡ {pattern_count} HISTORICAL PATTERNS - STRONG EVIDENCE, confidence: {avg_confidence:.0%}, transforms: {transforms}]"
+                else:
+                    # Explicitly mark candidates with NO pattern support
+                    pattern_note = " [❌ NO HISTORICAL PATTERNS - semantic match only]"
                 
                 target_info.append(
                     f"{i}. {tgt_table_out}.{tgt_column_out} "
@@ -512,7 +515,50 @@ class AIMappingServiceV3:
                     f"   Description: {t.get('tgt_comments', 'No description')}"
                 )
             
-            # Build historical patterns context - GROUPED BY TARGET with counts
+            # Track which pattern groups were matched to semantic candidates
+            matched_pattern_keys = set()
+            
+            # Add pattern-backed targets that WEREN'T in semantic results
+            # These are VERY important - they have historical evidence!
+            next_rank = len(target_info) + 1
+            for target_key, patterns in patterns_by_table_col.items():
+                pattern_tgt_table, pattern_tgt_col = target_key
+                
+                # Check if this pattern was already matched to a semantic candidate
+                already_in_candidates = False
+                for t in target_candidates[:5]:
+                    t_table = t.get('tgt_table_name', '').lower().strip()
+                    t_col = t.get('tgt_column_name', '').lower().strip()
+                    t_table_phys = t.get('tgt_table_physical_name', '').lower().strip()
+                    t_col_phys = t.get('tgt_column_physical_name', '').lower().strip()
+                    
+                    if (t_table == pattern_tgt_table and t_col == pattern_tgt_col) or \
+                       (t_table_phys == pattern_tgt_table and t_col_phys == pattern_tgt_col):
+                        already_in_candidates = True
+                        matched_pattern_keys.add(target_key)
+                        break
+                
+                if not already_in_candidates:
+                    # This pattern target wasn't in semantic results - ADD IT!
+                    grp_pattern_count = len(patterns)
+                    grp_avg_confidence = sum(p.get('confidence_score', 0) for p in patterns) / grp_pattern_count
+                    p_transforms = patterns[0].get('transformations_applied', 'None')
+                    
+                    # Get physical names from first pattern
+                    phys_table = patterns[0].get('tgt_table_physical_name', pattern_tgt_table.upper())
+                    phys_col = patterns[0].get('tgt_column_physical_name', pattern_tgt_col.upper())
+                    
+                    print(f"[AI Mapping V3] Adding pattern-only target: {pattern_tgt_table}.{pattern_tgt_col} with {grp_pattern_count} patterns")
+                    
+                    target_info.append(
+                        f"{next_rank}. {phys_table}.{phys_col} "
+                        f"(FROM HISTORICAL PATTERNS - NOT in semantic search) "
+                        f"[⚡⚡ {grp_pattern_count} HISTORICAL PATTERNS - HIGHEST PRIORITY, confidence: {grp_avg_confidence:.0%}, transforms: {p_transforms}]\n"
+                        f"   Description: {patterns[0].get('tgt_comments', 'Target from historical mapping patterns')}"
+                    )
+                    next_rank += 1
+            
+            # Build historical patterns context - only show unmatched patterns for context
             pattern_info = []
             for target_key, patterns in patterns_by_table_col.items():
                 pattern_tgt_table, pattern_tgt_col = target_key
@@ -528,8 +574,11 @@ class AIMappingServiceV3:
                         all_transforms.update(tr.strip() for tr in p_transforms.split(','))
                     rel_types.add(p.get('source_relationship_type', 'SINGLE'))
                 
+                # Note if this pattern was already shown in candidates
+                in_candidates_note = " (INCLUDED IN CANDIDATES ABOVE)" if target_key in matched_pattern_keys else " (ADDED TO CANDIDATES)"
+                
                 pattern_info.append(
-                    f"- Target: {pattern_tgt_col.upper()} (table: {pattern_tgt_table})\n"
+                    f"- Target: {pattern_tgt_table.upper()}.{pattern_tgt_col.upper()}{in_candidates_note}\n"
                     f"  ★ Pattern Count: {grp_pattern_count} (STRONG historical evidence)\n"
                     f"  ★ Average Confidence: {grp_avg_confidence:.0%}\n"
                     f"  Transformations Used: {', '.join(sorted(all_transforms)) if all_transforms else 'None'}\n"
