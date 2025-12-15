@@ -861,18 +861,22 @@ Generate valid Databricks SQL. Respond in JSON:
         try:
             with connection.cursor() as cursor:
                 # Build filter clause
+                # Note: Filter values need to use escaped quotes for embedding in SQL string
                 filters = []
                 if table_filter and len(table_filter) > 0:
                     # Filter to specific tables (case-insensitive)
+                    # Use double single-quotes for escaping inside the filter string
                     tables_lower = [t.lower().replace("'", "''") for t in table_filter]
-                    tables_str = ", ".join(f"'{t}'" for t in tables_lower)
+                    tables_str = ", ".join(f"''{t}''" for t in tables_lower)
                     filters.append(f"LOWER(src_table_physical_name) IN ({tables_str})")
                 
                 if user_filter:
-                    filters.append(f"uploaded_by = '{user_filter.replace(chr(39), chr(39)+chr(39))}'")
+                    escaped_user = user_filter.replace("'", "''")
+                    filters.append(f"uploaded_by = ''{escaped_user}''")
                 
                 # Only include PENDING and MAPPED (not ARCHIVED)
-                filters.append("COALESCE(mapping_status, 'PENDING') IN ('PENDING', 'MAPPED')")
+                # Use double single-quotes for string literals inside filter
+                filters.append("COALESCE(mapping_status, ''PENDING'') IN (''PENDING'', ''MAPPED'')")
                 
                 filter_clause = " AND ".join(filters) if filters else None
                 
