@@ -860,30 +860,14 @@ Generate valid Databricks SQL. Respond in JSON:
         
         try:
             with connection.cursor() as cursor:
-                # Build filter clause
-                # Note: Filter values need to use escaped quotes for embedding in SQL string
-                filters = []
-                if table_filter and len(table_filter) > 0:
-                    # Filter to specific tables (case-insensitive)
-                    # Use double single-quotes for escaping inside the filter string
-                    tables_lower = [t.lower().replace("'", "''") for t in table_filter]
-                    tables_str = ", ".join(f"''{t}''" for t in tables_lower)
-                    filters.append(f"LOWER(src_table_physical_name) IN ({tables_str})")
-                
-                if user_filter:
-                    escaped_user = user_filter.replace("'", "''")
-                    filters.append(f"uploaded_by = ''{escaped_user}''")
-                
-                # Only include PENDING and MAPPED (not ARCHIVED)
-                # Use double single-quotes for string literals inside filter
-                filters.append("COALESCE(mapping_status, ''PENDING'') IN (''PENDING'', ''MAPPED'')")
-                
-                filter_clause = " AND ".join(filters) if filters else None
-                
                 # Escape query for SQL
                 escaped_query = query.replace("'", "''")
                 
-                # Build vector search query
+                # Build vector search query - NO filters in VECTOR_SEARCH
+                # Filters are applied after fetching results
+                # Fetch extra results to account for post-filtering
+                fetch_count = num_results * 5  # Fetch more to have enough after filtering
+                
                 search_query = f"""
                     SELECT 
                         unmapped_field_id,
@@ -900,11 +884,9 @@ Generate valid Databricks SQL. Respond in JSON:
                     FROM VECTOR_SEARCH(
                         index => '{unmapped_index}',
                         query => '{escaped_query}',
-                        num_results => {num_results * 2}
-                        {f", filters => '{filter_clause}'" if filter_clause else ""}
+                        num_results => {fetch_count}
                     )
                     ORDER BY _score DESC
-                    LIMIT {num_results}
                 """
                 
                 print(f"[AI Mapping V3] Executing unmapped vector search...")
@@ -913,14 +895,43 @@ Generate valid Databricks SQL. Respond in JSON:
                 columns = [desc[0] for desc in cursor.description]
                 rows = cursor.fetchall()
                 
+                print(f"[AI Mapping V3] Vector search returned {len(rows)} raw results, applying filters...")
+                
+                # Build filter sets for post-filtering
+                table_filter_set = None
+                if table_filter and len(table_filter) > 0:
+                    table_filter_set = set(t.lower() for t in table_filter)
+                
                 results = []
                 for row in rows:
                     result = dict(zip(columns, row))
+                    
+                    # Apply filters post-fetch
+                    # Filter 1: Table filter
+                    if table_filter_set:
+                        field_table = (result.get('src_table_physical_name') or '').lower()
+                        if field_table not in table_filter_set:
+                            continue
+                    
+                    # Filter 2: User filter
+                    if user_filter:
+                        if result.get('uploaded_by') != user_filter:
+                            continue
+                    
+                    # Filter 3: Status filter (only PENDING and MAPPED)
+                    status = result.get('mapping_status') or 'PENDING'
+                    if status not in ('PENDING', 'MAPPED'):
+                        continue
+                    
                     # Rename _score to match_score for frontend
                     result['match_score'] = result.pop('_score', 0)
                     results.append(result)
+                    
+                    # Stop once we have enough results
+                    if len(results) >= num_results:
+                        break
                 
-                print(f"[AI Mapping V3] Unmapped search returned {len(results)} results")
+                print(f"[AI Mapping V3] After filtering: {len(results)} results")
                 for i, r in enumerate(results[:5]):
                     print(f"  {i+1}. {r.get('src_table_name', '?')}.{r.get('src_column_name', '?')} - score: {r.get('match_score', 0):.4f}")
                 
