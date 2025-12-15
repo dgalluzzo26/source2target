@@ -573,13 +573,29 @@ function getMatchingFieldsForJoinSlot(slot: JoinFieldSlot) {
   
   return eligibleFields
     .map(f => {
-      // Use vector search score if available, otherwise fall back to fuzzy match
+      // Get both vector search and fuzzy scores
       const vsScore = vsScoreMap.get(f.id)
       const fuzzyScore = calculateJoinFieldMatchScore(f, slot)
       
-      // Normalize VS score and use higher of the two
-      const normalizedVsScore = vsScore ? Math.min(vsScore * 20, 1.0) : 0
-      const score = Math.max(normalizedVsScore, fuzzyScore)
+      // Normalize VS score (0.005-0.05 range -> 0-1)
+      const normalizedVsScore = vsScore ? Math.min(vsScore * 25, 1.0) : 0
+      
+      let score: number
+      
+      // If found in BOTH vector search AND fuzzy matching, boost the score
+      if (vsScore && vsScore > 0.003 && fuzzyScore > 0.15) {
+        // Both methods found it - use max + bonus for agreement
+        const baseScore = Math.max(normalizedVsScore, fuzzyScore)
+        const vsBonus = Math.min(vsScore * 10, 0.3)
+        score = Math.min(baseScore + vsBonus, 0.99)
+        console.log('[JoinField] BOTH MATCH:', f.src_column_name, 
+          'VS:', vsScore.toFixed(4), 'fuzzy:', fuzzyScore.toFixed(2),
+          '+ bonus:', vsBonus.toFixed(2), '= final:', score.toFixed(2))
+      } else if (normalizedVsScore > fuzzyScore) {
+        score = normalizedVsScore
+      } else {
+        score = fuzzyScore
+      }
       
       return {
         id: f.id,
@@ -841,18 +857,39 @@ function getMatchingFieldsForSlot(slot: TemplateSlot) {
   return props.availableFields
     .filter(f => !alreadySelectedIds.has(f.id))
     .map(field => {
-      // Use vector search score if available, otherwise fall back to fuzzy match
+      // Get both vector search and fuzzy scores
       const vsScore = vsScoreMap.get(field.id)
       const fuzzyScore = calculateMatchScore(field, slot)
       
-      // Vector search scores are typically 0.01-0.05, normalize to 0-1 range
-      // Use higher of VS (normalized) or fuzzy score
-      const normalizedVsScore = vsScore ? Math.min(vsScore * 20, 1.0) : 0
-      const matchScore = Math.max(normalizedVsScore, fuzzyScore)
+      // Vector search scores are typically 0.005-0.05, normalize to 0-1 range
+      // Using 25x multiplier to get 0.04 -> 1.0
+      const normalizedVsScore = vsScore ? Math.min(vsScore * 25, 1.0) : 0
       
-      // Debug: log when VS score is used
-      if (vsScore && vsScore > 0) {
-        console.log('[PatternTemplate] Field', field.src_column_name, 'VS:', vsScore.toFixed(4), 'normalized:', normalizedVsScore.toFixed(2), 'fuzzy:', fuzzyScore.toFixed(2), 'final:', matchScore.toFixed(2))
+      let matchScore: number
+      
+      // If found in BOTH vector search AND fuzzy matching, boost the score
+      // This is a stronger signal than either alone
+      if (vsScore && vsScore > 0.003 && fuzzyScore > 0.15) {
+        // Both methods found it - use max score + bonus for agreement
+        // Bonus scales with how strong the VS match is
+        const baseScore = Math.max(normalizedVsScore, fuzzyScore)
+        const vsBonus = Math.min(vsScore * 10, 0.3) // VS 0.01 -> +0.10, VS 0.03 -> +0.30
+        matchScore = Math.min(baseScore + vsBonus, 0.99)
+        console.log('[PatternTemplate] BOTH MATCH:', field.src_column_name, 
+          'VS:', vsScore.toFixed(4), 
+          'fuzzy:', fuzzyScore.toFixed(2), 
+          'base:', baseScore.toFixed(2),
+          '+bonus:', vsBonus.toFixed(2),
+          '= final:', matchScore.toFixed(2))
+      } else if (normalizedVsScore > fuzzyScore) {
+        // Vector search alone is better
+        matchScore = normalizedVsScore
+        if (vsScore && vsScore > 0) {
+          console.log('[PatternTemplate] VS wins:', field.src_column_name, 'VS:', normalizedVsScore.toFixed(2), 'fuzzy:', fuzzyScore.toFixed(2))
+        }
+      } else {
+        // Fuzzy is better or no VS score
+        matchScore = fuzzyScore
       }
       
       return {
