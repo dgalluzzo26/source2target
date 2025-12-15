@@ -880,13 +880,13 @@ Generate valid Databricks SQL. Respond in JSON:
                         domain,
                         mapping_status,
                         uploaded_by,
-                        _score
+                        search_score
                     FROM VECTOR_SEARCH(
                         index => '{unmapped_index}',
                         query => '{escaped_query}',
                         num_results => {fetch_count}
                     )
-                    ORDER BY _score DESC
+                    ORDER BY search_score DESC
                 """
                 
                 print(f"[AI Mapping V3] Executing unmapped vector search...")
@@ -923,8 +923,8 @@ Generate valid Databricks SQL. Respond in JSON:
                     if status not in ('PENDING', 'MAPPED'):
                         continue
                     
-                    # Rename _score to match_score for frontend
-                    result['match_score'] = result.pop('_score', 0)
+                    # Rename search_score to match_score for frontend
+                    result['match_score'] = result.pop('search_score', 0)
                     results.append(result)
                     
                     # Stop once we have enough results
