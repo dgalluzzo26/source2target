@@ -360,21 +360,36 @@ const hasMultipleTables = computed(() => {
 })
 
 // Filter historical patterns based on current selection
-// Backend already filters by minimum score - just filter by relationship type
+// Must match BOTH the selected target column AND appropriate relationship type
 const filteredHistoricalPatterns = computed(() => {
   if (!historicalPatterns.value || historicalPatterns.value.length === 0) {
     console.log('[Mapping Config] No historical patterns to display')
     return []
   }
   
-  console.log('[Mapping Config] Filtering', historicalPatterns.value.length, 'patterns by relationship type')
+  // Get the selected target column to filter by
+  const selectedTargetColumn = targetField.value?.tgt_column_name?.toLowerCase() || ''
+  const selectedTargetTable = targetField.value?.tgt_table_name?.toLowerCase() || ''
+  
+  console.log('[Mapping Config] Filtering', historicalPatterns.value.length, 'patterns')
+  console.log('[Mapping Config] Selected target:', selectedTargetTable + '.' + selectedTargetColumn)
   console.log('[Mapping Config] hasMultipleFields:', hasMultipleFields.value)
   console.log('[Mapping Config] hasMultipleTables:', hasMultipleTables.value)
   
   const filtered = historicalPatterns.value.filter(pattern => {
+    // FIRST: Must match the selected target column
+    const patternTargetColumn = (pattern.tgt_column_name || '').toLowerCase()
+    const patternTargetTable = (pattern.tgt_table_name || '').toLowerCase()
+    
+    // Skip patterns for different target columns
+    if (selectedTargetColumn && patternTargetColumn !== selectedTargetColumn) {
+      console.log('[Mapping Config] Skipping pattern - different target:', patternTargetColumn, 'vs', selectedTargetColumn)
+      return false
+    }
+    
+    // THEN: Filter by relationship type based on current selection
     const patternType = (pattern.source_relationship_type || 'SINGLE').toUpperCase()
     
-    // Filter by relationship type based on current selection
     if (!hasMultipleFields.value) {
       // Single column selected - only show SINGLE patterns
       return patternType === 'SINGLE'
@@ -387,7 +402,7 @@ const filteredHistoricalPatterns = computed(() => {
     }
   }).slice(0, 5)  // Limit to top 5
   
-  console.log('[Mapping Config] Showing', filtered.length, 'patterns')
+  console.log('[Mapping Config] Showing', filtered.length, 'patterns for target:', selectedTargetColumn)
   
   return filtered
 })
