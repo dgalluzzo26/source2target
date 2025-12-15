@@ -166,8 +166,12 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
   const RELATIVE_THRESHOLD = 0.25   // Must be at least 25% of top score
   
   // Base combo boost: when a target has BOTH semantic match AND historical pattern
-  // This rewards validated mappings with semantic relevance
-  const BASE_COMBO_BOOST = 1.5  // Base 50% score boost for combo matches
+  // This rewards validated mappings - pattern support = higher confidence
+  const BASE_COMBO_BOOST = 2.5  // Base 150% score boost for pattern-backed targets
+  
+  // Penalty for targets with NO pattern support
+  // Pure semantic matches are less validated than pattern-backed ones
+  const NO_PATTERN_PENALTY = 0.6  // Reduce pure semantic scores by 40%
   
   // Frequency boost constants
   // Formula: BASE_COMBO_BOOST * (1 + min(1.0, log2(count) * FREQUENCY_BOOST_FACTOR))
@@ -775,6 +779,16 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       }
     })
     
+    // Apply penalty to targets with NO pattern support
+    // These are purely semantic matches without historical validation
+    options.forEach(opt => {
+      if (!opt.hasMatchingPattern && opt.source !== 'pattern') {
+        const originalScore = opt.score
+        opt.score = opt.score * NO_PATTERN_PENALTY
+        console.log(`[Unified Options] No pattern penalty: ${opt.tgt_column_name} ${originalScore?.toFixed(4)} * ${NO_PATTERN_PENALTY} = ${opt.score?.toFixed(4)}`)
+      }
+    })
+    
     // Sort by: 1) ai_pick first, 2) score descending
     options.sort((a, b) => {
       // AI pick always first
@@ -785,19 +799,17 @@ export const useAISuggestionsStore = defineStore('aiSuggestions', () => {
       return b.score - a.score
     })
     
-    // Assign ranks AND quality based on final position
-    // This ensures consistent quality regardless of source
+    // Assign ranks AND recalculate quality based on FINAL score
+    // IMPORTANT: Quality must be based on final score AFTER all boosts/penalties
     options.forEach((opt, idx) => {
       opt.rank = idx + 1
       
-      // If quality wasn't already set (patterns come in as Unknown), set by score
-      if (opt.matchQuality === 'Unknown') {
-        // Score-based quality using new calibrated thresholds
-        if (opt.score >= QUALITY_THRESHOLDS.excellent) opt.matchQuality = 'Excellent'
-        else if (opt.score >= QUALITY_THRESHOLDS.strong) opt.matchQuality = 'Strong'
-        else if (opt.score >= QUALITY_THRESHOLDS.good) opt.matchQuality = 'Good'
-        else opt.matchQuality = 'Weak'
-      }
+      // ALWAYS recalculate quality based on final score (after boosts/penalties)
+      // This ensures quality labels are consistent with the displayed ranking
+      if (opt.score >= QUALITY_THRESHOLDS.excellent) opt.matchQuality = 'Excellent'
+      else if (opt.score >= QUALITY_THRESHOLDS.strong) opt.matchQuality = 'Strong'
+      else if (opt.score >= QUALITY_THRESHOLDS.good) opt.matchQuality = 'Good'
+      else opt.matchQuality = 'Weak'
     })
     
     return options

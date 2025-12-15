@@ -307,8 +307,8 @@
             
             <!-- Card Actions -->
             <div class="option-actions">
-              <!-- For patterns with suggested mappings -->
-              <template v-if="option.source === 'pattern' && option.pattern">
+              <!-- For patterns OR merged options with multi-column patterns -->
+              <template v-if="(option.source === 'pattern' && option.pattern) || (option.hasMatchingPattern && option.pattern && option.isMultiColumn)">
                 <!-- Primary action: Apply if all fields matched -->
                 <Button
                   v-if="option.allFieldsMatched"
@@ -340,7 +340,7 @@
                 />
               </template>
               
-              <!-- For AI/Vector suggestions - Accept/Reject -->
+              <!-- For AI/Vector suggestions without multi-column pattern -->
               <template v-else>
                 <!-- Show "Apply with Transforms" if target has matching pattern -->
                 <Button
