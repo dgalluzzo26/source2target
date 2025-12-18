@@ -299,10 +299,32 @@ BEGIN
     updated_ts = CURRENT_TIMESTAMP()
   WHERE target_table_status_id = p_target_table_status_id;
   
-  -- Also update project counters (dynamic procedure call)
-  EXECUTE IMMEDIATE 
-    'CALL ' || p_catalog || '.' || p_schema || '.sp_update_project_counters(?, ?, ?)'
-    USING p_catalog, p_schema, v_project_id;
+  -- Also update project counters (inline to avoid dynamic CALL issues)
+  UPDATE IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_projects')
+  SET 
+    tables_complete = (
+      SELECT COUNT(*)
+      FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
+      WHERE project_id = v_project_id AND mapping_status = 'COMPLETE'
+    ),
+    tables_in_progress = (
+      SELECT COUNT(*)
+      FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
+      WHERE project_id = v_project_id 
+        AND mapping_status IN ('DISCOVERING', 'SUGGESTIONS_READY', 'IN_REVIEW')
+    ),
+    columns_mapped = (
+      SELECT COALESCE(SUM(columns_mapped), 0)
+      FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
+      WHERE project_id = v_project_id
+    ),
+    columns_pending_review = (
+      SELECT COALESCE(SUM(columns_pending_review), 0)
+      FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
+      WHERE project_id = v_project_id
+    ),
+    updated_ts = CURRENT_TIMESTAMP()
+  WHERE project_id = v_project_id;
   
 END;
 
