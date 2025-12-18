@@ -72,13 +72,17 @@ BEGIN
   ORDER BY tgt_table_name;
   
   -- Get counts for project update
-  SELECT COUNT(*) INTO v_tables_created
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
-  WHERE project_id = p_project_id;
+  SET v_tables_created = (
+    SELECT COUNT(*)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
+    WHERE project_id = p_project_id
+  );
   
-  SELECT COALESCE(SUM(total_columns), 0) INTO v_columns_total
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
-  WHERE project_id = p_project_id;
+  SET v_columns_total = (
+    SELECT COALESCE(SUM(total_columns), 0)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
+    WHERE project_id = p_project_id
+  );
   
   -- Update project counters
   UPDATE IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_projects')
@@ -125,31 +129,43 @@ BEGIN
   DECLARE v_columns_pending BIGINT;
   
   -- Calculate table counts
-  SELECT COUNT(*) INTO v_total_tables
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
-  WHERE project_id = p_project_id;
+  SET v_total_tables = (
+    SELECT COUNT(*)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
+    WHERE project_id = p_project_id
+  );
   
-  SELECT COUNT(*) INTO v_tables_complete
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
-  WHERE project_id = p_project_id AND mapping_status = 'COMPLETE';
+  SET v_tables_complete = (
+    SELECT COUNT(*)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
+    WHERE project_id = p_project_id AND mapping_status = 'COMPLETE'
+  );
   
-  SELECT COUNT(*) INTO v_tables_in_progress
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
-  WHERE project_id = p_project_id 
-    AND mapping_status IN ('DISCOVERING', 'SUGGESTIONS_READY', 'IN_REVIEW');
+  SET v_tables_in_progress = (
+    SELECT COUNT(*)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
+    WHERE project_id = p_project_id 
+      AND mapping_status IN ('DISCOVERING', 'SUGGESTIONS_READY', 'IN_REVIEW')
+  );
   
   -- Calculate column counts
-  SELECT COALESCE(SUM(total_columns), 0) INTO v_total_columns
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
-  WHERE project_id = p_project_id;
+  SET v_total_columns = (
+    SELECT COALESCE(SUM(total_columns), 0)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
+    WHERE project_id = p_project_id
+  );
   
-  SELECT COALESCE(SUM(columns_mapped), 0) INTO v_columns_mapped
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
-  WHERE project_id = p_project_id;
+  SET v_columns_mapped = (
+    SELECT COALESCE(SUM(columns_mapped), 0)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
+    WHERE project_id = p_project_id
+  );
   
-  SELECT COALESCE(SUM(columns_pending_review), 0) INTO v_columns_pending
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
-  WHERE project_id = p_project_id;
+  SET v_columns_pending = (
+    SELECT COALESCE(SUM(columns_pending_review), 0)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
+    WHERE project_id = p_project_id
+  );
   
   -- Update project
   UPDATE IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_projects')
@@ -201,46 +217,62 @@ BEGIN
   DECLARE v_min_conf DOUBLE;
   
   -- Get project_id
-  SELECT project_id INTO v_project_id
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
-  WHERE target_table_status_id = p_target_table_status_id;
+  SET v_project_id = (
+    SELECT project_id
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
+    WHERE target_table_status_id = p_target_table_status_id
+  );
   
   -- Count suggestions by status
-  SELECT COUNT(*) INTO v_with_pattern
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
-  WHERE target_table_status_id = p_target_table_status_id 
-    AND pattern_mapped_field_id IS NOT NULL;
+  SET v_with_pattern = (
+    SELECT COUNT(*)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND pattern_mapped_field_id IS NOT NULL
+  );
   
-  SELECT COUNT(*) INTO v_mapped
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
-  WHERE target_table_status_id = p_target_table_status_id 
-    AND suggestion_status IN ('APPROVED', 'EDITED');
+  SET v_mapped = (
+    SELECT COUNT(*)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND suggestion_status IN ('APPROVED', 'EDITED')
+  );
   
-  SELECT COUNT(*) INTO v_pending
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
-  WHERE target_table_status_id = p_target_table_status_id 
-    AND suggestion_status = 'PENDING';
+  SET v_pending = (
+    SELECT COUNT(*)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND suggestion_status = 'PENDING'
+  );
   
-  SELECT COUNT(*) INTO v_no_match
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
-  WHERE target_table_status_id = p_target_table_status_id 
-    AND suggestion_status IN ('NO_MATCH', 'NO_PATTERN');
+  SET v_no_match = (
+    SELECT COUNT(*)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND suggestion_status IN ('NO_MATCH', 'NO_PATTERN')
+  );
   
-  SELECT COUNT(*) INTO v_skipped
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
-  WHERE target_table_status_id = p_target_table_status_id 
-    AND suggestion_status IN ('SKIPPED', 'REJECTED');
+  SET v_skipped = (
+    SELECT COUNT(*)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND suggestion_status IN ('SKIPPED', 'REJECTED')
+  );
   
   -- Calculate confidence stats
-  SELECT AVG(confidence_score) INTO v_avg_conf
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
-  WHERE target_table_status_id = p_target_table_status_id 
-    AND confidence_score IS NOT NULL;
+  SET v_avg_conf = (
+    SELECT AVG(confidence_score)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND confidence_score IS NOT NULL
+  );
   
-  SELECT MIN(confidence_score) INTO v_min_conf
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
-  WHERE target_table_status_id = p_target_table_status_id 
-    AND confidence_score IS NOT NULL;
+  SET v_min_conf = (
+    SELECT MIN(confidence_score)
+    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_suggestions')
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND confidence_score IS NOT NULL
+  );
   
   -- Update table status
   UPDATE IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
