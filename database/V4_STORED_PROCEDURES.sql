@@ -2,8 +2,8 @@
 -- V4 STORED PROCEDURES - Target-First Workflow
 -- ============================================================================
 -- 
--- These stored procedures use dynamic SQL (EXECUTE IMMEDIATE) so they work
--- with any catalog and schema configuration.
+-- These stored procedures use IDENTIFIER() for dynamic table references,
+-- allowing them to work with any catalog and schema configuration.
 --
 -- USAGE:
 --   CALL oztest_dev.smartmapper.sp_initialize_target_tables(
@@ -43,59 +43,51 @@ CREATE OR REPLACE PROCEDURE oztest_dev.smartmapper.sp_initialize_target_tables(
 LANGUAGE SQL
 AS
 BEGIN
-  DECLARE v_full_schema STRING;
-  DECLARE v_sql STRING;
-  
-  SET v_full_schema = p_catalog || '.' || p_schema;
+  DECLARE v_tables_created INT DEFAULT 0;
+  DECLARE v_columns_total BIGINT DEFAULT 0;
   
   -- Insert target_table_status rows from semantic_fields
-  SET v_sql = '
-    INSERT INTO ' || v_full_schema || '.target_table_status (
-      project_id,
-      tgt_table_name,
-      tgt_table_physical_name,
-      tgt_table_description,
-      mapping_status,
-      total_columns,
-      display_order
-    )
-    SELECT 
-      ' || p_project_id || ' AS project_id,
-      tgt_table_name,
-      tgt_table_physical_name,
-      MIN(tgt_comments) AS tgt_table_description,
-      ''NOT_STARTED'' AS mapping_status,
-      COUNT(*) AS total_columns,
-      ROW_NUMBER() OVER (ORDER BY tgt_table_name) AS display_order
-    FROM ' || v_full_schema || '.semantic_fields
-    WHERE (' || COALESCE('''' || p_domain_filter || '''', 'NULL') || ' IS NULL 
-           OR ' || COALESCE('''' || p_domain_filter || '''', 'NULL') || ' = '''' 
-           OR INSTR(' || COALESCE('''' || p_domain_filter || '''', 'NULL') || ', domain) > 0)
-    GROUP BY tgt_table_name, tgt_table_physical_name
-    ORDER BY tgt_table_name
-  ';
+  INSERT INTO IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'target_table_status') (
+    project_id,
+    tgt_table_name,
+    tgt_table_physical_name,
+    tgt_table_description,
+    mapping_status,
+    total_columns,
+    display_order
+  )
+  SELECT 
+    p_project_id AS project_id,
+    tgt_table_name,
+    tgt_table_physical_name,
+    MIN(tgt_comments) AS tgt_table_description,
+    'NOT_STARTED' AS mapping_status,
+    COUNT(*) AS total_columns,
+    ROW_NUMBER() OVER (ORDER BY tgt_table_name) AS display_order
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'semantic_fields')
+  WHERE (p_domain_filter IS NULL 
+         OR p_domain_filter = '' 
+         OR INSTR(p_domain_filter, domain) > 0)
+  GROUP BY tgt_table_name, tgt_table_physical_name
+  ORDER BY tgt_table_name;
   
-  EXECUTE IMMEDIATE v_sql;
+  -- Get counts for project update
+  SELECT COUNT(*) INTO v_tables_created
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'target_table_status')
+  WHERE project_id = p_project_id;
+  
+  SELECT COALESCE(SUM(total_columns), 0) INTO v_columns_total
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'target_table_status')
+  WHERE project_id = p_project_id;
   
   -- Update project counters
-  SET v_sql = '
-    UPDATE ' || v_full_schema || '.mapping_projects
-    SET 
-      total_target_tables = (
-        SELECT COUNT(*) 
-        FROM ' || v_full_schema || '.target_table_status 
-        WHERE project_id = ' || p_project_id || '
-      ),
-      total_target_columns = (
-        SELECT COALESCE(SUM(total_columns), 0) 
-        FROM ' || v_full_schema || '.target_table_status 
-        WHERE project_id = ' || p_project_id || '
-      ),
-      project_status = ''ACTIVE'',
-      updated_ts = CURRENT_TIMESTAMP()
-    WHERE project_id = ' || p_project_id;
-  
-  EXECUTE IMMEDIATE v_sql;
+  UPDATE IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'mapping_projects')
+  SET 
+    total_target_tables = v_tables_created,
+    total_target_columns = v_columns_total,
+    project_status = 'ACTIVE',
+    updated_ts = CURRENT_TIMESTAMP()
+  WHERE project_id = p_project_id;
   
 END;
 
@@ -125,49 +117,51 @@ CREATE OR REPLACE PROCEDURE oztest_dev.smartmapper.sp_update_project_counters(
 LANGUAGE SQL
 AS
 BEGIN
-  DECLARE v_full_schema STRING;
-  DECLARE v_sql STRING;
+  DECLARE v_total_tables INT;
+  DECLARE v_tables_complete INT;
+  DECLARE v_tables_in_progress INT;
+  DECLARE v_total_columns BIGINT;
+  DECLARE v_columns_mapped BIGINT;
+  DECLARE v_columns_pending BIGINT;
   
-  SET v_full_schema = p_catalog || '.' || p_schema;
+  -- Calculate table counts
+  SELECT COUNT(*) INTO v_total_tables
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'target_table_status')
+  WHERE project_id = p_project_id;
   
-  SET v_sql = '
-    UPDATE ' || v_full_schema || '.mapping_projects
-    SET 
-      total_target_tables = (
-        SELECT COUNT(*) 
-        FROM ' || v_full_schema || '.target_table_status 
-        WHERE project_id = ' || p_project_id || '
-      ),
-      tables_complete = (
-        SELECT COUNT(*) 
-        FROM ' || v_full_schema || '.target_table_status 
-        WHERE project_id = ' || p_project_id || ' AND mapping_status = ''COMPLETE''
-      ),
-      tables_in_progress = (
-        SELECT COUNT(*) 
-        FROM ' || v_full_schema || '.target_table_status 
-        WHERE project_id = ' || p_project_id || ' 
-          AND mapping_status IN (''DISCOVERING'', ''SUGGESTIONS_READY'', ''IN_REVIEW'')
-      ),
-      total_target_columns = (
-        SELECT COALESCE(SUM(total_columns), 0) 
-        FROM ' || v_full_schema || '.target_table_status 
-        WHERE project_id = ' || p_project_id || '
-      ),
-      columns_mapped = (
-        SELECT COALESCE(SUM(columns_mapped), 0) 
-        FROM ' || v_full_schema || '.target_table_status 
-        WHERE project_id = ' || p_project_id || '
-      ),
-      columns_pending_review = (
-        SELECT COALESCE(SUM(columns_pending_review), 0) 
-        FROM ' || v_full_schema || '.target_table_status 
-        WHERE project_id = ' || p_project_id || '
-      ),
-      updated_ts = CURRENT_TIMESTAMP()
-    WHERE project_id = ' || p_project_id;
+  SELECT COUNT(*) INTO v_tables_complete
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'target_table_status')
+  WHERE project_id = p_project_id AND mapping_status = 'COMPLETE';
   
-  EXECUTE IMMEDIATE v_sql;
+  SELECT COUNT(*) INTO v_tables_in_progress
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'target_table_status')
+  WHERE project_id = p_project_id 
+    AND mapping_status IN ('DISCOVERING', 'SUGGESTIONS_READY', 'IN_REVIEW');
+  
+  -- Calculate column counts
+  SELECT COALESCE(SUM(total_columns), 0) INTO v_total_columns
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'target_table_status')
+  WHERE project_id = p_project_id;
+  
+  SELECT COALESCE(SUM(columns_mapped), 0) INTO v_columns_mapped
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'target_table_status')
+  WHERE project_id = p_project_id;
+  
+  SELECT COALESCE(SUM(columns_pending_review), 0) INTO v_columns_pending
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'target_table_status')
+  WHERE project_id = p_project_id;
+  
+  -- Update project
+  UPDATE IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'mapping_projects')
+  SET 
+    total_target_tables = v_total_tables,
+    tables_complete = v_tables_complete,
+    tables_in_progress = v_tables_in_progress,
+    total_target_columns = v_total_columns,
+    columns_mapped = v_columns_mapped,
+    columns_pending_review = v_columns_pending,
+    updated_ts = CURRENT_TIMESTAMP()
+  WHERE project_id = p_project_id;
   
 END;
 
@@ -197,87 +191,78 @@ CREATE OR REPLACE PROCEDURE oztest_dev.smartmapper.sp_recalculate_table_counters
 LANGUAGE SQL
 AS
 BEGIN
-  DECLARE v_full_schema STRING;
-  DECLARE v_sql STRING;
   DECLARE v_project_id BIGINT;
+  DECLARE v_with_pattern INT;
+  DECLARE v_mapped INT;
+  DECLARE v_pending INT;
+  DECLARE v_no_match INT;
+  DECLARE v_skipped INT;
+  DECLARE v_avg_conf DOUBLE;
+  DECLARE v_min_conf DOUBLE;
   
-  SET v_full_schema = p_catalog || '.' || p_schema;
+  -- Get project_id
+  SELECT project_id INTO v_project_id
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'target_table_status')
+  WHERE target_table_status_id = p_target_table_status_id;
   
-  -- Get project_id for later use
-  EXECUTE IMMEDIATE '
-    SELECT project_id 
-    FROM ' || v_full_schema || '.target_table_status 
-    WHERE target_table_status_id = ' || p_target_table_status_id
-  INTO v_project_id;
+  -- Count suggestions by status
+  SELECT COUNT(*) INTO v_with_pattern
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'mapping_suggestions')
+  WHERE target_table_status_id = p_target_table_status_id 
+    AND pattern_mapped_field_id IS NOT NULL;
   
-  -- Update table status with counts from suggestions
-  SET v_sql = '
-    UPDATE ' || v_full_schema || '.target_table_status tts
-    SET 
-      columns_with_pattern = (
-        SELECT COUNT(*) 
-        FROM ' || v_full_schema || '.mapping_suggestions 
-        WHERE target_table_status_id = ' || p_target_table_status_id || '
-          AND pattern_mapped_field_id IS NOT NULL
-      ),
-      columns_mapped = (
-        SELECT COUNT(*) 
-        FROM ' || v_full_schema || '.mapping_suggestions 
-        WHERE target_table_status_id = ' || p_target_table_status_id || '
-          AND suggestion_status IN (''APPROVED'', ''EDITED'')
-      ),
-      columns_pending_review = (
-        SELECT COUNT(*) 
-        FROM ' || v_full_schema || '.mapping_suggestions 
-        WHERE target_table_status_id = ' || p_target_table_status_id || '
-          AND suggestion_status = ''PENDING''
-      ),
-      columns_no_match = (
-        SELECT COUNT(*) 
-        FROM ' || v_full_schema || '.mapping_suggestions 
-        WHERE target_table_status_id = ' || p_target_table_status_id || '
-          AND suggestion_status IN (''NO_MATCH'', ''NO_PATTERN'')
-      ),
-      columns_skipped = (
-        SELECT COUNT(*) 
-        FROM ' || v_full_schema || '.mapping_suggestions 
-        WHERE target_table_status_id = ' || p_target_table_status_id || '
-          AND suggestion_status IN (''SKIPPED'', ''REJECTED'')
-      ),
-      avg_confidence = (
-        SELECT AVG(confidence_score) 
-        FROM ' || v_full_schema || '.mapping_suggestions 
-        WHERE target_table_status_id = ' || p_target_table_status_id || '
-          AND confidence_score IS NOT NULL
-      ),
-      min_confidence = (
-        SELECT MIN(confidence_score) 
-        FROM ' || v_full_schema || '.mapping_suggestions 
-        WHERE target_table_status_id = ' || p_target_table_status_id || '
-          AND confidence_score IS NOT NULL
-      ),
-      mapping_status = CASE 
-        WHEN (SELECT COUNT(*) FROM ' || v_full_schema || '.mapping_suggestions 
-              WHERE target_table_status_id = ' || p_target_table_status_id || '
-                AND suggestion_status IN (''PENDING'', ''NO_MATCH'', ''NO_PATTERN'')) = 0 
-        THEN ''COMPLETE''
-        WHEN (SELECT COUNT(*) FROM ' || v_full_schema || '.mapping_suggestions 
-              WHERE target_table_status_id = ' || p_target_table_status_id || '
-                AND suggestion_status IN (''APPROVED'', ''EDITED'', ''SKIPPED'', ''REJECTED'')) > 0 
-        THEN ''IN_REVIEW''
-        ELSE tts.mapping_status
-      END,
-      completed_ts = CASE 
-        WHEN (SELECT COUNT(*) FROM ' || v_full_schema || '.mapping_suggestions 
-              WHERE target_table_status_id = ' || p_target_table_status_id || '
-                AND suggestion_status IN (''PENDING'', ''NO_MATCH'', ''NO_PATTERN'')) = 0 
-        THEN CURRENT_TIMESTAMP()
-        ELSE tts.completed_ts
-      END,
-      updated_ts = CURRENT_TIMESTAMP()
-    WHERE target_table_status_id = ' || p_target_table_status_id;
+  SELECT COUNT(*) INTO v_mapped
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'mapping_suggestions')
+  WHERE target_table_status_id = p_target_table_status_id 
+    AND suggestion_status IN ('APPROVED', 'EDITED');
   
-  EXECUTE IMMEDIATE v_sql;
+  SELECT COUNT(*) INTO v_pending
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'mapping_suggestions')
+  WHERE target_table_status_id = p_target_table_status_id 
+    AND suggestion_status = 'PENDING';
+  
+  SELECT COUNT(*) INTO v_no_match
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'mapping_suggestions')
+  WHERE target_table_status_id = p_target_table_status_id 
+    AND suggestion_status IN ('NO_MATCH', 'NO_PATTERN');
+  
+  SELECT COUNT(*) INTO v_skipped
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'mapping_suggestions')
+  WHERE target_table_status_id = p_target_table_status_id 
+    AND suggestion_status IN ('SKIPPED', 'REJECTED');
+  
+  -- Calculate confidence stats
+  SELECT AVG(confidence_score) INTO v_avg_conf
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'mapping_suggestions')
+  WHERE target_table_status_id = p_target_table_status_id 
+    AND confidence_score IS NOT NULL;
+  
+  SELECT MIN(confidence_score) INTO v_min_conf
+  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'mapping_suggestions')
+  WHERE target_table_status_id = p_target_table_status_id 
+    AND confidence_score IS NOT NULL;
+  
+  -- Update table status
+  UPDATE IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'target_table_status')
+  SET 
+    columns_with_pattern = v_with_pattern,
+    columns_mapped = v_mapped,
+    columns_pending_review = v_pending,
+    columns_no_match = v_no_match,
+    columns_skipped = v_skipped,
+    avg_confidence = v_avg_conf,
+    min_confidence = v_min_conf,
+    mapping_status = CASE 
+      WHEN v_pending = 0 AND v_no_match = 0 THEN 'COMPLETE'
+      WHEN v_mapped > 0 OR v_skipped > 0 THEN 'IN_REVIEW'
+      ELSE mapping_status
+    END,
+    completed_ts = CASE 
+      WHEN v_pending = 0 AND v_no_match = 0 THEN CURRENT_TIMESTAMP()
+      ELSE completed_ts
+    END,
+    updated_ts = CURRENT_TIMESTAMP()
+  WHERE target_table_status_id = p_target_table_status_id;
   
   -- Also update project counters
   CALL oztest_dev.smartmapper.sp_update_project_counters(p_catalog, p_schema, v_project_id);
@@ -311,21 +296,12 @@ CREATE OR REPLACE PROCEDURE oztest_dev.smartmapper.sp_approve_as_pattern(
 LANGUAGE SQL
 AS
 BEGIN
-  DECLARE v_full_schema STRING;
-  DECLARE v_sql STRING;
-  
-  SET v_full_schema = p_catalog || '.' || p_schema;
-  
-  SET v_sql = '
-    UPDATE ' || v_full_schema || '.mapped_fields
-    SET 
-      is_approved_pattern = true,
-      pattern_approved_by = ''' || p_approved_by || ''',
-      pattern_approved_ts = CURRENT_TIMESTAMP()
-    WHERE mapped_field_id = ' || p_mapped_field_id;
-  
-  EXECUTE IMMEDIATE v_sql;
-  
+  UPDATE IDENTIFIER(p_catalog || '.' || p_schema || '.' || 'mapped_fields')
+  SET 
+    is_approved_pattern = true,
+    pattern_approved_by = p_approved_by,
+    pattern_approved_ts = CURRENT_TIMESTAMP()
+  WHERE mapped_field_id = p_mapped_field_id;
 END;
 
 
@@ -362,4 +338,3 @@ END;
 --   );
 --
 -- ============================================================================
-
