@@ -5,10 +5,17 @@
  * Uses nested routes with AppLayout as the parent wrapper component.
  * 
  * Route Structure:
+ * V4 Target-First Workflow:
+ * - /projects → Projects list (dashboard)
+ * - /projects/:id → Project detail (target tables)
+ * 
+ * V3 Source-First Workflow (legacy):
  * - / (root) → Introduction/Dashboard page
  * - /unmapped-fields → Unmapped Fields page (select source fields)
  * - /mapping-config → Mapping Configuration (SQL editor approach)
  * - /mappings → View Current Mappings (all users)
+ * 
+ * Admin:
  * - /semantic-fields → Semantic Table Management (admin only)
  * - /config → Admin Configuration (admin only)
  * 
@@ -42,6 +49,26 @@ const router = createRouter({
           name: 'introduction',
           component: () => import('../views/IntroductionView.vue')
         },
+        
+        // ================================================================
+        // V4 TARGET-FIRST WORKFLOW
+        // ================================================================
+        {
+          // Projects list - main V4 entry point
+          path: '/projects',
+          name: 'projects',
+          component: () => import('../views/ProjectsListView.vue')
+        },
+        {
+          // Project detail - target tables and suggestions
+          path: '/projects/:id',
+          name: 'project-detail',
+          component: () => import('../views/ProjectDetailView.vue')
+        },
+        
+        // ================================================================
+        // V3 SOURCE-FIRST WORKFLOW (Legacy)
+        // ================================================================
         {
           // Unmapped fields page - main entry point for mapping
           path: '/unmapped-fields',
@@ -60,6 +87,10 @@ const router = createRouter({
           name: 'mappings',
           component: () => import('../views/MappingsListViewV3.vue')
         },
+        
+        // ================================================================
+        // ADMIN
+        // ================================================================
         {
           // Semantic table management - admin only
           path: '/semantic-fields',

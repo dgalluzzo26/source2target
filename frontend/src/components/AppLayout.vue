@@ -33,9 +33,20 @@
             </router-link>
           </li>
           
-          <!-- Main Workflow -->
+          <!-- V4 Target-First Workflow -->
           <li class="menu-section" v-if="!sidebarCollapsed">
-            <span class="menu-section-label">Mapping Workflow</span>
+            <span class="menu-section-label">Target-First Mapping</span>
+          </li>
+          <li>
+            <router-link to="/projects" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Projects' : ''">
+              <i class="layout-menuitem-icon pi pi-folder"></i>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Projects</span>
+            </router-link>
+          </li>
+          
+          <!-- V3 Source-First Workflow (Legacy) -->
+          <li class="menu-section" v-if="!sidebarCollapsed">
+            <span class="menu-section-label">Source-First (Legacy)</span>
           </li>
           <li>
             <router-link to="/unmapped-fields" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Create Mappings' : ''">
