@@ -763,4 +763,251 @@ class UnmappedFieldsService:
         
         print(f"[Unmapped Fields Service] Found {len(result)} tables with columns for user {current_user}")
         return result
+    
+    # =========================================================================
+    # V4 PROJECT-BASED METHODS
+    # =========================================================================
+    
+    def _bulk_upload_with_project_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        unmapped_fields_table: str,
+        fields: List[Dict[str, Any]],
+        project_id: int
+    ) -> Dict[str, Any]:
+        """
+        Bulk upload source fields with project_id (synchronous).
+        
+        Efficiently inserts multiple fields in a single transaction.
+        Skips duplicates within the same project.
+        
+        Args:
+            server_hostname: Databricks workspace hostname
+            http_path: SQL warehouse HTTP path
+            unmapped_fields_table: Fully qualified table name
+            fields: List of field dictionaries
+            project_id: Project ID to associate fields with
+            
+        Returns:
+            Dictionary with upload results
+        """
+        print(f"[Unmapped Fields Service] Bulk uploading {len(fields)} fields for project {project_id}")
+        
+        connection = self._get_sql_connection(server_hostname, http_path)
+        
+        try:
+            with connection.cursor() as cursor:
+                inserted_count = 0
+                skipped_count = 0
+                
+                for field in fields:
+                    # Check for duplicate within project
+                    src_table = field.get("src_table_physical_name", "").replace("'", "''")
+                    src_column = field.get("src_column_physical_name", "").replace("'", "''")
+                    
+                    cursor.execute(f"""
+                        SELECT COUNT(*) FROM {unmapped_fields_table}
+                        WHERE src_table_physical_name = '{src_table}'
+                          AND src_column_physical_name = '{src_column}'
+                          AND project_id = {project_id}
+                    """)
+                    
+                    if cursor.fetchone()[0] > 0:
+                        skipped_count += 1
+                        continue
+                    
+                    # Insert field
+                    query = f"""
+                    INSERT INTO {unmapped_fields_table} (
+                        src_table_name,
+                        src_table_physical_name,
+                        src_column_name,
+                        src_column_physical_name,
+                        src_nullable,
+                        src_physical_datatype,
+                        src_comments,
+                        domain,
+                        project_id,
+                        mapping_status
+                    ) VALUES (
+                        '{field.get("src_table_name", "").replace("'", "''")}',
+                        '{field.get("src_table_physical_name", "").replace("'", "''")}',
+                        '{field.get("src_column_name", "").replace("'", "''")}',
+                        '{field.get("src_column_physical_name", "").replace("'", "''")}',
+                        '{field.get("src_nullable", "YES")}',
+                        '{field.get("src_physical_datatype", "STRING").replace("'", "''")}',
+                        {f"'{field.get('src_comments', '').replace(chr(39), chr(39)+chr(39))}'" if field.get("src_comments") else "NULL"},
+                        {f"'{field.get('domain', '').replace(chr(39), chr(39)+chr(39))}'" if field.get("domain") else "NULL"},
+                        {project_id},
+                        'PENDING'
+                    )
+                    """
+                    
+                    cursor.execute(query)
+                    inserted_count += 1
+                
+                print(f"[Unmapped Fields Service] Uploaded {inserted_count} fields, skipped {skipped_count} duplicates")
+                
+                return {
+                    "fields_uploaded": inserted_count,
+                    "fields_skipped": skipped_count,
+                    "project_id": project_id,
+                    "status": "success"
+                }
+                
+        except Exception as e:
+            print(f"[Unmapped Fields Service] Error in bulk upload: {str(e)}")
+            raise
+        finally:
+            connection.close()
+    
+    async def bulk_upload_with_project(
+        self,
+        fields: List[Dict[str, Any]],
+        project_id: int
+    ) -> Dict[str, Any]:
+        """
+        Bulk upload source fields for a project.
+        
+        V4: Uploads fields with project_id association.
+        
+        Args:
+            fields: List of field dictionaries with src_* columns
+            project_id: Project ID to associate fields with
+            
+        Returns:
+            Dictionary with upload results
+        """
+        db_config = self._get_db_config()
+        vs_config = self._get_vector_search_config()
+        
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor,
+            functools.partial(
+                self._bulk_upload_with_project_sync,
+                db_config['server_hostname'],
+                db_config['http_path'],
+                db_config['unmapped_fields_table'],
+                fields,
+                project_id
+            )
+        )
+        
+        # Sync vector search index (best-effort)
+        try:
+            await loop.run_in_executor(
+                executor,
+                functools.partial(
+                    self._sync_vector_search_index,
+                    vs_config['unmapped_fields_index']
+                )
+            )
+        except Exception as e:
+            print(f"[Unmapped Fields Service] VS sync after bulk upload failed (non-fatal): {e}")
+        
+        return result
+    
+    def _get_fields_by_project_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        unmapped_fields_table: str,
+        project_id: int,
+        table_filter: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get source fields for a project (synchronous).
+        
+        Args:
+            server_hostname: Databricks workspace hostname
+            http_path: SQL warehouse HTTP path
+            unmapped_fields_table: Fully qualified table name
+            project_id: Project ID to filter by
+            table_filter: Optional table name filter
+            
+        Returns:
+            List of field dictionaries
+        """
+        print(f"[Unmapped Fields Service] Getting fields for project {project_id}")
+        
+        connection = self._get_sql_connection(server_hostname, http_path)
+        
+        try:
+            with connection.cursor() as cursor:
+                table_clause = ""
+                if table_filter:
+                    table_clause = f"AND UPPER(src_table_physical_name) = UPPER('{table_filter.replace(chr(39), chr(39)+chr(39))}')"
+                
+                query = f"""
+                SELECT 
+                    unmapped_field_id,
+                    src_table_name,
+                    src_table_physical_name,
+                    src_column_name,
+                    src_column_physical_name,
+                    src_nullable,
+                    src_physical_datatype,
+                    src_comments,
+                    domain,
+                    mapping_status,
+                    mapped_field_id,
+                    project_id,
+                    uploaded_ts,
+                    uploaded_by
+                FROM {unmapped_fields_table}
+                WHERE project_id = {project_id}
+                {table_clause}
+                ORDER BY src_table_name, src_column_name
+                """
+                
+                cursor.execute(query)
+                columns = [desc[0] for desc in cursor.description]
+                rows = cursor.fetchall()
+                
+                fields = [dict(zip(columns, row)) for row in rows]
+                
+                print(f"[Unmapped Fields Service] Found {len(fields)} fields for project {project_id}")
+                return fields
+                
+        except Exception as e:
+            print(f"[Unmapped Fields Service] Error getting project fields: {str(e)}")
+            raise
+        finally:
+            connection.close()
+    
+    async def get_fields_by_project(
+        self,
+        project_id: int,
+        table_filter: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get source fields for a project.
+        
+        V4: Gets all source fields associated with a project_id.
+        
+        Args:
+            project_id: Project ID to filter by
+            table_filter: Optional table name filter
+            
+        Returns:
+            List of field dictionaries
+        """
+        db_config = self._get_db_config()
+        
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor,
+            functools.partial(
+                self._get_fields_by_project_sync,
+                db_config['server_hostname'],
+                db_config['http_path'],
+                db_config['unmapped_fields_table'],
+                project_id,
+                table_filter
+            )
+        )
+        
+        return result
 

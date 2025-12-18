@@ -21,6 +21,7 @@ from backend.services.config_service import config_service
 from backend.services.system_service import system_service
 from backend.services.auth_service import auth_service
 from backend.routers import semantic, mapping, ai_mapping, unmapped_fields, feedback, ai_mapping_v3, mapping_v3
+from backend.routers import projects, target_tables, suggestions
 
 # Import Databricks SDK for authentication
 try:
@@ -33,8 +34,8 @@ except ImportError:
 
 app = FastAPI(
     title="Smart Mapper API",
-    description="FastAPI backend for Smart Mapper Databricks app (V3 SQL Expression Mapping)",
-    version="3.0.0"
+    description="FastAPI backend for Smart Mapper Databricks app (V4 Target-First Workflow)",
+    version="4.0.0"
 )
 
 # Configure CORS for Vue frontend
@@ -46,7 +47,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include V3 routers (current architecture)
+# Include V4 routers (target-first workflow)
+app.include_router(projects.router)
+app.include_router(target_tables.router)
+app.include_router(suggestions.router)
+
+# Include V3 routers (SQL expression mappings)
 app.include_router(ai_mapping_v3.router)
 app.include_router(mapping_v3.router)
 app.include_router(unmapped_fields.router)
