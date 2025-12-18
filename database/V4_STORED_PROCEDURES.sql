@@ -299,8 +299,10 @@ BEGIN
     updated_ts = CURRENT_TIMESTAMP()
   WHERE target_table_status_id = p_target_table_status_id;
   
-  -- Also update project counters
-  CALL oztest_dev.smartmapper.sp_update_project_counters(p_catalog, p_schema, v_project_id);
+  -- Also update project counters (dynamic procedure call)
+  EXECUTE IMMEDIATE 
+    'CALL ' || p_catalog || '.' || p_schema || '.sp_update_project_counters(?, ?, ?)'
+    USING p_catalog, p_schema, v_project_id;
   
 END;
 
