@@ -454,45 +454,304 @@ ORDER BY ms.confidence_score DESC;
 -- STORED PROCEDURE: Initialize target tables for a project
 -- ============================================================================
 -- Call after creating a project to populate target_table_status
--- from semantic_fields based on domain filter
+-- from semantic_fields based on domain filter.
+-- 
+-- Uses SQL Stored Procedures (ANSI/PSM standard) available in Databricks SQL.
+-- Reference: https://www.databricks.com/blog/introducing-sql-stored-procedures-databricks
 -- ============================================================================
 
--- Note: Databricks SQL doesn't support stored procedures, so this is a 
--- parameterized query to run:
-
-/*
--- USAGE: Replace {project_id} and optionally {domain_filter}
-
-INSERT INTO ${CATALOG_SCHEMA}.target_table_status (
-  project_id,
-  tgt_table_name,
-  tgt_table_physical_name,
-  tgt_table_description,
-  mapping_status,
-  total_columns,
-  display_order
+CREATE OR REPLACE PROCEDURE ${CATALOG_SCHEMA}.sp_initialize_target_tables(
+  IN p_project_id BIGINT,
+  IN p_domain_filter STRING
 )
-SELECT 
-  {project_id} AS project_id,
-  tgt_table_name,
-  tgt_table_physical_name,
-  MIN(tgt_comments) AS tgt_table_description,  -- First column description as table desc
-  'NOT_STARTED' AS mapping_status,
-  COUNT(*) AS total_columns,
-  ROW_NUMBER() OVER (ORDER BY tgt_table_name) AS display_order
-FROM ${CATALOG_SCHEMA}.semantic_fields
-WHERE domain = '{domain_filter}'  -- Optional: filter by domain
-GROUP BY tgt_table_name, tgt_table_physical_name
-ORDER BY tgt_table_name;
+LANGUAGE SQL
+AS
+BEGIN
+  -- Declare variables
+  DECLARE v_tables_created INT DEFAULT 0;
+  DECLARE v_columns_total BIGINT DEFAULT 0;
+  
+  -- Insert target_table_status rows from semantic_fields
+  -- Filter by domain if provided (pipe-separated for multiple)
+  INSERT INTO ${CATALOG_SCHEMA}.target_table_status (
+    project_id,
+    tgt_table_name,
+    tgt_table_physical_name,
+    tgt_table_description,
+    mapping_status,
+    total_columns,
+    display_order
+  )
+  SELECT 
+    p_project_id AS project_id,
+    tgt_table_name,
+    tgt_table_physical_name,
+    MIN(tgt_comments) AS tgt_table_description,
+    'NOT_STARTED' AS mapping_status,
+    COUNT(*) AS total_columns,
+    ROW_NUMBER() OVER (ORDER BY tgt_table_name) AS display_order
+  FROM ${CATALOG_SCHEMA}.semantic_fields
+  WHERE (p_domain_filter IS NULL OR p_domain_filter = '' 
+         OR INSTR(p_domain_filter, domain) > 0)
+  GROUP BY tgt_table_name, tgt_table_physical_name
+  ORDER BY tgt_table_name;
+  
+  -- Get counts for project update
+  SET v_tables_created = (
+    SELECT COUNT(*) 
+    FROM ${CATALOG_SCHEMA}.target_table_status 
+    WHERE project_id = p_project_id
+  );
+  
+  SET v_columns_total = (
+    SELECT COALESCE(SUM(total_columns), 0) 
+    FROM ${CATALOG_SCHEMA}.target_table_status 
+    WHERE project_id = p_project_id
+  );
+  
+  -- Update project counters
+  UPDATE ${CATALOG_SCHEMA}.mapping_projects
+  SET 
+    total_target_tables = v_tables_created,
+    total_target_columns = v_columns_total,
+    project_status = 'ACTIVE',
+    updated_ts = CURRENT_TIMESTAMP()
+  WHERE project_id = p_project_id;
+  
+END;
 
--- Update project counters
-UPDATE ${CATALOG_SCHEMA}.mapping_projects
-SET 
-  total_target_tables = (SELECT COUNT(*) FROM ${CATALOG_SCHEMA}.target_table_status WHERE project_id = {project_id}),
-  total_target_columns = (SELECT SUM(total_columns) FROM ${CATALOG_SCHEMA}.target_table_status WHERE project_id = {project_id}),
-  updated_ts = CURRENT_TIMESTAMP()
-WHERE project_id = {project_id};
-*/
+
+-- ============================================================================
+-- STORED PROCEDURE: Update project counters
+-- ============================================================================
+-- Recalculates all project-level counters from target_table_status
+-- Call after approving/rejecting suggestions or completing tables
+-- ============================================================================
+
+CREATE OR REPLACE PROCEDURE ${CATALOG_SCHEMA}.sp_update_project_counters(
+  IN p_project_id BIGINT
+)
+LANGUAGE SQL
+AS
+BEGIN
+  DECLARE v_total_tables INT;
+  DECLARE v_tables_complete INT;
+  DECLARE v_tables_in_progress INT;
+  DECLARE v_total_columns BIGINT;
+  DECLARE v_columns_mapped BIGINT;
+  DECLARE v_columns_pending BIGINT;
+  
+  -- Calculate table counts
+  SET v_total_tables = (
+    SELECT COUNT(*) 
+    FROM ${CATALOG_SCHEMA}.target_table_status 
+    WHERE project_id = p_project_id
+  );
+  
+  SET v_tables_complete = (
+    SELECT COUNT(*) 
+    FROM ${CATALOG_SCHEMA}.target_table_status 
+    WHERE project_id = p_project_id AND mapping_status = 'COMPLETE'
+  );
+  
+  SET v_tables_in_progress = (
+    SELECT COUNT(*) 
+    FROM ${CATALOG_SCHEMA}.target_table_status 
+    WHERE project_id = p_project_id 
+      AND mapping_status IN ('DISCOVERING', 'SUGGESTIONS_READY', 'IN_REVIEW')
+  );
+  
+  -- Calculate column counts
+  SET v_total_columns = (
+    SELECT COALESCE(SUM(total_columns), 0) 
+    FROM ${CATALOG_SCHEMA}.target_table_status 
+    WHERE project_id = p_project_id
+  );
+  
+  SET v_columns_mapped = (
+    SELECT COALESCE(SUM(columns_mapped), 0) 
+    FROM ${CATALOG_SCHEMA}.target_table_status 
+    WHERE project_id = p_project_id
+  );
+  
+  SET v_columns_pending = (
+    SELECT COALESCE(SUM(columns_pending_review), 0) 
+    FROM ${CATALOG_SCHEMA}.target_table_status 
+    WHERE project_id = p_project_id
+  );
+  
+  -- Update project
+  UPDATE ${CATALOG_SCHEMA}.mapping_projects
+  SET 
+    total_target_tables = v_total_tables,
+    tables_complete = v_tables_complete,
+    tables_in_progress = v_tables_in_progress,
+    total_target_columns = v_total_columns,
+    columns_mapped = v_columns_mapped,
+    columns_pending_review = v_columns_pending,
+    updated_ts = CURRENT_TIMESTAMP()
+  WHERE project_id = p_project_id;
+  
+END;
+
+
+-- ============================================================================
+-- STORED PROCEDURE: Recalculate table counters from suggestions
+-- ============================================================================
+-- Recalculates column counts for a target table based on suggestion statuses
+-- Call after approving/rejecting/skipping suggestions
+-- ============================================================================
+
+CREATE OR REPLACE PROCEDURE ${CATALOG_SCHEMA}.sp_recalculate_table_counters(
+  IN p_target_table_status_id BIGINT
+)
+LANGUAGE SQL
+AS
+BEGIN
+  DECLARE v_project_id BIGINT;
+  DECLARE v_total_columns INT;
+  DECLARE v_with_pattern INT;
+  DECLARE v_mapped INT;
+  DECLARE v_pending INT;
+  DECLARE v_no_match INT;
+  DECLARE v_skipped INT;
+  DECLARE v_avg_conf DOUBLE;
+  DECLARE v_min_conf DOUBLE;
+  
+  -- Get project_id
+  SET v_project_id = (
+    SELECT project_id 
+    FROM ${CATALOG_SCHEMA}.target_table_status 
+    WHERE target_table_status_id = p_target_table_status_id
+  );
+  
+  -- Count suggestions by status
+  SET v_total_columns = (
+    SELECT COUNT(*) 
+    FROM ${CATALOG_SCHEMA}.mapping_suggestions 
+    WHERE target_table_status_id = p_target_table_status_id
+  );
+  
+  SET v_with_pattern = (
+    SELECT COUNT(*) 
+    FROM ${CATALOG_SCHEMA}.mapping_suggestions 
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND pattern_mapped_field_id IS NOT NULL
+  );
+  
+  SET v_mapped = (
+    SELECT COUNT(*) 
+    FROM ${CATALOG_SCHEMA}.mapping_suggestions 
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND suggestion_status IN ('APPROVED', 'EDITED')
+  );
+  
+  SET v_pending = (
+    SELECT COUNT(*) 
+    FROM ${CATALOG_SCHEMA}.mapping_suggestions 
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND suggestion_status = 'PENDING'
+  );
+  
+  SET v_no_match = (
+    SELECT COUNT(*) 
+    FROM ${CATALOG_SCHEMA}.mapping_suggestions 
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND suggestion_status IN ('NO_MATCH', 'NO_PATTERN')
+  );
+  
+  SET v_skipped = (
+    SELECT COUNT(*) 
+    FROM ${CATALOG_SCHEMA}.mapping_suggestions 
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND suggestion_status IN ('SKIPPED', 'REJECTED')
+  );
+  
+  -- Calculate confidence stats
+  SET v_avg_conf = (
+    SELECT AVG(confidence_score) 
+    FROM ${CATALOG_SCHEMA}.mapping_suggestions 
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND confidence_score IS NOT NULL
+  );
+  
+  SET v_min_conf = (
+    SELECT MIN(confidence_score) 
+    FROM ${CATALOG_SCHEMA}.mapping_suggestions 
+    WHERE target_table_status_id = p_target_table_status_id 
+      AND confidence_score IS NOT NULL
+  );
+  
+  -- Update table status
+  UPDATE ${CATALOG_SCHEMA}.target_table_status
+  SET 
+    total_columns = COALESCE(v_total_columns, total_columns),
+    columns_with_pattern = COALESCE(v_with_pattern, 0),
+    columns_mapped = COALESCE(v_mapped, 0),
+    columns_pending_review = COALESCE(v_pending, 0),
+    columns_no_match = COALESCE(v_no_match, 0),
+    columns_skipped = COALESCE(v_skipped, 0),
+    avg_confidence = v_avg_conf,
+    min_confidence = v_min_conf,
+    mapping_status = CASE 
+      WHEN v_pending = 0 AND v_no_match = 0 THEN 'COMPLETE'
+      WHEN v_mapped > 0 OR v_skipped > 0 THEN 'IN_REVIEW'
+      ELSE mapping_status
+    END,
+    completed_ts = CASE 
+      WHEN v_pending = 0 AND v_no_match = 0 THEN CURRENT_TIMESTAMP()
+      ELSE completed_ts
+    END,
+    updated_ts = CURRENT_TIMESTAMP()
+  WHERE target_table_status_id = p_target_table_status_id;
+  
+  -- Also update project counters
+  CALL ${CATALOG_SCHEMA}.sp_update_project_counters(v_project_id);
+  
+END;
+
+
+-- ============================================================================
+-- STORED PROCEDURE: Mark pattern as approved
+-- ============================================================================
+-- Marks a mapped_field as an approved pattern for future use
+-- ============================================================================
+
+CREATE OR REPLACE PROCEDURE ${CATALOG_SCHEMA}.sp_approve_as_pattern(
+  IN p_mapped_field_id BIGINT,
+  IN p_approved_by STRING
+)
+LANGUAGE SQL
+AS
+BEGIN
+  UPDATE ${CATALOG_SCHEMA}.mapped_fields
+  SET 
+    is_approved_pattern = true,
+    pattern_approved_by = p_approved_by,
+    pattern_approved_ts = CURRENT_TIMESTAMP()
+  WHERE mapped_field_id = p_mapped_field_id;
+END;
+
+
+-- ============================================================================
+-- USAGE EXAMPLES
+-- ============================================================================
+-- 
+-- Initialize tables for a new project:
+--   CALL oz_dev.silver_mapping.sp_initialize_target_tables(1, 'Member');
+--   CALL oz_dev.silver_mapping.sp_initialize_target_tables(2, 'Member|Claims');
+--   CALL oz_dev.silver_mapping.sp_initialize_target_tables(3, NULL);  -- All domains
+--
+-- Update project counters after changes:
+--   CALL oz_dev.silver_mapping.sp_update_project_counters(1);
+--
+-- Recalculate table counters after suggestion review:
+--   CALL oz_dev.silver_mapping.sp_recalculate_table_counters(5);
+--
+-- Approve a mapping as a pattern:
+--   CALL oz_dev.silver_mapping.sp_approve_as_pattern(42, 'user@company.com');
+--
+-- ============================================================================
 
 
 -- ============================================================================
@@ -506,12 +765,22 @@ WHERE project_id = {project_id};
 --
 -- Modified Tables:
 -- 1. unmapped_fields          - Added project_id column
--- 2. mapped_fields            - Added project_id column
+-- 2. mapped_fields            - Added project_id, is_approved_pattern columns
 --
 -- New Views:
 -- 1. v_project_dashboard      - Main dashboard stats
 -- 2. v_target_table_progress  - Per-table progress details
 -- 3. v_suggestion_review      - Suggestions pending review
+--
+-- Stored Procedures (ANSI/PSM SQL standard):
+-- 1. sp_initialize_target_tables(project_id, domain_filter)
+--    - Populates target_table_status from semantic_fields
+-- 2. sp_update_project_counters(project_id)
+--    - Recalculates project-level stats from target tables
+-- 3. sp_recalculate_table_counters(target_table_status_id)
+--    - Recalculates table stats from suggestions
+-- 4. sp_approve_as_pattern(mapped_field_id, approved_by)
+--    - Marks a mapping as an approved pattern for reuse
 --
 -- ============================================================================
 
