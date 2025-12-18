@@ -41,6 +41,7 @@ CREATE OR REPLACE PROCEDURE oztest_dev.smartmapper.sp_initialize_target_tables(
   IN p_domain_filter STRING
 )
 LANGUAGE SQL
+SQL SECURITY INVOKER
 AS
 BEGIN
   DECLARE v_tables_created INT DEFAULT 0;
@@ -119,6 +120,7 @@ CREATE OR REPLACE PROCEDURE oztest_dev.smartmapper.sp_update_project_counters(
   IN p_project_id BIGINT
 )
 LANGUAGE SQL
+SQL SECURITY INVOKER
 AS
 BEGIN
   DECLARE v_total_tables INT;
@@ -205,6 +207,7 @@ CREATE OR REPLACE PROCEDURE oztest_dev.smartmapper.sp_recalculate_table_counters
   IN p_target_table_status_id BIGINT
 )
 LANGUAGE SQL
+SQL SECURITY INVOKER
 AS
 BEGIN
   DECLARE v_project_id BIGINT;
@@ -326,6 +329,7 @@ CREATE OR REPLACE PROCEDURE oztest_dev.smartmapper.sp_approve_as_pattern(
   IN p_approved_by STRING
 )
 LANGUAGE SQL
+SQL SECURITY INVOKER
 AS
 BEGIN
   UPDATE IDENTIFIER(p_catalog || '.' || p_schema || '.mapped_fields')
