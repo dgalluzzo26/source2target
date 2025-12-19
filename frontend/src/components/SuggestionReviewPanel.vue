@@ -149,21 +149,21 @@
           </template>
           <!-- Clean: Can approve directly or edit -->
           <template v-else>
-            <Button 
-              label="Approve"
-              icon="pi pi-check"
-              size="small"
-              severity="success"
-              @click="handleApprove(suggestion)"
-            />
-            <Button 
+          <Button 
+            label="Approve"
+            icon="pi pi-check"
+            size="small"
+            severity="success"
+            @click="handleApprove(suggestion)"
+          />
+          <Button 
               label="Edit"
-              icon="pi pi-pencil"
-              size="small"
-              severity="info"
-              outlined
-              @click="openEditDialog(suggestion)"
-            />
+            icon="pi pi-pencil"
+            size="small"
+            severity="info"
+            outlined
+            @click="openEditDialog(suggestion)"
+          />
           </template>
           <Button 
             label="Reject"
@@ -367,26 +367,37 @@
               </div>
             </div>
 
-            <!-- Highlighted SQL Preview (shows problem fields) -->
-            <div v-if="problemFieldsInSQL.length > 0" class="sql-preview-highlighted">
-              <div class="preview-label">
-                <i class="pi pi-exclamation-circle"></i>
-                <span>{{ problemFieldsInSQL.length }} field(s) need attention - highlighted below</span>
+            <!-- SQL Preview with Syntax Highlighting - Collapsible -->
+            <div class="sql-preview-highlighted" :class="{ 'has-problems': problemFieldsInSQL.length > 0, 'collapsed': sqlPreviewCollapsed }">
+              <div 
+                class="preview-label clickable" 
+                :class="{ 'warning': problemFieldsInSQL.length > 0, 'info': problemFieldsInSQL.length === 0 }"
+                @click="sqlPreviewCollapsed = !sqlPreviewCollapsed"
+              >
+                <i :class="sqlPreviewCollapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-down'" class="toggle-icon"></i>
+                <i :class="problemFieldsInSQL.length > 0 ? 'pi pi-exclamation-circle' : 'pi pi-eye'"></i>
+                <span v-if="problemFieldsInSQL.length > 0">
+                  {{ problemFieldsInSQL.length }} field(s) need attention
+                </span>
+                <span v-else-if="getChanges(editingSuggestion).length > 0">
+                  Preview ({{ getChanges(editingSuggestion).length }} AI changes)
+                </span>
+                <span v-else>SQL Preview</span>
               </div>
-              <pre class="sql-highlighted" v-html="highlightedSQL"></pre>
+              <pre v-if="!sqlPreviewCollapsed" class="sql-highlighted" v-html="highlightedSQL"></pre>
             </div>
 
             <!-- Editable SQL -->
             <div class="sql-editor-container">
-              <Textarea 
+          <Textarea 
                 ref="sqlTextarea"
-                v-model="editedSQL" 
+            v-model="editedSQL" 
                 :rows="18"
                 class="sql-editor-v2 w-full"
-                placeholder="Enter the SQL expression..."
+            placeholder="Enter the SQL expression..."
                 spellcheck="false"
-              />
-            </div>
+          />
+        </div>
 
             <!-- Matched Source Summary (compact) -->
             <div class="matched-summary-compact" v-if="getMatchedFields(editingSuggestion).length > 0">
@@ -409,11 +420,11 @@
 
             <!-- Edit Notes (compact) -->
             <div class="notes-row">
-              <InputText 
-                v-model="editNotes" 
-                class="w-full"
+          <InputText 
+            v-model="editNotes" 
+            class="w-full"
                 placeholder="Notes (optional): Explain your changes..."
-              />
+          />
             </div>
           </div>
         </div>
@@ -515,6 +526,7 @@ const sourceFields = ref<any[]>([])
 const regeneratingId = ref<number | null>(null)
 const leftPanelCollapsed = ref(false)
 const aiChangesCollapsed = ref(false)
+const sqlPreviewCollapsed = ref(false)
 const sqlTextarea = ref<any>(null)
 
 // Computed
@@ -542,11 +554,18 @@ const problemFieldsInSQL = computed(() => {
   
   // Extract field names from warnings about missing/unknown fields
   for (const warning of warnings) {
-    // Look for patterns like "CDE_COUNTY", 'CDE_COUNTY', or just CDE_COUNTY in context
-    // Common warning patterns:
+    // Common warning patterns we need to match:
+    // - "Column CURR_REC_IND was found in multiple tables..."
+    // - "Column ADDR_USAGE was used for filtering..."
     // - "No matching source column found for CDE_COUNTY"
     // - "Column 'XYZ' not found"
     // - "Missing: ABC_FIELD"
+    
+    // Match "Column FIELD_NAME was..." or "Column FIELD_NAME is..."
+    const columnMatch = warning.match(/Column\s+([A-Z][A-Z0-9_]+)\s+(?:was|is|has)/i)
+    if (columnMatch) {
+      problems.push(columnMatch[1])
+    }
     
     // Match field names in quotes
     const quotedMatches = warning.match(/['"`]([A-Za-z_][A-Za-z0-9_]*)['"`]/g)
@@ -565,41 +584,64 @@ const problemFieldsInSQL = computed(() => {
     if (missingMatch) {
       problems.push(missingMatch[1])
     }
+    
+    // Match any ALL_CAPS_FIELD_NAME that looks like a column (fallback)
+    const allCapsMatches = warning.match(/\b([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)\b/g)
+    if (allCapsMatches) {
+      problems.push(...allCapsMatches)
+    }
   }
   
-  // Filter out common SQL keywords that might get caught
-  const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'AND', 'OR', 'ON', 'AS', 'IN', 'NOT', 'NULL']
+  // Filter out common SQL keywords and table names that might get caught
+  const excludeList = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'AND', 'OR', 'ON', 'AS', 'IN', 'NOT', 'NULL',
+                       'LEFT', 'RIGHT', 'INNER', 'OUTER', 'UNION', 'DISTINCT', 'CURR_REC_IND']
+  // Note: We're NOT excluding CURR_REC_IND anymore since it could be a legitimate problem field
+  const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'AND', 'OR', 'ON', 'AS', 'IN', 'NOT', 'NULL',
+                       'LEFT', 'RIGHT', 'INNER', 'OUTER', 'UNION', 'DISTINCT', 'GROUP', 'BY', 'ORDER',
+                       'HAVING', 'LIMIT', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END']
   const filtered = problems.filter(p => !sqlKeywords.includes(p.toUpperCase()))
   
   return [...new Set(filtered)] // unique values
 })
 
-// Highlighted SQL with problem fields marked
+// Highlighted SQL with syntax highlighting and problem fields marked
 const highlightedSQL = computed(() => {
-  if (!editedSQL.value || problemFieldsInSQL.value.length === 0) {
-    return escapeHtml(editedSQL.value)
+  if (!editedSQL.value) {
+    return ''
   }
   
   let html = escapeHtml(editedSQL.value)
   
-  // Sort by length descending to avoid partial replacements
-  const sortedProblems = [...problemFieldsInSQL.value].sort((a, b) => b.length - a.length)
-  
-  for (const field of sortedProblems) {
-    // Case-insensitive match, preserve original case in output
-    const regex = new RegExp(`\\b(${escapeRegExp(field)})\\b`, 'gi')
-    html = html.replace(regex, '<mark class="problem-field">$1</mark>')
+  // First, highlight problem fields (from warnings) in yellow
+  if (problemFieldsInSQL.value.length > 0) {
+    const sortedProblems = [...problemFieldsInSQL.value].sort((a, b) => b.length - a.length)
+    
+    for (const field of sortedProblems) {
+      const regex = new RegExp(`\\b(${escapeRegExp(field)})\\b`, 'gi')
+      html = html.replace(regex, '<mark class="problem-field">$1</mark>')
+    }
   }
   
-  // Also highlight SQL keywords for readability
+  // Highlight SQL keywords for readability
   const keywords = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 
                     'ON', 'AND', 'OR', 'AS', 'UNION', 'ALL', 'CASE', 'WHEN', 'THEN', 
-                    'ELSE', 'END', 'TRIM', 'CONCAT', 'COALESCE', 'NULL', 'IS', 'NOT']
+                    'ELSE', 'END', 'TRIM', 'CONCAT', 'COALESCE', 'NULL', 'IS', 'NOT',
+                    'DISTINCT', 'INITCAP', 'IN', 'LIKE', 'BETWEEN', 'GROUP', 'BY', 
+                    'ORDER', 'HAVING', 'LIMIT', 'OFFSET']
   
   for (const kw of keywords) {
     const regex = new RegExp(`\\b(${kw})\\b`, 'gi')
     html = html.replace(regex, '<span class="sql-keyword">$1</span>')
   }
+  
+  // Highlight string literals
+  html = html.replace(/('(?:[^'\\]|\\.)*')/g, '<span class="sql-string">$1</span>')
+  
+  // Highlight placeholders like ${USER_BRONZE_CATALOG}
+  html = html.replace(/(\$\{[A-Z_]+\})/g, '<span class="sql-placeholder">$1</span>')
+  
+  // Highlight table aliases (single letters followed by .)
+  html = html.replace(/\b([a-z])\.([A-Za-z_][A-Za-z0-9_]*)/g, '<span class="sql-alias">$1</span>.<span class="sql-column">$2</span>')
   
   return html
 })
@@ -1652,21 +1694,52 @@ function formatDate(dateStr?: string): string {
 
 /* Highlighted SQL Preview */
 .sql-preview-highlighted {
-  border: 2px solid var(--orange-300);
+  border: 1px solid var(--surface-300);
   border-radius: 8px;
-  background: #fffbf5;
+  background: var(--surface-50);
   overflow: hidden;
+}
+
+.sql-preview-highlighted.has-problems {
+  border: 2px solid var(--orange-300);
+  background: #fffbf5;
 }
 
 .preview-label {
   padding: 0.5rem 0.75rem;
-  background: var(--orange-100);
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.8rem;
-  color: var(--orange-700);
   font-weight: 500;
+}
+
+.preview-label.warning {
+  background: var(--orange-100);
+  color: var(--orange-700);
+}
+
+.preview-label.info {
+  background: var(--blue-50);
+  color: var(--blue-700);
+}
+
+.preview-label.clickable {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.preview-label.clickable:hover {
+  filter: brightness(0.95);
+}
+
+.preview-label .toggle-icon {
+  font-size: 0.7rem;
+  margin-right: 0.25rem;
+}
+
+.sql-preview-highlighted.collapsed {
+  border-radius: 8px;
 }
 
 .sql-highlighted {
@@ -1699,7 +1772,28 @@ function formatDate(dateStr?: string): string {
 
 .sql-highlighted :deep(.sql-keyword) {
   color: #1565c0;
+  font-weight: 600;
+}
+
+.sql-highlighted :deep(.sql-string) {
+  color: #2e7d32;
+}
+
+.sql-highlighted :deep(.sql-placeholder) {
+  color: #7b1fa2;
   font-weight: 500;
+  background: #f3e5f5;
+  padding: 0.1rem 0.2rem;
+  border-radius: 3px;
+}
+
+.sql-highlighted :deep(.sql-alias) {
+  color: #0097a7;
+  font-weight: 500;
+}
+
+.sql-highlighted :deep(.sql-column) {
+  color: #455a64;
 }
 
 /* SQL Editor Container */
