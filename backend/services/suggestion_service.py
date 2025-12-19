@@ -83,7 +83,7 @@ class SuggestionService:
         """Get LLM configuration."""
         config = self.config_service.get_config()
         return {
-            "endpoint_name": config.foundation_model.endpoint_name
+            "endpoint_name": config.ai_model.foundation_model_endpoint
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):
