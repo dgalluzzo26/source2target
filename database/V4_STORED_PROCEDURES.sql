@@ -42,57 +42,89 @@ CREATE OR REPLACE PROCEDURE oztest_dev.smartmapper.sp_initialize_target_tables(
 )
 LANGUAGE SQL
 SQL SECURITY INVOKER
+COMMENT 'Initialize target tables for a project from semantic_fields. Queries semantic_fields (global table) and creates target_table_status rows for the project. p_domain_filter filters by domain column (NULL or empty = all tables).'
 AS
 BEGIN
   DECLARE v_tables_created INT DEFAULT 0;
   DECLARE v_columns_total BIGINT DEFAULT 0;
+  DECLARE v_project_id BIGINT;
+  DECLARE v_domain_filter STRING;
+  DECLARE v_semantic_table STRING;
+  DECLARE v_status_table STRING;
+  DECLARE v_projects_table STRING;
+  
+  -- Copy parameters to local variables to avoid parsing issues with IDENTIFIER()
+  SET v_project_id = p_project_id;
+  SET v_domain_filter = p_domain_filter;
+  SET v_semantic_table = p_catalog || '.' || p_schema || '.semantic_fields';
+  SET v_status_table = p_catalog || '.' || p_schema || '.target_table_status';
+  SET v_projects_table = p_catalog || '.' || p_schema || '.mapping_projects';
   
   -- Insert target_table_status rows from semantic_fields
-  INSERT INTO IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status') (
-    project_id,
-    tgt_table_name,
-    tgt_table_physical_name,
-    tgt_table_description,
-    mapping_status,
-    total_columns,
-    display_order
-  )
-  SELECT 
-    p_project_id AS project_id,
-    tgt_table_name,
-    tgt_table_physical_name,
-    MIN(tgt_comments) AS tgt_table_description,
-    'NOT_STARTED' AS mapping_status,
-    COUNT(*) AS total_columns,
-    ROW_NUMBER() OVER (ORDER BY tgt_table_name) AS display_order
-  FROM IDENTIFIER(p_catalog || '.' || p_schema || '.semantic_fields')
-  WHERE (p_domain_filter IS NULL 
-         OR p_domain_filter = '' 
-         OR INSTR(p_domain_filter, domain) > 0)
-  GROUP BY tgt_table_name, tgt_table_physical_name
-  ORDER BY tgt_table_name;
+  -- Note: semantic_fields is a GLOBAL table (not project-specific)
+  -- It contains all target field definitions
+  -- The domain column allows filtering by category (e.g., 'Member', 'Claims')
+  
+  -- Use EXECUTE IMMEDIATE for dynamic SQL with proper parameter handling
+  EXECUTE IMMEDIATE 
+    'INSERT INTO IDENTIFIER(:status_tbl) (
+        project_id,
+        tgt_table_name,
+        tgt_table_physical_name,
+        tgt_table_description,
+        mapping_status,
+        total_columns,
+        display_order
+      )
+      SELECT 
+        :proj_id AS project_id,
+        tgt_table_name,
+        tgt_table_physical_name,
+        MIN(tgt_comments) AS tgt_table_description,
+        ''NOT_STARTED'' AS mapping_status,
+        COUNT(*) AS total_columns,
+        ROW_NUMBER() OVER (ORDER BY tgt_table_name) AS display_order
+      FROM IDENTIFIER(:sem_tbl)
+      WHERE (
+        :dom_filter IS NULL 
+        OR :dom_filter = '''' 
+        OR CONTAINS(:dom_filter, COALESCE(domain, ''''))
+      )
+      GROUP BY tgt_table_name, tgt_table_physical_name
+      ORDER BY tgt_table_name'
+    USING 
+      v_status_table AS status_tbl,
+      v_project_id AS proj_id,
+      v_semantic_table AS sem_tbl,
+      v_domain_filter AS dom_filter;
   
   -- Get counts for project update
   SET v_tables_created = (
     SELECT COUNT(*)
-    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
-    WHERE project_id = p_project_id
+    FROM IDENTIFIER(v_status_table)
+    WHERE project_id = v_project_id
   );
   
   SET v_columns_total = (
     SELECT COALESCE(SUM(total_columns), 0)
-    FROM IDENTIFIER(p_catalog || '.' || p_schema || '.target_table_status')
-    WHERE project_id = p_project_id
+    FROM IDENTIFIER(v_status_table)
+    WHERE project_id = v_project_id
   );
   
   -- Update project counters
-  UPDATE IDENTIFIER(p_catalog || '.' || p_schema || '.mapping_projects')
-  SET 
-    total_target_tables = v_tables_created,
-    total_target_columns = v_columns_total,
-    project_status = 'ACTIVE',
-    updated_ts = CURRENT_TIMESTAMP()
-  WHERE project_id = p_project_id;
+  EXECUTE IMMEDIATE
+    'UPDATE IDENTIFIER(:proj_tbl)
+     SET 
+       total_target_tables = :tbl_count,
+       total_target_columns = :col_count,
+       project_status = ''ACTIVE'',
+       updated_ts = CURRENT_TIMESTAMP()
+     WHERE project_id = :proj_id'
+    USING
+      v_projects_table AS proj_tbl,
+      v_tables_created AS tbl_count,
+      v_columns_total AS col_count,
+      v_project_id AS proj_id;
   
 END;
 

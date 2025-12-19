@@ -489,18 +489,38 @@ class ProjectService:
         Creates a target_table_status row for each unique target table.
         """
         print(f"[Project Service] Initializing target tables for project: {project_id}")
+        print(f"[Project Service] semantic_fields_table: {semantic_fields_table}")
+        print(f"[Project Service] target_table_status_table: {target_table_status_table}")
+        print(f"[Project Service] domain_filter: {domain_filter}")
         
         connection = self._get_sql_connection(server_hostname, http_path)
         
         try:
             with connection.cursor() as cursor:
+                # First, check how many rows are in semantic_fields
+                check_query = f"SELECT COUNT(*) FROM {semantic_fields_table}"
+                print(f"[Project Service] Checking semantic_fields count: {check_query}")
+                cursor.execute(check_query)
+                total_semantic = cursor.fetchone()[0]
+                print(f"[Project Service] Total rows in semantic_fields: {total_semantic}")
+                
+                # Check unique tables
+                tables_query = f"SELECT DISTINCT tgt_table_name, domain FROM {semantic_fields_table} LIMIT 20"
+                print(f"[Project Service] Checking unique tables: {tables_query}")
+                cursor.execute(tables_query)
+                tables = cursor.fetchall()
+                print(f"[Project Service] Sample tables found: {tables}")
+                
                 # Build domain filter
                 where_clause = ""
-                if domain_filter:
+                if domain_filter and domain_filter.strip():
                     # Support pipe-separated domains
                     domains = domain_filter.split("|")
                     domain_conditions = [f"domain = '{self._escape_sql(d.strip())}'" for d in domains]
                     where_clause = f"WHERE ({' OR '.join(domain_conditions)})"
+                    print(f"[Project Service] Using domain filter: {where_clause}")
+                else:
+                    print(f"[Project Service] No domain filter - selecting all tables")
                 
                 # Insert target table status rows grouped by table
                 query = f"""
@@ -529,6 +549,7 @@ class ProjectService:
                 ORDER BY tgt_table_name
                 """
                 
+                print(f"[Project Service] Insert query: {query}")
                 cursor.execute(query)
                 
                 # Get counts
@@ -576,7 +597,10 @@ class ProjectService:
         domain_filter: Optional[str] = None
     ) -> Dict[str, Any]:
         """Initialize target tables for a project (async wrapper)."""
+        print(f"[Project Service] >>> ENTERING initialize_target_tables async wrapper <<<")
+        print(f"[Project Service] project_id={project_id}, domain_filter={domain_filter}")
         db_config = self._get_db_config()
+        print(f"[Project Service] db_config keys: {list(db_config.keys())}")
         
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(

@@ -1,333 +1,562 @@
-# Source-to-Target Mapping Platform - Administrator Guide
+# Smart Mapper V4 - Administrator Guide
 
 ## Table of Contents
 1. [Administrator Overview](#administrator-overview)
-2. [Navigation Structure](#navigation-structure)
-3. [User Management](#user-management)
-4. [Settings Configuration](#settings-configuration)
-5. [Semantic Management](#semantic-management)
-6. [Transformation Management](#transformation-management)
-7. [Vector Search Sync](#vector-search-sync)
-8. [Mapping Management](#mapping-management)
-9. [System Monitoring](#system-monitoring)
-10. [Database Schema V2](#database-schema-v2)
-11. [Troubleshooting](#troubleshooting)
-12. [Maintenance](#maintenance)
-13. [Security](#security)
+2. [System Architecture](#system-architecture)
+3. [Database Schema V4](#database-schema-v4)
+4. [Stored Procedures](#stored-procedures)
+5. [Views](#views)
+6. [Configuration](#configuration)
+7. [Semantic Field Management](#semantic-field-management)
+8. [Pattern Management](#pattern-management)
+9. [Loading Historical Mappings](#loading-historical-mappings)
+10. [User & Team Management](#user--team-management)
+11. [System Monitoring](#system-monitoring)
+12. [Troubleshooting](#troubleshooting)
+13. [Maintenance](#maintenance)
+14. [Security](#security)
 
 ---
 
 ## Administrator Overview
 
-As an administrator, you have full access to all features and are responsible for:
-- Managing user access and permissions
-- Configuring system settings (database, AI, vector search)
-- Maintaining semantic field definitions
-- Managing the transformation library
-- Monitoring system health and vector search sync
-- Supporting users and troubleshooting issues
+As a Smart Mapper V4 administrator, you are responsible for:
+
+- **System Configuration**: Database, AI model, and vector search settings
+- **Semantic Field Management**: Maintaining target field definitions
+- **Pattern Management**: Loading and curating historical mapping patterns
+- **User Support**: Helping users with projects and troubleshooting
+- **System Monitoring**: Ensuring all components are operational
 
 ### Admin Identification
+
 Admins are identified by:
-- Green **"Admin"** badge in the header (top-right)
+- Green **"Admin"** badge in the header
 - Access to **Administration** section in sidebar
 - Membership in the configured admin group
 
-### Version 2.0 Features
-- **Multi-Field Mapping**: Map multiple source fields to one target
-- **Transformation Library**: Reusable SQL transformation templates
-- **Mapping Editor**: Edit transformations and joins without recreating
-- **Vector Search Auto-Sync**: Automatic index updates
-- **Export Mappings**: Download complete mapping details as CSV
+### V4 Key Changes from V3
+
+| Area | V3 (Source-First) | V4 (Target-First) |
+|------|-------------------|-------------------|
+| Workflow | Select source → find target | Select target table → AI suggests all |
+| Organization | Per-user mappings | Project-based with teams |
+| AI Scope | One field at a time | Entire table at once |
+| Progress | Individual field tracking | Table and project dashboards |
+| Storage | mapped_fields only | projects + tables + suggestions |
 
 ---
 
-## Navigation Structure
+## System Architecture
 
-The application uses a left sidebar with two main sections:
+### Components
 
-### 📊 Mapping Workflow (All Users)
 ```
-🏠 Home                - System status dashboard
-➕ Create Mappings     - Map source fields to targets
-📋 View Mappings       - Review and manage mappings
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           SMART MAPPER V4 ARCHITECTURE                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────────┐        ┌──────────────────┐        ┌───────────────┐ │
+│  │   Frontend       │        │   Backend        │        │  Databricks   │ │
+│  │   Vue.js 3       │◄──────►│   FastAPI        │◄──────►│  Unity Catalog│ │
+│  │   PrimeVue       │  REST  │   Python 3.11    │  SQL   │  SQL Warehouse│ │
+│  │   Pinia          │        │   OAuth          │  OAuth │  Model Serving│ │
+│  └──────────────────┘        └──────────────────┘        │  Vector Search│ │
+│                                                           └───────────────┘ │
+│                                                                              │
+│  Tables:                                                                     │
+│  ├── mapping_projects        (NEW - project tracking)                       │
+│  ├── target_table_status     (NEW - per-table progress)                     │
+│  ├── mapping_suggestions     (NEW - AI suggestions before approval)         │
+│  ├── semantic_fields         (target definitions - unchanged)               │
+│  ├── unmapped_fields         (source fields + project_id)                   │
+│  ├── mapped_fields           (approved mappings + project_id, patterns)     │
+│  └── mapping_feedback        (rejection learning)                           │
+│                                                                              │
+│  Stored Procedures:                                                          │
+│  ├── sp_initialize_target_tables                                            │
+│  ├── sp_recalculate_table_counters                                          │
+│  ├── sp_update_project_counters                                             │
+│  ├── sp_mark_table_complete                                                 │
+│  └── sp_approve_mapping_as_pattern                                          │
+│                                                                              │
+│  Views:                                                                      │
+│  ├── v_project_dashboard                                                     │
+│  ├── v_target_table_progress                                                │
+│  └── v_suggestion_review                                                    │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 🔧 Administration (Admins Only)
+### Data Flow
+
+1. **Project Creation**: User creates project → `mapping_projects` row created
+2. **Source Upload**: User uploads CSV → `unmapped_fields` rows with `project_id`
+3. **Table Init**: System reads `semantic_fields` → creates `target_table_status` rows
+4. **AI Discovery**: For each target column:
+   - Search `mapped_fields` for patterns (where `is_approved_pattern = true`)
+   - Search `unmapped_fields` for matching sources (vector search)
+   - LLM rewrites SQL with user's sources
+   - Store in `mapping_suggestions`
+5. **Approval**: User approves → creates `mapped_fields` row with `project_id`
+6. **Pattern Promotion**: Admin marks mapping as approved pattern → `is_approved_pattern = true`
+
+---
+
+## Database Schema V4
+
+### New Tables
+
+#### `mapping_projects`
+
+Tracks overall mapping projects with progress stats.
+
+```sql
+CREATE TABLE mapping_projects (
+  project_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  
+  -- Identification
+  project_name STRING NOT NULL,
+  project_description STRING,
+  
+  -- Source/target context
+  source_system_name STRING,
+  source_catalogs STRING,      -- Pipe-separated: "bronze_dmes|bronze_mmis"
+  source_schemas STRING,
+  target_catalogs STRING,
+  target_schemas STRING,
+  target_domains STRING,       -- Filter: "Member|Claims"
+  
+  -- Status: NOT_STARTED, ACTIVE, REVIEW, COMPLETE, ARCHIVED
+  project_status STRING DEFAULT 'NOT_STARTED',
+  
+  -- Progress counters (denormalized for dashboard performance)
+  total_target_tables INT DEFAULT 0,
+  tables_complete INT DEFAULT 0,
+  tables_in_progress INT DEFAULT 0,
+  total_target_columns INT DEFAULT 0,
+  columns_mapped INT DEFAULT 0,
+  columns_pending_review INT DEFAULT 0,
+  
+  -- Team access
+  team_members STRING,         -- Pipe-separated emails
+  
+  -- Audit
+  created_by STRING NOT NULL,
+  created_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+  updated_by STRING,
+  updated_ts TIMESTAMP,
+  completed_by STRING,
+  completed_ts TIMESTAMP
+);
 ```
-💾 Semantic Management       - Manage target field definitions
-🛡️  Transformation Management - Transformation library management
-⚙️  Settings                 - System configuration
+
+#### `target_table_status`
+
+Tracks mapping progress for each target table within a project.
+
+```sql
+CREATE TABLE target_table_status (
+  target_table_status_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  
+  -- Links
+  project_id BIGINT NOT NULL,  -- FK to mapping_projects
+  
+  -- Target table identification
+  tgt_table_name STRING NOT NULL,
+  tgt_table_physical_name STRING NOT NULL,
+  tgt_table_description STRING,
+  
+  -- Status: NOT_STARTED, DISCOVERING, SUGGESTIONS_READY, 
+  --         IN_PROGRESS, COMPLETE, SKIPPED
+  mapping_status STRING DEFAULT 'NOT_STARTED',
+  
+  -- Progress counters
+  total_columns INT DEFAULT 0,
+  columns_with_pattern INT DEFAULT 0,
+  columns_mapped INT DEFAULT 0,
+  columns_pending_review INT DEFAULT 0,
+  columns_no_match INT DEFAULT 0,
+  columns_skipped INT DEFAULT 0,
+  
+  -- AI processing
+  ai_job_id STRING,
+  ai_started_ts TIMESTAMP,
+  ai_completed_ts TIMESTAMP,
+  ai_error_message STRING,
+  
+  -- Confidence summary
+  avg_confidence DOUBLE,
+  min_confidence DOUBLE,
+  
+  -- Ordering
+  display_order INT,
+  priority STRING DEFAULT 'NORMAL',  -- HIGH, NORMAL, LOW
+  
+  -- Audit
+  created_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+  started_by STRING,
+  started_ts TIMESTAMP,
+  completed_by STRING,
+  completed_ts TIMESTAMP
+);
+```
+
+#### `mapping_suggestions`
+
+Stores AI suggestions before user approval.
+
+```sql
+CREATE TABLE mapping_suggestions (
+  suggestion_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  
+  -- Links
+  project_id BIGINT NOT NULL,
+  target_table_status_id BIGINT NOT NULL,
+  semantic_field_id BIGINT,        -- FK to semantic_fields
+  
+  -- Target identification
+  tgt_table_name STRING NOT NULL,
+  tgt_table_physical_name STRING NOT NULL,
+  tgt_column_name STRING NOT NULL,
+  tgt_column_physical_name STRING NOT NULL,
+  tgt_column_description STRING,
+  
+  -- Pattern used (if any)
+  pattern_type STRING,              -- DIRECT, UNION, JOIN, UNION_WITH_JOINS
+  pattern_mapped_field_id BIGINT,   -- FK to the pattern used
+  pattern_sql STRING,               -- Original pattern SQL
+  
+  -- AI suggestion
+  suggested_sql STRING,             -- Rewritten SQL for this project
+  matched_source_fields STRING,     -- JSON array of matched sources
+  ai_reasoning STRING,              -- LLM explanation
+  
+  -- Confidence
+  confidence_score DOUBLE,
+  pattern_confidence DOUBLE,
+  source_match_confidence DOUBLE,
+  
+  -- Warnings
+  warnings STRING,                  -- JSON array of warning messages
+  
+  -- Status: PENDING, APPROVED, EDITED, REJECTED, SKIPPED
+  suggestion_status STRING DEFAULT 'PENDING',
+  
+  -- If approved, link to created mapping
+  created_mapped_field_id BIGINT,
+  
+  -- User actions
+  user_edited_sql STRING,
+  rejection_reason STRING,
+  reviewed_by STRING,
+  reviewed_ts TIMESTAMP,
+  
+  -- Audit
+  created_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+);
+```
+
+### Modified Tables
+
+#### `unmapped_fields` - Added Columns
+
+```sql
+-- New column
+project_id BIGINT,  -- FK to mapping_projects (NULL for legacy)
+```
+
+#### `mapped_fields` - Added Columns
+
+```sql
+-- New columns for V4
+project_id BIGINT,               -- FK to mapping_projects (NULL = global pattern)
+is_approved_pattern BOOLEAN DEFAULT FALSE,
+pattern_approved_by STRING,
+pattern_approved_ts TIMESTAMP
+```
+
+### Key Column Reference
+
+| Table | Primary Key | Important FKs |
+|-------|-------------|---------------|
+| `mapping_projects` | `project_id` | - |
+| `target_table_status` | `target_table_status_id` | `project_id` |
+| `mapping_suggestions` | `suggestion_id` | `project_id`, `target_table_status_id`, `semantic_field_id` |
+| `unmapped_fields` | `unmapped_field_id` | `project_id` |
+| `mapped_fields` | `mapped_field_id` | `project_id`, `semantic_field_id` |
+
+---
+
+## Stored Procedures
+
+V4 uses Databricks SQL stored procedures for complex operations. All procedures accept dynamic catalog and schema parameters.
+
+### `sp_initialize_target_tables`
+
+Populates `target_table_status` from `semantic_fields` when starting a project.
+
+**Parameters:**
+- `p_catalog` - Catalog name (e.g., 'oztest_dev')
+- `p_schema` - Schema name (e.g., 'smartmapper')
+- `p_project_id` - Project ID to initialize
+- `p_domain_filter` - Domain filter (NULL for all, or 'Member', 'Member|Claims')
+
+**Example:**
+```sql
+CALL oztest_dev.smartmapper.sp_initialize_target_tables(
+  'oztest_dev', 'smartmapper', 1, 'Member'
+);
+```
+
+**What it does:**
+1. Queries `semantic_fields` for unique target tables (filtered by domain)
+2. Inserts rows into `target_table_status` with column counts
+3. Updates `mapping_projects` with `total_target_tables` and `total_target_columns`
+4. Sets project status to 'ACTIVE'
+
+### `sp_recalculate_table_counters`
+
+Recalculates progress counters for a target table from suggestion data.
+
+**Parameters:**
+- `p_catalog` - Catalog name
+- `p_schema` - Schema name
+- `p_target_table_status_id` - Table status ID to recalculate
+
+**Example:**
+```sql
+CALL oztest_dev.smartmapper.sp_recalculate_table_counters(
+  'oztest_dev', 'smartmapper', 42
+);
+```
+
+**What it does:**
+1. Counts suggestions by status (PENDING, APPROVED, REJECTED, SKIPPED)
+2. Updates `target_table_status` with new counters
+3. Calculates and updates confidence stats (avg, min)
+4. Updates the parent project's counters
+
+### `sp_update_project_counters`
+
+Recalculates project-level progress from all its tables.
+
+**Parameters:**
+- `p_catalog` - Catalog name
+- `p_schema` - Schema name
+- `p_project_id` - Project ID to recalculate
+
+**Example:**
+```sql
+CALL oztest_dev.smartmapper.sp_update_project_counters(
+  'oztest_dev', 'smartmapper', 1
+);
+```
+
+**What it does:**
+1. Aggregates counters from all `target_table_status` rows
+2. Updates `mapping_projects` with totals
+3. Updates `updated_ts` timestamp
+
+### `sp_mark_table_complete`
+
+Marks a target table as complete and updates all counters.
+
+**Parameters:**
+- `p_catalog` - Catalog name
+- `p_schema` - Schema name
+- `p_target_table_status_id` - Table status ID
+- `p_completed_by` - User email
+
+**Example:**
+```sql
+CALL oztest_dev.smartmapper.sp_mark_table_complete(
+  'oztest_dev', 'smartmapper', 42, 'user@example.com'
+);
+```
+
+### `sp_approve_mapping_as_pattern`
+
+Promotes an approved mapping to be used as a pattern for future AI suggestions.
+
+**Parameters:**
+- `p_catalog` - Catalog name
+- `p_schema` - Schema name
+- `p_mapped_field_id` - Mapped field ID to promote
+- `p_approved_by` - Admin user email
+
+**Example:**
+```sql
+CALL oztest_dev.smartmapper.sp_approve_mapping_as_pattern(
+  'oztest_dev', 'smartmapper', 100, 'admin@example.com'
+);
+```
+
+**What it does:**
+1. Sets `is_approved_pattern = TRUE`
+2. Records `pattern_approved_by` and `pattern_approved_ts`
+3. Pattern becomes available for AI to use in future projects
+
+---
+
+## Views
+
+### `v_project_dashboard`
+
+Aggregated statistics for the main projects dashboard.
+
+```sql
+CREATE VIEW v_project_dashboard AS
+SELECT 
+  p.project_id,
+  p.project_name,
+  p.project_description,
+  p.project_status,
+  p.source_system_name,
+  p.total_target_tables,
+  p.tables_complete,
+  p.tables_in_progress,
+  p.total_target_columns,
+  p.columns_mapped,
+  p.columns_pending_review,
+  ROUND(p.columns_mapped * 100.0 / NULLIF(p.total_target_columns, 0), 1) AS percent_complete,
+  p.created_by,
+  p.created_ts,
+  p.team_members
+FROM mapping_projects p
+WHERE p.project_status != 'ARCHIVED';
+```
+
+### `v_target_table_progress`
+
+Per-table progress details with status breakdown.
+
+```sql
+CREATE VIEW v_target_table_progress AS
+SELECT 
+  t.target_table_status_id,
+  t.project_id,
+  p.project_name,
+  t.tgt_table_name,
+  t.tgt_table_physical_name,
+  t.mapping_status,
+  t.total_columns,
+  t.columns_mapped,
+  t.columns_pending_review,
+  t.columns_skipped,
+  t.columns_no_match,
+  ROUND(t.columns_mapped * 100.0 / NULLIF(t.total_columns, 0), 1) AS percent_complete,
+  t.avg_confidence,
+  t.min_confidence,
+  t.display_order,
+  t.priority
+FROM target_table_status t
+JOIN mapping_projects p ON t.project_id = p.project_id;
+```
+
+### `v_suggestion_review`
+
+Suggestions pending review with full context.
+
+```sql
+CREATE VIEW v_suggestion_review AS
+SELECT 
+  s.suggestion_id,
+  s.project_id,
+  s.target_table_status_id,
+  t.tgt_table_name,
+  s.tgt_column_name,
+  s.tgt_column_physical_name,
+  s.tgt_column_description,
+  s.pattern_type,
+  s.suggested_sql,
+  s.matched_source_fields,
+  s.confidence_score,
+  s.warnings,
+  s.suggestion_status,
+  s.ai_reasoning,
+  s.created_ts
+FROM mapping_suggestions s
+JOIN target_table_status t ON s.target_table_status_id = t.target_table_status_id
+WHERE s.suggestion_status = 'PENDING'
+ORDER BY s.confidence_score DESC;
 ```
 
 ---
 
-## User Management
-
-### Admin Group Configuration
-
-#### Setting Up Admin Access
-
-1. **Navigate to Settings**:
-   - Click **"Settings"** (⚙️ icon) in the sidebar
-   - Go to **"Security"** or **"Admin Group"** section
-
-2. **Configure Admin Group**:
-   - **Admin Group Name**: Enter your Databricks workspace group name
-     - Example: `source2target_admins`
-     - Example: `data_platform_admins`
-   - Click **"Save Configuration"**
-
-3. **Verify Admin Access**:
-   - Users in this group will see "Admin" badge
-   - They'll have access to Administration section
-   - Group membership checked via Databricks Workspace API
-
-#### Best Practices
-- ✅ Use a dedicated admin group (e.g., "source2target_admins")
-- ✅ Limit admin access to 3-5 trusted users
-- ✅ Review group membership monthly in Databricks
-- ✅ Document who has admin access in your runbook
-- ✅ Use consistent naming conventions for admin groups
-
-### User Permissions Matrix
-
-| Permission | Admin | Regular User |
-|------------|-------|--------------|
-| View Home Page | ✅ | ✅ |
-| Create Mappings | ✅ | ✅ |
-| View Own Mappings | ✅ | ✅ |
-| Edit Mappings | ✅ | ✅ |
-| Delete Mappings | ✅ | ✅ |
-| Export Mappings | ✅ | ✅ |
-| AI Suggestions | ✅ | ✅ |
-| Manual Search | ✅ | ✅ |
-| **View All Mappings** | ✅ | ❌ |
-| **Semantic Management** | ✅ | ❌ |
-| **Transformation Management** | ✅ | ❌ |
-| **Settings** | ✅ | ❌ |
-
-### Data Visibility
-- **Regular Users**: See only mappings they created (filtered by `mapped_by` email)
-- **Admins**: See all mappings from all users (no filter)
-- **Audit Trail**: All actions tracked in database with user email and timestamp
-
----
-
-## Settings Configuration
-
-Access Settings by clicking **"Settings"** (⚙️) in the sidebar.
+## Configuration
 
 ### Database Configuration
 
-#### Required Settings
+Navigate to **Settings** → **Database**.
 
-**1. Warehouse Name**
-- **Label**: SQL Warehouse or Cluster name
-- **Example**: `my-sql-warehouse`
-- **Purpose**: Compute resource for queries
+**Required Settings:**
 
-**2. Server Hostname**
-- **Label**: Databricks workspace hostname
-- **Format**: `your-workspace.cloud.databricks.com`
-- **Example**: `adb-1234567890123456.7.azuredatabricks.net`
-- **Where to Find**: Databricks workspace URL (without https://)
+| Setting | Description | Example |
+|---------|-------------|---------|
+| Warehouse Name | SQL Warehouse name | `my-sql-warehouse` |
+| Server Hostname | Databricks workspace URL | `workspace.cloud.databricks.com` |
+| HTTP Path | Warehouse HTTP path | `/sql/1.0/warehouses/abc123` |
+| Catalog Name | Unity Catalog name | `oztest_dev` |
+| Schema Name | Database schema | `smartmapper` |
 
-**3. HTTP Path** (Optional)
-- **Label**: SQL Warehouse or Cluster HTTP path
-- **Format**: `/sql/1.0/warehouses/abc123def456`
-- **Example**: `/sql/1.0/warehouses/a1b2c3d4e5f67890`
-- **Where to Find**: 
-  - SQL Warehouse → Connection Details → HTTP Path
-  - If left empty, auto-detected from warehouse name
+**Table Names** (enter without catalog.schema prefix):
 
-**4. Catalog Name**
-- **Label**: Unity Catalog name
-- **Example**: `prod_db` or `main`
-- **Purpose**: Top-level namespace
-
-**5. Schema Name**
-- **Label**: Database schema name
-- **Example**: `source2target`
-- **Purpose**: Contains all platform tables
-
-**6. Table Names**
-Enter table names **without** catalog.schema prefix:
-- **Semantic Management Table**: `semantic_fields`
-- **Unmapped Fields Table**: `unmapped_fields`
-- **Mapped Fields Table**: `mapped_fields`
-- **Mapping Details Table**: `mapping_details`
-- **Mapping Joins Table**: `mapping_joins`
-- **Transformation Library Table**: `transformation_library`
-
-⚠️ **Important**: Enter table names only (e.g., `semantic_fields`), NOT fully qualified names (e.g., `catalog.schema.semantic_fields`)
-
-#### Setup Steps
-1. Navigate to **Settings** → **Database**
-2. Fill in all required fields
-3. Click **"Save Configuration"**
-4. Go to **Home** page to verify connection
-5. Check for green ✅ "Database Connection" status
-
-#### Validation
-The system automatically checks:
-- ✅ Server hostname format
-- ✅ HTTP path format (if provided)
-- ✅ Table names don't contain catalog/schema prefixes
-- ✅ Connection to SQL warehouse
-- ✅ Access to specified tables
+| Setting | Default Value |
+|---------|---------------|
+| Semantic Fields Table | `semantic_fields` |
+| Unmapped Fields Table | `unmapped_fields` |
+| Mapped Fields Table | `mapped_fields` |
+| Mapping Projects Table | `mapping_projects` |
+| Target Table Status Table | `target_table_status` |
+| Mapping Suggestions Table | `mapping_suggestions` |
 
 ### Vector Search Configuration
 
-#### Required Settings
+**Required Settings:**
 
-**1. Index Name**
-- **Label**: Vector search index full name
-- **Format**: `catalog.schema.index_name`
-- **Example**: `prod_db.source2target.semantic_fields_vs`
-- **Purpose**: AI semantic search on target fields
-
-**2. Endpoint Name**
-- **Label**: Vector search endpoint name
-- **Example**: `s2t_vsendpoint`
-- **Purpose**: Compute endpoint for vector search
-
-#### Prerequisites
-Before configuring vector search:
-
-1. **Create Vector Search Endpoint** in Databricks:
-   - Navigate to: Compute → Vector Search
-   - Click "Create Endpoint"
-   - Name: `s2t_vsendpoint` (or your chosen name)
-   - Wait for endpoint to be "Ready"
-
-2. **Create Vector Search Index**:
-   ```sql
-   CREATE VECTOR SEARCH INDEX catalog.schema.semantic_fields_vs
-   ON TABLE catalog.schema.semantic_fields (semantic_field)
-   COMPUTE ENDPOINT s2t_vsendpoint
-   ```
-   - Index the `semantic_field` column
-   - Wait for initial sync to complete
-
-#### Setup Steps
-1. Navigate to **Settings** → **Vector Search**
-2. Enter **Index Name** (fully qualified)
-3. Enter **Endpoint Name**
-4. Click **"Save Configuration"**
-5. Go to **Home** to verify: "Vector Search Available" ✅
-
-#### Testing
-- Check "Vector Search Available" on Home page
-- Should show "✓ Available" if configured correctly
-- Try AI suggestions in Create Mappings to verify
+| Setting | Description | Example |
+|---------|-------------|---------|
+| Semantic Index | Index for target fields | `oztest_dev.smartmapper.semantic_fields_vs` |
+| Patterns Index | Index for mapping patterns | `oztest_dev.smartmapper.mapped_fields_vs` |
+| Endpoint Name | Vector search endpoint | `s2t_vsendpoint` |
 
 ### AI Model Configuration
 
-#### Required Settings
+**Required Settings:**
 
-**1. Foundation Model Endpoint**
-- **Label**: Databricks Model Serving endpoint name
-- **Example**: `databricks-meta-llama-3-3-70b-instruct`
-- **Example**: `databricks-dbrx-instruct`
-- **Purpose**: AI model for generating mapping suggestions
-
-**2. Previous Mappings Table** (Optional)
-- **Label**: Historical mappings table for learning
-- **Format**: `catalog.schema.table_name`
-- **Example**: `prod_db.source2target.mapping_history`
-- **Purpose**: Improve AI suggestions based on past mappings
-
-#### Prerequisites
-
-1. **Deploy AI Model** in Databricks Model Serving:
-   - Navigate to: Machine Learning → Serving
-   - Click "Create Serving Endpoint"
-   - Select foundation model (e.g., Llama 3.3 70B)
-   - Name: `databricks-meta-llama-3-3-70b-instruct`
-   - Wait for endpoint to be "Ready"
-
-#### Setup Steps
-1. Navigate to **Settings** → **AI/ML Models**
-2. Enter **Foundation Model Endpoint** name
-3. (Optional) Enter **Previous Mappings Table**
-4. Click **"Save Configuration"**
-5. Go to **Home** to verify: "AI Model Ready" ✅
-
-#### Testing
-- Check "AI Model Ready" on Home page
-- Status should show "Ready" for full functionality
-- Test in Create Mappings → Get AI Suggestions
-
-### Configuration File
-
-All settings are stored in `app_config.json` at the app root:
-
-```json
-{
-  "database": {
-    "warehouse_name": "my-sql-warehouse",
-    "server_hostname": "workspace.cloud.databricks.com",
-    "http_path": "/sql/1.0/warehouses/...",
-    "catalog_name": "prod_db",
-    "schema_name": "source2target",
-    "semantic_fields_table": "semantic_fields",
-    "unmapped_fields_table": "unmapped_fields",
-    "mapped_fields_table": "mapped_fields",
-    "mapping_details_table": "mapping_details",
-    "mapping_joins_table": "mapping_joins",
-    "transformation_library_table": "transformation_library"
-  },
-  "vector_search": {
-    "index_name": "prod_db.source2target.semantic_fields_vs",
-    "endpoint_name": "s2t_vsendpoint"
-  },
-  "ai_model": {
-    "foundation_model_endpoint": "databricks-meta-llama-3-3-70b-instruct",
-    "previous_mappings_table_name": "prod_db.source2target.mapping_history"
-  },
-  "admin_group": {
-    "group_name": "source2target_admins"
-  }
-}
-```
-
-#### Backup and Restore
-1. **Backup**: Copy `app_config.json` to safe location before changes
-2. **Restore**: Replace `app_config.json` and restart app
-3. **Version Control**: Store in git (without sensitive data)
+| Setting | Description | Example |
+|---------|-------------|---------|
+| Foundation Model Endpoint | LLM endpoint name | `databricks-meta-llama-3-3-70b-instruct` |
 
 ---
 
-## Semantic Management
-
-Access by clicking **"Semantic Management"** (💾) in the sidebar.
+## Semantic Field Management
 
 ### Overview
-Semantic fields define all possible **target fields** that source fields can be mapped to. Each record represents one target column with semantic metadata for AI matching.
+
+Semantic fields define all possible target fields. The V4 workflow depends on complete, well-described semantic fields.
 
 ### Viewing Semantic Fields
 
-**The Table Shows:**
-- **Table Name**: Logical target table name
-- **Column Name**: Logical target column name
-- **Physical Names**: Actual database table.column
-- **Data Type**: STRING, INT, DATE, etc.
-- **Nullable**: YES or NO
-- **Description**: Semantic description (critical for AI!)
-- **Domain**: Category (e.g., member, claims, provider)
+Navigate to **Administration** → **Semantic Fields**.
 
-**Features:**
-- Search/filter by any field
-- Sort by any column
-- Pagination (10, 25, 50, 100 rows)
+The table shows:
+- Target table and column names (logical and physical)
+- Data type and nullable flag
+- Description (critical for AI matching)
+- Domain category
 
 ### Adding Semantic Fields
 
-Currently done via direct database insert:
+**Via UI:**
+1. Click **"Add Field"**
+2. Fill in all fields
+3. Click **"Save"**
 
+**Via SQL:**
 ```sql
-INSERT INTO catalog.schema.semantic_fields (
+INSERT INTO oztest_dev.smartmapper.semantic_fields (
   tgt_table_name,
   tgt_table_physical_name,
   tgt_column_name,
@@ -337,723 +566,338 @@ INSERT INTO catalog.schema.semantic_fields (
   tgt_comments,
   domain
 ) VALUES (
-  'Member Demographics',              -- Logical table name
-  'slv_member_demographics',          -- Physical table name
-  'Full Name',                        -- Logical column name
-  'full_name',                        -- Physical column name
-  'NO',                               -- Nullable
-  'STRING',                           -- Data type
-  'Member full name combining first and last names',  -- Description
-  'member'                            -- Domain
+  'Member Contact',
+  'MBR_CNTCT',
+  'Address Line 1',
+  'ADDR_1_TXT',
+  'YES',
+  'STRING',
+  'First line of member address including street number and name',
+  'Member'
 );
 ```
 
-**Note**: The `semantic_field` column is auto-generated via computed column.
+### Best Practices for Semantic Fields
 
-#### Best Practices for Semantic Fields
-- ✅ **Detailed Descriptions**: Write clear, comprehensive descriptions
-  - Bad: "Name"
-  - Good: "Member full legal name as appears on insurance card"
-- ✅ **Consistent Naming**: Use standard naming conventions
-- ✅ **Include All Targets**: Add every possible target field
-- ✅ **Use Domains**: Categorize by business domain
-- ✅ **Update Regularly**: Keep descriptions current as requirements change
+1. ✅ **Detailed Descriptions**: Write comprehensive `tgt_comments`
+   - Bad: "Address"
+   - Good: "First line of member mailing address including street number and name"
+   
+2. ✅ **Consistent Domains**: Use standard domain names (Member, Claims, Provider)
 
-### Editing Semantic Fields
+3. ✅ **Complete Coverage**: Add ALL target columns, even complex ones
 
-1. Find the record in the table
-2. Click the **✏️ edit icon**
-3. Modify fields in the dialog:
-   - Table/column names (logical and physical)
-   - Data type
-   - Nullable flag
-   - Description
-   - Domain
-4. Click **"Save"**
-5. **Vector search index auto-syncs** immediately
-
-### Deleting Semantic Fields
-
-1. Find the record in the table
-2. Click the **🗑️ delete icon**
-3. Confirm deletion
-4. ⚠️ **Warning**: Cannot be undone!
-5. **Check for existing mappings first** - deleting a target that has mappings will break those mappings
-6. **Vector search index auto-syncs** immediately
-
-### Vector Search Integration
-
-After any semantic field changes (create, update, delete):
-1. System **automatically triggers** vector search index sync
-2. Success message appears in backend logs
-3. Sync typically takes 30-60 seconds to propagate
-4. AI suggestions reflect changes after sync completes
-5. If auto-sync fails, index will sync automatically within 5-10 minutes
+4. ✅ **Physical Names Match**: Ensure physical names match actual table/column names
 
 ---
 
-## Transformation Management
+## Pattern Management
 
-Access by clicking **"Transformation Management"** (🛡️) in the sidebar.
+### What are Patterns?
 
-### Overview
-The transformation library provides **reusable SQL transformation templates** that users can apply to source fields during mapping. This ensures consistency and reduces errors.
+Patterns are approved mappings that the AI uses to suggest SQL for new projects. They are stored in `mapped_fields` with `is_approved_pattern = TRUE`.
 
-### Viewing Transformations
+### Pattern Sources
 
-**The Transformation Library Table Shows:**
-- **Name**: Display name (e.g., "Trim Whitespace")
-- **Code**: Unique identifier (e.g., "TRIM")
-- **Expression**: SQL template with `{field}` placeholder
-- **Category**: Grouping (STRING, DATE, NUMERIC, etc.)
-- **Description**: What the transformation does
-- **System Badge**: Blue badge for protected system transformations
+1. **Historical Mappings**: Loaded from past migration projects
+2. **Promoted Mappings**: New mappings marked as patterns by admins
 
-**Features:**
-- Search across all fields
-- Filter by category
-- Sort by any column
-- Pagination (10, 25, 50 rows per page)
+### Viewing Patterns
 
-### Creating Transformations
-
-#### Step 1: Click "Add Transformation"
-Opens the creation dialog.
-
-#### Step 2: Fill Required Fields
-
-**Name** (required):
-- **Label**: User-friendly name shown in dropdowns
-- **Example**: "Remove Special Characters"
-- **Example**: "Format Phone Number"
-
-**Code** (required):
-- **Label**: Unique identifier for the transformation
-- **Format**: UPPERCASE_WITH_UNDERSCORES
-- **Example**: `REMOVE_SPECIAL`
-- **Example**: `FORMAT_PHONE`
-- ⚠️ Must be unique across all transformations
-
-**SQL Expression** (required):
-- **Label**: SQL template using `{field}` as placeholder
-- **Example**: `REGEXP_REPLACE({field}, '[^A-Za-z0-9 ]', '')`
-- **Example**: `TRIM(UPPER({field}))`
-- ⚠️ Must include `{field}` or validation fails
-- The `{field}` placeholder is replaced with actual field name at runtime
-
-**Description** (optional):
-- **Label**: Explanation of what the transformation does
-- **Example**: "Removes all non-alphanumeric characters from the field"
-- **Tip**: Include examples or use cases
-
-**Category** (optional):
-- **Label**: Group similar transformations
-- **Options**: STRING, DATE, NUMERIC, CONVERSION, NULL_HANDLING, CUSTOM
-- **Default**: CUSTOM
-- **Purpose**: Organize transformations in the library
-
-**Mark as System** (checkbox):
-- **Label**: System-protected transformation
-- **Default**: Unchecked (custom transformation)
-- **If Checked**: Transformation cannot be edited or deleted
-- **Use Case**: Core transformations you never want changed
-
-#### Step 3: Save
-1. Click **"Create"** button
-2. Validation runs:
-   - Checks `{field}` placeholder exists
-   - Checks code is unique
-3. Success message appears
-4. Transformation immediately available to users
-
-#### Examples
-
-**Example 1: Phone Number Formatting**
-```
-Name: Format Phone Number
-Code: FORMAT_PHONE
-Expression: REGEXP_REPLACE({field}, '[^0-9]', '')
-Description: Removes all non-numeric characters from phone numbers (keeps only 0-9)
-Category: STRING
-System: No
+Query the database:
+```sql
+SELECT 
+  mf.mapped_field_id,
+  sf.tgt_table_name,
+  sf.tgt_column_name,
+  mf.source_expression,
+  mf.source_tables,
+  mf.join_metadata,
+  mf.pattern_approved_by,
+  mf.pattern_approved_ts
+FROM mapped_fields mf
+JOIN semantic_fields sf ON mf.semantic_field_id = sf.semantic_field_id
+WHERE mf.is_approved_pattern = TRUE
+ORDER BY sf.tgt_table_name, sf.tgt_column_name;
 ```
 
-**Example 2: Date to ISO Format**
-```
-Name: ISO Date Format
-Code: ISO_DATE
-Expression: TO_DATE({field}, 'yyyy-MM-dd')
-Description: Converts date field to ISO 8601 format (YYYY-MM-DD)
-Category: DATE
-System: No
-```
+### Promoting a Mapping to Pattern
 
-**Example 3: Clean Currency**
-```
-Name: Clean Currency Value
-Code: CLEAN_CURRENCY
-Expression: CAST(REGEXP_REPLACE({field}, '[^0-9.]', '') AS DECIMAL(10,2))
-Description: Removes currency symbols and converts to decimal (e.g., "$1,234.56" → 1234.56)
-Category: NUMERIC
-System: No
+**Via Stored Procedure:**
+```sql
+CALL oztest_dev.smartmapper.sp_approve_mapping_as_pattern(
+  'oztest_dev', 'smartmapper', 
+  123,  -- mapped_field_id
+  'admin@example.com'
+);
 ```
 
-### Editing Transformations
+### Pattern Quality Guidelines
 
-#### Restrictions
-- ✅ **Custom transformations** can be edited
-- ❌ **System transformations** cannot be edited (button disabled, grayed out)
-
-#### Edit Process
-1. Find the transformation in the table
-2. Click the **✏️ pencil icon** (disabled if system transformation)
-3. Edit dialog opens with current values
-4. Modify any field **except** system flag
-5. Click **"Update"**
-6. Changes apply immediately
-7. All existing mappings using this transformation **keep their current expression** (not updated)
-
-**Note**: Editing a transformation affects new mappings only. Existing mappings store the actual SQL expression, not a reference.
-
-### Deleting Transformations
-
-#### Restrictions
-- ✅ **Custom transformations** can be deleted
-- ❌ **System transformations** cannot be deleted (button disabled, grayed out)
-
-#### Delete Process
-1. Find the transformation in the table
-2. Click the **🗑️ trash icon** (disabled if system transformation)
-3. Confirmation dialog shows:
-   - Transformation name and code
-   - Warning that action cannot be undone
-4. Click **"Delete"** to confirm
-5. Transformation removed from library
-6. **Important**: Does NOT break existing mappings (they store the expression)
-
-#### Safety Warning
-- Deleting a transformation **does not break existing mappings**
-- Existing mappings store the actual SQL expression
-- Users can still see the expression in existing mappings
-- Future mappings won't have this transformation in dropdown
-
-### System Transformations
-
-#### Pre-Loaded Transformations
-
-**STRING Category:**
-- **Trim Whitespace** (TRIM): `TRIM({field})`
-- **Upper Case** (UPPER): `UPPER({field})`
-- **Lower Case** (LOWER): `LOWER({field})`
-- **Initial Caps** (INITCAP): `INITCAP({field})`
-- **Trim and Upper** (TRIM_UPPER): `UPPER(TRIM({field}))`
-- **Trim and Lower** (TRIM_LOWER): `LOWER(TRIM({field}))`
-
-**CONVERSION Category:**
-- **Cast to String** (CAST_STRING): `CAST({field} AS STRING)`
-- **Cast to Integer** (CAST_INT): `CAST({field} AS INT)`
-
-**DATE Category:**
-- **Cast to Date** (CAST_DATE): `CAST({field} AS DATE)`
-- **Cast to Timestamp** (CAST_TIMESTAMP): `CAST({field} AS TIMESTAMP)`
-
-**NULL_HANDLING Category:**
-- **Replace Nulls** (COALESCE): `COALESCE({field}, '')`
-- **Replace Nulls with Zero** (COALESCE_ZERO): `COALESCE({field}, 0)`
-
-#### Protection
-System transformations are protected:
-- Cannot be edited (button disabled)
-- Cannot be deleted (button disabled)
-- Show blue "SYSTEM" badge
-- Protected at API level (403 error if attempted)
-- Ensure core transformations always available
-
-### Best Practices
-
-#### For Transformation Design
-1. ✅ Keep expressions simple and readable
-2. ✅ Use descriptive names (not just "Transform 1")
-3. ✅ Provide clear descriptions with examples
-4. ✅ Test expressions with sample data before adding
-5. ✅ Use appropriate categories for organization
-6. ✅ Follow SQL best practices
-
-#### For Code Naming
-1. ✅ Use UPPER_CASE_WITH_UNDERSCORES
-2. ✅ Keep codes short but descriptive (max 20 chars)
-3. ✅ Prefix related transformations (e.g., CAST_*, TRIM_*)
-4. ✅ Avoid special characters except underscore
-5. ✅ Make codes memorable and intuitive
-
-#### For Expression Templates
-1. ✅ Always include {field} placeholder
-2. ✅ Use valid Databricks SQL syntax
-3. ✅ Escape single quotes properly in expressions
-4. ✅ Test with various data types
-5. ✅ Document complex logic in description
-
-#### For Library Management
-1. ✅ Mark core/standard transformations as system
-2. ✅ Review and clean unused custom transformations monthly
-3. ✅ Keep categories organized (5-10 transformations per category max)
-4. ✅ Document transformation usage patterns
-5. ✅ Train users on new transformations when added
+1. ✅ **Complete SQL**: Include all JOINs, filters, and transformations
+2. ✅ **Documented join_metadata**: Complex patterns should have structured metadata
+3. ✅ **Tested**: Verify pattern SQL works with actual data
+4. ✅ **Reviewed**: Have another team member review before approving
 
 ---
 
-## Vector Search Sync
+## Loading Historical Mappings
 
-### Overview
-When semantic field records are created, updated, or deleted, the vector search index must be synchronized to reflect changes for AI suggestions.
+### Purpose
 
-### Automatic Sync Triggers
-The system **automatically triggers** vector search sync after:
-1. Creating a new semantic field
-2. Updating an existing semantic field  
-3. Deleting a semantic field
+Load past migration mappings as patterns for the AI to learn from.
 
-No manual intervention required!
+### Step 1: Prepare Data
 
-### Sync Process
+Create a CSV or table with historical mappings:
 
-**Step 1: Database Change**
-Admin creates/updates/deletes semantic field via UI or SQL.
+| Column | Description |
+|--------|-------------|
+| tgt_table_name | Target table logical name |
+| tgt_column_name | Target column logical name |
+| source_expression | Complete SQL expression |
+| source_tables | Pipe-separated source tables |
+| source_columns | Pipe-separated source columns |
+| source_descriptions | Descriptions for semantic field |
+| join_metadata | JSON structure for complex patterns |
 
-**Step 2: Trigger Sync**
-Immediately after commit, backend calls:
-```python
-workspace_client.vector_search_indexes.sync_index(index_name)
-```
+### Step 2: Load into Staging
 
-**Step 3: Monitor Result**
-
-**Success (Backend Logs):**
-```
-================================================================================
-[Vector Search Sync] Triggering sync for index: prod_db.source2target.semantic_fields_vs
-================================================================================
-[Vector Search Sync] ✅ Sync triggered successfully
-[Vector Search Sync] Note: Full sync may take a few moments to complete
-================================================================================
-```
-
-**Failure (Backend Logs):**
-```
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-[Vector Search Sync] ⚠️ Warning: Could not sync vector search index
-[Vector Search Sync] Error type: HTTPError
-[Vector Search Sync] Error message: Endpoint not responding
-[Vector Search Sync] The index will auto-sync eventually (may take 5-10 minutes)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-```
-
-**Step 4: Propagation**
-- Sync trigger is immediate
-- Full propagation takes 30-60 seconds
-- AI suggestions reflect changes after propagation
-- Users may see slight delay in new fields appearing
-
-### Monitoring Sync
-
-#### Check Backend Logs
-1. Go to Databricks workspace
-2. Navigate to **Apps** → Your App
-3. Click **"Logs"** tab
-4. Filter for "Vector Search Sync"
-5. Look for success (✅) or warning (⚠️) messages
-
-#### Success Indicators
-- ✅ "Sync triggered successfully" in logs
-- ✅ No error messages
-- ✅ AI suggestions include new/updated fields within 1-2 minutes
-- ✅ Deleted fields disappear from suggestions
-
-#### Failure Indicators
-- ⚠️ Warning messages in logs
-- ⚠️ Error type and detailed message shown
-- ⚠️ AI suggestions don't reflect changes immediately
-- ⚠️ May need to wait for auto-sync (5-10 minutes)
-
-### Manual Sync Fallback
-
-If automatic sync fails repeatedly:
-
-**Option 1: Via Databricks UI**
-1. Go to **Compute** → **Vector Search**
-2. Find your index
-3. Click **"Sync Now"** button
-4. Wait for completion (usually 1-2 minutes)
-
-**Option 2: Via Databricks SQL**
+Upload CSV to Unity Catalog as a table:
 ```sql
--- Force refresh of vector search index
-REFRESH VECTOR SEARCH INDEX catalog.schema.semantic_fields_vs;
+CREATE TABLE oztest_dev.smartmapper.historical_mappings_staging
+USING CSV
+OPTIONS (header = true, path = '/path/to/historical_mappings.csv');
 ```
 
-**Option 3: Via Python API**
-```python
-from databricks.sdk import WorkspaceClient
+### Step 3: Insert as Patterns
 
-w = WorkspaceClient()
-w.vector_search_indexes.sync_index("catalog.schema.semantic_fields_vs")
+```sql
+INSERT INTO oztest_dev.smartmapper.mapped_fields (
+  semantic_field_id,
+  source_expression,
+  source_tables,
+  source_columns,
+  source_descriptions,
+  source_semantic_field,
+  join_metadata,
+  mapping_status,
+  mapping_source,
+  project_id,
+  is_approved_pattern,
+  pattern_approved_by,
+  pattern_approved_ts,
+  mapped_by,
+  mapped_ts
+)
+SELECT 
+  sf.semantic_field_id,
+  h.source_expression,
+  h.source_tables,
+  h.source_columns,
+  h.source_descriptions,
+  CONCAT(
+    'SOURCE TABLES: ', COALESCE(h.source_tables, ''),
+    ' | SOURCE COLUMNS: ', COALESCE(h.source_columns, ''),
+    ' | DESCRIPTIONS: ', COALESCE(h.source_descriptions, '')
+  ) AS source_semantic_field,
+  h.join_metadata,
+  'ACTIVE',
+  'BULK_UPLOAD',
+  NULL,  -- No project = global pattern
+  TRUE,  -- Mark as approved pattern
+  'admin@example.com',
+  CURRENT_TIMESTAMP(),
+  'admin@example.com',
+  CURRENT_TIMESTAMP()
+FROM historical_mappings_staging h
+JOIN semantic_fields sf 
+  ON h.tgt_table_name = sf.tgt_table_name 
+  AND h.tgt_column_name = sf.tgt_column_name;
 ```
 
-### Troubleshooting Sync
+### Step 4: Sync Vector Index
 
-#### Common Issues
-
-**1. Vector Search Endpoint Stopped**
-- **Symptom**: Sync fails with "endpoint not available"
-- **Solution**: Start the vector search endpoint in Databricks
-
-**2. Index Not Found**
-- **Symptom**: Sync fails with "index does not exist"
-- **Solution**: Verify index name in Settings matches actual index
-
-**3. Permissions Issues**
-- **Symptom**: Sync fails with "access denied"
-- **Solution**: Check service principal has sync permissions on index
-
-**4. Network Issues**
-- **Symptom**: Sync fails with timeout
-- **Solution**: Check Databricks workspace connectivity
-
-**5. Service Disruption**
-- **Symptom**: All syncs failing
-- **Solution**: Check Databricks status page for outages
+After loading patterns, sync the vector search index:
+```sql
+-- The system auto-syncs, but you can force it:
+REFRESH VECTOR SEARCH INDEX oztest_dev.smartmapper.mapped_fields_vs;
+```
 
 ---
 
-## Mapping Management
+## User & Team Management
 
-### Viewing All Mappings (Admin)
+### Admin Group Configuration
 
-Admins see **all mappings** from all users in View Mappings:
-- No user filter applied
-- Can see `mapped_by` column showing who created each mapping
-- Can export all mappings
+1. Navigate to **Settings** → **Security**
+2. Set **Admin Group Name** to your Databricks workspace group
+3. Users in this group see "Admin" badge and access Administration menu
 
-Regular users only see their own mappings.
+### Project Team Access
 
-### Export All Mappings
+Projects support team-based access:
 
-1. Navigate to **View Mappings**
-2. Click **"Export Mappings"** button
-3. CSV downloads with complete mapping details:
-   - Single row per mapping
-   - All source fields (pipe-separated)
-   - Complete SQL transformation expressions
-   - Join conditions
-   - User metadata
+1. **Creator**: User who creates the project (always has access)
+2. **Team Members**: Users added by email to `team_members` column
 
-**Admin Export** includes all users' mappings.  
-**User Export** includes only their own mappings.
-
-### Bulk Operations
-
-Currently not implemented via UI, but can be done via SQL:
-
-**Bulk Delete Mappings:**
+**Adding Team Members:**
+- Via UI: Project Settings → Team Members
+- Via SQL:
 ```sql
--- Delete all INACTIVE mappings
-DELETE FROM catalog.schema.mapped_fields WHERE mapping_status = 'INACTIVE';
-DELETE FROM catalog.schema.mapping_details WHERE mapped_field_id NOT IN (SELECT mapped_field_id FROM catalog.schema.mapped_fields);
-DELETE FROM catalog.schema.mapping_joins WHERE mapped_field_id NOT IN (SELECT mapped_field_id FROM catalog.schema.mapped_fields);
+UPDATE mapping_projects
+SET team_members = 'user1@example.com|user2@example.com'
+WHERE project_id = 1;
 ```
 
-**Bulk Update Status:**
-```sql
--- Set all user's mappings to INACTIVE
-UPDATE catalog.schema.mapped_fields 
-SET mapping_status = 'INACTIVE', updated_ts = CURRENT_TIMESTAMP()
-WHERE mapped_by = 'user@example.com';
-```
+### Permissions Matrix
+
+| Permission | Admin | Project Owner | Team Member |
+|------------|-------|---------------|-------------|
+| Create projects | ✅ | ✅ | ✅ |
+| View own projects | ✅ | ✅ | ✅ |
+| View team projects | ✅ | ✅ | ✅ |
+| View all projects | ✅ | ❌ | ❌ |
+| Edit project settings | ✅ | ✅ | ❌ |
+| Add team members | ✅ | ✅ | ❌ |
+| Delete project | ✅ | ✅ | ❌ |
+| Semantic Management | ✅ | ❌ | ❌ |
+| Approve patterns | ✅ | ❌ | ❌ |
+| System Configuration | ✅ | ❌ | ❌ |
 
 ---
 
 ## System Monitoring
 
-### System Status Dashboard (Home Page)
+### System Status Dashboard
 
-**Database Connection**
-- **Status**: Connected / Failed
-- **Checks**: Warehouse accessibility, table access, authentication
-- **Troubleshooting**: 
-  - Verify warehouse is running
-  - Check OAuth/service principal permissions
-  - Validate HTTP path in Settings
+The Home page shows system health:
 
-**Vector Search**
-- **Status**: Available / Unavailable / Not Configured
-- **Checks**: Endpoint running, index accessible, sync capability
-- **Troubleshooting**:
-  - Verify endpoint is running
-  - Check index exists and name is correct
-  - Validate endpoint name in Settings
-
-**AI Model**
-- **Status**: Ready / Not Ready / Not Configured
-- **Checks**: Model endpoint status, inference capability
-- **Troubleshooting**:
-  - Verify endpoint is deployed and running
-  - Check endpoint name matches Settings
-  - Review Model Serving logs in Databricks
-
-**Configuration**
-- **Status**: Valid / Invalid
-- **Checks**: All required fields present, format validation
-- **Troubleshooting**:
-  - Review Settings page for missing fields
-  - Validate field formats
-  - Check console for error messages
+| Component | Status | What it checks |
+|-----------|--------|----------------|
+| Database Connection | ✅/❌ | Warehouse accessible, tables exist |
+| Vector Search | ✅/❌ | Endpoint running, index accessible |
+| AI Model | ✅/❌ | LLM endpoint responding |
+| Configuration | ✅/❌ | All required settings present |
 
 ### Performance Metrics
 
 **Typical Query Times:**
-- Home page load: 2-5 seconds
-- Unmapped fields: 5-10 seconds
-- Mapped fields: 5-10 seconds
-- Semantic fields: 10-15 seconds
-- Vector search: 15-25 seconds
-- AI suggestions: 20-30 seconds total
+- Project list: 2-3 seconds
+- Target table list: 2-3 seconds
+- Suggestions load: 3-5 seconds
+- AI discovery (per column): 2-5 seconds
 
 **If Queries Are Slow:**
 1. Check warehouse state (serverless may need warmup)
-2. Review data volume (large tables = slower)
+2. Review data volume
 3. Monitor warehouse utilization
-4. Check network latency
-5. Consider warehouse scaling (larger size)
-
-### Database Warehouse Recommendations
-
-**Serverless (Recommended for Cost):**
-- ✅ Starts on-demand
-- ✅ Scales automatically
-- ⚠️ Initial queries slow (cold start)
-- ✅ Cost-effective for intermittent use
-
-**Classic (Recommended for Performance):**
-- ✅ Always running (if configured)
-- ✅ Consistent fast performance
-- ⚠️ Higher cost
-- ✅ Best for heavy usage
+4. Consider warehouse scaling
 
 ### Accessing Logs
 
-**Backend Application Logs:**
+**Backend Logs:**
 1. Go to Databricks workspace
-2. Navigate to **Apps**
-3. Select your app
-4. Click **"Logs"** tab
-5. Filter by:
-   - Time period
-   - Log level (ERROR, INFO, DEBUG)
-   - Service name (e.g., "Mapping Service V2", "Vector Search Sync")
-
-**Log Format:**
-```
-[Service Name] Message type: Details
-```
-
-**Examples:**
-```
-[Semantic Service] Successfully updated record ID: 42
-[Vector Search Sync] ✅ Sync triggered successfully
-[Mapping Service V2] Creating mapping: slv_member.full_name
-[Transformation Service] Created transformation: FORMAT_PHONE
-```
-
----
-
-## Database Schema V2
-
-### Schema Overview
-
-Version 2.0 uses normalized tables for multi-field mapping:
-
-```
-semantic_fields (target field definitions)
-       ↓ (semantic_field_id FK)
-mapped_fields (target fields with mappings)
-       ↓ (mapped_field_id FK)
-       ├─ mapping_details (source fields: order, transformations)
-       └─ mapping_joins (join conditions for multi-table)
-
-unmapped_fields (source fields awaiting mapping)
-
-transformation_library (reusable transformation templates)
-
-mapping_feedback (AI suggestion feedback)
-```
-
-### Key Tables
-
-**semantic_fields**
-- Primary Key: `semantic_field_id`
-- Vector Search Column: `semantic_field` (auto-generated)
-- Purpose: Define all possible target fields
-
-**unmapped_fields**
-- Primary Key: `unmapped_field_id`
-- Filtered By: `uploaded_by`
-- Purpose: Source fields to be mapped
-
-**mapped_fields**
-- Primary Key: `mapped_field_id`
-- Foreign Key: `semantic_field_id` → semantic_fields
-- Filtered By: `mapped_by` (users see only their own)
-- Purpose: One row per target field with mapping
-
-**mapping_details**
-- Primary Key: `mapping_detail_id`
-- Foreign Key: `mapped_field_id` → mapped_fields
-- Ordered By: `field_order`
-- Contains: `transformations` (SQL expression)
-- Purpose: Individual source fields in each mapping
-
-**mapping_joins**
-- Primary Key: `mapping_join_id`
-- Foreign Key: `mapped_field_id` → mapped_fields
-- Ordered By: `join_order`
-- Purpose: Join conditions for multi-table mappings
-
-**transformation_library**
-- Primary Key: `transformation_id`
-- Unique: `transformation_code`
-- Protected: `is_system` (boolean)
-- Purpose: Reusable SQL transformation templates
-
-### Column Name Reference
-
-⚠️ **Important Column Names** (commonly confused):
-
-| Table | Primary Key | Foreign Key | Notes |
-|-------|-------------|-------------|-------|
-| mapped_fields | `mapped_field_id` | - | NOT `mapping_id` |
-| mapping_details | `mapping_detail_id` | `mapped_field_id` | NOT `detail_id`, NOT `mapping_id` |
-| mapping_joins | `mapping_join_id` | `mapped_field_id` | NOT `mapping_id` |
-| - | - | - | - |
-| mapping_details | - | - | Column: `transformations` (NOT `transformation_expr`) |
+2. Navigate to **Apps** → Your App
+3. Click **"Logs"** tab
+4. Filter by service name:
+   - `[Projects Router]` - Project API calls
+   - `[Target Tables Service]` - Table operations
+   - `[Suggestion Service]` - AI suggestion generation
+   - `[Vector Search]` - Search operations
 
 ---
 
 ## Troubleshooting
 
-### Transformation Library Issues
+### Common Issues
 
-**Cannot Edit/Delete System Transformation**
-- **Symptom**: Edit/delete buttons grayed out
-- **Cause**: Transformation marked as system
-- **Solution**: This is by design to protect core transformations
+**1. Project Not Loading**
+- **Symptom**: Spinner indefinitely
+- **Cause**: Database connection or warehouse asleep
+- **Solution**: Check warehouse status, wait for warmup
 
-**Duplicate Code Error**
-- **Symptom**: "Transformation with code 'XXX' already exists"
-- **Cause**: Code must be unique
-- **Solution**: Choose different code or edit existing transformation
+**2. Discovery Fails**
+- **Symptom**: Table stuck in DISCOVERING
+- **Cause**: LLM endpoint down or timeout
+- **Solution**: Check AI model endpoint status, retry
 
-**Expression Validation Error**
-- **Symptom**: "Expression must include {field} placeholder"
-- **Cause**: SQL expression missing required {field}
-- **Solution**: Add {field} where field name should appear
+**3. No Suggestions Generated**
+- **Symptom**: 0 suggestions after discovery
+- **Cause**: No patterns found, no source fields match
+- **Solution**: Check patterns exist, verify source descriptions
 
-### Vector Search Sync Issues
+**4. Vector Search Unavailable**
+- **Symptom**: AI can't find matches
+- **Cause**: Endpoint stopped or index not synced
+- **Solution**: Start endpoint, sync index
 
-**Sync Always Fails**
-- **Symptom**: ⚠️ warning in logs, changes not in AI suggestions
-- **Cause**: Vector search endpoint or permissions issue
-- **Solution**:
-  1. Check endpoint is running in Databricks
-  2. Verify index exists
-  3. Check service principal permissions
-  4. Try manual sync
+**5. Team Members Can't See Project**
+- **Symptom**: User not seeing shared project
+- **Cause**: Email not in team_members
+- **Solution**: Add user's exact email to team_members
 
-**Sync Succeeds But Changes Not Visible**
-- **Symptom**: ✅ success but AI doesn't show new fields
-- **Cause**: Sync propagation delay
-- **Solution**: Wait 1-2 minutes, then test again
+### Debug Queries
 
-### Mapping Issues
+**Check project data:**
+```sql
+SELECT * FROM mapping_projects WHERE project_id = 1;
+```
 
-**Mapping Update Fails**
-- **Symptom**: Error when editing transformation
-- **Cause**: Backend column name mismatch (all fixed in v2)
-- **Solution**: Should work now; check logs if still failing
+**Check table status:**
+```sql
+SELECT * FROM target_table_status WHERE project_id = 1;
+```
 
-**Transformation Expression Not Updating**
-- **Symptom**: Changed transformation but expression not updated
-- **Cause**: Was a bug, now fixed (Step 4 in update process)
-- **Solution**: Update again; should rebuild expression
+**Check suggestion counts:**
+```sql
+SELECT suggestion_status, COUNT(*) 
+FROM mapping_suggestions 
+WHERE project_id = 1 
+GROUP BY suggestion_status;
+```
 
-### Settings Issues
-
-**Database Connection Failed**
-- **Symptom**: "Database Connection Failed" on Home
-- **Solution**:
-  1. Verify SQL warehouse is running
-  2. Check HTTP path is correct
-  3. Test OAuth token generation
-  4. Review backend logs
-  5. Increase timeout if serverless
-
-**Vector Search Unavailable**
-- **Symptom**: "Vector Search Unavailable" on Home
-- **Solution**:
-  1. Verify endpoint is running
-  2. Check index name matches Settings
-  3. Ensure index is synced
-  4. Test endpoint accessibility
-
-**AI Model Not Ready**
-- **Symptom**: "AI Model Not Ready" on Home
-- **Solution**:
-  1. Check model endpoint is deployed
-  2. Verify endpoint is in "Ready" state
-  3. Confirm endpoint name in Settings
-  4. Test endpoint with sample query
+**Check pattern availability:**
+```sql
+SELECT tgt_table_name, COUNT(*) AS pattern_count
+FROM mapped_fields mf
+JOIN semantic_fields sf ON mf.semantic_field_id = sf.semantic_field_id
+WHERE mf.is_approved_pattern = TRUE
+GROUP BY tgt_table_name;
+```
 
 ---
 
 ## Maintenance
 
 ### Daily Tasks
-- ✅ Monitor system status dashboard (all green ✅)
+- ✅ Monitor system status dashboard
 - ✅ Review backend logs for errors
-- ✅ Check user-reported issues
-- ✅ Verify vector search sync working
+- ✅ Check active project progress
 
 ### Weekly Tasks
-- ✅ Review semantic fields for accuracy
-- ✅ Check transformation library usage
-- ✅ Monitor mapping activity trends
-- ✅ Clean unused custom transformations
-- ✅ Export mappings for backup
+- ✅ Review pending suggestions older than 7 days
+- ✅ Check pattern library coverage
+- ✅ Monitor vector search sync status
+- ✅ Export project progress reports
 
 ### Monthly Tasks
 - ✅ Audit admin group membership
-- ✅ Review Settings for updates needed
-- ✅ Analyze mapping patterns and quality
+- ✅ Review and clean archived projects
+- ✅ Analyze AI suggestion accuracy
 - ✅ Update documentation as needed
-- ✅ Test disaster recovery procedures
-- ✅ Review and optimize database indexes
+- ✅ Review and promote high-quality mappings to patterns
 
 ### Backup Strategy
 
 **Configuration:**
 - Backup `app_config.json` before changes
 - Store in version control
-- Document configuration changes
 
 **Database Tables:**
-- Use Databricks table snapshots (Delta Lake)
+- Use Delta Lake time travel for recovery
 - Export critical tables weekly
 - Test restore procedures monthly
-- Document backup schedule
-
-**Transformation Library:**
-- Export transformations to SQL script
-- Version control custom transformations
-- Document transformation business logic
 
 ---
 
@@ -1063,58 +907,44 @@ mapping_feedback (AI suggestion feedback)
 - Users authenticated via **Databricks OAuth**
 - Email captured from `X-Forwarded-Email` header
 - No separate login required
-- Session managed by Databricks
 
 ### Authorization
 - Admin access via **Databricks group membership**
-- Regular users limited to own mappings
-- Row-level filtering by `mapped_by` email field
-- Transformation library changes admin-only
+- Project access via `created_by` or `team_members`
+- Stored procedures use `SQL SECURITY INVOKER`
 
 ### Data Access
-- Users see only their own mappings (by `mapped_by`)
-- Admins can view all data via UI and direct database access
+- Users see only projects they own or are team members of
+- Admins can view all projects
 - Service principal has full read/write to tables
-- Audit trail tracks all user actions
 
 ### Best Practices
 1. ✅ Use service principal for app deployment
-2. ✅ Limit admin group to 3-5 trusted users
+2. ✅ Limit admin group to trusted users
 3. ✅ Enable audit logging in Databricks
 4. ✅ Review access logs weekly
 5. ✅ Use HTTPS only (enforced by Databricks Apps)
 6. ✅ Keep dependencies updated
-7. ✅ Monitor for suspicious activity
-8. ✅ Document security procedures
-9. ✅ Regular security reviews
-
-### Compliance
-- User actions tracked via `mapped_by` and timestamps
-- Audit trail in all database tables
-- Access logs in Databricks
-- GDPR: User data filterable/deletable by email
 
 ---
 
 ## Support Resources
 
 ### Documentation
-- **Quick Start**: [QUICK_START.md](QUICK_START.md)
 - **User Guide**: [USER_GUIDE.md](USER_GUIDE.md)
+- **Quick Start**: [QUICK_START.md](QUICK_START.md)
 - **Developer Guide**: [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
-- **Database Schema**: [database/V2_SCHEMA_DIAGRAM.md](../database/V2_SCHEMA_DIAGRAM.md)
-- **Feature Docs**: Check `/` root for `*_FEATURE.md` and `*_FIX.md` files
+- **Architecture**: [architecture/TARGET_FIRST_WORKFLOW.md](architecture/TARGET_FIRST_WORKFLOW.md)
 
-### Getting Help
-1. Review this admin guide
-2. Check system logs
-3. Review Databricks documentation
-4. Contact development team
-5. Check GitHub issues (if applicable)
+### Database Files
+- **V4 Schema**: `database/V4_TARGET_FIRST_SCHEMA.sql`
+- **Stored Procedures**: `database/V4_STORED_PROCEDURES.sql`
+- **Test Data**: `database/V4_TEST_DATA.sql`
+- **Load Historical**: `database/V4_LOAD_HISTORICAL_MAPPINGS.sql`
 
 ---
 
-**Version**: 2.0  
-**Last Updated**: November 2025  
-**Platform**: Source-to-Target Mapping (Multi-Field V2)  
-**New Features**: Transformation library, Mapping editor, Export, Vector auto-sync
+**Version**: 4.0 - Target-First Workflow
+**Last Updated**: December 2025
+**Platform**: Smart Mapper (Target-First V4)
+**Key Features**: Project management, Stored procedures, Team collaboration, Pattern library

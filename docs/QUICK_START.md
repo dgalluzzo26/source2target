@@ -1,477 +1,345 @@
-# Quick Start Guide
+# Quick Start Guide - Smart Mapper V4
 
-## Welcome to the Source-to-Target Mapping Platform! 🎉
+## Welcome to Smart Mapper! 🎉
 
-This guide will get you started creating field mappings in just a few minutes using the V2 multi-field mapping system.
-
----
-
-## Navigation Overview
-
-The application has a clean sidebar navigation with two sections:
-
-### 📊 Mapping Workflow (All Users)
-- **Home** - System status and overview
-- **Create Mappings** - Map source fields to targets
-- **View Mappings** - Review and manage existing mappings
-
-### 🔧 Administration (Admins Only)
-- **Semantic Management** - Manage target field definitions
-- **Transformation Management** - Transformation library management
-- **Settings** - System configuration
+Get started with the **Target-First** workflow in just a few minutes. This guide walks you through creating your first mapping project.
 
 ---
 
-## The 6-Step Mapping Process
+## The V4 Target-First Workflow
 
-Here's the complete workflow for creating a field mapping:
+Smart Mapper V4 uses a **project-based, target-first** approach:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 1: Check System Status                                   │
-│  ✅ Verify all systems are operational                         │
+│  STEP 1: Create a Project                                       │
+│  📁 Give your mapping project a name                            │
 └─────────────────────────────────────────────────────────────────┘
                             ⬇️
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 2: Navigate to Create Mappings                           │
-│  ➕ Open the unmapped fields page                              │
+│  STEP 2: Upload Source Fields                                   │
+│  📤 Upload CSV with ALL your source columns                     │
 └─────────────────────────────────────────────────────────────────┘
                             ⬇️
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 3: Select Source Field(s)                                │
-│  ☑️ Choose 1 or more fields → Click "Map Selected Fields"      │
+│  STEP 3: Initialize Target Tables                               │
+│  🎯 System creates list of target tables to map                 │
 └─────────────────────────────────────────────────────────────────┘
                             ⬇️
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 4: Choose Target Field                                   │
-│  🤖 Use AI Suggestions  OR  🔍 Manual Search                   │
+│  STEP 4: Start AI Discovery                                     │
+│  🤖 AI suggests mappings for ALL columns in a table             │
 └─────────────────────────────────────────────────────────────────┘
                             ⬇️
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 5: Configure Mapping                                     │
-│  🔧 Set transformations + concatenation + joins                │
+│  STEP 5: Review & Approve Suggestions                           │
+│  ✅ Approve, ✏️ Edit, or ❌ Reject each suggestion               │
 └─────────────────────────────────────────────────────────────────┘
                             ⬇️
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 6: Save & Verify                                         │
-│  💾 Save mapping → View in "View Mappings"                     │
+│  STEP 6: Complete & Export                                      │
+│  📊 Track progress, mark tables complete, export results        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Quick Summary:**
-1. **Check** system status → 2. **Navigate** to Create Mappings → 3. **Select** source fields → 4. **Choose** target field → 5. **Configure** transformations → 6. **Save** and verify
+---
+
+## Step 1: Create a Project
+
+1. Click **"+ New Project"** on the Projects dashboard
+2. Enter project details:
+   - **Name**: e.g., "DMES Member Migration Q1 2025"
+   - **Description**: Optional but helpful
+   - **Target Domains**: Filter (e.g., "Member" or "Member|Claims")
+3. Click **"Create"**
+
+You'll be taken to your new project's detail page.
 
 ---
 
-## Step 1: Check System Status
+## Step 2: Upload Source Fields
 
-1. Click **"Home"** in the left sidebar (🏠 icon)
-2. Verify all system checks are green:
-   - ✅ **Database Connection** - SQL warehouse connectivity
-   - ✅ **Vector Search Available** - AI search engine ready
-   - ✅ **AI Model Ready** - Suggestion engine operational
-   - ✅ **Configuration Valid** - System settings correct
+### Download the Template
 
-If any checks fail, contact your administrator.
+1. Click **"Upload Sources"** button
+2. Click **"Download Template"**
+3. Open the CSV template
 
----
+### Fill the Template
 
-## Step 2: Navigate to Create Mappings
+The template requires these columns:
 
-1. Click **"Create Mappings"** in the left sidebar (➕ icon)
-2. You'll see the **Unmapped Fields** table
-3. This shows all source fields waiting to be mapped
+| Column | Required | Example |
+|--------|----------|---------|
+| `src_table_name` | ✅ | `T_MEMBER` |
+| `src_table_physical_name` | ✅ | `t_member` |
+| `src_column_name` | ✅ | `MEMBER_ID` |
+| `src_column_physical_name` | ✅ | `member_id` |
+| `src_physical_datatype` | ✅ | `STRING` |
+| `src_nullable` | ✅ | `YES` or `NO` |
+| `src_comments` | ⚠️ **Critical!** | `Unique member identifier` |
+| `domain` | Optional | `member` |
 
----
+> ⚠️ **Important**: The `src_comments` field is **essential** for AI matching. Without descriptions, the AI cannot find good matches!
 
-## Step 3: Select Source Field(s)
+### Upload
 
-### For Single-Field Mapping
-1. Click the **checkbox** next to one source field
-2. Review the field details (table, column, datatype)
-
-### For Multi-Field Mapping
-1. Click **checkboxes** next to multiple related fields
-   - Example: FIRST_NAME and LAST_NAME → full_name
-   - Example: STREET, CITY, STATE, ZIP → full_address
-2. Fields will be combined in the order selected
-
-### Then Click "Map Selected Fields"
-3. Click the **"Map Selected Fields"** button
-4. The mapping wizard opens
+1. Click **"Select CSV File"**
+2. Choose your completed CSV
+3. Click **"Upload"**
+4. Verify: "Uploaded X fields from Y tables"
 
 ---
 
-## Step 4: Choose Your Target Field
+## Step 3: Initialize Target Tables
 
-The mapping wizard shows two ways to find your target field:
+1. On your project page, click **"Initialize Tables"**
+2. System queries target definitions from `semantic_fields`
+3. Creates a status row for each target table
+4. You'll see a list like:
 
-### Option A: Get AI Suggestions (Recommended) 🤖
-
-1. **Configure AI Settings** (optional):
-   - **Vector Results**: 25 (default is fine)
-   - **AI Results**: 10 (default is fine)
-   - **User Feedback**: Add context like "patient demographics" or "address fields"
-
-2. **Click "🤖 Get AI Suggestions"**
-   - Wait 15-25 seconds for processing
-   - AI analyzes field names, descriptions, and semantics
-
-3. **Review Suggestions Table**:
-   - **Rank**: Ordered by confidence score
-   - **Target Table & Column**: Destination field name
-   - **Confidence Score**: Higher is better
-     - 0.8-1.0 = Excellent match (green)
-     - 0.6-0.8 = Good match (blue)
-     - 0.4-0.6 = Possible match (yellow)
-   - **Reasoning**: Why AI suggested this match
-
-4. **Select Best Match**:
-   - Click **"Select"** button on the best suggestion
-   - Target field populates in the wizard
-
-### Option B: Manual Search 🔍
-
-1. **Enter Search Term** in the search box
-   - Try table names: "member", "claim", "provider"
-   - Try column names: "name", "date", "address"
-   - Try descriptions: "patient identifier", "service date"
-
-2. **Click "🔍 Search"**
-   - Results appear (up to 50 matches)
-   - Sorted by table and column name
-
-3. **Select Target Field**:
-   - Click **"Select"** button on desired field
-   - Target field populates in the wizard
+| Table | Status | Columns | Progress |
+|-------|--------|---------|----------|
+| MBR_CNTCT | NOT_STARTED | 25 | 0% |
+| MBR_FNDTN | NOT_STARTED | 18 | 0% |
 
 ---
 
-## Step 5: Configure Your Mapping
+## Step 4: Start AI Discovery
 
-Once you've selected a target, configure how source fields map to it:
+1. Click on a target table (e.g., `MBR_CNTCT`)
+2. Click **"Start Discovery"** (▶️ play icon)
+3. Status changes to **DISCOVERING**
+4. Wait 1-5 minutes (depending on table size)
+5. When done, status changes to **SUGGESTIONS_READY**
 
-### Read-Only Target Information
-- **Target Table**: Shows the selected target table
-- **Target Column**: Shows the selected target column
-- These are **locked** - to change, restart the wizard
-
-### Configure Source Fields
-
-For each selected source field, you can:
-
-#### 1. Apply Transformations
-Click the transformation dropdown for each field:
-
-**Pre-built Transformations:**
-- **TRIM** - Remove whitespace
-- **UPPER** - Convert to uppercase
-- **LOWER** - Convert to lowercase
-- **TRIM_UPPER** - Trim and uppercase
-- **CAST_STRING** - Convert to string
-- **CAST_INT** - Convert to integer
-- **COALESCE** - Replace NULL with empty string
-
-**Custom Transformations:**
-- Select "Custom" from dropdown
-- Enter your own SQL expression
-- Example: `REGEXP_REPLACE(field, '[^0-9]', '')`
-
-#### 2. Set Concatenation Strategy (Multi-Field Only)
-
-If you selected **multiple source fields**, choose how to combine them:
-
-- **SPACE** - Join with space
-  - Example: "John" + "Doe" = `"John Doe"`
-  
-- **COMMA** - Join with comma and space
-  - Example: "John" + "Doe" = `"John, Doe"`
-  
-- **PIPE** - Join with pipe delimiter
-  - Example: "John" + "Doe" = `"John|Doe"`
-  
-- **CUSTOM** - Use your own separator
-  - Enter separator: `" - "`, `"_"`, `" / "`, etc.
-  - Example: "John" + "Doe" = `"John - Doe"`
-  
-- **NONE** - No concatenation (uses last field)
-  - Example: "John" + "Doe" = `"Doe"`
-
-#### 3. Add Join Conditions (If Needed)
-
-If your source fields come from different tables:
-
-1. **Click "+ Add Join"** button
-2. **Fill Join Details**:
-   - **Left Table**: First table name
-   - **Left Column**: Join column from first table
-   - **Join Type**: INNER, LEFT, RIGHT, or FULL
-   - **Right Table**: Second table name
-   - **Right Column**: Join column from second table
-
-3. **Example Join**:
-   ```
-   t_member.member_id LEFT JOIN t_address.member_id
-   ```
-
-4. **Multiple Joins**: Click "+ Add Join" again to add more
+**While waiting, you can:**
+- Start discovery on other tables
+- View project statistics
+- Work on already-ready tables
 
 ---
 
-## Step 6: Save Your Mapping
+## Step 5: Review Suggestions
 
-1. **Review Everything**:
-   - Source fields and order (shown as badges: 1️⃣, 2️⃣, 3️⃣)
-   - Transformations applied to each field
-   - Concatenation strategy (if multiple fields)
-   - Join conditions (if applicable)
+### Open Review Panel
 
-2. **View SQL Expression Preview** (if shown):
-   - Complete SQL transformation expression
-   - Verify it looks correct
+1. Click **"Review Suggestions"** on a table with status SUGGESTIONS_READY
+2. You'll see a list of all columns with their AI suggestions
 
-3. **Click "Save Mapping"**:
-   - Mapping is created immediately
-   - Success message appears
-   - Wizard closes automatically
+### Each Suggestion Shows:
 
-4. **Result**:
-   - Source fields removed from unmapped list
-   - New mapping appears in "View Mappings"
+```
+┌────────────────────────────────────────────────────────────────┐
+│ ✅ ADDR_1_TXT (First address line)              Confidence: 94%│
+│ Pattern: UNION_WITH_JOINS                                      │
+│ Sources: my_member_base.ADDR_LINE_1, my_member_addr.STREET_1   │
+│                                                                │
+│ [View SQL ▼] - Click to see the complete SQL                  │
+│                                                                │
+│ [✓ Approve] [✎ Edit] [✗ Reject] [→ Skip]                      │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### Actions
+
+| Action | When to Use | What Happens |
+|--------|-------------|--------------|
+| **Approve** ✓ | Suggestion is correct | Creates final mapping |
+| **Edit** ✏️ | SQL needs small changes | Opens SQL editor, then creates mapping |
+| **Reject** ✗ | Suggestion is wrong | Records feedback, column unmatched |
+| **Skip** → | Not needed now | Column skipped, doesn't block completion |
+
+### Bulk Actions
+
+- **Approve All High (≥85%)**: Auto-approve high-confidence suggestions
+- **Expand All**: Show SQL for all suggestions
 
 ---
 
-## Step 7: View and Manage Your Mappings
+## Step 6: Complete & Track Progress
 
-### View All Mappings
+### Table Progress
 
-1. Click **"View Mappings"** in the left sidebar (📋 icon)
-2. See your completed mappings in a data table
+As you approve suggestions:
+- Progress bar fills up
+- Counter shows: `15 / 25 columns mapped`
+- When all columns have a status → table marked **COMPLETE**
 
-### Understanding the Mappings Table
+### Project Dashboard
 
-**Each row shows:**
-- **Target Field**: Destination table.column
-- **Source Field(s)**: Origin fields with count badge
-- **Concatenation**: Strategy used (if multiple fields)
-- **Transformations**: Indicator if transformations applied
-- **Status**: ACTIVE or INACTIVE
-- **Created**: Timestamp
-- **Actions**: View, Edit, Delete buttons
+Your project page shows overall progress:
 
-### View Mapping Details
+```
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│    Tables    │  │   Columns    │  │   Pending    │
+│    3 / 12    │  │   45 / 156   │  │     23       │
+│     25%      │  │     29%      │  │   Review →   │
+└──────────────┘  └──────────────┘  └──────────────┘
+```
 
-1. **Click the eye icon** (👁️) to see complete details:
-   - All source fields in order
-   - Individual field transformations
-   - Concatenation details
-   - Join conditions
+### Export Results
+
+1. Click **"Export Mappings"**
+2. CSV downloads with:
+   - Target table and column
    - Complete SQL expression
-   - Metadata (who created, when)
-
-### Edit a Mapping ✏️
-
-**What You CAN Edit:**
-- ✅ Transformation expressions on existing fields
-- ✅ Concatenation strategy and separator
-- ✅ Join conditions (add, modify, remove)
-
-**What You CANNOT Edit** (requires delete + recreate):
-- ❌ Target field
-- ❌ Add or remove source fields
-- ❌ Change field order
-
-**To Edit:**
-1. Click the **pencil icon** (✏️) on the mapping
-2. Modify transformations, concatenation, or joins in the dialog
-3. Click **"Save Changes"**
-4. Updates apply immediately
-
-### Delete a Mapping 🗑️
-
-1. Click the **trash icon** (🗑️) on the mapping
-2. Confirm the deletion
-3. Source fields return to unmapped list
-4. Mapping is permanently removed
-
-### Export Mappings 📥
-
-1. Click **"Export Mappings"** button in the toolbar
-2. CSV file downloads automatically
-3. File includes complete SQL transformation logic
-4. Filename: `mappings_export_YYYY-MM-DD.csv`
+   - Source tables and columns used
 
 ---
 
-## Complete Example: Mapping Full Name
+## Complete Example: Mapping MBR_CNTCT
 
-Let's walk through the complete **6-step process** with a real example:
+### Setup (Steps 1-3)
 
-### Scenario
-Map `FIRST_NAME` and `LAST_NAME` from the source system to a `full_name` target field.
+1. **Create Project**: "ACME State Migration"
+2. **Upload Sources**: 500 source fields from 12 tables
+3. **Initialize Tables**: 8 target tables appear
 
-### Step-by-Step Walkthrough
+### Map a Table (Steps 4-5)
 
-#### STEP 1: Check System Status ✅
-1. Click **"Home"** in the left sidebar
-2. Verify all indicators are green:
-   - ✅ Database Connection: Connected
-   - ✅ Vector Search: Available
-   - ✅ AI Model: Ready
-   - ✅ Configuration: Valid
-3. All systems operational - ready to proceed!
+1. Click on `MBR_CNTCT` (25 columns)
+2. Click **"Start Discovery"**
+3. Wait 3 minutes...
+4. Status: **SUGGESTIONS_READY**
+5. Click **"Review Suggestions"**
 
-#### STEP 2: Navigate to Create Mappings ➕
-1. Click **"Create Mappings"** in the left sidebar
-2. Unmapped Fields table loads
-3. See list of available source fields
+### Review Suggestions
 
-#### STEP 3: Select Source Field(s) ☑️
-1. Find and select fields:
-   - ☑️ FIRST_NAME (from t_member table)
-   - ☑️ LAST_NAME (from t_member table)
-2. Click **"Map Selected Fields"** button
-3. Mapping wizard opens
+**High Confidence (approve directly):**
+- ✅ `MBR_SK` - 96% confidence - Approve
+- ✅ `ADDR_1_TXT` - 94% confidence - Approve
+- ✅ `CITY_TXT` - 91% confidence - Approve
 
-#### STEP 4: Choose Target Field 🎯
-**Using AI Suggestions:**
-1. Click **"🤖 Get AI Suggestions"**
-2. Wait 15-20 seconds for AI processing
-3. Review suggestions:
-   - **Rank #1**: `slv_member.full_name` (confidence: 0.92) ⭐
-   - **Rank #2**: `slv_demographics.member_name` (confidence: 0.78)
-   - **Rank #3**: `slv_person.full_legal_name` (confidence: 0.65)
-4. Click **"Select"** on Rank #1 (best match)
-5. Target field populated: `slv_member.full_name`
+**Medium Confidence (review carefully):**
+- ⚠️ `CNTCT_TYP_CD` - 72% confidence - Check SQL, then Approve
 
-#### STEP 5: Configure Mapping 🔧
-**Configure Source Fields:**
-1. **FIRST_NAME** (Field 1️⃣):
-   - Transformation dropdown: Select "Trim and Upper"
-   - Expression: `UPPER(TRIM(first_name))`
+**Low Confidence (manual work):**
+- ❓ `CNTRY_CD` - 45% confidence - Edit SQL or Reject
 
-2. **LAST_NAME** (Field 2️⃣):
-   - Transformation dropdown: Select "Trim and Upper"
-   - Expression: `UPPER(TRIM(last_name))`
+**No Match Found:**
+- ❌ `CUSTOM_FIELD_1` - No pattern - Skip (not in target spec)
 
-**Set Concatenation:**
-3. Concatenation Strategy: **SPACE**
-4. Preview: `CONCAT(UPPER(TRIM(first_name)), ' ', UPPER(TRIM(last_name)))`
+### Complete Table
 
-**Review:**
-- Source: FIRST_NAME + LAST_NAME
-- Target: slv_member.full_name
-- Result: "JOHN DOE" (uppercase, trimmed, space-separated)
-
-#### STEP 6: Save & Verify 💾
-1. Click **"Save Mapping"**
-2. Success message: "Mapping created successfully!"
-3. Wizard closes
-4. **Verify:**
-   - Click **"View Mappings"** in sidebar
-   - Find row: `slv_member.full_name`
-   - Source shows: `FIRST_NAME | LAST_NAME` with badge "2 fields"
-   - Status: ACTIVE ✅
-   - Created: Just now
-
-**🎉 Mapping Complete!** The full_name field will now be populated by combining FIRST_NAME and LAST_NAME with the transformations applied.
+After reviewing all 25 columns:
+- 22 approved
+- 2 edited and approved
+- 1 skipped
+- Status: **COMPLETE** ✅
 
 ---
 
 ## Tips for Success
 
-### 🎯 Getting Better AI Suggestions
-- ✅ Select logically related fields together
-- ✅ Add descriptions to source fields when possible
-- ✅ Use the "User Feedback" field for context
-- ✅ Review top 3-5 suggestions, not just #1
-- ✅ Look for confidence scores above 0.7
+### 📝 Source Field Descriptions Matter!
 
-### ⚡ Efficient Workflow
-- ✅ Start with AI suggestions for most mappings
-- ✅ Use manual search for specific/known targets
-- ✅ Work on related fields in batches (e.g., all address fields)
-- ✅ Apply consistent transformations (e.g., TRIM all text fields)
-- ✅ Use edit feature instead of delete+recreate when possible
+**Bad:**
+```
+src_column_name: ADDR_L1
+src_comments: 
+```
 
-### 🔧 Using Transformations
-- ✅ **TRIM** for all text fields to remove whitespace
-- ✅ **UPPER** or **LOWER** for standardization
-- ✅ **CAST** when datatypes don't match
-- ✅ **COALESCE** to handle NULL values
-- ✅ Custom expressions for complex logic
+**Good:**
+```
+src_column_name: ADDR_L1
+src_comments: First line of member mailing address including street number
+```
 
-### 🔗 Multi-Field Mapping Best Practices
-- ✅ Select fields in logical order (First Name → Last Name, not reversed)
-- ✅ Choose appropriate concatenation strategy for your use case
-- ✅ Test final expression with sample data
-- ✅ Document complex mappings in your notes
-- ✅ Use NONE strategy only when you want just the last field
+### ⚡ Work Efficiently
 
-### 📋 Managing Your Mappings
-- ✅ Export regularly for backup
-- ✅ Review mappings periodically for accuracy
-- ✅ Use consistent naming in transformations
-- ✅ Set mappings to INACTIVE instead of deleting (if supported)
-- ✅ Document business rules in descriptions
+- ✅ Start multiple table discoveries at once
+- ✅ Use **"Approve All High"** for tables with good patterns
+- ✅ Focus manual review on low-confidence suggestions
+- ✅ Skip columns that aren't needed rather than spending time on them
+
+### 🤖 Understanding AI Confidence
+
+| Score | Action |
+|-------|--------|
+| 85%+ | Usually safe to approve directly |
+| 70-84% | Review the SQL before approving |
+| 50-69% | Check carefully, may need editing |
+| <50% | Consider manual mapping |
+
+### 👥 Team Collaboration
+
+- Add team members by email when creating the project
+- Different people can work on different tables
+- Everyone sees the same progress dashboard
 
 ---
 
-## Common Questions
+## What If...
 
-**Q: How many source fields can I map to one target?**  
-A: As many as needed! Common patterns use 2-4 fields, but you can map more.
+**Q: AI discovery is taking too long?**
+- Large tables (50+ columns) take 5-10 minutes
+- You can work on other tables while waiting
+- Check if AI model endpoint is healthy
 
-**Q: Can I change the order of source fields after saving?**  
-A: No, field order cannot be changed. You must delete and recreate the mapping.
+**Q: No suggestions for some columns?**
+- No historical pattern exists
+- Create a manual mapping
+- Your mapping becomes a pattern for future projects!
 
-**Q: What if I selected the wrong target field?**  
-A: Delete the mapping and create a new one. You cannot change the target field.
+**Q: Suggestion SQL looks wrong?**
+- Click **Edit** and fix it
+- Your edits create better patterns
 
-**Q: Can I use the same source field in multiple mappings?**  
-A: Yes! One source field can map to multiple different target fields.
+**Q: Made a mistake on an approval?**
+- Go to the approved mappings
+- Delete and redo, or edit if possible
 
-**Q: How long does AI take?**  
-A: Usually 15-25 seconds. If it takes longer, check system status.
+---
 
-**Q: What's a good confidence score?**  
-A: 0.8-1.0 is excellent, 0.6-0.8 is good, below 0.6 review carefully.
+## Confidence Score Legend
 
-**Q: Can I edit transformations after saving?**  
-A: Yes! Click the edit icon (✏️) on the mapping and change transformations.
+| Indicator | Score | Meaning |
+|-----------|-------|---------|
+| ✅ Green | 85-100% | High confidence - likely correct |
+| ⚠️ Yellow | 70-84% | Medium - review before approving |
+| 🟠 Orange | 50-69% | Low - needs attention |
+| ❌ Red | <50% | Very low - consider manual |
 
-**Q: What happens if I delete a mapping?**  
-A: Source fields return to the unmapped list and can be remapped.
+---
+
+## Navigation Reference
+
+### Mapping Workflow
+- **Projects** 📁 - Your mapping projects dashboard
+
+### Administration (Admins Only)
+- **Semantic Fields** 💾 - Manage target definitions
+- **Configuration** ⚙️ - System settings
+
+---
+
+## Your First Project Checklist
+
+- [ ] Create a new project
+- [ ] Download the source fields template
+- [ ] Fill template with source columns and **descriptions**
+- [ ] Upload source fields CSV
+- [ ] Click "Initialize Tables"
+- [ ] Select a target table
+- [ ] Start AI Discovery
+- [ ] Wait for suggestions
+- [ ] Review and approve/edit suggestions
+- [ ] Mark table complete
+- [ ] Repeat for remaining tables
+- [ ] Export final mappings
+
+**Congratulations! You've completed your first V4 mapping project!** 🎊
 
 ---
 
 ## Need More Help?
 
-📖 **Full User Guide**: [USER_GUIDE.md](USER_GUIDE.md) - Detailed feature documentation  
-⚙️ **Admin Guide**: [ADMIN_GUIDE.md](ADMIN_GUIDE.md) - For administrators  
-💻 **Developer Guide**: [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) - Technical reference
+📖 **Full User Guide**: [USER_GUIDE.md](USER_GUIDE.md)
+⚙️ **Admin Guide**: [ADMIN_GUIDE.md](ADMIN_GUIDE.md)
+🏗️ **Architecture**: [architecture/TARGET_FIRST_WORKFLOW.md](architecture/TARGET_FIRST_WORKFLOW.md)
 
 ---
 
-## Your First Mapping Checklist
-
-- [ ] Check system status (Home page - all green ✅)
-- [ ] Go to Create Mappings page
-- [ ] Select one or more unmapped fields
-- [ ] Get AI suggestions OR manual search
-- [ ] Select target field
-- [ ] Configure transformations (optional)
-- [ ] Set concatenation strategy (if multiple fields)
-- [ ] Add joins (if needed)
-- [ ] Save mapping
-- [ ] Verify in View Mappings page
-
-**Congratulations! You've completed your first mapping!** 🎊
-
-Continue creating more mappings using the same process. The more you use the platform, the faster and more efficient you'll become!
-
----
-
-**Version**: 2.0  
-**Last Updated**: November 2025  
-**Platform**: Source-to-Target Mapping (Multi-Field V2)
+**Version**: 4.0 - Target-First Workflow
+**Last Updated**: December 2025

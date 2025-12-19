@@ -173,16 +173,21 @@ async def initialize_target_tables(
     
     Call this after uploading source fields.
     """
+    print(f"[Projects Router] >>> initialize_target_tables ENDPOINT CALLED <<<")
+    print(f"[Projects Router] project_id={project_id}, domain={domain}")
     try:
         # Verify project exists
         project = await project_service.get_project_by_id(project_id)
+        print(f"[Projects Router] Project found: {project.get('project_name') if project else 'None'}")
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         
         # Use project's target_domains if no domain specified
         domain_filter = domain or project.get("target_domains")
+        print(f"[Projects Router] Using domain_filter: {domain_filter}")
         
         result = await project_service.initialize_target_tables(project_id, domain_filter)
+        print(f"[Projects Router] Result: {result}")
         return InitializeTablesResponse(
             project_id=project_id,
             tables_initialized=result["tables_initialized"],
