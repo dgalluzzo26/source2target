@@ -237,16 +237,38 @@
       v-model:visible="showUploadDialog" 
       modal 
       header="Upload Source Fields" 
-      :style="{ width: '500px' }"
+      :style="{ width: '600px' }"
     >
       <div class="upload-content">
-        <p>Upload a CSV file with your source fields. Required columns:</p>
-        <ul>
-          <li><code>src_table_name</code> - Source table name</li>
-          <li><code>src_column_name</code> - Source column name</li>
+        <Message severity="info" :closable="false">
+          <strong>Important:</strong> The <code>src_comments</code> field is essential for AI matching. 
+          Without descriptions, the AI cannot find the best source columns for your target fields.
+        </Message>
+        
+        <p class="mt-3">Download the template, fill in your source fields, and upload the CSV file.</p>
+        
+        <div class="template-section">
+          <Button 
+            label="Download Template" 
+            icon="pi pi-download" 
+            outlined
+            severity="secondary"
+            @click="handleDownloadTemplate"
+            v-tooltip.top="'Download CSV template with required format'"
+          />
+        </div>
+        
+        <h4>Required CSV Columns:</h4>
+        <ul class="field-list">
+          <li><code>src_table_name</code> - Logical source table name</li>
+          <li><code>src_table_physical_name</code> - Physical table name in database</li>
+          <li><code>src_column_name</code> - Logical source column name</li>
+          <li><code>src_column_physical_name</code> - Physical column name in database</li>
+          <li><code>src_physical_datatype</code> - Data type (STRING, INT, DATE, etc.)</li>
+          <li><code>src_nullable</code> - Whether column is nullable (YES/NO)</li>
+          <li><code>src_comments</code> - <strong>Column description (critical for AI matching)</strong></li>
+          <li><code>domain</code> - Domain category (optional, e.g., member, provider)</li>
         </ul>
-        <p>Optional columns: <code>src_table_physical_name</code>, <code>src_column_physical_name</code>, 
-           <code>src_physical_datatype</code>, <code>src_comments</code>, <code>domain</code></p>
         
         <FileUpload
           mode="basic"
@@ -254,7 +276,7 @@
           :maxFileSize="10000000"
           @select="handleFileSelect"
           chooseLabel="Select CSV File"
-          class="w-full"
+          class="w-full mt-3"
         />
         
         <div v-if="selectedFile" class="selected-file">
@@ -429,6 +451,78 @@ async function handleUpload() {
   } finally {
     uploading.value = false
   }
+}
+
+function handleDownloadTemplate() {
+  // Create CSV template for source fields - matches the original unmapped fields format
+  const headers = [
+    'src_table_name',
+    'src_table_physical_name',
+    'src_column_name',
+    'src_column_physical_name',
+    'src_physical_datatype',
+    'src_nullable',
+    'src_comments',
+    'domain'
+  ]
+  
+  const exampleRows = [
+    [
+      'T_MEMBER',
+      't_member',
+      'MEMBER_ID',
+      'member_id',
+      'STRING',
+      'NO',
+      'Unique member identifier assigned by the state',
+      'member'
+    ],
+    [
+      'T_MEMBER',
+      't_member',
+      'FIRST_NAME',
+      'first_name',
+      'STRING',
+      'YES',
+      'Member first name',
+      'member'
+    ],
+    [
+      'T_ADDRESS',
+      't_address',
+      'ADDR_LINE_1',
+      'addr_line_1',
+      'STRING',
+      'YES',
+      'Primary address street line 1',
+      'member'
+    ]
+  ]
+  
+  const csvContent = [
+    headers.join(','),
+    ...exampleRows.map(row => row.map(cell => 
+      // Escape cells containing commas or quotes
+      cell.includes(',') || cell.includes('"') ? `"${cell.replace(/"/g, '""')}"` : cell
+    ).join(','))
+  ].join('\n')
+  
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'source_fields_template.csv'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+  
+  toast.add({
+    severity: 'success',
+    summary: 'Template Downloaded',
+    detail: 'Fill in the template with your source fields and upload',
+    life: 3000
+  })
 }
 
 async function handleInitializeTables() {
@@ -808,9 +902,19 @@ function getRowClass(data: TargetTableStatus): string {
   line-height: 1.6;
 }
 
-.upload-content ul {
+.upload-content h4 {
+  margin: 1rem 0 0.5rem 0;
+  color: var(--text-color);
+  font-size: 0.95rem;
+}
+
+.upload-content .field-list {
   margin: 0.5rem 0;
   padding-left: 1.5rem;
+}
+
+.upload-content .field-list li {
+  margin-bottom: 0.35rem;
 }
 
 .upload-content code {
@@ -818,6 +922,18 @@ function getRowClass(data: TargetTableStatus): string {
   padding: 0.15rem 0.35rem;
   border-radius: 4px;
   font-size: 0.85rem;
+  font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+.template-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background: var(--surface-50);
+  border-radius: 8px;
+  border: 1px dashed var(--surface-300);
 }
 
 .selected-file {

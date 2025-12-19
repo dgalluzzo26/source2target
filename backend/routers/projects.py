@@ -208,15 +208,17 @@ async def upload_source_fields(
     """
     Upload source fields for a project from CSV.
     
-    Expected CSV columns:
-    - src_table_name (required)
-    - src_column_name (required)
-    - src_table_physical_name (optional, defaults to src_table_name)
-    - src_column_physical_name (optional, defaults to src_column_name)
-    - src_physical_datatype (optional)
-    - src_nullable (optional, default YES)
-    - src_comments (optional, but recommended for AI matching)
-    - domain (optional)
+    This uses the SAME format as the legacy unmapped fields upload.
+    
+    Expected CSV columns (all required for AI matching):
+    - src_table_name: Logical source table name
+    - src_table_physical_name: Physical table name in database
+    - src_column_name: Logical source column name
+    - src_column_physical_name: Physical column name in database
+    - src_physical_datatype: Data type (STRING, INT, DATE, etc.)
+    - src_nullable: Whether column is nullable (YES/NO)
+    - src_comments: Column description (CRITICAL for AI vector search matching)
+    - domain: Optional domain category (e.g., member, provider)
     """
     try:
         # Verify project exists
@@ -229,21 +231,52 @@ async def upload_source_fields(
         decoded = contents.decode('utf-8')
         reader = csv.DictReader(io.StringIO(decoded))
         
+        # Validate headers
+        required_columns = [
+            'src_table_name', 
+            'src_table_physical_name', 
+            'src_column_name', 
+            'src_column_physical_name',
+            'src_physical_datatype',
+            'src_nullable',
+            'src_comments'
+        ]
+        
+        headers = reader.fieldnames or []
+        missing_columns = [col for col in required_columns if col not in headers]
+        
+        if missing_columns:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Missing required columns: {', '.join(missing_columns)}. "
+                       f"Please download the template to see the correct format."
+            )
+        
         fields_to_upload = []
         tables_found = set()
+        row_number = 1  # Start after header
+        warnings = []
         
         for row in reader:
-            # Validate required fields
+            row_number += 1
+            
+            # Validate required fields have values
             if not row.get("src_table_name") or not row.get("src_column_name"):
+                warnings.append(f"Row {row_number}: Skipped - missing table or column name")
                 continue
+            
+            # Warn if src_comments is empty (affects AI matching quality)
+            if not row.get("src_comments", "").strip():
+                warnings.append(f"Row {row_number}: {row['src_table_name']}.{row['src_column_name']} - "
+                               f"No description provided (may reduce AI matching accuracy)")
             
             field = {
                 "src_table_name": row.get("src_table_name", "").strip(),
-                "src_column_name": row.get("src_column_name", "").strip(),
                 "src_table_physical_name": row.get("src_table_physical_name", row.get("src_table_name", "")).strip(),
+                "src_column_name": row.get("src_column_name", "").strip(),
                 "src_column_physical_name": row.get("src_column_physical_name", row.get("src_column_name", "")).strip(),
                 "src_physical_datatype": row.get("src_physical_datatype", "STRING").strip(),
-                "src_nullable": row.get("src_nullable", "YES").strip(),
+                "src_nullable": row.get("src_nullable", "YES").strip().upper(),
                 "src_comments": row.get("src_comments", "").strip(),
                 "domain": row.get("domain", "").strip(),
                 "project_id": project_id
@@ -255,7 +288,7 @@ async def upload_source_fields(
         if not fields_to_upload:
             raise HTTPException(
                 status_code=400, 
-                detail="No valid fields found in CSV. Required columns: src_table_name, src_column_name"
+                detail="No valid fields found in CSV. Ensure all required columns have values."
             )
         
         # Bulk upload fields
@@ -263,6 +296,14 @@ async def upload_source_fields(
             fields_to_upload, 
             project_id
         )
+        
+        # Log warnings if any
+        if warnings:
+            print(f"[Projects Router] Upload warnings for project {project_id}:")
+            for w in warnings[:10]:  # Log first 10 warnings
+                print(f"  - {w}")
+            if len(warnings) > 10:
+                print(f"  ... and {len(warnings) - 10} more warnings")
         
         return UploadSourceFieldsResponse(
             project_id=project_id,
