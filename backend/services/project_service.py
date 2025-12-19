@@ -28,7 +28,8 @@ from backend.models.project import (
 from backend.services.config_service import ConfigService
 
 # Thread pool for blocking database operations
-executor = ThreadPoolExecutor(max_workers=3)
+# Use more workers to handle concurrent requests
+executor = ThreadPoolExecutor(max_workers=5)
 
 
 class ProjectService:
@@ -37,6 +38,18 @@ class ProjectService:
     def __init__(self):
         """Initialize the project service."""
         self.config_service = ConfigService()
+        self._workspace_client = None
+    
+    @property
+    def workspace_client(self):
+        """Lazy initialization of WorkspaceClient."""
+        if self._workspace_client is None:
+            try:
+                from databricks.sdk import WorkspaceClient
+                self._workspace_client = WorkspaceClient()
+            except Exception as e:
+                print(f"[Project Service] Could not init WorkspaceClient: {e}")
+        return self._workspace_client
     
     def _get_db_config(self) -> Dict[str, str]:
         """Get database configuration."""
@@ -55,12 +68,31 @@ class ProjectService:
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):
-        """Get SQL connection using OAuth."""
-        return sql.connect(
-            server_hostname=server_hostname,
-            http_path=http_path,
-            auth_type="databricks-oauth"
-        )
+        """Get SQL connection with proper OAuth token handling (matches semantic_service)."""
+        # Try to get OAuth token from WorkspaceClient config
+        access_token = None
+        if self.workspace_client and hasattr(self.workspace_client.config, 'authenticate'):
+            try:
+                headers = self.workspace_client.config.authenticate()
+                if headers and 'Authorization' in headers:
+                    access_token = headers['Authorization'].replace('Bearer ', '')
+                    print(f"[Project Service] Using OAuth token from WorkspaceClient")
+            except Exception as e:
+                print(f"[Project Service] Could not get OAuth token: {e}")
+        
+        if access_token:
+            return sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path,
+                access_token=access_token
+            )
+        else:
+            print(f"[Project Service] Using databricks-oauth auth type")
+            return sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path,
+                auth_type="databricks-oauth"
+            )
     
     def _escape_sql(self, value: str) -> str:
         """Escape single quotes for SQL strings."""
@@ -198,17 +230,18 @@ class ProjectService:
         
         try:
             with connection.cursor() as cursor:
-                where_clause = "" if include_archived else "WHERE project_status != 'ARCHIVED'"
+                # Handle NULL project_status and avoid issues with ARCHIVED filter
+                where_clause = "" if include_archived else "WHERE COALESCE(project_status, 'NOT_STARTED') != 'ARCHIVED'"
                 
                 # Use SELECT * to avoid column name mismatches
                 query = f"""
                 SELECT *
                 FROM {projects_table}
                 {where_clause}
-                ORDER BY created_ts DESC
+                ORDER BY COALESCE(created_ts, CURRENT_TIMESTAMP()) DESC
                 """
                 
-                print(f"[Project Service] Executing query...")
+                print(f"[Project Service] Executing query: {query[:200]}...")
                 cursor.execute(query)
                 columns = [desc[0] for desc in cursor.description]
                 rows = cursor.fetchall()
@@ -242,19 +275,25 @@ class ProjectService:
         """Get all projects (async wrapper)."""
         db_config = self._get_db_config()
         
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            executor,
-            functools.partial(
-                self._get_projects_sync,
-                db_config["server_hostname"],
-                db_config["http_path"],
-                db_config["projects_table"],
-                include_archived
+        try:
+            loop = asyncio.get_event_loop()
+            result = await asyncio.wait_for(
+                loop.run_in_executor(
+                    executor,
+                    functools.partial(
+                        self._get_projects_sync,
+                        db_config["server_hostname"],
+                        db_config["http_path"],
+                        db_config["projects_table"],
+                        include_archived
+                    )
+                ),
+                timeout=60.0  # 60 seconds timeout
             )
-        )
-        
-        return result
+            return result
+        except asyncio.TimeoutError:
+            print("[Project Service] Query timed out after 60 seconds")
+            return []  # Return empty list on timeout
     
     # =========================================================================
     # GET PROJECT BY ID

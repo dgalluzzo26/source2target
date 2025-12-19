@@ -44,7 +44,8 @@
             </router-link>
           </li>
           
-          <!-- V3 Source-First Workflow (Legacy) -->
+          <!-- V3 Source-First Workflow (Legacy) - Hidden, accessible via direct URL if needed -->
+          <!-- 
           <li class="menu-section" v-if="!sidebarCollapsed">
             <span class="menu-section-label">Source-First (Legacy)</span>
           </li>
@@ -60,6 +61,7 @@
               <span class="layout-menuitem-text" v-if="!sidebarCollapsed">View Mappings</span>
             </router-link>
           </li>
+          -->
           
           <!-- Admin Section -->
           <li class="menu-section" v-if="!sidebarCollapsed && userStore.isAdmin">
