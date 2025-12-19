@@ -329,34 +329,17 @@ class ProjectService:
         """Get a project by ID (synchronous)."""
         print(f"[Project Service] Fetching project: {project_id}")
         
-        connection = self._get_sql_connection(server_hostname, http_path)
+        try:
+            connection = self._get_sql_connection(server_hostname, http_path)
+        except Exception as e:
+            print(f"[Project Service] Connection error: {str(e)}")
+            return None
         
         try:
             with connection.cursor() as cursor:
+                # Use SELECT * to avoid column name mismatches
                 query = f"""
-                SELECT 
-                    project_id,
-                    project_name,
-                    project_description,
-                    source_system_name,
-                    source_catalogs,
-                    source_schemas,
-                    target_catalogs,
-                    target_schemas,
-                    target_domains,
-                    project_status,
-                    total_target_tables,
-                    tables_complete,
-                    tables_in_progress,
-                    total_target_columns,
-                    columns_mapped,
-                    columns_pending_review,
-                    created_by,
-                    created_ts,
-                    updated_by,
-                    updated_ts,
-                    completed_by,
-                    completed_ts
+                SELECT *
                 FROM {projects_table}
                 WHERE project_id = {project_id}
                 """
@@ -366,7 +349,16 @@ class ProjectService:
                 row = cursor.fetchone()
                 
                 if row:
-                    return dict(zip(columns, row))
+                    project = dict(zip(columns, row))
+                    # Ensure defaults
+                    project.setdefault('total_target_tables', 0)
+                    project.setdefault('tables_complete', 0)
+                    project.setdefault('tables_in_progress', 0)
+                    project.setdefault('total_target_columns', 0)
+                    project.setdefault('columns_mapped', 0)
+                    project.setdefault('columns_pending_review', 0)
+                    # Serialize for JSON
+                    return self._serialize_row(project)
                 return None
                 
         except Exception as e:
@@ -549,8 +541,8 @@ class ProjectService:
                 """)
                 
                 counts = cursor.fetchone()
-                table_count = counts[0] if counts else 0
-                column_count = counts[1] if counts else 0
+                table_count = counts[0] if counts and counts[0] is not None else 0
+                column_count = counts[1] if counts and counts[1] is not None else 0
                 
                 # Update project counters
                 cursor.execute(f"""
