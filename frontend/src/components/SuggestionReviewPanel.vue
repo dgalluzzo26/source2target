@@ -879,29 +879,45 @@ async function handleAIAssist() {
   
   aiGenerating.value = true
   try {
-    const response = await fetch('/api/v3/ai/generate-sql', {
+    // Get available column names for context
+    const availableColumns = sourceFields.value.map(f => f.src_column_physical_name)
+    
+    const response = await fetch('/api/v4/suggestions/ai/assist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt: aiPrompt.value,
-        context: {
-          target_column: editingSuggestion.value?.tgt_column_name,
-          target_table: editingSuggestion.value?.tgt_table_name,
-          current_sql: editedSQL.value
-        }
+        current_sql: editedSQL.value,
+        target_column: editingSuggestion.value?.tgt_column_name,
+        target_table: editingSuggestion.value?.tgt_table_name,
+        available_columns: availableColumns
       })
     })
     
     if (response.ok) {
       const result = await response.json()
-      if (result.sql) {
+      if (result.success && result.sql) {
         editedSQL.value = result.sql
-        toast.add({ severity: 'success', summary: 'SQL Generated', detail: 'AI generated SQL expression', life: 2000 })
+        toast.add({ 
+          severity: 'success', 
+          summary: 'SQL Updated', 
+          detail: result.explanation || 'AI modified the SQL expression', 
+          life: 3000 
+        })
+      } else {
+        toast.add({ 
+          severity: 'warn', 
+          summary: 'AI Response', 
+          detail: result.explanation || 'Could not modify SQL', 
+          life: 4000 
+        })
       }
     } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to generate SQL', life: 3000 })
+      const error = await response.json().catch(() => ({}))
+      toast.add({ severity: 'error', summary: 'Error', detail: error.detail || 'Failed to call AI', life: 3000 })
     }
   } catch (e) {
+    console.error('AI Assist error:', e)
     toast.add({ severity: 'error', summary: 'Error', detail: 'AI service unavailable', life: 3000 })
   } finally {
     aiGenerating.value = false

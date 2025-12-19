@@ -1543,3 +1543,150 @@ Return ONLY valid JSON with this structure:
         
         return result
 
+    # =========================================================================
+    # AI SQL ASSISTANT
+    # =========================================================================
+    
+    def _ai_sql_assist_sync(
+        self,
+        prompt: str,
+        current_sql: str,
+        target_column: Optional[str] = None,
+        target_table: Optional[str] = None,
+        available_columns: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Use LLM to modify SQL based on natural language prompt.
+        
+        Args:
+            prompt: User's natural language instruction (e.g., "Replace CDE_COUNTY with COUNTY_CD")
+            current_sql: The current SQL expression to modify
+            target_column: Optional target column name for context
+            target_table: Optional target table name for context
+            available_columns: Optional list of available source columns
+            
+        Returns:
+            Dict with 'sql', 'explanation', 'success'
+        """
+        try:
+            config = self.config_service.get_config()
+            
+            # Build context section
+            context_parts = []
+            if target_table and target_column:
+                context_parts.append(f"Target: {target_table}.{target_column}")
+            if available_columns:
+                context_parts.append(f"Available source columns: {', '.join(available_columns[:20])}")
+            
+            context_str = "\n".join(context_parts) if context_parts else "No additional context provided."
+            
+            system_prompt = """You are an expert SQL assistant helping to modify data mapping expressions.
+
+Your job is to take a user's natural language request and modify the SQL expression accordingly.
+
+RULES:
+1. Only output the modified SQL - no explanations unless asked
+2. Preserve the overall structure and intent of the original SQL
+3. Be precise with column/table name replacements
+4. Keep SQL formatting clean and readable
+5. If the request is unclear, make a reasonable interpretation
+
+OUTPUT FORMAT:
+Return a JSON object with:
+{
+  "sql": "the modified SQL expression",
+  "explanation": "brief explanation of what was changed"
+}"""
+
+            user_prompt = f"""CONTEXT:
+{context_str}
+
+CURRENT SQL:
+```sql
+{current_sql}
+```
+
+USER REQUEST:
+{prompt}
+
+Modify the SQL according to the user's request and return JSON with the result."""
+
+            print(f"[AI Assist] Calling LLM with prompt: {prompt[:100]}...")
+            
+            response = self.workspace_client.serving_endpoints.query(
+                name=config.ai_models.llm_endpoint,
+                messages=[
+                    ChatMessage(role=ChatMessageRole.SYSTEM, content=system_prompt),
+                    ChatMessage(role=ChatMessageRole.USER, content=user_prompt)
+                ],
+                max_tokens=2000
+            )
+            
+            response_text = response.choices[0].message.content
+            print(f"[AI Assist] LLM response: {response_text[:200]}...")
+            
+            # Parse JSON from response
+            import re
+            json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', response_text)
+            
+            # Find JSON in response
+            json_start = json_str.find('{')
+            json_end = json_str.rfind('}') + 1
+            
+            if json_start >= 0 and json_end > json_start:
+                try:
+                    result = json.loads(json_str[json_start:json_end])
+                    return {
+                        "sql": result.get("sql", current_sql),
+                        "explanation": result.get("explanation", "SQL modified"),
+                        "success": True
+                    }
+                except json.JSONDecodeError as e:
+                    print(f"[AI Assist] JSON parse error: {e}")
+                    # Try to extract SQL directly from response
+                    sql_match = re.search(r'```sql\s*(.*?)\s*```', response_text, re.DOTALL)
+                    if sql_match:
+                        return {
+                            "sql": sql_match.group(1).strip(),
+                            "explanation": "SQL extracted from response",
+                            "success": True
+                        }
+            
+            # Fallback - return original
+            return {
+                "sql": current_sql,
+                "explanation": "Could not parse LLM response",
+                "success": False
+            }
+            
+        except Exception as e:
+            print(f"[AI Assist] Error: {str(e)}")
+            return {
+                "sql": current_sql,
+                "explanation": f"Error: {str(e)}",
+                "success": False
+            }
+    
+    async def ai_sql_assist(
+        self,
+        prompt: str,
+        current_sql: str,
+        target_column: Optional[str] = None,
+        target_table: Optional[str] = None,
+        available_columns: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """AI SQL assistant (async wrapper)."""
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor,
+            functools.partial(
+                self._ai_sql_assist_sync,
+                prompt,
+                current_sql,
+                target_column,
+                target_table,
+                available_columns
+            )
+        )
+        return result
+

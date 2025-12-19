@@ -392,3 +392,62 @@ async def regenerate_suggestion(suggestion_id: int):
     except Exception as e:
         print(f"[Suggestions Router] Error regenerating suggestion: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# AI SQL ASSISTANT
+# =============================================================================
+
+class AIAssistRequest(BaseModel):
+    """Request for AI SQL assistance."""
+    prompt: str
+    current_sql: str
+    target_column: Optional[str] = None
+    target_table: Optional[str] = None
+    available_columns: Optional[list] = None
+
+
+class AIAssistResponse(BaseModel):
+    """Response from AI SQL assistant."""
+    sql: str
+    explanation: str
+    success: bool
+
+
+@router.post("/ai/assist", response_model=AIAssistResponse)
+async def ai_sql_assist(request: AIAssistRequest):
+    """
+    AI SQL Assistant - helps modify SQL expressions based on natural language prompts.
+    
+    Example prompts:
+    - "Replace CDE_COUNTY with COUNTY_CD"
+    - "Add a TRIM around the column name"
+    - "Join to the address table on RECIP_ID"
+    - "Change the alias from b to rm"
+    
+    The AI will understand the context and modify the SQL accordingly.
+    """
+    try:
+        print(f"[AI Assist] Processing prompt: {request.prompt[:100]}...")
+        
+        result = await suggestion_service.ai_sql_assist(
+            prompt=request.prompt,
+            current_sql=request.current_sql,
+            target_column=request.target_column,
+            target_table=request.target_table,
+            available_columns=request.available_columns
+        )
+        
+        return AIAssistResponse(
+            sql=result.get("sql", request.current_sql),
+            explanation=result.get("explanation", ""),
+            success=result.get("success", False)
+        )
+        
+    except Exception as e:
+        print(f"[AI Assist] Error: {e}")
+        return AIAssistResponse(
+            sql=request.current_sql,
+            explanation=f"Error: {str(e)}",
+            success=False
+        )
