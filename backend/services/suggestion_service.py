@@ -1614,7 +1614,7 @@ Modify the SQL according to the user's request and return JSON with the result."
             print(f"[AI Assist] Calling LLM with prompt: {prompt[:100]}...")
             
             response = self.workspace_client.serving_endpoints.query(
-                name=config.ai_models.llm_endpoint,
+                name=config.ai_model.foundation_model_endpoint,
                 messages=[
                     ChatMessage(role=ChatMessageRole.SYSTEM, content=system_prompt),
                     ChatMessage(role=ChatMessageRole.USER, content=user_prompt)
