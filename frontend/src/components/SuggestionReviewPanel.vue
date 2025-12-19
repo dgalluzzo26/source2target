@@ -145,7 +145,7 @@
 
         <!-- Actions -->
         <div class="suggestion-actions" v-if="suggestion.suggestion_status === 'PENDING'">
-          <!-- Show Edit first if there are warnings or low confidence -->
+          <!-- Has issues: Must review/edit first, no direct approve -->
           <template v-if="hasWarningsOrIssues(suggestion)">
             <Button 
               label="Review & Edit"
@@ -154,16 +154,8 @@
               severity="warning"
               @click="openEditDialog(suggestion)"
             />
-            <Button 
-              label="Approve Anyway"
-              icon="pi pi-check"
-              size="small"
-              severity="success"
-              outlined
-              @click="handleApprove(suggestion)"
-            />
           </template>
-          <!-- Show Approve first if clean (no warnings, high confidence) -->
+          <!-- Clean: Can approve directly or edit -->
           <template v-else>
             <Button 
               label="Approve"
@@ -294,18 +286,25 @@
 
           <!-- Right: SQL Editor -->
           <div class="sql-panel">
-            <!-- Pattern Info & Warnings -->
+            <!-- Pattern Info & Warnings - Compact Horizontal -->
             <div v-if="getChanges(editingSuggestion).length > 0 || getWarnings(editingSuggestion).length > 0" class="pattern-changes">
-              <h4><i class="pi pi-info-circle"></i> AI Changes & Notes</h4>
-              <div class="changes-list">
-                <div v-for="(change, idx) in getChanges(editingSuggestion)" :key="'c'+idx" class="change-item">
-                  <i class="pi pi-arrow-right"></i>
-                  <span v-if="change.original">Replaced: <code>{{ change.original }}</code> → <code>{{ change.replacement }}</code></span>
-                  <span v-else>{{ change.description || change }}</span>
-                </div>
-                <div v-for="(warning, idx) in getWarnings(editingSuggestion)" :key="'w'+idx" class="warning-item">
-                  <i class="pi pi-exclamation-triangle"></i>
-                  <span>{{ warning }}</span>
+              <div class="changes-inline">
+                <span class="changes-label"><i class="pi pi-info-circle"></i> AI Notes:</span>
+                <div class="changes-tags">
+                  <Tag 
+                    v-for="(change, idx) in getChanges(editingSuggestion)" 
+                    :key="'c'+idx"
+                    :value="change.original ? `${change.original} → ${change.replacement}` : (change.description || String(change))"
+                    severity="info"
+                    size="small"
+                  />
+                  <Tag 
+                    v-for="(warning, idx) in getWarnings(editingSuggestion)" 
+                    :key="'w'+idx"
+                    :value="warning"
+                    severity="warning"
+                    size="small"
+                  />
                 </div>
               </div>
             </div>
@@ -319,15 +318,16 @@
                     label="AI Assist" 
                     icon="pi pi-bolt" 
                     size="small"
-                    severity="help"
-                    outlined
+                    severity="secondary"
                     @click="showAIAssist = true"
                     v-tooltip.top="'Get AI help with this expression'"
+                    class="ai-assist-btn"
                   />
                   <Button 
                     icon="pi pi-copy" 
                     size="small"
-                    text
+                    severity="secondary"
+                    outlined
                     @click="copySQL(editedSQL)"
                     v-tooltip.top="'Copy SQL'"
                   />
@@ -335,7 +335,7 @@
               </div>
               <Textarea 
                 v-model="editedSQL" 
-                :rows="10"
+                :rows="14"
                 class="sql-editor w-full"
                 placeholder="Enter the SQL expression..."
                 spellcheck="false"
@@ -1223,52 +1223,43 @@ function formatDate(dateStr?: string): string {
 }
 
 .pattern-changes {
-  padding: 1rem;
+  padding: 0.5rem 0.75rem;
   background: var(--surface-50);
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--surface-border);
 }
 
-.pattern-changes h4 {
-  margin: 0 0 0.75rem 0;
-  font-size: 0.9rem;
+.changes-inline {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  color: var(--primary-color);
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
-.changes-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.change-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-}
-
-.change-item i {
-  color: var(--primary-color);
-  margin-top: 2px;
-}
-
-.change-item code {
-  background: var(--surface-200);
-  padding: 0.1rem 0.3rem;
-  border-radius: 3px;
+.changes-label {
   font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-color-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
 }
 
-.change-item .warning-item {
-  color: var(--orange-600);
+.changes-label i {
+  font-size: 0.9rem;
 }
 
-.change-item .warning-item i {
-  color: var(--orange-500);
+.changes-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.ai-assist-btn {
+  background: var(--primary-color) !important;
+  color: white !important;
+  border-color: var(--primary-color) !important;
 }
 
 .sql-editor-section {
