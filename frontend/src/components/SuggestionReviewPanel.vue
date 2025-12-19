@@ -22,14 +22,6 @@
       </div>
       <div class="summary-actions">
         <Button 
-          label="Bulk Approve High Confidence"
-          icon="pi pi-check-circle"
-          size="small"
-          severity="success"
-          :disabled="highConfidenceCount === 0"
-          @click="handleBulkApprove"
-        />
-        <Button 
           icon="pi pi-refresh"
           size="small"
           severity="secondary"
@@ -182,6 +174,15 @@
             @click="openRejectDialog(suggestion)"
           />
           <Button 
+            icon="pi pi-refresh"
+            size="small"
+            severity="secondary"
+            text
+            :loading="regeneratingId === suggestion.suggestion_id"
+            @click="handleRegenerate(suggestion)"
+            v-tooltip.top="'Regenerate this suggestion'"
+          />
+          <Button 
             label="Skip"
             icon="pi pi-forward"
             size="small"
@@ -194,9 +195,20 @@
         <!-- Manual Mapping Action for No Match -->
         <div class="suggestion-actions" v-if="suggestion.suggestion_status === 'NO_MATCH' || suggestion.suggestion_status === 'NO_PATTERN'">
           <Button 
+            label="Regenerate"
+            icon="pi pi-refresh"
+            size="small"
+            severity="info"
+            :loading="regeneratingId === suggestion.suggestion_id"
+            @click="handleRegenerate(suggestion)"
+            v-tooltip.top="'Re-run AI discovery for this column'"
+          />
+          <Button 
             label="Create Manual Mapping"
             icon="pi pi-plus"
             size="small"
+            severity="secondary"
+            outlined
             @click="$emit('manual-mapping', suggestion)"
           />
           <Button 
@@ -462,6 +474,7 @@ const aiPrompt = ref('')
 const sourceFilter = ref('')
 const expandedTables = ref<string[]>([])
 const sourceFields = ref<any[]>([])
+const regeneratingId = ref<number | null>(null)
 
 // Computed
 const suggestions = computed(() => projectsStore.suggestions)
@@ -475,12 +488,6 @@ const approvedCount = computed(() =>
 )
 const noMatchCount = computed(() => 
   suggestions.value.filter(s => s.suggestion_status === 'NO_MATCH' || s.suggestion_status === 'NO_PATTERN').length
-)
-const highConfidenceCount = computed(() => 
-  suggestions.value.filter(s => 
-    s.suggestion_status === 'PENDING' && 
-    (s.confidence_score || 0) >= 0.8
-  ).length
 )
 
 // Group source fields by table
@@ -721,32 +728,21 @@ async function handleSkip(suggestion: MappingSuggestion) {
   }
 }
 
-async function handleBulkApprove() {
-  const highConfidence = suggestions.value.filter(s => 
-    s.suggestion_status === 'PENDING' && 
-    (s.confidence_score || 0) >= 0.8
-  )
-  
-  if (highConfidence.length === 0) return
-  
+async function handleRegenerate(suggestion: MappingSuggestion) {
   try {
-    const result = await projectsStore.bulkApprove(
-      highConfidence.map(s => s.suggestion_id),
-      userStore.userEmail || 'unknown',
-      0.8
-    )
-    
+    regeneratingId.value = suggestion.suggestion_id
+    await projectsStore.regenerateSuggestion(suggestion.suggestion_id)
     toast.add({ 
       severity: 'success', 
-      summary: 'Bulk Approve Complete', 
-      detail: `Approved ${result.approved_count} suggestions`,
+      summary: 'Regenerated', 
+      detail: `AI rediscovery complete for ${suggestion.tgt_column_physical_name}`, 
       life: 3000 
     })
-    
-    await loadSuggestions()
     emit('suggestion-updated')
   } catch (e: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 5000 })
+    toast.add({ severity: 'error', summary: 'Regeneration Failed', detail: e.message, life: 5000 })
+  } finally {
+    regeneratingId.value = null
   }
 }
 

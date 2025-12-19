@@ -6,14 +6,9 @@
  * 
  * Route Structure:
  * V4 Target-First Workflow:
- * - /projects → Projects list (dashboard)
- * - /projects/:id → Project detail (target tables)
- * 
- * V3 Source-First Workflow (legacy):
  * - / (root) → Introduction/Dashboard page
- * - /unmapped-fields → Unmapped Fields page (select source fields)
- * - /mapping-config → Mapping Configuration (SQL editor approach)
- * - /mappings → View Current Mappings (all users)
+ * - /projects → Projects list
+ * - /projects/:id → Project detail (target tables & suggestions)
  * 
  * Admin:
  * - /semantic-fields → Semantic Table Management (admin only)
@@ -54,7 +49,7 @@ const router = createRouter({
         // V4 TARGET-FIRST WORKFLOW
         // ================================================================
         {
-          // Projects list - main V4 entry point
+          // Projects list - main entry point
           path: '/projects',
           name: 'projects',
           component: () => import('../views/ProjectsListView.vue')
@@ -64,28 +59,6 @@ const router = createRouter({
           path: '/projects/:id',
           name: 'project-detail',
           component: () => import('../views/ProjectDetailView.vue')
-        },
-        
-        // ================================================================
-        // V3 SOURCE-FIRST WORKFLOW (Legacy)
-        // ================================================================
-        {
-          // Unmapped fields page - main entry point for mapping
-          path: '/unmapped-fields',
-          name: 'unmapped-fields',
-          component: () => import('../views/UnmappedFieldsView.vue')
-        },
-        {
-          // Mapping configuration page - SQL editor approach
-          path: '/mapping-config',
-          name: 'mapping-config',
-          component: () => import('../views/MappingConfigViewV3.vue')
-        },
-        {
-          // View current mappings - available to all users
-          path: '/mappings',
-          name: 'mappings',
-          component: () => import('../views/MappingsListViewV3.vue')
         },
         
         // ================================================================

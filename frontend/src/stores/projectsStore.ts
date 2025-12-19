@@ -120,6 +120,7 @@ export const useProjectsStore = defineStore('projects', () => {
   const targetTables = ref<TargetTableStatus[]>([])
   const currentTable = ref<TargetTableStatus | null>(null)
   const suggestions = ref<MappingSuggestion[]>([])
+  const currentTableId = ref<number | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -363,6 +364,8 @@ export const useProjectsStore = defineStore('projects', () => {
   async function fetchSuggestions(projectId: number, tableId: number, statusFilter?: string) {
     loading.value = true
     error.value = null
+    // Track current table for regeneration
+    currentTableId.value = tableId
     try {
       const params = statusFilter ? `?status=${statusFilter}` : ''
       const { data } = await api.get<MappingSuggestion[]>(
@@ -512,6 +515,24 @@ export const useProjectsStore = defineStore('projects', () => {
     }
   }
 
+  async function regenerateSuggestion(suggestionId: number) {
+    error.value = null
+    try {
+      const { data } = await api.post(`/api/v4/suggestions/${suggestionId}/regenerate`)
+      
+      // Find the suggestion to get project_id and table_id for refresh
+      const suggestion = suggestions.value.find(s => s.suggestion_id === suggestionId)
+      if (suggestion && currentTableId.value) {
+        await fetchSuggestions(suggestion.project_id, currentTableId.value)
+      }
+      
+      return data
+    } catch (e: any) {
+      error.value = e.message || 'Failed to regenerate suggestion'
+      throw e
+    }
+  }
+
   // =============================================================================
   // HELPERS
   // =============================================================================
@@ -585,6 +606,7 @@ export const useProjectsStore = defineStore('projects', () => {
     rejectSuggestion,
     skipSuggestion,
     bulkApprove,
+    regenerateSuggestion,
 
     // Helpers
     parseMatchedSourceFields,

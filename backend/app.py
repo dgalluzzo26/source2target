@@ -20,7 +20,7 @@ from typing import Optional, Dict, Any
 from backend.services.config_service import config_service
 from backend.services.system_service import system_service
 from backend.services.auth_service import auth_service
-from backend.routers import semantic, mapping, ai_mapping, unmapped_fields, feedback, ai_mapping_v3, mapping_v3
+from backend.routers import semantic, unmapped_fields, feedback
 from backend.routers import projects, target_tables, suggestions
 
 # Import Databricks SDK for authentication
@@ -52,18 +52,10 @@ app.include_router(projects.router)
 app.include_router(target_tables.router)
 app.include_router(suggestions.router)
 
-# Include V3 routers (SQL expression mappings)
-app.include_router(ai_mapping_v3.router)
-app.include_router(mapping_v3.router)
+# Include utility routers
 app.include_router(unmapped_fields.router)
 app.include_router(feedback.router)
-
-# Include semantic/utility routers
 app.include_router(semantic.router)
-
-# Legacy V1 routers (for backward compatibility)
-app.include_router(mapping.router)
-app.include_router(ai_mapping.router)
 
 @app.get("/api/health")
 async def health_check():

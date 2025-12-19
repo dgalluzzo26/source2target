@@ -351,14 +351,44 @@ Return ONLY valid JSON with this structure:
             json_end = response_text.rfind('}') + 1
             
             if json_start >= 0 and json_end > json_start:
-                result = json.loads(response_text[json_start:json_end])
-                print(f"[Suggestion Service] SQL rewritten with confidence: {result.get('confidence', 0)}")
-                return result
+                json_str = response_text[json_start:json_end]
+                
+                # Remove control characters that can break JSON parsing
+                # Keep newlines (\n) and tabs (\t) but remove other control chars
+                import re
+                json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', json_str)
+                
+                # Also handle escaped newlines in SQL that might cause issues
+                # Replace literal \n in strings with escaped version
+                json_str = json_str.replace('\r\n', '\\n').replace('\r', '\\n')
+                
+                try:
+                    result = json.loads(json_str)
+                    print(f"[Suggestion Service] SQL rewritten with confidence: {result.get('confidence', 0)}")
+                    return result
+                except json.JSONDecodeError as je:
+                    print(f"[Suggestion Service] JSON parse error: {str(je)}")
+                    print(f"[Suggestion Service] Raw JSON (first 500 chars): {json_str[:500]}")
+                    
+                    # Try a more aggressive cleanup
+                    json_str_clean = re.sub(r'[\x00-\x1f\x7f]', ' ', json_str)
+                    try:
+                        result = json.loads(json_str_clean)
+                        print(f"[Suggestion Service] SQL rewritten after cleanup with confidence: {result.get('confidence', 0)}")
+                        return result
+                    except:
+                        return {
+                            "rewritten_sql": pattern_sql,
+                            "changes": [],
+                            "warnings": [f"JSON parse error: {str(je)}"],
+                            "confidence": 0.3,
+                            "reasoning": "LLM response contained invalid characters"
+                        }
             else:
                 return {
                     "rewritten_sql": pattern_sql,
                     "changes": [],
-                    "warnings": ["Failed to parse LLM response"],
+                    "warnings": ["Failed to parse LLM response - no JSON found"],
                     "confidence": 0.3,
                     "reasoning": "LLM response could not be parsed"
                 }
@@ -700,6 +730,237 @@ Return ONLY valid JSON with this structure:
                 project_id,
                 target_table_status_id,
                 tgt_table_physical_name
+            )
+        )
+        
+        return result
+    
+    # =========================================================================
+    # REGENERATE SINGLE SUGGESTION
+    # =========================================================================
+    
+    def _regenerate_single_suggestion_sync(
+        self,
+        db_config: Dict[str, str],
+        vs_config: Dict[str, str],
+        llm_config: Dict[str, str],
+        suggestion_id: int
+    ) -> Dict[str, Any]:
+        """
+        Regenerate AI suggestion for a single column.
+        
+        Useful when user has added new source fields and wants to re-run
+        discovery for just one column without rediscovering the entire table.
+        """
+        print(f"[Suggestion Service] Regenerating suggestion: {suggestion_id}")
+        
+        connection = self._get_sql_connection(
+            db_config["server_hostname"],
+            db_config["http_path"]
+        )
+        
+        try:
+            with connection.cursor() as cursor:
+                # Get the existing suggestion details
+                cursor.execute(f"""
+                    SELECT 
+                        s.suggestion_id,
+                        s.project_id,
+                        s.target_table_status_id,
+                        s.semantic_field_id,
+                        s.tgt_table_name,
+                        s.tgt_table_physical_name,
+                        s.tgt_column_name,
+                        s.tgt_column_physical_name,
+                        s.tgt_comments,
+                        s.tgt_physical_datatype,
+                        sf.domain
+                    FROM {db_config['mapping_suggestions_table']} s
+                    LEFT JOIN {db_config['semantic_fields_table']} sf 
+                        ON s.semantic_field_id = sf.semantic_field_id
+                    WHERE s.suggestion_id = {suggestion_id}
+                """)
+                
+                columns = [desc[0] for desc in cursor.description]
+                row = cursor.fetchone()
+                
+                if not row:
+                    return {"error": f"Suggestion {suggestion_id} not found", "status": "error"}
+                
+                suggestion = dict(zip(columns, row))
+                project_id = suggestion["project_id"]
+                target_table_status_id = suggestion["target_table_status_id"]
+                tgt_column_physical = suggestion["tgt_column_physical_name"]
+                tgt_table_physical = suggestion["tgt_table_physical_name"]
+                tgt_comments = suggestion.get("tgt_comments", "")
+                
+                print(f"[Suggestion Service] Regenerating for column: {tgt_column_physical}")
+                
+                # Step 1: Find pattern for this target column
+                cursor.execute(f"""
+                    SELECT 
+                        mapped_field_id,
+                        source_expression,
+                        source_tables,
+                        source_columns,
+                        source_descriptions,
+                        source_relationship_type,
+                        transformations_applied,
+                        join_metadata
+                    FROM {db_config['mapped_fields_table']}
+                    WHERE UPPER(tgt_column_physical_name) = UPPER('{self._escape_sql(tgt_column_physical)}')
+                      AND UPPER(tgt_table_physical_name) = UPPER('{self._escape_sql(tgt_table_physical)}')
+                      AND is_approved_pattern = TRUE
+                      AND project_id IS NULL
+                    ORDER BY confidence_score DESC NULLS LAST
+                    LIMIT 1
+                """)
+                
+                pattern_cols = [desc[0] for desc in cursor.description]
+                pattern_row = cursor.fetchone()
+                
+                # Build suggestion data
+                new_suggestion_data = {
+                    "project_id": project_id,
+                    "target_table_status_id": target_table_status_id,
+                    "semantic_field_id": suggestion["semantic_field_id"],
+                    "tgt_table_name": suggestion["tgt_table_name"],
+                    "tgt_table_physical_name": tgt_table_physical,
+                    "tgt_column_name": suggestion["tgt_column_name"],
+                    "tgt_column_physical_name": tgt_column_physical,
+                    "tgt_comments": tgt_comments,
+                    "tgt_physical_datatype": suggestion.get("tgt_physical_datatype"),
+                    "pattern_mapped_field_id": None,
+                    "pattern_type": None,
+                    "pattern_sql": None,
+                    "matched_source_fields": "[]",
+                    "suggested_sql": None,
+                    "sql_changes": "[]",
+                    "confidence_score": None,
+                    "ai_reasoning": None,
+                    "warnings": "[]",
+                    "suggestion_status": "NO_PATTERN"
+                }
+                
+                if pattern_row:
+                    pattern = dict(zip(pattern_cols, pattern_row))
+                    new_suggestion_data["pattern_mapped_field_id"] = pattern["mapped_field_id"]
+                    new_suggestion_data["pattern_type"] = pattern.get("source_relationship_type", "SINGLE")
+                    new_suggestion_data["pattern_sql"] = pattern["source_expression"]
+                    
+                    # Step 2: Find matching source columns
+                    search_query = f"{tgt_comments} {pattern.get('source_descriptions', '')}"
+                    
+                    # Vector search
+                    matched_sources = self._vector_search_source_fields_sync(
+                        vs_config["endpoint_name"],
+                        vs_config["unmapped_fields_index"],
+                        search_query,
+                        project_id,
+                        num_results=5
+                    )
+                    
+                    # Fallback to SQL search
+                    if not matched_sources:
+                        matched_sources = self._sql_search_source_fields_sync(
+                            db_config["server_hostname"],
+                            db_config["http_path"],
+                            db_config["unmapped_fields_table"],
+                            search_query,
+                            project_id,
+                            num_results=5
+                        )
+                    
+                    if matched_sources:
+                        # Store matched sources
+                        matched_fields_json = json.dumps([
+                            {
+                                "unmapped_field_id": m["unmapped_field_id"],
+                                "src_table_name": m.get("src_table_name", ""),
+                                "src_table_physical_name": m.get("src_table_physical_name", ""),
+                                "src_column_name": m.get("src_column_name", ""),
+                                "src_column_physical_name": m.get("src_column_physical_name", ""),
+                                "src_comments": m.get("src_comments", ""),
+                                "src_physical_datatype": m.get("src_physical_datatype", ""),
+                                "match_score": m.get("score", 0.5)
+                            }
+                            for m in matched_sources
+                        ])
+                        new_suggestion_data["matched_source_fields"] = matched_fields_json
+                        
+                        # Step 3: Rewrite SQL with LLM
+                        rewrite_result = self._rewrite_sql_with_llm_sync(
+                            llm_config["endpoint_name"],
+                            pattern["source_expression"],
+                            pattern.get("join_metadata"),
+                            pattern.get("source_descriptions", ""),
+                            matched_sources,
+                            tgt_column_physical
+                        )
+                        
+                        new_suggestion_data["suggested_sql"] = rewrite_result.get("rewritten_sql")
+                        new_suggestion_data["sql_changes"] = json.dumps(rewrite_result.get("changes", []))
+                        new_suggestion_data["confidence_score"] = rewrite_result.get("confidence", 0.5)
+                        new_suggestion_data["ai_reasoning"] = rewrite_result.get("reasoning", "")
+                        new_suggestion_data["warnings"] = json.dumps(rewrite_result.get("warnings", []))
+                        new_suggestion_data["suggestion_status"] = "PENDING"
+                    else:
+                        new_suggestion_data["suggestion_status"] = "NO_MATCH"
+                        new_suggestion_data["warnings"] = json.dumps(["No matching source fields found for this pattern"])
+                
+                # Step 4: Update the existing suggestion
+                cursor.execute(f"""
+                    UPDATE {db_config['mapping_suggestions_table']}
+                    SET
+                        pattern_mapped_field_id = {new_suggestion_data['pattern_mapped_field_id'] if new_suggestion_data['pattern_mapped_field_id'] else 'NULL'},
+                        pattern_type = {f"'{new_suggestion_data['pattern_type']}'" if new_suggestion_data['pattern_type'] else 'NULL'},
+                        pattern_sql = {f"'{self._escape_sql(new_suggestion_data['pattern_sql'])}'" if new_suggestion_data['pattern_sql'] else 'NULL'},
+                        matched_source_fields = '{self._escape_sql(new_suggestion_data['matched_source_fields'])}',
+                        suggested_sql = {f"'{self._escape_sql(new_suggestion_data['suggested_sql'])}'" if new_suggestion_data['suggested_sql'] else 'NULL'},
+                        sql_changes = '{self._escape_sql(new_suggestion_data['sql_changes'])}',
+                        confidence_score = {new_suggestion_data['confidence_score'] if new_suggestion_data['confidence_score'] else 'NULL'},
+                        ai_reasoning = {f"'{self._escape_sql(new_suggestion_data['ai_reasoning'])}'" if new_suggestion_data['ai_reasoning'] else 'NULL'},
+                        warnings = '{self._escape_sql(new_suggestion_data['warnings'])}',
+                        suggestion_status = '{new_suggestion_data['suggestion_status']}',
+                        edited_sql = NULL,
+                        edited_source_fields = NULL,
+                        edit_notes = NULL,
+                        rejection_reason = NULL,
+                        reviewed_by = NULL,
+                        reviewed_ts = NULL
+                    WHERE suggestion_id = {suggestion_id}
+                """)
+                
+                print(f"[Suggestion Service] Regenerated suggestion {suggestion_id} with status: {new_suggestion_data['suggestion_status']}")
+                
+                return {
+                    "suggestion_id": suggestion_id,
+                    "status": new_suggestion_data["suggestion_status"],
+                    "confidence_score": new_suggestion_data.get("confidence_score"),
+                    "message": "Suggestion regenerated successfully"
+                }
+                
+        except Exception as e:
+            print(f"[Suggestion Service] Error regenerating suggestion: {str(e)}")
+            raise
+        finally:
+            connection.close()
+    
+    async def regenerate_single_suggestion(self, suggestion_id: int) -> Dict[str, Any]:
+        """Regenerate AI suggestion for a single column (async wrapper)."""
+        db_config = self._get_db_config()
+        vs_config = self._get_vector_search_config()
+        llm_config = self._get_llm_config()
+        
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor,
+            functools.partial(
+                self._regenerate_single_suggestion_sync,
+                db_config,
+                vs_config,
+                llm_config,
+                suggestion_id
             )
         )
         

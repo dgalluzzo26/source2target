@@ -347,3 +347,48 @@ async def bulk_approve_suggestions(request: BulkApproveRequest):
         print(f"[Suggestions Router] Error in bulk approve: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# =============================================================================
+# REGENERATE SINGLE SUGGESTION
+# =============================================================================
+
+@router.post("/{suggestion_id}/regenerate", response_model=SuggestionActionResponse)
+async def regenerate_suggestion(suggestion_id: int):
+    """
+    Regenerate AI suggestion for a single column.
+    
+    Use this when:
+    - User has added new source fields and wants to re-run discovery
+    - Previous discovery had an error
+    - User wants to try matching again after uploading more sources
+    
+    This will:
+    1. Re-lookup the pattern for this target column
+    2. Re-run vector search to find matching source columns
+    3. Re-call the LLM to rewrite the SQL
+    4. Update the suggestion with new results
+    
+    The suggestion status will be reset based on results:
+    - PENDING: Pattern found and sources matched
+    - NO_MATCH: Pattern found but no matching sources
+    - NO_PATTERN: No pattern exists for this target column
+    """
+    try:
+        print(f"[Suggestions Router] Regenerating suggestion: {suggestion_id}")
+        
+        result = await suggestion_service.regenerate_single_suggestion(suggestion_id)
+        
+        if result.get("error"):
+            raise HTTPException(status_code=404, detail=result["error"])
+        
+        return SuggestionActionResponse(
+            suggestion_id=suggestion_id,
+            status=result.get("status", "unknown"),
+            message=result.get("message", "Suggestion regenerated")
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Suggestions Router] Error regenerating suggestion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
