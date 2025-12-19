@@ -405,12 +405,24 @@ Return ONLY valid JSON with this structure:
         
         try:
             with connection.cursor() as cursor:
+                # Clear existing suggestions for this table (allows re-discovery)
+                cursor.execute(f"""
+                    DELETE FROM {db_config['mapping_suggestions_table']}
+                    WHERE target_table_status_id = {target_table_status_id}
+                """)
+                print(f"[Suggestion Service] Cleared existing suggestions for table {target_table_status_id}")
+                
                 # Update table status to DISCOVERING
                 cursor.execute(f"""
                     UPDATE {db_config['target_table_status_table']}
                     SET 
                         mapping_status = 'DISCOVERING',
-                        ai_started_ts = CURRENT_TIMESTAMP()
+                        ai_started_ts = CURRENT_TIMESTAMP(),
+                        ai_completed_ts = NULL,
+                        ai_error_message = NULL,
+                        columns_with_pattern = 0,
+                        columns_pending_review = 0,
+                        columns_no_match = 0
                     WHERE target_table_status_id = {target_table_status_id}
                 """)
                 
