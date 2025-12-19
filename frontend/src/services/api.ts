@@ -578,6 +578,11 @@ const api = {
       },
     })
 
+    // Handle 304 Not Modified - return empty array/object (cached response)
+    if (response.status === 304) {
+      return { data: [] as unknown as T }
+    }
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: response.statusText }))
       throw {

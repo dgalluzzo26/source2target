@@ -170,41 +170,28 @@ class ProjectService:
         include_archived: bool = False
     ) -> List[Dict[str, Any]]:
         """Get all projects (synchronous)."""
-        print(f"[Project Service] Fetching projects...")
+        print(f"[Project Service] Fetching projects from {projects_table}...")
         
-        connection = self._get_sql_connection(server_hostname, http_path)
+        try:
+            connection = self._get_sql_connection(server_hostname, http_path)
+        except Exception as e:
+            print(f"[Project Service] Connection error: {str(e)}")
+            # Return empty list if connection fails (e.g., local dev without Databricks)
+            return []
         
         try:
             with connection.cursor() as cursor:
                 where_clause = "" if include_archived else "WHERE project_status != 'ARCHIVED'"
                 
+                # Use SELECT * to avoid column name mismatches
                 query = f"""
-                SELECT 
-                    project_id,
-                    project_name,
-                    project_description,
-                    source_system_name,
-                    source_catalogs,
-                    source_schemas,
-                    target_catalogs,
-                    target_schemas,
-                    target_domains,
-                    project_status,
-                    total_target_tables,
-                    tables_complete,
-                    tables_in_progress,
-                    total_target_columns,
-                    columns_mapped,
-                    columns_pending_review,
-                    created_by,
-                    created_ts,
-                    updated_by,
-                    updated_ts
+                SELECT *
                 FROM {projects_table}
                 {where_clause}
                 ORDER BY created_ts DESC
                 """
                 
+                print(f"[Project Service] Executing query...")
                 cursor.execute(query)
                 columns = [desc[0] for desc in cursor.description]
                 rows = cursor.fetchall()
@@ -212,6 +199,13 @@ class ProjectService:
                 projects = []
                 for row in rows:
                     project = dict(zip(columns, row))
+                    # Ensure required fields have defaults
+                    project.setdefault('total_target_tables', 0)
+                    project.setdefault('tables_complete', 0)
+                    project.setdefault('tables_in_progress', 0)
+                    project.setdefault('total_target_columns', 0)
+                    project.setdefault('columns_mapped', 0)
+                    project.setdefault('columns_pending_review', 0)
                     projects.append(project)
                 
                 print(f"[Project Service] Found {len(projects)} projects")
@@ -219,6 +213,8 @@ class ProjectService:
                 
         except Exception as e:
             print(f"[Project Service] Error fetching projects: {str(e)}")
+            import traceback
+            traceback.print_exc()
             raise
         finally:
             connection.close()
