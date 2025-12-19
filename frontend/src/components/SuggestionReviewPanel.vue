@@ -241,7 +241,7 @@
       v-model:visible="showEditDialog" 
       modal 
       header="Edit Mapping" 
-      :style="{ width: '95vw', maxWidth: '1200px' }"
+      :style="{ width: '95vw', maxWidth: '1400px' }"
       maximizable
     >
       <div v-if="editingSuggestion" class="edit-dialog-content">
@@ -257,124 +257,153 @@
           </div>
         </div>
 
-        <!-- Two Column Layout -->
-        <div class="edit-columns">
-          <!-- Left: Source Fields -->
-          <div class="source-panel">
-            <div class="panel-header">
-              <h4><i class="pi pi-table"></i> Available Source Fields</h4>
-              <InputText 
-                v-model="sourceFilter" 
-                placeholder="Filter columns..." 
-                size="small"
-                class="source-filter"
-              />
+        <!-- Three Column Layout -->
+        <div class="edit-columns-v2">
+          <!-- Left: Collapsible Source & Changes Panel -->
+          <div class="left-panel" :class="{ 'collapsed': leftPanelCollapsed }">
+            <div class="panel-toggle" @click="leftPanelCollapsed = !leftPanelCollapsed">
+              <i :class="leftPanelCollapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-left'"></i>
+              <span v-if="!leftPanelCollapsed">Sources & Notes</span>
             </div>
             
-            <div class="source-tables">
-              <div v-for="table in groupedSourceFields" :key="table.tableName" class="source-table-group">
-                <div class="table-header" @click="toggleTableExpand(table.tableName)">
-                  <i :class="expandedTables.includes(table.tableName) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></i>
-                  <strong>{{ table.tableName }}</strong>
-                  <Badge :value="table.columns.length" severity="secondary" />
-                </div>
-                <div v-if="expandedTables.includes(table.tableName)" class="table-columns">
+            <div v-if="!leftPanelCollapsed" class="left-panel-content">
+              <!-- AI Changes Section -->
+              <div v-if="getChanges(editingSuggestion).length > 0 || getWarnings(editingSuggestion).length > 0" class="changes-section">
+                <h4><i class="pi pi-lightbulb"></i> AI Changes</h4>
+                <div class="change-list">
                   <div 
-                    v-for="col in filteredColumns(table.columns)" 
-                    :key="col.unmapped_field_id"
-                    class="column-item"
-                    :class="{ 'matched': isMatchedColumn(col) }"
-                    @click="insertColumnToSQL(col)"
-                    v-tooltip.right="col.src_comments || 'Click to insert'"
+                    v-for="(change, idx) in getChanges(editingSuggestion)" 
+                    :key="'c'+idx"
+                    class="change-item"
+                    :class="{ 'is-problem': isProblemChange(change) }"
+                    @click="highlightInSQL(change)"
                   >
-                    <span class="col-name">{{ col.src_column_physical_name }}</span>
-                    <span class="col-type">{{ col.src_physical_datatype || 'STRING' }}</span>
-                    <i v-if="isMatchedColumn(col)" class="pi pi-check matched-icon"></i>
+                    <i :class="getChangeIcon(change)"></i>
+                    <div class="change-detail">
+                      <span class="change-original">{{ change.original }}</span>
+                      <i class="pi pi-arrow-right"></i>
+                      <span class="change-new">{{ change.new || change.replacement || '?' }}</span>
+                    </div>
+                  </div>
+                  <div 
+                    v-for="(warning, idx) in getWarnings(editingSuggestion)" 
+                    :key="'w'+idx"
+                    class="change-item is-warning"
+                  >
+                    <i class="pi pi-exclamation-triangle"></i>
+                    <span>{{ warning }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Source Fields Section -->
+              <div class="source-section">
+                <h4><i class="pi pi-table"></i> Source Fields</h4>
+                <InputText 
+                  v-model="sourceFilter" 
+                  placeholder="Filter..." 
+                  size="small"
+                  class="source-filter"
+                />
+                
+                <div class="source-tables">
+                  <div v-for="table in groupedSourceFields" :key="table.tableName" class="source-table-group">
+                    <div class="table-header" @click="toggleTableExpand(table.tableName)">
+                      <i :class="expandedTables.includes(table.tableName) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></i>
+                      <strong>{{ table.tableName }}</strong>
+                      <Badge :value="table.columns.length" severity="secondary" />
+                    </div>
+                    <div v-if="expandedTables.includes(table.tableName)" class="table-columns">
+                      <div 
+                        v-for="col in filteredColumns(table.columns)" 
+                        :key="col.unmapped_field_id"
+                        class="column-item"
+                        :class="{ 'matched': isMatchedColumn(col) }"
+                        @click="insertColumnToSQL(col)"
+                        v-tooltip.right="col.src_comments || 'Click to insert'"
+                      >
+                        <span class="col-name">{{ col.src_column_physical_name }}</span>
+                        <span class="col-type">{{ col.src_physical_datatype || 'STRING' }}</span>
+                        <i v-if="isMatchedColumn(col)" class="pi pi-check matched-icon"></i>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Right: SQL Editor -->
-          <div class="sql-panel">
-            <!-- Pattern Info & Warnings - Compact Horizontal -->
-            <div v-if="getChanges(editingSuggestion).length > 0 || getWarnings(editingSuggestion).length > 0" class="pattern-changes">
-              <div class="changes-inline">
-                <span class="changes-label"><i class="pi pi-info-circle"></i> AI Notes:</span>
-                <div class="changes-tags">
-                  <Tag 
-                    v-for="(change, idx) in getChanges(editingSuggestion)" 
-                    :key="'c'+idx"
-                    :value="formatChange(change)"
-                    severity="info"
-                    size="small"
-                  />
-                  <Tag 
-                    v-for="(warning, idx) in getWarnings(editingSuggestion)" 
-                    :key="'w'+idx"
-                    :value="warning"
-                    severity="warning"
-                    size="small"
-                  />
-                </div>
+          <!-- Right: SQL Editor (takes remaining space) -->
+          <div class="sql-panel-v2">
+            <!-- SQL Editor Header -->
+            <div class="sql-header">
+              <label><i class="pi pi-code"></i> SQL Expression</label>
+              <div class="sql-actions">
+                <Button 
+                  label="AI Assist" 
+                  icon="pi pi-bolt" 
+                  size="small"
+                  @click="showAIAssist = true"
+                  v-tooltip.top="'Get AI help with this expression'"
+                  class="ai-assist-btn"
+                />
+                <Button 
+                  icon="pi pi-copy" 
+                  size="small"
+                  severity="secondary"
+                  outlined
+                  @click="copySQL(editedSQL)"
+                  v-tooltip.top="'Copy SQL'"
+                />
               </div>
             </div>
 
-            <!-- SQL Editor with AI Helper -->
-            <div class="sql-editor-section">
-              <div class="sql-header">
-                <label>SQL Expression:</label>
-                <div class="sql-actions">
-                  <Button 
-                    label="AI Assist" 
-                    icon="pi pi-bolt" 
-                    size="small"
-                    severity="secondary"
-                    @click="showAIAssist = true"
-                    v-tooltip.top="'Get AI help with this expression'"
-                    class="ai-assist-btn"
-                  />
-                  <Button 
-                    icon="pi pi-copy" 
-                    size="small"
-                    severity="secondary"
-                    outlined
-                    @click="copySQL(editedSQL)"
-                    v-tooltip.top="'Copy SQL'"
-                  />
-                </div>
+            <!-- Highlighted SQL Preview (shows problem fields) -->
+            <div v-if="problemFieldsInSQL.length > 0" class="sql-preview-highlighted">
+              <div class="preview-label">
+                <i class="pi pi-exclamation-circle"></i>
+                <span>{{ problemFieldsInSQL.length }} field(s) need attention - highlighted below</span>
               </div>
+              <pre class="sql-highlighted" v-html="highlightedSQL"></pre>
+            </div>
+
+            <!-- Editable SQL -->
+            <div class="sql-editor-container">
               <Textarea 
+                ref="sqlTextarea"
                 v-model="editedSQL" 
-                :rows="14"
-                class="sql-editor w-full"
+                :rows="18"
+                class="sql-editor-v2 w-full"
                 placeholder="Enter the SQL expression..."
                 spellcheck="false"
               />
             </div>
 
-            <!-- Matched Source Summary -->
-            <div class="matched-summary" v-if="getMatchedFields(editingSuggestion).length > 0">
-              <h4>Matched Source Fields:</h4>
+            <!-- Matched Source Summary (compact) -->
+            <div class="matched-summary-compact" v-if="getMatchedFields(editingSuggestion).length > 0">
+              <span class="matched-label"><i class="pi pi-check-circle"></i> Matched:</span>
               <div class="matched-tags">
                 <Tag 
-                  v-for="field in getMatchedFields(editingSuggestion)" 
+                  v-for="field in getMatchedFields(editingSuggestion).slice(0, 5)" 
                   :key="field.unmapped_field_id"
-                  :value="`${field.src_table_physical_name}.${field.src_column_physical_name} (${(field.match_score * 100).toFixed(0)}%)`"
+                  :value="`${field.src_column_physical_name}`"
                   severity="success"
                   size="small"
+                />
+                <Badge 
+                  v-if="getMatchedFields(editingSuggestion).length > 5"
+                  :value="`+${getMatchedFields(editingSuggestion).length - 5}`"
+                  severity="secondary"
                 />
               </div>
             </div>
 
-            <!-- Edit Notes -->
-            <div class="field">
-              <label>Notes (optional):</label>
+            <!-- Edit Notes (compact) -->
+            <div class="notes-row">
               <InputText 
                 v-model="editNotes" 
                 class="w-full"
-                placeholder="Explain your changes..."
+                placeholder="Notes (optional): Explain your changes..."
               />
             </div>
           </div>
@@ -475,6 +504,8 @@ const sourceFilter = ref('')
 const expandedTables = ref<string[]>([])
 const sourceFields = ref<any[]>([])
 const regeneratingId = ref<number | null>(null)
+const leftPanelCollapsed = ref(false)
+const sqlTextarea = ref<any>(null)
 
 // Computed
 const suggestions = computed(() => projectsStore.suggestions)
@@ -489,6 +520,76 @@ const approvedCount = computed(() =>
 const noMatchCount = computed(() => 
   suggestions.value.filter(s => s.suggestion_status === 'NO_MATCH' || s.suggestion_status === 'NO_PATTERN').length
 )
+
+// Problem fields from AI changes that need user attention
+const problemFieldsInSQL = computed(() => {
+  if (!editingSuggestion.value) return []
+  
+  const changes = getChanges(editingSuggestion.value)
+  const warnings = getWarnings(editingSuggestion.value)
+  const problems: string[] = []
+  
+  // Extract original field names from changes that indicate problems
+  for (const change of changes) {
+    if (change.original) {
+      // Look for fields that were replaced or have issues
+      problems.push(change.original)
+    }
+    if (change.missing) {
+      problems.push(change.missing)
+    }
+  }
+  
+  // If there are warnings about missing/unknown fields, try to extract them
+  for (const warning of warnings) {
+    const matches = warning.match(/['"]([A-Z_0-9]+)['"]/gi)
+    if (matches) {
+      problems.push(...matches.map((m: string) => m.replace(/['"]/g, '')))
+    }
+  }
+  
+  return [...new Set(problems)] // unique values
+})
+
+// Highlighted SQL with problem fields marked
+const highlightedSQL = computed(() => {
+  if (!editedSQL.value || problemFieldsInSQL.value.length === 0) {
+    return escapeHtml(editedSQL.value)
+  }
+  
+  let html = escapeHtml(editedSQL.value)
+  
+  // Sort by length descending to avoid partial replacements
+  const sortedProblems = [...problemFieldsInSQL.value].sort((a, b) => b.length - a.length)
+  
+  for (const field of sortedProblems) {
+    // Case-insensitive match, preserve original case in output
+    const regex = new RegExp(`\\b(${escapeRegExp(field)})\\b`, 'gi')
+    html = html.replace(regex, '<mark class="problem-field">$1</mark>')
+  }
+  
+  // Also highlight SQL keywords for readability
+  const keywords = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 
+                    'ON', 'AND', 'OR', 'AS', 'UNION', 'ALL', 'CASE', 'WHEN', 'THEN', 
+                    'ELSE', 'END', 'TRIM', 'CONCAT', 'COALESCE', 'NULL', 'IS', 'NOT']
+  
+  for (const kw of keywords) {
+    const regex = new RegExp(`\\b(${kw})\\b`, 'gi')
+    html = html.replace(regex, '<span class="sql-keyword">$1</span>')
+  }
+  
+  return html
+})
+
+function escapeHtml(text: string): string {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 // Group source fields by table
 const groupedSourceFields = computed(() => {
@@ -626,6 +727,45 @@ function formatChange(change: any): string {
     return change.description
   }
   return String(change)
+}
+
+function isProblemChange(change: any): boolean {
+  // Determine if this change indicates a problem that needs fixing
+  const newVal = change.new || change.replacement || ''
+  // Problem if: no replacement provided, or replacement contains placeholder/unknown
+  return !newVal || 
+         newVal.includes('?') || 
+         newVal.toLowerCase().includes('unknown') ||
+         newVal.toLowerCase().includes('user_') ||
+         change.type === 'missing' ||
+         change.type === 'not_found'
+}
+
+function getChangeIcon(change: any): string {
+  if (isProblemChange(change)) {
+    return 'pi pi-exclamation-circle'
+  }
+  if (change.type === 'replaced' || change.new || change.replacement) {
+    return 'pi pi-arrow-right-arrow-left'
+  }
+  return 'pi pi-info-circle'
+}
+
+function highlightInSQL(change: any) {
+  if (!change.original || !sqlTextarea.value) return
+  
+  const sql = editedSQL.value
+  const searchTerm = change.original
+  const index = sql.toUpperCase().indexOf(searchTerm.toUpperCase())
+  
+  if (index >= 0) {
+    // Select the text in the textarea
+    const textarea = sqlTextarea.value.$el?.querySelector('textarea') || sqlTextarea.value
+    if (textarea && textarea.setSelectionRange) {
+      textarea.focus()
+      textarea.setSelectionRange(index, index + searchTerm.length)
+    }
+  }
 }
 
 function hasWarningsOrIssues(suggestion: MappingSuggestion): boolean {
@@ -1126,6 +1266,390 @@ function formatDate(dateStr?: string): string {
   font-size: 0.9rem;
 }
 
+/* NEW: Three-column layout v2 */
+.edit-columns-v2 {
+  display: flex;
+  gap: 1rem;
+  min-height: 500px;
+}
+
+/* Left Panel - Collapsible */
+.left-panel {
+  width: 300px;
+  min-width: 300px;
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  background: var(--surface-50);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.left-panel.collapsed {
+  width: 40px;
+  min-width: 40px;
+}
+
+.panel-toggle {
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  background: var(--surface-100);
+  border-bottom: 1px solid var(--surface-border);
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.panel-toggle:hover {
+  background: var(--surface-200);
+}
+
+.left-panel.collapsed .panel-toggle {
+  justify-content: center;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  padding: 1rem 0.5rem;
+  height: 100%;
+}
+
+.left-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Changes Section */
+.changes-section {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.changes-section h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--primary-color);
+}
+
+.change-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.change-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid var(--surface-200);
+}
+
+.change-item:hover {
+  background: var(--primary-50);
+  border-color: var(--primary-200);
+}
+
+.change-item.is-problem {
+  background: #fff3e0;
+  border-color: var(--orange-200);
+}
+
+.change-item.is-problem i {
+  color: var(--orange-500);
+}
+
+.change-item.is-warning {
+  background: #fff8e1;
+  border-color: var(--yellow-300);
+}
+
+.change-item.is-warning i {
+  color: var(--yellow-700);
+}
+
+.change-item i {
+  color: var(--primary-color);
+  margin-top: 2px;
+}
+
+.change-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.change-original {
+  font-family: monospace;
+  background: #ffcdd2;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  color: #c62828;
+  text-decoration: line-through;
+}
+
+.change-detail .pi-arrow-right {
+  font-size: 0.7rem;
+  color: var(--text-color-secondary);
+}
+
+.change-new {
+  font-family: monospace;
+  background: #c8e6c9;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  color: #2e7d32;
+}
+
+/* Source Section */
+.source-section {
+  flex: 1;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.source-section h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.source-filter {
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+.source-tables {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  background: white;
+}
+
+.source-table-group {
+  border-bottom: 1px solid var(--surface-100);
+}
+
+.source-table-group:last-child {
+  border-bottom: none;
+}
+
+.table-header {
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.table-header:hover {
+  background: var(--surface-50);
+}
+
+.table-header i {
+  font-size: 0.7rem;
+  color: var(--text-color-secondary);
+}
+
+.table-header strong {
+  flex: 1;
+  font-size: 0.8rem;
+}
+
+.table-columns {
+  padding: 0 0.25rem 0.25rem;
+}
+
+.column-item {
+  padding: 0.35rem 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+  font-size: 0.8rem;
+}
+
+.column-item:hover {
+  background: var(--primary-50);
+}
+
+.column-item.matched {
+  background: var(--green-50);
+  border-left: 3px solid var(--green-500);
+}
+
+.col-name {
+  flex: 1;
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+.col-type {
+  font-size: 0.7rem;
+  color: var(--text-color-secondary);
+}
+
+.matched-icon {
+  color: var(--green-500);
+  font-size: 0.75rem;
+}
+
+/* SQL Panel V2 */
+.sql-panel-v2 {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.sql-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sql-header label {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sql-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.ai-assist-btn {
+  background: linear-gradient(135deg, var(--primary-color), var(--purple-500)) !important;
+  color: white !important;
+  border: none !important;
+}
+
+/* Highlighted SQL Preview */
+.sql-preview-highlighted {
+  border: 2px solid var(--orange-300);
+  border-radius: 8px;
+  background: #fffbf5;
+  overflow: hidden;
+}
+
+.preview-label {
+  padding: 0.5rem 0.75rem;
+  background: var(--orange-100);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--orange-700);
+  font-weight: 500;
+}
+
+.sql-highlighted {
+  padding: 0.75rem;
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 150px;
+  overflow-y: auto;
+  background: white;
+}
+
+.sql-highlighted :deep(.problem-field) {
+  background: #ffeb3b;
+  color: #c62828;
+  padding: 0.1rem 0.25rem;
+  border-radius: 3px;
+  font-weight: 600;
+  border: 1px solid #ff9800;
+  animation: pulse-highlight 2s infinite;
+}
+
+@keyframes pulse-highlight {
+  0%, 100% { background: #ffeb3b; }
+  50% { background: #ffc107; }
+}
+
+.sql-highlighted :deep(.sql-keyword) {
+  color: #1565c0;
+  font-weight: 500;
+}
+
+/* SQL Editor Container */
+.sql-editor-container {
+  flex: 1;
+  min-height: 300px;
+}
+
+.sql-editor-v2 {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+  font-size: 0.9rem;
+  background: #1e1e1e !important;
+  color: #d4d4d4 !important;
+  border-radius: 8px;
+  height: 100%;
+  resize: vertical;
+}
+
+/* Matched Summary Compact */
+.matched-summary-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--green-50);
+  border-radius: 6px;
+  border: 1px solid var(--green-200);
+}
+
+.matched-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--green-700);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.matched-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+/* Notes Row */
+.notes-row {
+  margin-top: auto;
+}
+
+/* Legacy compatibility */
 .edit-columns {
   display: grid;
   grid-template-columns: 320px 1fr;
@@ -1133,7 +1657,6 @@ function formatDate(dateStr?: string): string {
   min-height: 400px;
 }
 
-/* Source Panel */
 .source-panel {
   border: 1px solid var(--surface-border);
   border-radius: 8px;
@@ -1156,79 +1679,6 @@ function formatDate(dateStr?: string): string {
   gap: 0.5rem;
 }
 
-.source-filter {
-  width: 100%;
-}
-
-.source-tables {
-  flex: 1;
-  overflow-y: auto;
-  max-height: 400px;
-}
-
-.source-table-group {
-  border-bottom: 1px solid var(--surface-border);
-}
-
-.table-header {
-  padding: 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  background: var(--surface-50);
-  transition: background 0.2s;
-}
-
-.table-header:hover {
-  background: var(--surface-100);
-}
-
-.table-header i {
-  font-size: 0.75rem;
-  color: var(--text-color-secondary);
-}
-
-.table-columns {
-  padding: 0.25rem;
-}
-
-.column-item {
-  padding: 0.5rem 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.15s;
-}
-
-.column-item:hover {
-  background: var(--primary-50);
-}
-
-.column-item.matched {
-  background: var(--green-50);
-  border-left: 3px solid var(--green-500);
-}
-
-.col-name {
-  flex: 1;
-  font-family: monospace;
-  font-size: 0.85rem;
-}
-
-.col-type {
-  font-size: 0.75rem;
-  color: var(--text-color-secondary);
-}
-
-.matched-icon {
-  color: var(--green-500);
-  font-size: 0.8rem;
-}
-
-/* SQL Panel */
 .sql-panel {
   display: flex;
   flex-direction: column;
@@ -1269,30 +1719,8 @@ function formatDate(dateStr?: string): string {
   gap: 0.35rem;
 }
 
-.ai-assist-btn {
-  background: var(--primary-color) !important;
-  color: white !important;
-  border-color: var(--primary-color) !important;
-}
-
 .sql-editor-section {
   flex: 1;
-}
-
-.sql-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
-
-.sql-header label {
-  font-weight: 500;
-}
-
-.sql-actions {
-  display: flex;
-  gap: 0.25rem;
 }
 
 .sql-editor {
@@ -1314,12 +1742,6 @@ function formatDate(dateStr?: string): string {
   margin: 0 0 0.5rem 0;
   font-size: 0.85rem;
   color: var(--green-700);
-}
-
-.matched-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
 }
 
 /* AI Assist Dialog */

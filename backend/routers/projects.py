@@ -5,14 +5,20 @@ V4 Target-First Workflow:
 - Create and manage mapping projects
 - Upload source fields to a project
 - Initialize target tables from semantic_fields
+
+Access Control:
+- Users can only see projects they created OR where they are listed in team_members
+- Admins can see all projects
 """
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Request
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Request, Depends
 from typing import List, Optional
 from pydantic import BaseModel
 import csv
 import io
+import os
 from backend.services.project_service import ProjectService
 from backend.services.unmapped_fields_service import UnmappedFieldsService
+from backend.services.auth_service import AuthService
 from backend.models.project import (
     MappingProject,
     MappingProjectCreate,
@@ -26,6 +32,74 @@ router = APIRouter(prefix="/api/v4/projects", tags=["V4 Projects"])
 # Service instances
 project_service = ProjectService()
 unmapped_fields_service = UnmappedFieldsService()
+auth_service = AuthService()
+
+
+# =============================================================================
+# AUTH HELPER
+# =============================================================================
+
+async def get_current_user_email(request: Request) -> Optional[str]:
+    """
+    Extract current user's email from request headers.
+    Returns None if no user detected (allows anonymous access in dev).
+    """
+    # Try Databricks App headers first
+    email = request.headers.get('x-forwarded-email')
+    if email and '@' in email:
+        return email.lower()
+    
+    # Try other common headers
+    for header in ['x-databricks-user', 'x-user-email', 'x-forwarded-user']:
+        value = request.headers.get(header)
+        if value and '@' in value:
+            return value.lower()
+    
+    # Environment variable fallback
+    databricks_user = os.environ.get('DATABRICKS_USER')
+    if databricks_user and '@' in databricks_user:
+        return databricks_user.lower()
+    
+    # Dev mode fallback - allow anonymous access
+    return None
+
+
+async def get_current_user_is_admin(request: Request) -> bool:
+    """Check if current user is an admin."""
+    email = await get_current_user_email(request)
+    if not email:
+        return False
+    return auth_service.check_admin_group_membership(email)
+
+
+def user_can_access_project(project: dict, user_email: Optional[str], is_admin: bool) -> bool:
+    """
+    Check if user has access to a project.
+    
+    Access granted if:
+    - User is admin
+    - User created the project
+    - User is in team_members list
+    - No user detected (dev mode - allows all)
+    """
+    if is_admin:
+        return True
+    
+    if not user_email:
+        # Dev mode - no user detected, allow access
+        return True
+    
+    # Check if creator
+    created_by = (project.get("created_by") or "").lower()
+    if created_by == user_email:
+        return True
+    
+    # Check team_members (comma or pipe separated)
+    team_members = (project.get("team_members") or "").lower()
+    if user_email in team_members:
+        return True
+    
+    return False
 
 
 # =============================================================================
@@ -67,15 +141,28 @@ class UploadSourceFieldsResponse(BaseModel):
 
 @router.get("/", response_model=List[dict])
 async def get_projects(
+    request: Request,
     include_archived: bool = Query(False, description="Include archived projects")
 ):
     """
-    Get all mapping projects.
+    Get mapping projects the current user has access to.
+    
+    Users see projects they created OR where they're in team_members.
+    Admins see all projects.
     
     Returns list of projects with progress stats.
     """
     try:
-        projects = await project_service.get_projects(include_archived=include_archived)
+        user_email = await get_current_user_email(request)
+        is_admin = await get_current_user_is_admin(request)
+        
+        # Admins see all, regular users get filtered
+        filter_email = None if is_admin else user_email
+        
+        projects = await project_service.get_projects(
+            include_archived=include_archived,
+            user_email=filter_email
+        )
         return projects
     except Exception as e:
         print(f"[Projects Router] Error getting projects: {e}")
@@ -104,14 +191,27 @@ async def create_project(data: MappingProjectCreate):
 
 
 @router.get("/{project_id}", response_model=dict)
-async def get_project(project_id: int):
+async def get_project(project_id: int, request: Request):
     """
     Get a single project by ID with full details.
+    
+    Access Control: User must be creator, team member, or admin.
     """
     try:
         project = await project_service.get_project_by_id(project_id)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Check access
+        user_email = await get_current_user_email(request)
+        is_admin = await get_current_user_is_admin(request)
+        
+        if not user_can_access_project(project, user_email, is_admin):
+            raise HTTPException(
+                status_code=403, 
+                detail="You don't have access to this project. Contact the project owner to be added to team_members."
+            )
+        
         return project
     except HTTPException:
         raise
@@ -121,23 +221,38 @@ async def get_project(project_id: int):
 
 
 @router.put("/{project_id}", response_model=UpdateProjectResponse)
-async def update_project(project_id: int, data: MappingProjectUpdate):
+async def update_project(project_id: int, data: MappingProjectUpdate, request: Request):
     """
     Update a project's metadata or status.
+    
+    Access Control: User must be creator, team member, or admin.
     """
     try:
+        # Check access first
+        project = await project_service.get_project_by_id(project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        user_email = await get_current_user_email(request)
+        is_admin = await get_current_user_is_admin(request)
+        
+        if not user_can_access_project(project, user_email, is_admin):
+            raise HTTPException(status_code=403, detail="You don't have access to this project")
+        
         result = await project_service.update_project(project_id, data)
         return UpdateProjectResponse(
             project_id=project_id,
             status=result["status"]
         )
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[Projects Router] Error updating project: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/{project_id}")
-async def delete_project(project_id: int):
+async def delete_project(project_id: int, request: Request):
     """
     Delete a project and all related data.
     
@@ -147,10 +262,30 @@ async def delete_project(project_id: int):
     
     Source fields will be unlinked (not deleted).
     Approved mappings will remain.
+    
+    Access Control: User must be creator or admin (team members cannot delete).
     """
     try:
+        # Check access - only creator or admin can delete
+        project = await project_service.get_project_by_id(project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        user_email = await get_current_user_email(request)
+        is_admin = await get_current_user_is_admin(request)
+        
+        # For delete, only creator or admin (not just team member)
+        created_by = (project.get("created_by") or "").lower()
+        if not is_admin and (not user_email or created_by != user_email):
+            raise HTTPException(
+                status_code=403, 
+                detail="Only the project creator or admin can delete a project"
+            )
+        
         result = await project_service.delete_project(project_id)
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[Projects Router] Error deleting project: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -163,6 +298,7 @@ async def delete_project(project_id: int):
 @router.post("/{project_id}/initialize-tables", response_model=InitializeTablesResponse)
 async def initialize_target_tables(
     project_id: int,
+    request: Request,
     domain: Optional[str] = Query(None, description="Domain filter (pipe-separated for multiple)")
 ):
     """
@@ -172,15 +308,23 @@ async def initialize_target_tables(
     Optionally filter by domain (e.g., "Member" or "Member|Claims").
     
     Call this after uploading source fields.
+    
+    Access Control: User must be creator, team member, or admin.
     """
     print(f"[Projects Router] >>> initialize_target_tables ENDPOINT CALLED <<<")
     print(f"[Projects Router] project_id={project_id}, domain={domain}")
     try:
-        # Verify project exists
+        # Verify project exists and check access
         project = await project_service.get_project_by_id(project_id)
         print(f"[Projects Router] Project found: {project.get('project_name') if project else 'None'}")
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
+        
+        user_email = await get_current_user_email(request)
+        is_admin = await get_current_user_is_admin(request)
+        
+        if not user_can_access_project(project, user_email, is_admin):
+            raise HTTPException(status_code=403, detail="You don't have access to this project")
         
         # Use domain parameter if provided, otherwise use project's target_domains
         # If neither is set (or empty string), domain_filter will be None (= ALL tables)
@@ -219,6 +363,7 @@ async def initialize_target_tables(
 @router.post("/{project_id}/source-fields", response_model=UploadSourceFieldsResponse)
 async def upload_source_fields(
     project_id: int,
+    request: Request,
     file: UploadFile = File(..., description="CSV file with source fields")
 ):
     """
@@ -235,12 +380,20 @@ async def upload_source_fields(
     - src_nullable: Whether column is nullable (YES/NO)
     - src_comments: Column description (CRITICAL for AI vector search matching)
     - domain: Optional domain category (e.g., member, provider)
+    
+    Access Control: User must be creator, team member, or admin.
     """
     try:
-        # Verify project exists
+        # Verify project exists and check access
         project = await project_service.get_project_by_id(project_id)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
+        
+        user_email = await get_current_user_email(request)
+        is_admin = await get_current_user_is_admin(request)
+        
+        if not user_can_access_project(project, user_email, is_admin):
+            raise HTTPException(status_code=403, detail="You don't have access to this project")
         
         # Read CSV
         contents = await file.read()
@@ -338,19 +491,35 @@ async def upload_source_fields(
 @router.get("/{project_id}/source-fields", response_model=List[dict])
 async def get_project_source_fields(
     project_id: int,
+    request: Request,
     table_filter: Optional[str] = Query(None, description="Filter by table name")
 ):
     """
     Get source fields for a project.
     
     Optionally filter by source table name.
+    
+    Access Control: User must be creator, team member, or admin.
     """
     try:
+        # Check access
+        project = await project_service.get_project_by_id(project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        user_email = await get_current_user_email(request)
+        is_admin = await get_current_user_is_admin(request)
+        
+        if not user_can_access_project(project, user_email, is_admin):
+            raise HTTPException(status_code=403, detail="You don't have access to this project")
+        
         fields = await unmapped_fields_service.get_fields_by_project(
             project_id, 
             table_filter=table_filter
         )
         return fields
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[Projects Router] Error getting source fields: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -361,20 +530,31 @@ async def get_project_source_fields(
 # =============================================================================
 
 @router.get("/{project_id}/stats", response_model=dict)
-async def get_project_stats(project_id: int):
+async def get_project_stats(project_id: int, request: Request):
     """
     Get detailed statistics for a project.
     
     Returns counts for tables, columns, and progress.
+    
+    Access Control: User must be creator, team member, or admin.
     """
     try:
-        # Update counters first
+        # Get project and check access
+        project = await project_service.get_project_by_id(project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        user_email = await get_current_user_email(request)
+        is_admin = await get_current_user_is_admin(request)
+        
+        if not user_can_access_project(project, user_email, is_admin):
+            raise HTTPException(status_code=403, detail="You don't have access to this project")
+        
+        # Update counters
         await project_service.update_project_counters(project_id)
         
         # Get fresh project data
         project = await project_service.get_project_by_id(project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
         
         # Calculate progress
         total_columns = project.get("total_target_columns", 0)
