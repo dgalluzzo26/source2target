@@ -294,7 +294,7 @@
                   <Tag 
                     v-for="(change, idx) in getChanges(editingSuggestion)" 
                     :key="'c'+idx"
-                    :value="change.original ? `${change.original} → ${change.replacement}` : (change.description || String(change))"
+                    :value="formatChange(change)"
                     severity="info"
                     size="small"
                   />
@@ -602,6 +602,23 @@ function getChanges(suggestion: MappingSuggestion): any[] {
   } catch {
     return []
   }
+}
+
+function formatChange(change: any): string {
+  // Handle different change formats from LLM
+  if (change.original && change.new) {
+    return `${change.original} → ${change.new}`
+  }
+  if (change.original && change.replacement) {
+    return `${change.original} → ${change.replacement}`
+  }
+  if (change.type && change.original) {
+    return `${change.type}: ${change.original}`
+  }
+  if (change.description) {
+    return change.description
+  }
+  return String(change)
 }
 
 function hasWarningsOrIssues(suggestion: MappingSuggestion): boolean {
