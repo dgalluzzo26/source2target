@@ -87,12 +87,29 @@ class SuggestionService:
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):
-        """Get SQL connection using OAuth."""
-        return sql.connect(
-            server_hostname=server_hostname,
-            http_path=http_path,
-            auth_type="databricks-oauth"
-        )
+        """Get SQL connection with proper OAuth token handling."""
+        # Try to get OAuth token from WorkspaceClient config
+        access_token = None
+        if self.workspace_client and hasattr(self.workspace_client.config, 'authenticate'):
+            try:
+                headers = self.workspace_client.config.authenticate()
+                if headers and 'Authorization' in headers:
+                    access_token = headers['Authorization'].replace('Bearer ', '')
+            except Exception as e:
+                print(f"[Suggestion Service] Could not get OAuth token: {e}")
+        
+        if access_token:
+            return sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path,
+                access_token=access_token
+            )
+        else:
+            return sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path,
+                auth_type="databricks-oauth"
+            )
     
     def _escape_sql(self, value: str) -> str:
         """Escape single quotes for SQL strings."""

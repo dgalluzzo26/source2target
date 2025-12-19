@@ -216,10 +216,11 @@ class ProjectService:
         server_hostname: str,
         http_path: str,
         projects_table: str,
-        include_archived: bool = False
+        include_archived: bool = False,
+        user_email: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Get all projects (synchronous)."""
-        print(f"[Project Service] Fetching projects from {projects_table}...")
+        """Get projects (synchronous). Filters by user access if user_email provided."""
+        print(f"[Project Service] Fetching projects from {projects_table} for user: {user_email or 'all'}...")
         
         try:
             connection = self._get_sql_connection(server_hostname, http_path)
@@ -231,13 +232,27 @@ class ProjectService:
         try:
             with connection.cursor() as cursor:
                 # Handle NULL project_status and avoid issues with ARCHIVED filter
-                where_clause = "" if include_archived else "WHERE COALESCE(project_status, 'NOT_STARTED') != 'ARCHIVED'"
+                base_where = "COALESCE(project_status, 'NOT_STARTED') != 'ARCHIVED'" if not include_archived else "1=1"
+                
+                # Filter by user access if user_email provided
+                # User can see: projects they created OR projects where they're a team member
+                if user_email:
+                    escaped_email = self._escape_sql(user_email.lower())
+                    user_filter = f"""
+                    AND (
+                        LOWER(created_by) = '{escaped_email}'
+                        OR LOWER(COALESCE(team_members, '')) LIKE '%{escaped_email}%'
+                    )
+                    """
+                else:
+                    user_filter = ""
                 
                 # Use SELECT * to avoid column name mismatches
                 query = f"""
                 SELECT *
                 FROM {projects_table}
-                {where_clause}
+                WHERE {base_where}
+                {user_filter}
                 ORDER BY COALESCE(created_ts, CURRENT_TIMESTAMP()) DESC
                 """
                 
@@ -271,8 +286,12 @@ class ProjectService:
         finally:
             connection.close()
     
-    async def get_projects(self, include_archived: bool = False) -> List[Dict[str, Any]]:
-        """Get all projects (async wrapper)."""
+    async def get_projects(
+        self, 
+        include_archived: bool = False,
+        user_email: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get projects (async wrapper). Filters by user access if user_email provided."""
         db_config = self._get_db_config()
         
         try:
@@ -285,7 +304,8 @@ class ProjectService:
                         db_config["server_hostname"],
                         db_config["http_path"],
                         db_config["projects_table"],
-                        include_archived
+                        include_archived,
+                        user_email
                     )
                 ),
                 timeout=60.0  # 60 seconds timeout

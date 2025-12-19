@@ -6,7 +6,7 @@ V4 Target-First Workflow:
 - Upload source fields to a project
 - Initialize target tables from semantic_fields
 """
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Request
 from typing import List, Optional
 from pydantic import BaseModel
 import csv

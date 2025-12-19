@@ -1,4 +1,21 @@
 -- ============================================================================
+-- V4 Schema Updates - Team Access & Pattern Approval
+-- ============================================================================
+
+
+-- ============================================================================
+-- ADD TEAM MEMBERS TO MAPPING_PROJECTS
+-- ============================================================================
+-- Allows project creators to share projects with team members
+
+ALTER TABLE ${CATALOG_SCHEMA}.mapping_projects 
+ADD COLUMN IF NOT EXISTS team_members STRING 
+COMMENT 'Pipe-separated list of team member emails who can access this project';
+
+-- Example: 'john@company.com|jane@company.com|bob@company.com'
+
+
+-- ============================================================================
 -- V4 mapped_fields Table - Complete Recreation
 -- ============================================================================
 -- 
