@@ -12,7 +12,8 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import functools
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, date
+from decimal import Decimal
 from databricks import sql
 from backend.models.project import (
     MappingProject,
@@ -66,6 +67,22 @@ class ProjectService:
         if value is None:
             return ""
         return value.replace("'", "''")
+    
+    def _serialize_row(self, row_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert database row to JSON-serializable dict."""
+        result = {}
+        for key, value in row_dict.items():
+            if isinstance(value, datetime):
+                result[key] = value.isoformat()
+            elif isinstance(value, date):
+                result[key] = value.isoformat()
+            elif isinstance(value, Decimal):
+                result[key] = float(value)
+            elif value is None:
+                result[key] = None
+            else:
+                result[key] = value
+        return result
     
     # =========================================================================
     # CREATE PROJECT
@@ -206,6 +223,8 @@ class ProjectService:
                     project.setdefault('total_target_columns', 0)
                     project.setdefault('columns_mapped', 0)
                     project.setdefault('columns_pending_review', 0)
+                    # Serialize to JSON-safe types
+                    project = self._serialize_row(project)
                     projects.append(project)
                 
                 print(f"[Project Service] Found {len(projects)} projects")
