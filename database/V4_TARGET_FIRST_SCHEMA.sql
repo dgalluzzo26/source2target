@@ -68,6 +68,9 @@ CREATE TABLE IF NOT EXISTS ${CATALOG_SCHEMA}.mapping_projects (
   -- Historical mappings (loaded as patterns) are pre-approved
   -- New mappings from this project require approval before becoming patterns
   
+  -- Team access
+  team_members STRING COMMENT 'Comma-separated emails of team members with access (creator always has access)',
+  
   -- Audit fields
   created_by STRING NOT NULL COMMENT 'User who created the project',
   created_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Timestamp when project was created',

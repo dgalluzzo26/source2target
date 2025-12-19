@@ -111,9 +111,9 @@
             <i class="pi pi-tag"></i>
             {{ project.target_domains }}
           </span>
-          <span v-if="project.source_system" class="source-tag">
+          <span v-if="project.source_system_name" class="source-tag">
             <i class="pi pi-database"></i>
-            {{ project.source_system }}
+            {{ project.source_system_name }}
           </span>
         </div>
       </div>
@@ -135,7 +135,7 @@
       v-model:visible="showCreateDialog" 
       modal 
       header="Create New Project" 
-      :style="{ width: '500px' }"
+      :style="{ width: '600px' }"
     >
       <div class="create-form">
         <div class="field">
@@ -153,33 +153,113 @@
           <Textarea 
             id="projectDescription"
             v-model="newProject.project_description" 
-            :rows="3"
+            :rows="2"
             class="w-full"
             placeholder="Describe the purpose of this project..."
           />
         </div>
 
-        <div class="field">
-          <label for="sourceSystem">Source System</label>
-          <InputText 
-            id="sourceSystem"
-            v-model="newProject.source_system" 
-            class="w-full"
-            placeholder="e.g., Legacy DW, DMES, Claims System"
-          />
+        <!-- Source Configuration -->
+        <div class="form-section">
+          <h4><i class="pi pi-upload"></i> Source Configuration</h4>
+          
+          <div class="field">
+            <label for="sourceSystem">Source System Name</label>
+            <InputText 
+              id="sourceSystem"
+              v-model="newProject.source_system_name" 
+              class="w-full"
+              placeholder="e.g., Legacy DW, DMES, ACME_MMIS"
+            />
+            <small class="field-hint">Friendly name for the source system</small>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="sourceCatalogs">Source Catalog(s)</label>
+              <InputText 
+                id="sourceCatalogs"
+                v-model="newProject.source_catalogs" 
+                class="w-full"
+                placeholder="e.g., bronze_dmes"
+              />
+              <small class="field-hint">Pipe-separated if multiple</small>
+            </div>
+
+            <div class="field">
+              <label for="sourceSchemas">Source Schema(s)</label>
+              <InputText 
+                id="sourceSchemas"
+                v-model="newProject.source_schemas" 
+                class="w-full"
+                placeholder="e.g., member|claims"
+              />
+              <small class="field-hint">Pipe-separated if multiple</small>
+            </div>
+          </div>
         </div>
 
-        <div class="field">
-          <label for="targetDomains">Target Domains</label>
-          <InputText 
-            id="targetDomains"
-            v-model="newProject.target_domains" 
-            class="w-full"
-            placeholder="e.g., Member or Member|Claims"
-          />
-          <small class="field-hint">
-            Pipe-separated list of domains to include. Leave blank for all.
-          </small>
+        <!-- Target Configuration -->
+        <div class="form-section">
+          <h4><i class="pi pi-download"></i> Target Configuration</h4>
+          
+          <div class="field-row">
+            <div class="field">
+              <label for="targetCatalogs">Target Catalog(s)</label>
+              <InputText 
+                id="targetCatalogs"
+                v-model="newProject.target_catalogs" 
+                class="w-full"
+                placeholder="e.g., silver_dmes"
+              />
+              <small class="field-hint">Pipe-separated if multiple</small>
+            </div>
+
+            <div class="field">
+              <label for="targetSchemas">Target Schema(s)</label>
+              <InputText 
+                id="targetSchemas"
+                v-model="newProject.target_schemas" 
+                class="w-full"
+                placeholder="e.g., member"
+              />
+              <small class="field-hint">Pipe-separated if multiple</small>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="targetDomains">Target Domains (Optional Filter)</label>
+            <InputText 
+              id="targetDomains"
+              v-model="newProject.target_domains" 
+              class="w-full"
+              placeholder="Leave blank for ALL domains"
+            />
+            <small class="field-hint">
+              <i class="pi pi-info-circle"></i>
+              Leave empty to include ALL target tables. Use pipe-separated values to filter (e.g., MEMBER|CLAIMS).
+            </small>
+          </div>
+        </div>
+
+        <!-- Team Access -->
+        <div class="form-section">
+          <h4><i class="pi pi-users"></i> Team Access</h4>
+          
+          <div class="field">
+            <label for="teamMembers">Team Member Emails</label>
+            <Textarea 
+              id="teamMembers"
+              v-model="newProject.team_members" 
+              :rows="2"
+              class="w-full"
+              placeholder="e.g., user1@company.com, user2@company.com"
+            />
+            <small class="field-hint">
+              Comma-separated list of emails who can access this project.
+              Project creator always has access.
+            </small>
+          </div>
         </div>
       </div>
 
@@ -241,8 +321,13 @@ const selectedProject = ref<MappingProject | null>(null)
 const newProject = ref({
   project_name: '',
   project_description: '',
-  source_system: '',
-  target_domains: ''
+  source_system_name: '',
+  source_catalogs: '',
+  source_schemas: '',
+  target_catalogs: '',
+  target_schemas: '',
+  target_domains: '',
+  team_members: ''
 })
 
 // Computed
@@ -330,8 +415,13 @@ async function handleCreateProject() {
     const result = await projectsStore.createProject({
       project_name: newProject.value.project_name,
       project_description: newProject.value.project_description || undefined,
-      source_system: newProject.value.source_system || undefined,
+      source_system_name: newProject.value.source_system_name || undefined,
+      source_catalogs: newProject.value.source_catalogs || undefined,
+      source_schemas: newProject.value.source_schemas || undefined,
+      target_catalogs: newProject.value.target_catalogs || undefined,
+      target_schemas: newProject.value.target_schemas || undefined,
       target_domains: newProject.value.target_domains || undefined,
+      team_members: newProject.value.team_members || undefined,
       created_by: userStore.userEmail || 'unknown'
     })
 
@@ -365,8 +455,13 @@ function resetNewProject() {
   newProject.value = {
     project_name: '',
     project_description: '',
-    source_system: '',
-    target_domains: ''
+    source_system_name: '',
+    source_catalogs: '',
+    source_schemas: '',
+    target_catalogs: '',
+    target_schemas: '',
+    target_domains: '',
+    team_members: ''
   }
 }
 
@@ -637,20 +732,49 @@ function getProgressPercent(project: MappingProject): number {
   gap: 1.25rem;
 }
 
+.form-section {
+  background: var(--surface-50);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-section h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.9rem;
+  color: var(--gainwell-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-section h4 i {
+  font-size: 0.85rem;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .field label {
   font-weight: 500;
+  font-size: 0.9rem;
   color: var(--text-color);
 }
 
 .field-hint {
   color: var(--text-color-secondary);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 .w-full {

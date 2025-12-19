@@ -178,9 +178,17 @@ async def start_discovery(
     
     Poll GET /suggestions or use webhooks to know when complete.
     """
+    import traceback
+    print(f"[Target Tables Router] >>> DISCOVER ENDPOINT CALLED <<<")
+    print(f"[Target Tables Router] project_id={project_id}, target_table_status_id={target_table_status_id}")
+    print(f"[Target Tables Router] Request: started_by={request.started_by}")
+    
     try:
         # Get the table
+        print(f"[Target Tables Router] Fetching table by id...")
         table = await target_table_service.get_target_table_by_id(target_table_status_id)
+        print(f"[Target Tables Router] Table found: {table}")
+        
         if not table:
             raise HTTPException(status_code=404, detail="Target table not found")
         
@@ -194,24 +202,30 @@ async def start_discovery(
             )
         
         # Update status to indicate started
+        print(f"[Target Tables Router] Updating table status to DISCOVERING...")
         update_data = TargetTableStatusUpdate(
             mapping_status=TableMappingStatus.DISCOVERING,
             started_by=request.started_by
         )
         await target_table_service.update_target_table_status(target_table_status_id, update_data)
+        print(f"[Target Tables Router] Table status updated successfully")
         
         # Run discovery in background
         async def run_discovery():
             try:
+                print(f"[Target Tables Router] Starting background discovery...")
                 await suggestion_service.generate_suggestions_for_table(
                     project_id,
                     target_table_status_id,
                     table["tgt_table_physical_name"]
                 )
+                print(f"[Target Tables Router] Discovery completed, updating counters...")
                 # Update project counters
                 await project_service.update_project_counters(project_id)
+                print(f"[Target Tables Router] Counters updated")
             except Exception as e:
                 print(f"[Target Tables Router] Background discovery error: {e}")
+                traceback.print_exc()
         
         background_tasks.add_task(run_discovery)
         
@@ -226,6 +240,7 @@ async def start_discovery(
         raise
     except Exception as e:
         print(f"[Target Tables Router] Error starting discovery: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -241,22 +256,32 @@ async def start_discovery_sync(
     Same as /discover but waits for completion.
     Use this for smaller tables or when you need immediate results.
     """
+    import traceback
+    print(f"[Target Tables Router] >>> DISCOVER SYNC ENDPOINT CALLED <<<")
+    print(f"[Target Tables Router] project_id={project_id}, target_table_status_id={target_table_status_id}")
+    
     try:
         # Get the table
+        print(f"[Target Tables Router] Fetching table by id...")
         table = await target_table_service.get_target_table_by_id(target_table_status_id)
+        print(f"[Target Tables Router] Table: {table}")
+        
         if not table:
             raise HTTPException(status_code=404, detail="Target table not found")
         
         # Update started_by
+        print(f"[Target Tables Router] Updating started_by...")
         update_data = TargetTableStatusUpdate(started_by=request.started_by)
         await target_table_service.update_target_table_status(target_table_status_id, update_data)
         
         # Run discovery synchronously
+        print(f"[Target Tables Router] Running discovery for table: {table['tgt_table_physical_name']}")
         result = await suggestion_service.generate_suggestions_for_table(
             project_id,
             target_table_status_id,
             table["tgt_table_physical_name"]
         )
+        print(f"[Target Tables Router] Discovery result: {result}")
         
         # Update project counters
         await project_service.update_project_counters(project_id)
@@ -275,6 +300,7 @@ async def start_discovery_sync(
         raise
     except Exception as e:
         print(f"[Target Tables Router] Error in sync discovery: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

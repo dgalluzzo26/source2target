@@ -105,6 +105,9 @@ class MappingProject(BaseModel):
     columns_mapped: int = Field(default=0, description="Columns with approved mappings")
     columns_pending_review: int = Field(default=0, description="Columns pending review")
     
+    # Team access
+    team_members: Optional[str] = Field(None, description="Comma-separated emails of team members with access")
+    
     # Audit
     created_by: Optional[str] = Field(None, description="User who created")
     created_ts: Optional[datetime] = Field(None, description="Creation timestamp")
@@ -124,6 +127,7 @@ class MappingProjectCreate(BaseModel):
     target_catalogs: Optional[str] = None
     target_schemas: Optional[str] = None
     target_domains: Optional[str] = None
+    team_members: Optional[str] = Field(None, description="Comma-separated emails of team members with access")
     created_by: Optional[str] = None
 
 
@@ -137,6 +141,7 @@ class MappingProjectUpdate(BaseModel):
     target_catalogs: Optional[str] = None
     target_schemas: Optional[str] = None
     target_domains: Optional[str] = None
+    team_members: Optional[str] = Field(None, description="Comma-separated emails of team members with access")
     project_status: Optional[ProjectStatus] = None
     updated_by: Optional[str] = None
 

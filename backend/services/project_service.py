@@ -144,6 +144,7 @@ class ProjectService:
                     target_catalogs,
                     target_schemas,
                     target_domains,
+                    team_members,
                     project_status,
                     created_by,
                     created_ts
@@ -156,6 +157,7 @@ class ProjectService:
                     {f"'{self._escape_sql(data.target_catalogs)}'" if data.target_catalogs else 'NULL'},
                     {f"'{self._escape_sql(data.target_schemas)}'" if data.target_schemas else 'NULL'},
                     {f"'{self._escape_sql(data.target_domains)}'" if data.target_domains else 'NULL'},
+                    {f"'{self._escape_sql(data.team_members)}'" if data.team_members else 'NULL'},
                     'NOT_STARTED',
                     {f"'{self._escape_sql(data.created_by)}'" if data.created_by else 'NULL'},
                     CURRENT_TIMESTAMP()
@@ -423,6 +425,8 @@ class ProjectService:
                     set_parts.append(f"target_schemas = '{self._escape_sql(data.target_schemas)}'")
                 if data.target_domains is not None:
                     set_parts.append(f"target_domains = '{self._escape_sql(data.target_domains)}'")
+                if data.team_members is not None:
+                    set_parts.append(f"team_members = '{self._escape_sql(data.team_members)}'")
                 if data.project_status is not None:
                     set_parts.append(f"project_status = '{data.project_status.value}'")
                 if data.updated_by is not None:
@@ -511,16 +515,16 @@ class ProjectService:
                 tables = cursor.fetchall()
                 print(f"[Project Service] Sample tables found: {tables}")
                 
-                # Build domain filter
+                # Build domain filter (CASE-INSENSITIVE)
                 where_clause = ""
                 if domain_filter and domain_filter.strip():
-                    # Support pipe-separated domains
+                    # Support pipe-separated domains - use UPPER for case-insensitive match
                     domains = domain_filter.split("|")
-                    domain_conditions = [f"domain = '{self._escape_sql(d.strip())}'" for d in domains]
+                    domain_conditions = [f"UPPER(domain) = UPPER('{self._escape_sql(d.strip())}')" for d in domains]
                     where_clause = f"WHERE ({' OR '.join(domain_conditions)})"
-                    print(f"[Project Service] Using domain filter: {where_clause}")
+                    print(f"[Project Service] Using domain filter (case-insensitive): {where_clause}")
                 else:
-                    print(f"[Project Service] No domain filter - selecting all tables")
+                    print(f"[Project Service] No domain filter - selecting ALL tables")
                 
                 # Insert target table status rows grouped by table
                 query = f"""

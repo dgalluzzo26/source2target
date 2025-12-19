@@ -19,15 +19,25 @@ export interface MappingProject {
   project_id: number
   project_name: string
   project_description?: string
-  source_system?: string
+  // Source configuration
+  source_system_name?: string
+  source_catalogs?: string
+  source_schemas?: string
+  // Target configuration
+  target_catalogs?: string
+  target_schemas?: string
   target_domains?: string
-  project_status: 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'COMPLETE' | 'ARCHIVED'
+  // Status and counters
+  project_status: 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'COMPLETE' | 'ARCHIVED' | 'NOT_STARTED' | 'IN_PROGRESS'
   total_target_tables: number
   tables_complete: number
   tables_in_progress: number
   total_target_columns: number
   columns_mapped: number
   columns_pending_review: number
+  // Team access
+  team_members?: string
+  // Audit
   created_by?: string
   created_ts?: string
   updated_ts?: string
@@ -149,8 +159,13 @@ export const useProjectsStore = defineStore('projects', () => {
   async function createProject(data: {
     project_name: string
     project_description?: string
-    source_system?: string
+    source_system_name?: string
+    source_catalogs?: string
+    source_schemas?: string
+    target_catalogs?: string
+    target_schemas?: string
     target_domains?: string
+    team_members?: string
     created_by: string
   }) {
     loading.value = true

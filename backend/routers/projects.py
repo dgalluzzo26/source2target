@@ -182,9 +182,20 @@ async def initialize_target_tables(
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         
-        # Use project's target_domains if no domain specified
-        domain_filter = domain or project.get("target_domains")
-        print(f"[Projects Router] Using domain_filter: {domain_filter}")
+        # Use domain parameter if provided, otherwise use project's target_domains
+        # If neither is set (or empty string), domain_filter will be None (= ALL tables)
+        project_domains = project.get("target_domains")
+        
+        # Treat empty strings as None (= ALL domains)
+        if domain is not None and domain.strip():
+            domain_filter = domain.strip()
+        elif project_domains and project_domains.strip():
+            domain_filter = project_domains.strip()
+        else:
+            domain_filter = None  # This means ALL domains
+            
+        print(f"[Projects Router] Project target_domains: {project_domains}")
+        print(f"[Projects Router] Final domain_filter: {domain_filter} (None = ALL domains)")
         
         result = await project_service.initialize_target_tables(project_id, domain_filter)
         print(f"[Projects Router] Result: {result}")
