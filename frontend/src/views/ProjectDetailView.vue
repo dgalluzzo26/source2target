@@ -42,6 +42,26 @@
 
     <!-- Stats Cards -->
     <div class="stats-row" v-if="project">
+      <!-- Source Stats -->
+      <div class="stat-card source">
+        <div class="stat-icon source-tables">
+          <i class="pi pi-upload"></i>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ project.source_tables_count || 0 }}</span>
+          <span class="stat-label">Source Tables</span>
+        </div>
+      </div>
+      <div class="stat-card source">
+        <div class="stat-icon source-columns">
+          <i class="pi pi-bars"></i>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ project.source_columns_count || 0 }}</span>
+          <span class="stat-label">Source Columns</span>
+        </div>
+      </div>
+      <!-- Target Stats -->
       <div class="stat-card">
         <div class="stat-icon tables">
           <i class="pi pi-table"></i>
@@ -743,6 +763,16 @@ function getRowClass(data: TargetTableStatus): string {
   font-size: 1.25rem;
 }
 
+.stat-icon.source-tables {
+  background: #fce4ec;
+  color: #c2185b;
+}
+
+.stat-icon.source-columns {
+  background: #f3e5f5;
+  color: #8e24aa;
+}
+
 .stat-icon.tables {
   background: #e3f2fd;
   color: #1976d2;
@@ -759,8 +789,12 @@ function getRowClass(data: TargetTableStatus): string {
 }
 
 .stat-icon.columns {
-  background: #f3e5f5;
-  color: #7b1fa2;
+  background: #e0f7fa;
+  color: #00838f;
+}
+
+.stat-card.source {
+  border-left: 3px solid #c2185b;
 }
 
 .stat-content {

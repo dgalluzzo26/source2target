@@ -37,6 +37,9 @@ export interface MappingProject {
   columns_pending_review: number
   // Team access
   team_members?: string
+  // Source field stats (computed from unmapped_fields)
+  source_tables_count?: number
+  source_columns_count?: number
   // Audit
   created_by?: string
   created_ts?: string

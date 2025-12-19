@@ -370,17 +370,89 @@ class ProjectService:
             connection.close()
     
     async def get_project_by_id(self, project_id: int) -> Optional[Dict[str, Any]]:
-        """Get a project by ID (async wrapper)."""
+        """Get a project by ID (async wrapper) - includes source field stats."""
         db_config = self._get_db_config()
         
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
+        project = await loop.run_in_executor(
             executor,
             functools.partial(
                 self._get_project_by_id_sync,
                 db_config["server_hostname"],
                 db_config["http_path"],
                 db_config["projects_table"],
+                project_id
+            )
+        )
+        
+        # Add source field stats
+        if project:
+            source_stats = await self.get_source_field_stats(project_id)
+            project.update(source_stats)
+        
+        return project
+    
+    # =========================================================================
+    # GET SOURCE FIELD STATS
+    # =========================================================================
+    
+    def _get_source_field_stats_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        unmapped_fields_table: str,
+        project_id: int
+    ) -> Dict[str, Any]:
+        """Get source field statistics for a project (synchronous)."""
+        print(f"[Project Service] Getting source field stats for project: {project_id}")
+        
+        connection = self._get_sql_connection(server_hostname, http_path)
+        
+        try:
+            with connection.cursor() as cursor:
+                # Get counts of source tables and columns
+                query = f"""
+                SELECT 
+                    COUNT(DISTINCT src_table_physical_name) AS source_tables_count,
+                    COUNT(*) AS source_columns_count
+                FROM {unmapped_fields_table}
+                WHERE project_id = {project_id}
+                """
+                
+                cursor.execute(query)
+                row = cursor.fetchone()
+                
+                if row:
+                    return {
+                        "source_tables_count": row[0] or 0,
+                        "source_columns_count": row[1] or 0
+                    }
+                return {
+                    "source_tables_count": 0,
+                    "source_columns_count": 0
+                }
+                
+        except Exception as e:
+            print(f"[Project Service] Error fetching source field stats: {str(e)}")
+            return {
+                "source_tables_count": 0,
+                "source_columns_count": 0
+            }
+        finally:
+            connection.close()
+    
+    async def get_source_field_stats(self, project_id: int) -> Dict[str, Any]:
+        """Get source field statistics for a project (async wrapper)."""
+        db_config = self._get_db_config()
+        
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor,
+            functools.partial(
+                self._get_source_field_stats_sync,
+                db_config["server_hostname"],
+                db_config["http_path"],
+                db_config["unmapped_fields_table"],
                 project_id
             )
         )
