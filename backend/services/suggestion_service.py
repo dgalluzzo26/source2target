@@ -227,7 +227,7 @@ class SuggestionService:
                     domain
                 FROM {unmapped_fields_table}
                 WHERE project_id = {project_id}
-                  AND mapping_status = 'PENDING'
+                  AND mapping_status IN ('PENDING', 'UNMAPPED')
                   AND ({like_conditions})
                 LIMIT {num_results}
                 """

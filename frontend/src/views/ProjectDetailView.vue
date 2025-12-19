@@ -336,6 +336,7 @@
         :table-id="reviewingTable.target_table_status_id"
         :table-name="reviewingTable.tgt_table_name"
         @suggestion-updated="handleSuggestionUpdated"
+        @manual-mapping="handleManualMapping"
       />
     </Dialog>
   </div>
@@ -632,6 +633,22 @@ async function handleSuggestionUpdated() {
   // Refresh table data when suggestion is updated
   await projectsStore.fetchTargetTables(projectId.value)
   await projectsStore.fetchProject(projectId.value)
+}
+
+function handleManualMapping(suggestion: any) {
+  // Show a dialog for manual mapping
+  toast.add({
+    severity: 'info',
+    summary: 'Manual Mapping',
+    detail: `Manual mapping for ${suggestion.tgt_column_name} - Feature coming soon. You can edit the SQL directly using the Edit button.`,
+    life: 5000
+  })
+  
+  // TODO: Implement full manual mapping dialog that:
+  // 1. Shows list of available source fields
+  // 2. Lets user pick source columns
+  // 3. Generates SQL expression
+  // 4. Saves as a new suggestion or directly as a mapping
 }
 
 function toggleTableMenu(event: Event, table: TargetTableStatus) {
