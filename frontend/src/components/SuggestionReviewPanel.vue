@@ -267,10 +267,17 @@
             </div>
             
             <div v-if="!leftPanelCollapsed" class="left-panel-content">
-              <!-- AI Changes Section -->
+              <!-- AI Changes Section - Collapsible -->
               <div v-if="getChanges(editingSuggestion).length > 0 || getWarnings(editingSuggestion).length > 0" class="changes-section">
-                <h4><i class="pi pi-lightbulb"></i> AI Changes</h4>
-                <div class="change-list">
+                <div class="section-header" @click="aiChangesCollapsed = !aiChangesCollapsed">
+                  <i :class="aiChangesCollapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-down'"></i>
+                  <h4><i class="pi pi-lightbulb"></i> AI Changes</h4>
+                  <Badge 
+                    :value="getChanges(editingSuggestion).length + getWarnings(editingSuggestion).length" 
+                    :severity="getWarnings(editingSuggestion).length > 0 ? 'warning' : 'info'"
+                  />
+                </div>
+                <div v-if="!aiChangesCollapsed" class="change-list">
                   <div 
                     v-for="(change, idx) in getChanges(editingSuggestion)" 
                     :key="'c'+idx"
@@ -289,6 +296,7 @@
                     v-for="(warning, idx) in getWarnings(editingSuggestion)" 
                     :key="'w'+idx"
                     class="change-item is-warning"
+                    @click="highlightWarningField(warning)"
                   >
                     <i class="pi pi-exclamation-triangle"></i>
                     <span>{{ warning }}</span>
@@ -343,6 +351,7 @@
                   label="AI Assist" 
                   icon="pi pi-bolt" 
                   size="small"
+                  severity="help"
                   @click="showAIAssist = true"
                   v-tooltip.top="'Get AI help with this expression'"
                   class="ai-assist-btn"
@@ -505,6 +514,7 @@ const expandedTables = ref<string[]>([])
 const sourceFields = ref<any[]>([])
 const regeneratingId = ref<number | null>(null)
 const leftPanelCollapsed = ref(false)
+const aiChangesCollapsed = ref(false)
 const sqlTextarea = ref<any>(null)
 
 // Computed
@@ -521,34 +531,47 @@ const noMatchCount = computed(() =>
   suggestions.value.filter(s => s.suggestion_status === 'NO_MATCH' || s.suggestion_status === 'NO_PATTERN').length
 )
 
-// Problem fields from AI changes that need user attention
+// Problem fields from AI warnings that need user attention
+// NOTE: We only highlight fields from WARNINGS (missing/not found), 
+// NOT from successful changes (those are already fixed)
 const problemFieldsInSQL = computed(() => {
   if (!editingSuggestion.value) return []
   
-  const changes = getChanges(editingSuggestion.value)
   const warnings = getWarnings(editingSuggestion.value)
   const problems: string[] = []
   
-  // Extract original field names from changes that indicate problems
-  for (const change of changes) {
-    if (change.original) {
-      // Look for fields that were replaced or have issues
-      problems.push(change.original)
-    }
-    if (change.missing) {
-      problems.push(change.missing)
-    }
-  }
-  
-  // If there are warnings about missing/unknown fields, try to extract them
+  // Extract field names from warnings about missing/unknown fields
   for (const warning of warnings) {
-    const matches = warning.match(/['"]([A-Z_0-9]+)['"]/gi)
-    if (matches) {
-      problems.push(...matches.map((m: string) => m.replace(/['"]/g, '')))
+    // Look for patterns like "CDE_COUNTY", 'CDE_COUNTY', or just CDE_COUNTY in context
+    // Common warning patterns:
+    // - "No matching source column found for CDE_COUNTY"
+    // - "Column 'XYZ' not found"
+    // - "Missing: ABC_FIELD"
+    
+    // Match field names in quotes
+    const quotedMatches = warning.match(/['"`]([A-Za-z_][A-Za-z0-9_]*)['"`]/g)
+    if (quotedMatches) {
+      problems.push(...quotedMatches.map((m: string) => m.replace(/['"`]/g, '')))
+    }
+    
+    // Match "for FIELD_NAME" or "found for FIELD_NAME" 
+    const forMatch = warning.match(/for\s+([A-Z][A-Z0-9_]+)/i)
+    if (forMatch) {
+      problems.push(forMatch[1])
+    }
+    
+    // Match "Missing: FIELD_NAME" or "Missing FIELD_NAME"
+    const missingMatch = warning.match(/missing[:\s]+([A-Z][A-Z0-9_]+)/i)
+    if (missingMatch) {
+      problems.push(missingMatch[1])
     }
   }
   
-  return [...new Set(problems)] // unique values
+  // Filter out common SQL keywords that might get caught
+  const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'AND', 'OR', 'ON', 'AS', 'IN', 'NOT', 'NULL']
+  const filtered = problems.filter(p => !sqlKeywords.includes(p.toUpperCase()))
+  
+  return [...new Set(filtered)] // unique values
 })
 
 // Highlighted SQL with problem fields marked
@@ -760,6 +783,40 @@ function highlightInSQL(change: any) {
   
   if (index >= 0) {
     // Select the text in the textarea
+    const textarea = sqlTextarea.value.$el?.querySelector('textarea') || sqlTextarea.value
+    if (textarea && textarea.setSelectionRange) {
+      textarea.focus()
+      textarea.setSelectionRange(index, index + searchTerm.length)
+    }
+  }
+}
+
+function highlightWarningField(warning: string) {
+  if (!sqlTextarea.value) return
+  
+  // Extract field name from warning
+  let searchTerm = ''
+  
+  // Try "for FIELD_NAME" pattern
+  const forMatch = warning.match(/for\s+([A-Z][A-Z0-9_]+)/i)
+  if (forMatch) {
+    searchTerm = forMatch[1]
+  }
+  
+  // Try quoted field name
+  if (!searchTerm) {
+    const quotedMatch = warning.match(/['"`]([A-Za-z_][A-Za-z0-9_]*)['"`]/)
+    if (quotedMatch) {
+      searchTerm = quotedMatch[1]
+    }
+  }
+  
+  if (!searchTerm) return
+  
+  const sql = editedSQL.value
+  const index = sql.toUpperCase().indexOf(searchTerm.toUpperCase())
+  
+  if (index >= 0) {
     const textarea = sqlTextarea.value.$el?.querySelector('textarea') || sqlTextarea.value
     if (textarea && textarea.setSelectionRange) {
       textarea.focus()
@@ -1325,12 +1382,40 @@ function formatDate(dateStr?: string): string {
 
 /* Changes Section */
 .changes-section {
-  padding: 0.75rem;
   border-bottom: 1px solid var(--surface-border);
 }
 
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  cursor: pointer;
+  background: var(--surface-100);
+  transition: background 0.15s;
+}
+
+.section-header:hover {
+  background: var(--surface-200);
+}
+
+.section-header > i:first-child {
+  font-size: 0.7rem;
+  color: var(--text-color-secondary);
+}
+
+.section-header h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--primary-color);
+  flex: 1;
+}
+
 .changes-section h4 {
-  margin: 0 0 0.5rem 0;
+  margin: 0;
   font-size: 0.85rem;
   display: flex;
   align-items: center;
@@ -1342,6 +1427,7 @@ function formatDate(dateStr?: string): string {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  padding: 0.5rem 0.75rem 0.75rem;
 }
 
 .change-item {
@@ -1543,9 +1629,25 @@ function formatDate(dateStr?: string): string {
 }
 
 .ai-assist-btn {
-  background: linear-gradient(135deg, var(--primary-color), var(--purple-500)) !important;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
   color: white !important;
   border: none !important;
+  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3) !important;
+}
+
+.ai-assist-btn:hover {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+  box-shadow: 0 4px 8px rgba(99, 102, 241, 0.4) !important;
+}
+
+:deep(.ai-assist-btn) {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+  color: white !important;
+  border: none !important;
+}
+
+:deep(.ai-assist-btn:hover) {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
 }
 
 /* Highlighted SQL Preview */

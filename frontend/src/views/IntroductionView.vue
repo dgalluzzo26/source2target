@@ -77,13 +77,13 @@
 
     <!-- Quick Actions -->
     <div class="actions-grid">
-      <Card class="action-card" @click="navigateTo('/unmapped-fields')">
+      <Card class="action-card" @click="navigateTo('/projects')">
         <template #content>
           <div class="action-content">
             <i class="pi pi-sitemap action-icon"></i>
-            <h3>Field Mapping</h3>
-            <p>Map source fields to target schema with AI assistance</p>
-            <Button label="Start Mapping" icon="pi pi-arrow-right" />
+            <h3>Mapping Projects</h3>
+            <p>Create and manage target-first mapping projects with AI assistance</p>
+            <Button label="View Projects" icon="pi pi-arrow-right" />
           </div>
         </template>
       </Card>
@@ -114,32 +114,40 @@
           <div class="step">
             <div class="step-number">1</div>
             <div class="step-content">
-              <h4>Configure Connections</h4>
-              <p>Set up your database connections and AI model endpoints in the Configuration section.</p>
+              <h4>Create a Project</h4>
+              <p>Start by creating a mapping project with your source system name and target domains.</p>
             </div>
           </div>
           
           <div class="step">
             <div class="step-number">2</div>
             <div class="step-content">
-              <h4>Discover Data</h4>
-              <p>Browse and analyze your source tables and columns in the Field Mapping section.</p>
+              <h4>Upload Source Fields</h4>
+              <p>Upload a CSV of your source tables and columns. Include descriptions for better AI matching.</p>
             </div>
           </div>
           
           <div class="step">
             <div class="step-number">3</div>
             <div class="step-content">
-              <h4>Map Fields</h4>
-              <p>Use AI-powered suggestions or manual search to map fields to your target schema.</p>
+              <h4>Initialize Target Tables</h4>
+              <p>Select which target domains to map. The system creates a table-by-table mapping queue.</p>
             </div>
           </div>
           
           <div class="step">
             <div class="step-number">4</div>
             <div class="step-content">
-              <h4>Export Results</h4>
-              <p>Download your completed mappings as CSV templates for further processing.</p>
+              <h4>Run AI Discovery</h4>
+              <p>AI finds patterns from historical mappings and matches your source fields automatically.</p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">5</div>
+            <div class="step-content">
+              <h4>Review & Approve</h4>
+              <p>Review AI suggestions, edit SQL expressions as needed, and approve mappings.</p>
             </div>
           </div>
         </div>
