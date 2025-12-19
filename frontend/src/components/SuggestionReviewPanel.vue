@@ -145,21 +145,42 @@
 
         <!-- Actions -->
         <div class="suggestion-actions" v-if="suggestion.suggestion_status === 'PENDING'">
-          <Button 
-            label="Approve"
-            icon="pi pi-check"
-            size="small"
-            severity="success"
-            @click="handleApprove(suggestion)"
-          />
-          <Button 
-            label="Edit & Approve"
-            icon="pi pi-pencil"
-            size="small"
-            severity="info"
-            outlined
-            @click="openEditDialog(suggestion)"
-          />
+          <!-- Show Edit first if there are warnings or low confidence -->
+          <template v-if="hasWarningsOrIssues(suggestion)">
+            <Button 
+              label="Review & Edit"
+              icon="pi pi-pencil"
+              size="small"
+              severity="warning"
+              @click="openEditDialog(suggestion)"
+            />
+            <Button 
+              label="Approve Anyway"
+              icon="pi pi-check"
+              size="small"
+              severity="success"
+              outlined
+              @click="handleApprove(suggestion)"
+            />
+          </template>
+          <!-- Show Approve first if clean (no warnings, high confidence) -->
+          <template v-else>
+            <Button 
+              label="Approve"
+              icon="pi pi-check"
+              size="small"
+              severity="success"
+              @click="handleApprove(suggestion)"
+            />
+            <Button 
+              label="Edit"
+              icon="pi pi-pencil"
+              size="small"
+              severity="info"
+              outlined
+              @click="openEditDialog(suggestion)"
+            />
+          </template>
           <Button 
             label="Reject"
             icon="pi pi-times"
@@ -211,42 +232,168 @@
       </div>
     </div>
 
-    <!-- Edit Dialog -->
+    <!-- Enhanced Edit Dialog -->
     <Dialog 
       v-model:visible="showEditDialog" 
       modal 
-      header="Edit SQL Expression" 
-      :style="{ width: '700px' }"
+      header="Edit Mapping" 
+      :style="{ width: '95vw', maxWidth: '1200px' }"
+      maximizable
     >
       <div v-if="editingSuggestion" class="edit-dialog-content">
-        <div class="edit-target-info">
-          <label>Target Column:</label>
-          <strong>{{ editingSuggestion.tgt_column_name }}</strong>
+        <!-- Target Info Header -->
+        <div class="edit-header">
+          <div class="target-info">
+            <Tag value="TARGET" severity="info" />
+            <strong>{{ editingSuggestion.tgt_table_name }}.{{ editingSuggestion.tgt_column_name }}</strong>
+            <span class="datatype">({{ editingSuggestion.tgt_physical_datatype || 'STRING' }})</span>
+          </div>
+          <div class="target-description" v-if="editingSuggestion.tgt_comments">
+            {{ editingSuggestion.tgt_comments }}
+          </div>
         </div>
 
-        <div class="field">
-          <label>SQL Expression:</label>
-          <Textarea 
-            v-model="editedSQL" 
-            :rows="8"
-            class="sql-editor w-full"
-            placeholder="Enter the SQL expression..."
-          />
-        </div>
+        <!-- Two Column Layout -->
+        <div class="edit-columns">
+          <!-- Left: Source Fields -->
+          <div class="source-panel">
+            <div class="panel-header">
+              <h4><i class="pi pi-table"></i> Available Source Fields</h4>
+              <InputText 
+                v-model="sourceFilter" 
+                placeholder="Filter columns..." 
+                size="small"
+                class="source-filter"
+              />
+            </div>
+            
+            <div class="source-tables">
+              <div v-for="table in groupedSourceFields" :key="table.tableName" class="source-table-group">
+                <div class="table-header" @click="toggleTableExpand(table.tableName)">
+                  <i :class="expandedTables.includes(table.tableName) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></i>
+                  <strong>{{ table.tableName }}</strong>
+                  <Badge :value="table.columns.length" severity="secondary" />
+                </div>
+                <div v-if="expandedTables.includes(table.tableName)" class="table-columns">
+                  <div 
+                    v-for="col in filteredColumns(table.columns)" 
+                    :key="col.unmapped_field_id"
+                    class="column-item"
+                    :class="{ 'matched': isMatchedColumn(col) }"
+                    @click="insertColumnToSQL(col)"
+                    v-tooltip.right="col.src_comments || 'Click to insert'"
+                  >
+                    <span class="col-name">{{ col.src_column_physical_name }}</span>
+                    <span class="col-type">{{ col.src_physical_datatype || 'STRING' }}</span>
+                    <i v-if="isMatchedColumn(col)" class="pi pi-check matched-icon"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-        <div class="field">
-          <label>Notes (optional):</label>
-          <InputText 
-            v-model="editNotes" 
-            class="w-full"
-            placeholder="Explain your changes..."
-          />
+          <!-- Right: SQL Editor -->
+          <div class="sql-panel">
+            <!-- Pattern Info & Warnings -->
+            <div v-if="getChanges(editingSuggestion).length > 0 || getWarnings(editingSuggestion).length > 0" class="pattern-changes">
+              <h4><i class="pi pi-info-circle"></i> AI Changes & Notes</h4>
+              <div class="changes-list">
+                <div v-for="(change, idx) in getChanges(editingSuggestion)" :key="'c'+idx" class="change-item">
+                  <i class="pi pi-arrow-right"></i>
+                  <span v-if="change.original">Replaced: <code>{{ change.original }}</code> → <code>{{ change.replacement }}</code></span>
+                  <span v-else>{{ change.description || change }}</span>
+                </div>
+                <div v-for="(warning, idx) in getWarnings(editingSuggestion)" :key="'w'+idx" class="warning-item">
+                  <i class="pi pi-exclamation-triangle"></i>
+                  <span>{{ warning }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- SQL Editor with AI Helper -->
+            <div class="sql-editor-section">
+              <div class="sql-header">
+                <label>SQL Expression:</label>
+                <div class="sql-actions">
+                  <Button 
+                    label="AI Assist" 
+                    icon="pi pi-bolt" 
+                    size="small"
+                    severity="help"
+                    outlined
+                    @click="showAIAssist = true"
+                    v-tooltip.top="'Get AI help with this expression'"
+                  />
+                  <Button 
+                    icon="pi pi-copy" 
+                    size="small"
+                    text
+                    @click="copySQL(editedSQL)"
+                    v-tooltip.top="'Copy SQL'"
+                  />
+                </div>
+              </div>
+              <Textarea 
+                v-model="editedSQL" 
+                :rows="10"
+                class="sql-editor w-full"
+                placeholder="Enter the SQL expression..."
+                spellcheck="false"
+              />
+            </div>
+
+            <!-- Matched Source Summary -->
+            <div class="matched-summary" v-if="getMatchedFields(editingSuggestion).length > 0">
+              <h4>Matched Source Fields:</h4>
+              <div class="matched-tags">
+                <Tag 
+                  v-for="field in getMatchedFields(editingSuggestion)" 
+                  :key="field.unmapped_field_id"
+                  :value="`${field.src_table_physical_name}.${field.src_column_physical_name} (${(field.match_score * 100).toFixed(0)}%)`"
+                  severity="success"
+                  size="small"
+                />
+              </div>
+            </div>
+
+            <!-- Edit Notes -->
+            <div class="field">
+              <label>Notes (optional):</label>
+              <InputText 
+                v-model="editNotes" 
+                class="w-full"
+                placeholder="Explain your changes..."
+              />
+            </div>
+          </div>
         </div>
       </div>
 
       <template #footer>
         <Button label="Cancel" icon="pi pi-times" @click="showEditDialog = false" severity="secondary" />
-        <Button label="Save & Approve" icon="pi pi-check" @click="handleEditApprove" :loading="saving" />
+        <Button label="Save & Approve" icon="pi pi-check" @click="handleEditApprove" :loading="saving" severity="success" />
+      </template>
+    </Dialog>
+
+    <!-- AI Assist Dialog -->
+    <Dialog 
+      v-model:visible="showAIAssist" 
+      modal 
+      header="AI SQL Assistant" 
+      :style="{ width: '600px' }"
+    >
+      <div class="ai-assist-content">
+        <p>Describe what you need help with:</p>
+        <Textarea 
+          v-model="aiPrompt" 
+          :rows="3"
+          class="w-full"
+          placeholder="e.g., Join recipient_master to member table on SAK_RECIP..."
+        />
+      </div>
+      <template #footer>
+        <Button label="Cancel" @click="showAIAssist = false" severity="secondary" />
+        <Button label="Generate SQL" icon="pi pi-bolt" @click="handleAIAssist" :loading="aiGenerating" />
       </template>
     </Dialog>
 
@@ -303,12 +450,18 @@ const userStore = useUserStore()
 // State
 const showEditDialog = ref(false)
 const showRejectDialog = ref(false)
+const showAIAssist = ref(false)
 const editingSuggestion = ref<MappingSuggestion | null>(null)
 const rejectingSuggestion = ref<MappingSuggestion | null>(null)
 const editedSQL = ref('')
 const editNotes = ref('')
 const rejectReason = ref('')
 const saving = ref(false)
+const aiGenerating = ref(false)
+const aiPrompt = ref('')
+const sourceFilter = ref('')
+const expandedTables = ref<string[]>([])
+const sourceFields = ref<any[]>([])
 
 // Computed
 const suggestions = computed(() => projectsStore.suggestions)
@@ -329,6 +482,26 @@ const highConfidenceCount = computed(() =>
     (s.confidence_score || 0) >= 0.8
   ).length
 )
+
+// Group source fields by table
+const groupedSourceFields = computed(() => {
+  const groups: { tableName: string; columns: any[] }[] = []
+  const tableMap = new Map<string, any[]>()
+  
+  for (const field of sourceFields.value) {
+    const tableName = field.src_table_physical_name || 'Unknown'
+    if (!tableMap.has(tableName)) {
+      tableMap.set(tableName, [])
+    }
+    tableMap.get(tableName)!.push(field)
+  }
+  
+  tableMap.forEach((columns, tableName) => {
+    groups.push({ tableName, columns })
+  })
+  
+  return groups.sort((a, b) => a.tableName.localeCompare(b.tableName))
+})
 
 // Lifecycle
 onMounted(() => {
@@ -371,7 +544,107 @@ function openEditDialog(suggestion: MappingSuggestion) {
   editingSuggestion.value = suggestion
   editedSQL.value = suggestion.suggested_sql || ''
   editNotes.value = ''
+  sourceFilter.value = ''
+  expandedTables.value = []
   showEditDialog.value = true
+  
+  // Load source fields for the project
+  loadSourceFields()
+}
+
+async function loadSourceFields() {
+  try {
+    const response = await fetch(`/api/v4/projects/${props.projectId}/source-fields`)
+    if (response.ok) {
+      sourceFields.value = await response.json()
+      // Auto-expand first table
+      if (groupedSourceFields.value.length > 0) {
+        expandedTables.value = [groupedSourceFields.value[0].tableName]
+      }
+    }
+  } catch (e) {
+    console.error('Error loading source fields:', e)
+  }
+}
+
+function toggleTableExpand(tableName: string) {
+  if (expandedTables.value.includes(tableName)) {
+    expandedTables.value = expandedTables.value.filter(t => t !== tableName)
+  } else {
+    expandedTables.value.push(tableName)
+  }
+}
+
+function filteredColumns(columns: any[]) {
+  if (!sourceFilter.value) return columns
+  const filter = sourceFilter.value.toLowerCase()
+  return columns.filter(c => 
+    c.src_column_physical_name?.toLowerCase().includes(filter) ||
+    c.src_comments?.toLowerCase().includes(filter)
+  )
+}
+
+function isMatchedColumn(col: any): boolean {
+  if (!editingSuggestion.value) return false
+  const matched = getMatchedFields(editingSuggestion.value)
+  return matched.some(m => m.unmapped_field_id === col.unmapped_field_id)
+}
+
+function insertColumnToSQL(col: any) {
+  const insertion = `${col.src_table_physical_name}.${col.src_column_physical_name}`
+  editedSQL.value += (editedSQL.value ? ' ' : '') + insertion
+}
+
+function getChanges(suggestion: MappingSuggestion): any[] {
+  if (!suggestion.sql_changes) return []
+  try {
+    return JSON.parse(suggestion.sql_changes)
+  } catch {
+    return []
+  }
+}
+
+function hasWarningsOrIssues(suggestion: MappingSuggestion): boolean {
+  const warnings = getWarnings(suggestion)
+  const confidence = suggestion.confidence_score || 0
+  // Has issues if: warnings exist, low confidence, or no matched sources
+  return warnings.length > 0 || confidence < 0.9 || !suggestion.matched_source_fields || suggestion.matched_source_fields === '[]'
+}
+
+async function handleAIAssist() {
+  if (!aiPrompt.value) return
+  
+  aiGenerating.value = true
+  try {
+    const response = await fetch('/api/v3/ai/generate-sql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: aiPrompt.value,
+        context: {
+          target_column: editingSuggestion.value?.tgt_column_name,
+          target_table: editingSuggestion.value?.tgt_table_name,
+          current_sql: editedSQL.value
+        }
+      })
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      if (result.sql) {
+        editedSQL.value = result.sql
+        toast.add({ severity: 'success', summary: 'SQL Generated', detail: 'AI generated SQL expression', life: 2000 })
+      }
+    } else {
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to generate SQL', life: 3000 })
+    }
+  } catch (e) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'AI service unavailable', life: 3000 })
+  } finally {
+    aiGenerating.value = false
+    showAIAssist.value = false
+    aiPrompt.value = ''
+  }
 }
 
 async function handleEditApprove() {
@@ -809,26 +1082,246 @@ function formatDate(dateStr?: string): string {
   color: var(--text-color-secondary);
 }
 
-/* Edit Dialog */
+/* Enhanced Edit Dialog */
 .edit-dialog-content {
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.edit-target-info {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
+.edit-header {
+  padding: 1rem;
+  background: var(--surface-50);
+  border-radius: 8px;
+  border-left: 4px solid var(--primary-color);
 }
 
-.edit-target-info label {
+.target-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.target-info .datatype {
+  color: var(--text-color-secondary);
+  font-size: 0.9rem;
+}
+
+.target-description {
+  margin-top: 0.5rem;
+  color: var(--text-color-secondary);
+  font-size: 0.9rem;
+}
+
+.edit-columns {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.5rem;
+  min-height: 400px;
+}
+
+/* Source Panel */
+.source-panel {
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  padding: 0.75rem;
+  background: var(--surface-100);
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.panel-header h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.source-filter {
+  width: 100%;
+}
+
+.source-tables {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.source-table-group {
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.table-header {
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  background: var(--surface-50);
+  transition: background 0.2s;
+}
+
+.table-header:hover {
+  background: var(--surface-100);
+}
+
+.table-header i {
+  font-size: 0.75rem;
   color: var(--text-color-secondary);
 }
 
-.sql-editor {
+.table-columns {
+  padding: 0.25rem;
+}
+
+.column-item {
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.column-item:hover {
+  background: var(--primary-50);
+}
+
+.column-item.matched {
+  background: var(--green-50);
+  border-left: 3px solid var(--green-500);
+}
+
+.col-name {
+  flex: 1;
   font-family: monospace;
+  font-size: 0.85rem;
+}
+
+.col-type {
+  font-size: 0.75rem;
+  color: var(--text-color-secondary);
+}
+
+.matched-icon {
+  color: var(--green-500);
+  font-size: 0.8rem;
+}
+
+/* SQL Panel */
+.sql-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.pattern-changes {
+  padding: 1rem;
+  background: var(--surface-50);
+  border-radius: 8px;
+  border: 1px solid var(--surface-border);
+}
+
+.pattern-changes h4 {
+  margin: 0 0 0.75rem 0;
   font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--primary-color);
+}
+
+.changes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.change-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.change-item i {
+  color: var(--primary-color);
+  margin-top: 2px;
+}
+
+.change-item code {
+  background: var(--surface-200);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
+}
+
+.change-item .warning-item {
+  color: var(--orange-600);
+}
+
+.change-item .warning-item i {
+  color: var(--orange-500);
+}
+
+.sql-editor-section {
+  flex: 1;
+}
+
+.sql-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.sql-header label {
+  font-weight: 500;
+}
+
+.sql-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.sql-editor {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.9rem;
+  background: var(--surface-900);
+  color: var(--surface-50);
+  border-radius: 8px;
+}
+
+.matched-summary {
+  padding: 0.75rem;
+  background: var(--green-50);
+  border-radius: 6px;
+  border: 1px solid var(--green-200);
+}
+
+.matched-summary h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  color: var(--green-700);
+}
+
+.matched-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* AI Assist Dialog */
+.ai-assist-content p {
+  margin: 0 0 1rem 0;
+  color: var(--text-color-secondary);
 }
 
 /* Reject Dialog */
