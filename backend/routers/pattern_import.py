@@ -68,6 +68,20 @@ class SavePatternsRequest(BaseModel):
 # ENDPOINTS
 # =============================================================================
 
+def decode_csv_content(content: bytes) -> str:
+    """Try multiple encodings to decode CSV content."""
+    encodings = ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252', 'iso-8859-1']
+    
+    for encoding in encodings:
+        try:
+            return content.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    
+    # Last resort: decode with errors='replace'
+    return content.decode('utf-8', errors='replace')
+
+
 @router.post("/upload")
 async def upload_csv(
     request: Request,
@@ -85,7 +99,7 @@ async def upload_csv(
     try:
         # Read file content
         content = await file.read()
-        csv_content = content.decode('utf-8')
+        csv_content = decode_csv_content(content)
         
         # Parse CSV
         result = pattern_import_service.parse_csv(csv_content)
@@ -130,7 +144,7 @@ async def create_session(
         
         # Read and parse CSV
         content = await file.read()
-        csv_content = content.decode('utf-8')
+        csv_content = decode_csv_content(content)
         csv_data = pattern_import_service.parse_csv(csv_content)
         
         if csv_data.get("status") == "error":
