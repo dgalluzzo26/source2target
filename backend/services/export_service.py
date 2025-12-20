@@ -278,6 +278,9 @@ class ExportService:
         from_clause = self._extract_from_clause(mappings)
         
         # Generate the INSERT statement
+        column_list = ',\n  '.join(columns)
+        select_list = ',\n'.join(select_expressions)
+        
         sql = f"""-- ============================================================================
 -- Generated INSERT statement for: {table_name}
 -- Table: {target_catalog}.{target_schema}.{table_physical}
@@ -285,10 +288,10 @@ class ExportService:
 -- ============================================================================
 
 INSERT INTO {target_catalog}.{target_schema}.{table_physical} (
-  {',\\n  '.join(columns)}
+  {column_list}
 )
 SELECT
-{',\\n'.join(select_expressions)}
+{select_list}
 {from_clause}
 -- NOTE: Add WHERE clause and JOIN conditions as needed
 -- Review complex expressions marked with /* Complex: */ comments
