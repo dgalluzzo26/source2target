@@ -74,6 +74,12 @@
             </router-link>
           </li>
           <li v-if="userStore.isAdmin">
+            <router-link to="/admin/patterns" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Import Patterns' : ''">
+              <i class="layout-menuitem-icon pi pi-upload"></i>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Import Patterns</span>
+            </router-link>
+          </li>
+          <li v-if="userStore.isAdmin">
             <router-link to="/config" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Settings' : ''">
               <i class="layout-menuitem-icon pi pi-cog"></i>
               <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Settings</span>

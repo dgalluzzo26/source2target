@@ -24,11 +24,29 @@
       </div>
       <div class="header-right">
         <Button 
+          label="Manage Sources" 
+          icon="pi pi-list" 
+          severity="secondary"
+          text
+          @click="showManageSourcesDialog = true"
+          :disabled="!project?.source_columns_count"
+          v-tooltip.bottom="'View, edit, or delete source fields'"
+        />
+        <Button 
           label="Upload Sources" 
           icon="pi pi-upload" 
           severity="secondary"
           outlined
           @click="showUploadDialog = true"
+        />
+        <Button 
+          label="Export" 
+          icon="pi pi-download" 
+          severity="success"
+          outlined
+          @click="showExportDialog = true"
+          :disabled="!project?.columns_mapped"
+          v-tooltip.bottom="'Export mappings as CSV or SQL'"
         />
         <Button 
           label="Initialize Tables" 
@@ -339,6 +357,275 @@
         @manual-mapping="handleManualMapping"
       />
     </Dialog>
+
+    <!-- Manage Source Fields Dialog -->
+    <Dialog 
+      v-model:visible="showManageSourcesDialog" 
+      modal 
+      header="Manage Source Fields" 
+      :style="{ width: '90vw', maxWidth: '1200px' }"
+      maximizable
+    >
+      <div class="manage-sources-content">
+        <!-- Toolbar -->
+        <div class="sources-toolbar">
+          <IconField iconPosition="left">
+            <InputIcon class="pi pi-search" />
+            <InputText v-model="sourceFieldSearch" placeholder="Search fields..." />
+          </IconField>
+          
+          <div class="toolbar-actions">
+            <Dropdown
+              v-model="sourceTableFilter"
+              :options="sourceTableOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Filter by table"
+              showClear
+              style="width: 200px"
+            />
+            <Button 
+              label="Delete All" 
+              icon="pi pi-trash" 
+              severity="danger"
+              outlined
+              @click="confirmDeleteAllSources"
+              :disabled="!filteredSourceFields.length"
+            />
+          </div>
+        </div>
+
+        <!-- Loading -->
+        <div v-if="loadingSourceFields" class="loading-sources">
+          <ProgressSpinner style="width: 50px; height: 50px" />
+          <span>Loading source fields...</span>
+        </div>
+
+        <!-- Source Fields Table -->
+        <DataTable 
+          v-else
+          :value="filteredSourceFields" 
+          :paginator="true" 
+          :rows="15"
+          :rowsPerPageOptions="[15, 30, 50, 100]"
+          dataKey="unmapped_field_id"
+          :globalFilterFields="['src_table_name', 'src_column_name', 'src_comments']"
+          v-model:selection="selectedSourceFields"
+          selectionMode="multiple"
+          responsiveLayout="scroll"
+          class="sources-table"
+          stripedRows
+          :sortOrder="-1"
+          sortField="src_table_name"
+        >
+          <template #empty>
+            <div class="empty-sources">
+              <i class="pi pi-inbox"></i>
+              <span>No source fields found</span>
+            </div>
+          </template>
+
+          <Column selectionMode="multiple" headerStyle="width: 3rem" />
+          
+          <Column field="src_table_name" header="Table" sortable style="min-width: 150px">
+            <template #body="{ data }">
+              <span class="table-name">{{ data.src_table_name }}</span>
+            </template>
+          </Column>
+          
+          <Column field="src_column_name" header="Column" sortable style="min-width: 150px">
+            <template #body="{ data }">
+              <code class="column-name">{{ data.src_column_physical_name }}</code>
+              <div class="column-logical" v-if="data.src_column_name !== data.src_column_physical_name">
+                {{ data.src_column_name }}
+              </div>
+            </template>
+          </Column>
+          
+          <Column field="src_physical_datatype" header="Type" sortable style="width: 100px">
+            <template #body="{ data }">
+              <Tag :value="data.src_physical_datatype || 'STRING'" severity="info" />
+            </template>
+          </Column>
+          
+          <Column field="src_comments" header="Description" style="min-width: 250px">
+            <template #body="{ data }">
+              <div class="description-cell">
+                {{ data.src_comments || '-' }}
+              </div>
+            </template>
+            <template #editor="{ data }">
+              <InputText v-model="data.src_comments" class="w-full" />
+            </template>
+          </Column>
+          
+          <Column field="mapping_status" header="Status" sortable style="width: 120px">
+            <template #body="{ data }">
+              <Tag 
+                :value="data.mapping_status" 
+                :severity="data.mapping_status === 'MAPPED' ? 'success' : data.mapping_status === 'PENDING' ? 'warning' : 'secondary'"
+              />
+            </template>
+          </Column>
+          
+          <Column header="Actions" style="width: 100px">
+            <template #body="{ data }">
+              <div class="action-buttons">
+                <Button 
+                  icon="pi pi-pencil" 
+                  text 
+                  rounded 
+                  size="small"
+                  @click="editSourceField(data)"
+                  v-tooltip.top="'Edit'"
+                />
+                <Button 
+                  icon="pi pi-trash" 
+                  text 
+                  rounded 
+                  severity="danger" 
+                  size="small"
+                  @click="confirmDeleteSourceField(data)"
+                  v-tooltip.top="'Delete'"
+                />
+              </div>
+            </template>
+          </Column>
+        </DataTable>
+
+        <!-- Bulk Actions -->
+        <div v-if="selectedSourceFields.length" class="bulk-actions">
+          <span>{{ selectedSourceFields.length }} field(s) selected</span>
+          <Button 
+            label="Delete Selected" 
+            icon="pi pi-trash" 
+            severity="danger"
+            size="small"
+            @click="confirmDeleteSelectedSources"
+          />
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="Close" icon="pi pi-times" @click="showManageSourcesDialog = false" />
+      </template>
+    </Dialog>
+
+    <!-- Edit Source Field Dialog -->
+    <Dialog 
+      v-model:visible="showEditSourceDialog" 
+      modal 
+      header="Edit Source Field" 
+      :style="{ width: '500px' }"
+    >
+      <div v-if="editingSourceField" class="edit-source-form">
+        <div class="form-field">
+          <label>Table Name</label>
+          <InputText v-model="editingSourceField.src_table_name" class="w-full" />
+        </div>
+        <div class="form-field">
+          <label>Column Name</label>
+          <InputText v-model="editingSourceField.src_column_name" class="w-full" />
+        </div>
+        <div class="form-field">
+          <label>Physical Column Name</label>
+          <InputText v-model="editingSourceField.src_column_physical_name" class="w-full" />
+        </div>
+        <div class="form-field">
+          <label>Data Type</label>
+          <InputText v-model="editingSourceField.src_physical_datatype" class="w-full" />
+        </div>
+        <div class="form-field">
+          <label>Description</label>
+          <Textarea v-model="editingSourceField.src_comments" rows="3" class="w-full" />
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" @click="showEditSourceDialog = false" severity="secondary" />
+        <Button label="Save" icon="pi pi-check" @click="saveSourceField" :loading="savingSourceField" />
+      </template>
+    </Dialog>
+
+    <!-- Export Dialog -->
+    <Dialog 
+      v-model:visible="showExportDialog" 
+      modal 
+      header="Export Mappings" 
+      :style="{ width: '600px' }"
+    >
+      <div class="export-content">
+        <Message v-if="!exportableTables.length" severity="info">
+          No mapped tables available for export. Complete some mappings first.
+        </Message>
+        
+        <div v-else>
+          <div class="form-field">
+            <label>Select Table</label>
+            <Dropdown
+              v-model="exportSelectedTable"
+              :options="exportTableOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Select a table to export"
+              class="w-full"
+            />
+          </div>
+          
+          <div class="form-field mt-3">
+            <label>Export Format</label>
+            <div class="export-format-options">
+              <div 
+                class="format-option" 
+                :class="{ selected: exportFormat === 'csv' }"
+                @click="exportFormat = 'csv'"
+              >
+                <i class="pi pi-file"></i>
+                <div>
+                  <strong>CSV</strong>
+                  <small>Download mapping details as spreadsheet</small>
+                </div>
+              </div>
+              <div 
+                class="format-option" 
+                :class="{ selected: exportFormat === 'sql' }"
+                @click="exportFormat = 'sql'"
+              >
+                <i class="pi pi-code"></i>
+                <div>
+                  <strong>SQL</strong>
+                  <small>Generate Databricks INSERT statement</small>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div v-if="exportFormat === 'sql'" class="form-field mt-3">
+            <label>Target Catalog</label>
+            <InputText v-model="exportTargetCatalog" class="w-full" placeholder="${TARGET_CATALOG}" />
+          </div>
+          
+          <div v-if="exportFormat === 'sql'" class="form-field mt-2">
+            <label>Target Schema</label>
+            <InputText v-model="exportTargetSchema" class="w-full" placeholder="${TARGET_SCHEMA}" />
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" @click="showExportDialog = false" severity="secondary" />
+        <Button 
+          label="Export" 
+          icon="pi pi-download" 
+          @click="handleExport"
+          :disabled="!exportSelectedTable"
+          :loading="exporting"
+        />
+      </template>
+    </Dialog>
+
+    <!-- Confirm Delete Dialog -->
+    <ConfirmDialog />
   </div>
 </template>
 
@@ -362,6 +649,10 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Menu from 'primevue/menu'
 import FileUpload from 'primevue/fileupload'
+import Dropdown from 'primevue/dropdown'
+import Textarea from 'primevue/textarea'
+import ConfirmDialog from 'primevue/confirmdialog'
+import { useConfirm } from 'primevue/useconfirm'
 import SuggestionReviewPanel from '@/components/SuggestionReviewPanel.vue'
 
 const router = useRouter()
@@ -377,11 +668,32 @@ const projectId = computed(() => Number(route.params.id))
 const tableSearch = ref('')
 const showUploadDialog = ref(false)
 const showReviewDialog = ref(false)
+const showManageSourcesDialog = ref(false)
+const showEditSourceDialog = ref(false)
+const showExportDialog = ref(false)
 const uploading = ref(false)
+const exporting = ref(false)
+
+// Export state
+const exportableTables = ref<any[]>([])
+const exportSelectedTable = ref<string | null>(null)
+const exportFormat = ref<'csv' | 'sql'>('csv')
+const exportTargetCatalog = ref('${TARGET_CATALOG}')
+const exportTargetSchema = ref('${TARGET_SCHEMA}')
 const selectedFile = ref<File | null>(null)
 const tableMenu = ref()
 const selectedTable = ref<TargetTableStatus | null>(null)
 const reviewingTable = ref<TargetTableStatus | null>(null)
+
+// Source field management
+const sourceFields = ref<any[]>([])
+const loadingSourceFields = ref(false)
+const sourceFieldSearch = ref('')
+const sourceTableFilter = ref<string | null>(null)
+const selectedSourceFields = ref<any[]>([])
+const editingSourceField = ref<any>(null)
+const savingSourceField = ref(false)
+const confirm = useConfirm()
 
 // Computed
 const project = computed(() => projectsStore.currentProject)
@@ -426,6 +738,49 @@ const tableMenuItems = computed(() => [
     }
   }
 ])
+
+// Source field management computed
+const sourceTableOptions = computed(() => {
+  const tables = new Set(sourceFields.value.map(f => f.src_table_physical_name || f.src_table_name))
+  return [
+    { label: 'All Tables', value: null },
+    ...Array.from(tables).map(t => ({ label: t, value: t }))
+  ]
+})
+
+const filteredSourceFields = computed(() => {
+  let result = sourceFields.value
+  
+  // Filter by table
+  if (sourceTableFilter.value) {
+    result = result.filter(f => 
+      (f.src_table_physical_name || f.src_table_name) === sourceTableFilter.value
+    )
+  }
+  
+  // Filter by search
+  if (sourceFieldSearch.value) {
+    const query = sourceFieldSearch.value.toLowerCase()
+    result = result.filter(f =>
+      (f.src_table_name || '').toLowerCase().includes(query) ||
+      (f.src_column_name || '').toLowerCase().includes(query) ||
+      (f.src_column_physical_name || '').toLowerCase().includes(query) ||
+      (f.src_comments || '').toLowerCase().includes(query)
+    )
+  }
+  
+  return result
+})
+
+const exportTableOptions = computed(() => {
+  return [
+    { label: 'All Tables', value: 'ALL' },
+    ...exportableTables.value.map(t => ({
+      label: `${t.tgt_table_name} (${t.column_count} columns)`,
+      value: t.tgt_table_physical_name
+    }))
+  ]
+})
 
 // Lifecycle
 onMounted(async () => {
@@ -709,6 +1064,249 @@ function getRowClass(data: TargetTableStatus): string {
   if (data.mapping_status === 'COMPLETE') return 'complete-row'
   if (data.mapping_status === 'SKIPPED') return 'skipped-row'
   return ''
+}
+
+// =========================================================================
+// SOURCE FIELD MANAGEMENT
+// =========================================================================
+
+// Watch for dialog open to load source fields
+watch(showManageSourcesDialog, async (visible) => {
+  if (visible) {
+    await loadSourceFields()
+  }
+})
+
+// Watch for export dialog to load exportable tables
+watch(showExportDialog, async (visible) => {
+  if (visible) {
+    await loadExportableTables()
+  }
+})
+
+async function loadSourceFields() {
+  loadingSourceFields.value = true
+  try {
+    const response = await fetch(`/api/v4/projects/${projectId.value}/source-fields`)
+    if (response.ok) {
+      sourceFields.value = await response.json()
+    } else {
+      throw new Error('Failed to load source fields')
+    }
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 3000 })
+  } finally {
+    loadingSourceFields.value = false
+  }
+}
+
+function editSourceField(field: any) {
+  editingSourceField.value = { ...field }
+  showEditSourceDialog.value = true
+}
+
+async function saveSourceField() {
+  if (!editingSourceField.value) return
+  
+  savingSourceField.value = true
+  try {
+    const response = await fetch(
+      `/api/v4/projects/${projectId.value}/source-fields/${editingSourceField.value.unmapped_field_id}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          src_table_name: editingSourceField.value.src_table_name,
+          src_column_name: editingSourceField.value.src_column_name,
+          src_column_physical_name: editingSourceField.value.src_column_physical_name,
+          src_physical_datatype: editingSourceField.value.src_physical_datatype,
+          src_comments: editingSourceField.value.src_comments
+        })
+      }
+    )
+    
+    if (response.ok) {
+      toast.add({ severity: 'success', summary: 'Saved', detail: 'Source field updated', life: 2000 })
+      showEditSourceDialog.value = false
+      await loadSourceFields()
+      // Refresh project to update counts
+      await projectsStore.fetchProject(projectId.value)
+    } else {
+      throw new Error('Failed to save')
+    }
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 3000 })
+  } finally {
+    savingSourceField.value = false
+  }
+}
+
+function confirmDeleteSourceField(field: any) {
+  confirm.require({
+    message: `Delete field "${field.src_column_name}" from table "${field.src_table_name}"?`,
+    header: 'Confirm Delete',
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    accept: () => deleteSourceField(field.unmapped_field_id)
+  })
+}
+
+async function deleteSourceField(fieldId: number) {
+  try {
+    const response = await fetch(
+      `/api/v4/projects/${projectId.value}/source-fields/${fieldId}`,
+      { method: 'DELETE' }
+    )
+    
+    if (response.ok) {
+      toast.add({ severity: 'success', summary: 'Deleted', detail: 'Source field removed', life: 2000 })
+      await loadSourceFields()
+      await projectsStore.fetchProject(projectId.value)
+    } else {
+      throw new Error('Failed to delete')
+    }
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 3000 })
+  }
+}
+
+function confirmDeleteSelectedSources() {
+  confirm.require({
+    message: `Delete ${selectedSourceFields.value.length} selected field(s)?`,
+    header: 'Confirm Delete',
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    accept: () => deleteSelectedSources()
+  })
+}
+
+async function deleteSelectedSources() {
+  for (const field of selectedSourceFields.value) {
+    await deleteSourceField(field.unmapped_field_id)
+  }
+  selectedSourceFields.value = []
+}
+
+function confirmDeleteAllSources() {
+  const tableName = sourceTableFilter.value
+  const message = tableName 
+    ? `Delete all fields from table "${tableName}"?`
+    : `Delete ALL ${sourceFields.value.length} source fields?`
+  
+  confirm.require({
+    message,
+    header: 'Confirm Delete All',
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    accept: () => deleteAllSources()
+  })
+}
+
+async function deleteAllSources() {
+  try {
+    const url = sourceTableFilter.value
+      ? `/api/v4/projects/${projectId.value}/source-fields?table_name=${encodeURIComponent(sourceTableFilter.value)}`
+      : `/api/v4/projects/${projectId.value}/source-fields`
+    
+    const response = await fetch(url, { method: 'DELETE' })
+    
+    if (response.ok) {
+      const result = await response.json()
+      toast.add({ 
+        severity: 'success', 
+        summary: 'Deleted', 
+        detail: `Removed ${result.deleted_count} fields`, 
+        life: 3000 
+      })
+      await loadSourceFields()
+      await projectsStore.fetchProject(projectId.value)
+    } else {
+      throw new Error('Failed to delete')
+    }
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 3000 })
+  }
+}
+
+// =========================================================================
+// EXPORT FUNCTIONS
+// =========================================================================
+
+async function loadExportableTables() {
+  try {
+    const response = await fetch(`/api/v4/projects/${projectId.value}/export/tables`)
+    if (response.ok) {
+      const data = await response.json()
+      exportableTables.value = data.tables || []
+      // Default to first table if available
+      if (exportableTables.value.length > 0) {
+        exportSelectedTable.value = exportableTables.value[0].tgt_table_physical_name
+      }
+    }
+  } catch (e: any) {
+    console.error('Error loading exportable tables:', e)
+  }
+}
+
+async function handleExport() {
+  if (!exportSelectedTable.value) return
+  
+  exporting.value = true
+  try {
+    let url: string
+    let filename: string
+    
+    if (exportFormat.value === 'csv') {
+      url = `/api/v4/projects/${projectId.value}/export/csv`
+      if (exportSelectedTable.value !== 'ALL') {
+        url += `?table_name=${encodeURIComponent(exportSelectedTable.value)}`
+      }
+      filename = `mappings_${projectId.value}${exportSelectedTable.value !== 'ALL' ? '_' + exportSelectedTable.value : ''}.csv`
+    } else {
+      // SQL export requires specific table
+      if (exportSelectedTable.value === 'ALL') {
+        toast.add({ severity: 'warn', summary: 'Select Table', detail: 'Please select a specific table for SQL export', life: 3000 })
+        exporting.value = false
+        return
+      }
+      url = `/api/v4/projects/${projectId.value}/export/sql?table_name=${encodeURIComponent(exportSelectedTable.value)}`
+      url += `&target_catalog=${encodeURIComponent(exportTargetCatalog.value)}`
+      url += `&target_schema=${encodeURIComponent(exportTargetSchema.value)}`
+      filename = `${exportSelectedTable.value}_insert.sql`
+    }
+    
+    const response = await fetch(url)
+    
+    if (response.ok) {
+      const content = await response.text()
+      
+      // Download file
+      const blob = new Blob([content], { type: exportFormat.value === 'csv' ? 'text/csv' : 'text/plain' })
+      const downloadUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(downloadUrl)
+      
+      toast.add({ 
+        severity: 'success', 
+        summary: 'Exported', 
+        detail: `Downloaded ${filename}`, 
+        life: 3000 
+      })
+      
+      showExportDialog.value = false
+    } else {
+      throw new Error('Export failed')
+    }
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 3000 })
+  } finally {
+    exporting.value = false
+  }
 }
 </script>
 
@@ -1023,6 +1621,166 @@ function getRowClass(data: TargetTableStatus): string {
   background: #f44336 !important;
 }
 
+/* Source Field Management */
+.manage-sources-content {
+  min-height: 400px;
+}
+
+.sources-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.loading-sources {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  gap: 1rem;
+  color: var(--text-color-secondary);
+}
+
+.empty-sources {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  color: var(--text-color-secondary);
+}
+
+.empty-sources i {
+  font-size: 2rem;
+}
+
+.sources-table .table-name {
+  font-weight: 600;
+  color: var(--gainwell-dark);
+}
+
+.sources-table .column-name {
+  font-size: 0.85rem;
+  padding: 0.15rem 0.4rem;
+  background: var(--surface-200);
+  border-radius: 3px;
+}
+
+.sources-table .column-logical {
+  font-size: 0.8rem;
+  color: var(--text-color-secondary);
+  margin-top: 0.25rem;
+}
+
+.sources-table .description-cell {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sources-table .action-buttons {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-100);
+  border-radius: 6px;
+  margin-top: 1rem;
+}
+
+.bulk-actions span {
+  font-weight: 600;
+  color: var(--gainwell-primary);
+}
+
+.edit-source-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.edit-source-form .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.edit-source-form label {
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+/* Export Dialog */
+.export-content .form-field {
+  margin-bottom: 1rem;
+}
+
+.export-content .form-field label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--text-color);
+}
+
+.export-format-options {
+  display: flex;
+  gap: 1rem;
+}
+
+.format-option {
+  flex: 1;
+  padding: 1rem;
+  border: 2px solid var(--surface-300);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  transition: all 0.2s;
+}
+
+.format-option:hover {
+  border-color: var(--gainwell-primary);
+  background: var(--surface-50);
+}
+
+.format-option.selected {
+  border-color: var(--gainwell-primary);
+  background: var(--gainwell-primary-light, rgba(0, 120, 212, 0.1));
+}
+
+.format-option i {
+  font-size: 1.5rem;
+  color: var(--gainwell-primary);
+}
+
+.format-option strong {
+  display: block;
+  color: var(--text-color);
+}
+
+.format-option small {
+  display: block;
+  color: var(--text-color-secondary);
+  font-size: 0.8rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .project-detail-view {
@@ -1049,6 +1807,11 @@ function getRowClass(data: TargetTableStatus): string {
   
   .table-search {
     width: 100%;
+  }
+  
+  .sources-toolbar {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>

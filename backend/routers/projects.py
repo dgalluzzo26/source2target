@@ -10,7 +10,7 @@ Access Control:
 - Users can only see projects they created OR where they are listed in team_members
 - Admins can see all projects
 """
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Request, Depends
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Request, Depends, Body
 from typing import List, Optional
 from pydantic import BaseModel
 import csv
@@ -522,6 +522,124 @@ async def get_project_source_fields(
         raise
     except Exception as e:
         print(f"[Projects Router] Error getting source fields: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/{project_id}/source-fields/{field_id}")
+async def update_source_field(
+    project_id: int,
+    field_id: int,
+    request: Request,
+    updates: dict = Body(...)
+):
+    """
+    Update a source field.
+    
+    Allows editing source field metadata (name, description, datatype, etc.).
+    
+    Access Control: User must be creator, team member, or admin.
+    """
+    try:
+        # Get project and check access
+        project = await project_service.get_project_by_id(project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        user_email = await get_current_user_email(request)
+        is_admin = await get_current_user_is_admin(request)
+        
+        if not user_can_access_project(project, user_email, is_admin):
+            raise HTTPException(status_code=403, detail="You don't have access to this project")
+        
+        # Update the field
+        result = await unmapped_fields_service.update_field(field_id, updates)
+        
+        return {"status": "success", "field_id": field_id, "updated": result}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Projects Router] Error updating source field: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{project_id}/source-fields/{field_id}")
+async def delete_source_field(
+    project_id: int,
+    field_id: int,
+    request: Request
+):
+    """
+    Delete a source field.
+    
+    Removes the field from the project's source fields.
+    
+    Access Control: User must be creator, team member, or admin.
+    """
+    try:
+        # Get project and check access
+        project = await project_service.get_project_by_id(project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        user_email = await get_current_user_email(request)
+        is_admin = await get_current_user_is_admin(request)
+        
+        if not user_can_access_project(project, user_email, is_admin):
+            raise HTTPException(status_code=403, detail="You don't have access to this project")
+        
+        # Delete the field
+        result = await unmapped_fields_service.delete_unmapped_field(field_id)
+        
+        return {"status": "success", "field_id": field_id, "message": "Field deleted"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Projects Router] Error deleting source field: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{project_id}/source-fields")
+async def delete_all_source_fields(
+    project_id: int,
+    request: Request,
+    table_name: Optional[str] = Query(None, description="Delete only fields from this table")
+):
+    """
+    Delete all source fields for a project, optionally filtered by table name.
+    
+    Access Control: User must be creator, team member, or admin.
+    """
+    try:
+        # Get project and check access
+        project = await project_service.get_project_by_id(project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        user_email = await get_current_user_email(request)
+        is_admin = await get_current_user_is_admin(request)
+        
+        if not user_can_access_project(project, user_email, is_admin):
+            raise HTTPException(status_code=403, detail="You don't have access to this project")
+        
+        # Delete fields
+        result = await unmapped_fields_service.delete_fields_by_project(
+            project_id, 
+            table_name=table_name
+        )
+        
+        return {
+            "status": "success", 
+            "project_id": project_id,
+            "table_name": table_name,
+            "deleted_count": result.get("deleted_count", 0)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Projects Router] Error deleting source fields: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

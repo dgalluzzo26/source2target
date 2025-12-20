@@ -21,7 +21,7 @@ from backend.services.config_service import config_service
 from backend.services.system_service import system_service
 from backend.services.auth_service import auth_service
 from backend.routers import semantic, unmapped_fields, feedback
-from backend.routers import projects, target_tables, suggestions
+from backend.routers import projects, target_tables, suggestions, export, pattern_import
 
 # Import Databricks SDK for authentication
 try:
@@ -51,6 +51,8 @@ app.add_middleware(
 app.include_router(projects.router)
 app.include_router(target_tables.router)
 app.include_router(suggestions.router)
+app.include_router(export.router)
+app.include_router(pattern_import.router)
 
 # Include utility routers
 app.include_router(unmapped_fields.router)

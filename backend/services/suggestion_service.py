@@ -32,6 +32,7 @@ from backend.models.suggestion import (
 )
 from backend.models.project import TableMappingStatus
 from backend.services.config_service import ConfigService
+from backend.services.vector_search_service import VectorSearchService
 
 # Thread pool for blocking database operations
 executor = ThreadPoolExecutor(max_workers=4)
@@ -43,6 +44,7 @@ class SuggestionService:
     def __init__(self):
         """Initialize the suggestion service."""
         self.config_service = ConfigService()
+        self.vector_search_service = VectorSearchService()
         self._workspace_client = None
     
     @property
@@ -402,6 +404,162 @@ Return ONLY valid JSON with this structure:
                 "confidence": 0.2,
                 "reasoning": "LLM call failed"
             }
+    
+    # =========================================================================
+    # GENERATE JOIN METADATA FROM SQL
+    # =========================================================================
+    
+    def _generate_join_metadata_sync(
+        self,
+        llm_endpoint: str,
+        sql_expression: str,
+        target_column: str,
+        target_table: str,
+        source_tables: str,
+        source_columns: str
+    ) -> Optional[str]:
+        """
+        Use LLM to parse SQL and generate join_metadata JSON.
+        
+        Args:
+            llm_endpoint: Name of the LLM serving endpoint
+            sql_expression: The final SQL expression to analyze
+            target_column: Target column physical name
+            target_table: Target table physical name
+            source_tables: Pipe-separated source table names
+            source_columns: Pipe-separated source column names
+            
+        Returns:
+            JSON string of join_metadata, or None on failure
+        """
+        if not sql_expression or sql_expression.strip() == "":
+            return None
+        
+        print(f"[Suggestion Service] Generating join_metadata for: {target_column}")
+        
+        prompt = f"""Parse this SQL expression and generate a JSON metadata object for a data mapping tool.
+
+SQL EXPRESSION:
+```sql
+{sql_expression}
+```
+
+CONTEXT:
+- Target Column: {target_column}
+- Target Table: {target_table}
+- Source Tables: {source_tables}
+- Source Columns: {source_columns}
+
+Generate a JSON object with this EXACT structure:
+{{
+  "patternType": "SINGLE|JOIN|UNION|UNION_JOIN|CONCAT",
+  "outputColumn": "<the column being selected>",
+  "description": "<brief description of what this mapping does>",
+  "silverTables": [
+    {{"alias": "<alias>", "physicalName": "<full table name>", "isConstant": true, "description": "<table purpose>"}}
+  ],
+  "unionBranches": [
+    {{
+      "branchId": 1,
+      "description": "<what this branch does>",
+      "bronzeTable": {{"alias": "<alias>", "physicalName": "<table>", "isConstant": false}},
+      "joins": [
+        {{"type": "INNER|LEFT", "toTable": "<alias>", "onCondition": "<condition>"}}
+      ],
+      "whereClause": "<where clause if any>"
+    }}
+  ],
+  "userColumnsToMap": [
+    {{"role": "join_key|output|filter", "originalColumn": "<column>", "description": "<what user provides>"}}
+  ],
+  "userTablesToMap": [
+    {{"role": "bronze_primary|bronze_secondary", "originalTable": "<table>", "description": "<what user replaces>"}}
+  ]
+}}
+
+RULES:
+1. silverTables = tables from silver_* schemas (CONSTANT, user does NOT replace)
+2. bronzeTables/userTablesToMap = tables from bronze_* schemas (user REPLACES with their tables)
+3. For UNION, create separate unionBranches for each SELECT
+4. If no JOINs/UNIONs, use patternType "SINGLE" and set unionBranches to empty array []
+5. Return ONLY the JSON object, no explanation"""
+
+        try:
+            response = self.workspace_client.serving_endpoints.query(
+                name=llm_endpoint,
+                messages=[
+                    ChatMessage(role=ChatMessageRole.USER, content=prompt)
+                ],
+                max_tokens=2000
+            )
+            
+            response_text = response.choices[0].message.content
+            
+            # Extract JSON from response
+            json_start = response_text.find('{')
+            json_end = response_text.rfind('}') + 1
+            
+            if json_start >= 0 and json_end > json_start:
+                json_str = response_text[json_start:json_end]
+                
+                # Clean control characters
+                import re
+                json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', json_str)
+                
+                # Validate it's valid JSON
+                json.loads(json_str)
+                print(f"[Suggestion Service] Generated join_metadata successfully")
+                return json_str
+            else:
+                print(f"[Suggestion Service] No JSON found in LLM response for join_metadata")
+                return None
+                
+        except json.JSONDecodeError as e:
+            print(f"[Suggestion Service] Failed to parse join_metadata JSON: {e}")
+            return None
+        except Exception as e:
+            print(f"[Suggestion Service] LLM error generating join_metadata: {str(e)}")
+            return None
+    
+    def _determine_relationship_type(self, sql: str, source_columns: str) -> str:
+        """Determine the source relationship type from SQL."""
+        if not sql:
+            return "SINGLE"
+        
+        sql_upper = sql.upper()
+        
+        if "UNION" in sql_upper and "JOIN" in sql_upper:
+            return "UNION_JOIN"
+        elif "UNION" in sql_upper:
+            return "UNION"
+        elif "JOIN" in sql_upper:
+            return "JOIN"
+        elif source_columns and "|" in source_columns:
+            return "CONCAT"
+        else:
+            return "SINGLE"
+    
+    def _extract_transformations(self, sql: str) -> Optional[str]:
+        """Extract transformation functions used in SQL."""
+        if not sql:
+            return None
+        
+        sql_upper = sql.upper()
+        transforms = []
+        
+        # Common transformation functions
+        transform_funcs = [
+            'TRIM', 'UPPER', 'LOWER', 'INITCAP', 'CONCAT', 'SUBSTRING', 'SUBSTR',
+            'REPLACE', 'COALESCE', 'NVL', 'IFNULL', 'NULLIF', 'CAST', 'CONVERT',
+            'TO_DATE', 'TO_TIMESTAMP', 'DATE_FORMAT', 'LPAD', 'RPAD', 'LEFT', 'RIGHT',
+            'CASE', 'DECODE', 'IIF', 'SPLIT_PART', 'REGEXP_REPLACE', 'REGEXP_EXTRACT'
+        ]
+        
+        for func in transform_funcs:
+            if func in sql_upper:
+                transforms.append(func)
+        
+        return ", ".join(transforms) if transforms else None
     
     # =========================================================================
     # GENERATE SUGGESTIONS FOR TABLE
@@ -1190,6 +1348,56 @@ Return ONLY valid JSON with this structure:
                 source_descriptions = "|".join([m.get("src_comments", "") for m in matched_sources[:3]])
                 source_datatypes = "|".join([m.get("src_physical_datatype", "") for m in matched_sources[:3]])
                 
+                # Get join_metadata, transformations, and domains from the original pattern
+                pattern_join_metadata = None
+                pattern_transformations = None
+                source_domain = None
+                target_domain = None
+                
+                if suggestion.get("pattern_mapped_field_id"):
+                    cursor.execute(f"""
+                        SELECT join_metadata, transformations_applied, source_domain, target_domain
+                        FROM {db_config['mapped_fields_table']}
+                        WHERE mapped_field_id = {suggestion['pattern_mapped_field_id']}
+                    """)
+                    pattern_row = cursor.fetchone()
+                    if pattern_row:
+                        pattern_join_metadata = pattern_row[0]
+                        pattern_transformations = pattern_row[1]
+                        source_domain = pattern_row[2]
+                        target_domain = pattern_row[3]
+                
+                # Get target domain from semantic_fields if not from pattern
+                if not target_domain and suggestion.get('semantic_field_id'):
+                    cursor.execute(f"""
+                        SELECT domain FROM {db_config['semantic_fields_table']}
+                        WHERE semantic_field_id = {suggestion['semantic_field_id']}
+                    """)
+                    domain_row = cursor.fetchone()
+                    if domain_row:
+                        target_domain = domain_row[0]
+                
+                # Generate fresh join_metadata from the final SQL expression
+                # This handles cases where user edited the SQL
+                config = self.config_service.get_config()
+                generated_join_metadata = self._generate_join_metadata_sync(
+                    config.ai_model.foundation_model_endpoint,
+                    final_sql,
+                    suggestion.get('tgt_column_physical_name', ''),
+                    suggestion.get('tgt_table_physical_name', ''),
+                    source_tables_physical,
+                    source_columns_physical
+                )
+                
+                # Use generated metadata, fall back to pattern if generation failed
+                final_join_metadata = generated_join_metadata or pattern_join_metadata
+                
+                # Determine relationship type from the final SQL
+                relationship_type = self._determine_relationship_type(final_sql, source_columns_physical)
+                
+                # Extract transformations from the final SQL
+                final_transformations = self._extract_transformations(final_sql) or pattern_transformations
+                
                 # Create mapping in mapped_fields
                 cursor.execute(f"""
                     INSERT INTO {db_config['mapped_fields_table']} (
@@ -1206,7 +1414,10 @@ Return ONLY valid JSON with this structure:
                         source_columns_physical,
                         source_descriptions,
                         source_datatypes,
+                        source_domain,
+                        target_domain,
                         source_relationship_type,
+                        transformations_applied,
                         join_metadata,
                         confidence_score,
                         mapping_source,
@@ -1231,8 +1442,11 @@ Return ONLY valid JSON with this structure:
                         '{self._escape_sql(source_columns_physical)}',
                         '{self._escape_sql(source_descriptions)}',
                         '{self._escape_sql(source_datatypes)}',
-                        '{suggestion.get('pattern_type', 'SINGLE')}',
-                        {f"'{self._escape_sql(str(suggestion.get('pattern_sql', '')))}'" if suggestion.get('pattern_sql') else 'NULL'},
+                        {f"'{self._escape_sql(source_domain)}'" if source_domain else 'NULL'},
+                        {f"'{self._escape_sql(target_domain)}'" if target_domain else 'NULL'},
+                        '{relationship_type}',
+                        {f"'{self._escape_sql(final_transformations)}'" if final_transformations else 'NULL'},
+                        {f"'{self._escape_sql(final_join_metadata)}'" if final_join_metadata else 'NULL'},
                         {suggestion.get('confidence_score', 0.8)},
                         'AI',
                         {f"'{self._escape_sql(suggestion.get('ai_reasoning', ''))}'" if suggestion.get('ai_reasoning') else 'NULL'},
@@ -1315,6 +1529,14 @@ Return ONLY valid JSON with this structure:
             )
         )
         
+        # Sync vector search index after successful approval
+        if result.get("mapped_field_id"):
+            try:
+                await self.vector_search_service.sync_mapped_fields_index()
+                print(f"[Suggestion Service] Vector index sync triggered after approval")
+            except Exception as e:
+                print(f"[Suggestion Service] Warning: Vector index sync failed: {e}")
+        
         return result
     
     async def edit_and_approve_suggestion(
@@ -1337,6 +1559,14 @@ Return ONLY valid JSON with this structure:
                 request.edit_notes
             )
         )
+        
+        # Sync vector search index after successful approval
+        if result.get("mapped_field_id"):
+            try:
+                await self.vector_search_service.sync_mapped_fields_index()
+                print(f"[Suggestion Service] Vector index sync triggered after edit+approval")
+            except Exception as e:
+                print(f"[Suggestion Service] Warning: Vector index sync failed: {e}")
         
         return result
     

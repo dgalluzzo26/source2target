@@ -1010,4 +1010,199 @@ class UnmappedFieldsService:
         )
         
         return result
+    
+    # =========================================================================
+    # UPDATE FIELD
+    # =========================================================================
+    
+    def _update_field_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        unmapped_fields_table: str,
+        field_id: int,
+        updates: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Update a source field (synchronous).
+        
+        Args:
+            server_hostname: Databricks workspace hostname
+            http_path: SQL warehouse HTTP path
+            unmapped_fields_table: Fully qualified table name
+            field_id: ID of the field to update
+            updates: Dictionary of field updates
+            
+        Returns:
+            Dictionary with status and updated field info
+        """
+        print(f"[Unmapped Fields Service] Updating field {field_id}")
+        
+        connection = self._get_sql_connection(server_hostname, http_path)
+        
+        try:
+            with connection.cursor() as cursor:
+                # Build SET clause from updates
+                allowed_fields = [
+                    'src_table_name', 'src_table_physical_name',
+                    'src_column_name', 'src_column_physical_name',
+                    'src_comments', 'src_physical_datatype',
+                    'src_nullable', 'domain', 'mapping_status'
+                ]
+                
+                set_parts = ["updated_ts = CURRENT_TIMESTAMP()"]
+                
+                for field, value in updates.items():
+                    if field in allowed_fields:
+                        if value is None:
+                            set_parts.append(f"{field} = NULL")
+                        else:
+                            # Escape single quotes
+                            escaped_value = str(value).replace("'", "''")
+                            set_parts.append(f"{field} = '{escaped_value}'")
+                
+                if len(set_parts) <= 1:
+                    return {"status": "error", "message": "No valid fields to update"}
+                
+                set_clause = ", ".join(set_parts)
+                
+                cursor.execute(f"""
+                    UPDATE {unmapped_fields_table}
+                    SET {set_clause}
+                    WHERE unmapped_field_id = {field_id}
+                """)
+                
+                print(f"[Unmapped Fields Service] Updated field {field_id}")
+                return {"status": "success", "field_id": field_id}
+                
+        except Exception as e:
+            print(f"[Unmapped Fields Service] Error updating field: {str(e)}")
+            raise
+        finally:
+            connection.close()
+    
+    async def update_field(
+        self,
+        field_id: int,
+        updates: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Update a source field.
+        
+        Args:
+            field_id: ID of the field to update
+            updates: Dictionary of field updates
+            
+        Returns:
+            Dictionary with status
+        """
+        db_config = self._get_db_config()
+        
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor,
+            functools.partial(
+                self._update_field_sync,
+                db_config['server_hostname'],
+                db_config['http_path'],
+                db_config['unmapped_fields_table'],
+                field_id,
+                updates
+            )
+        )
+        
+        return result
+    
+    # =========================================================================
+    # DELETE FIELDS BY PROJECT
+    # =========================================================================
+    
+    def _delete_fields_by_project_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        unmapped_fields_table: str,
+        project_id: int,
+        table_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Delete all source fields for a project (synchronous).
+        
+        Args:
+            server_hostname: Databricks workspace hostname
+            http_path: SQL warehouse HTTP path
+            unmapped_fields_table: Fully qualified table name
+            project_id: Project ID
+            table_name: Optional - only delete fields from this table
+            
+        Returns:
+            Dictionary with deleted count
+        """
+        print(f"[Unmapped Fields Service] Deleting fields for project {project_id}")
+        
+        connection = self._get_sql_connection(server_hostname, http_path)
+        
+        try:
+            with connection.cursor() as cursor:
+                # Build WHERE clause
+                where_clause = f"WHERE project_id = {project_id}"
+                
+                if table_name:
+                    escaped_table = table_name.replace("'", "''")
+                    where_clause += f" AND UPPER(src_table_physical_name) = UPPER('{escaped_table}')"
+                
+                # Get count first
+                cursor.execute(f"""
+                    SELECT COUNT(*) FROM {unmapped_fields_table}
+                    {where_clause}
+                """)
+                count_row = cursor.fetchone()
+                delete_count = count_row[0] if count_row else 0
+                
+                # Delete
+                cursor.execute(f"""
+                    DELETE FROM {unmapped_fields_table}
+                    {where_clause}
+                """)
+                
+                print(f"[Unmapped Fields Service] Deleted {delete_count} fields for project {project_id}")
+                return {"status": "success", "deleted_count": delete_count}
+                
+        except Exception as e:
+            print(f"[Unmapped Fields Service] Error deleting project fields: {str(e)}")
+            raise
+        finally:
+            connection.close()
+    
+    async def delete_fields_by_project(
+        self,
+        project_id: int,
+        table_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Delete all source fields for a project.
+        
+        Args:
+            project_id: Project ID
+            table_name: Optional - only delete fields from this table
+            
+        Returns:
+            Dictionary with deleted count
+        """
+        db_config = self._get_db_config()
+        
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor,
+            functools.partial(
+                self._delete_fields_by_project_sync,
+                db_config['server_hostname'],
+                db_config['http_path'],
+                db_config['unmapped_fields_table'],
+                project_id,
+                table_name
+            )
+        )
+        
+        return result
 

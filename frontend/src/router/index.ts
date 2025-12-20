@@ -71,6 +71,12 @@ const router = createRouter({
           component: () => import('../views/SemanticFieldsView.vue')
         },
         {
+          // Pattern import - admin only
+          path: '/admin/patterns',
+          name: 'pattern-import',
+          component: () => import('../views/PatternImportView.vue')
+        },
+        {
           // Admin configuration page - general settings
           path: '/config',
           name: 'config',

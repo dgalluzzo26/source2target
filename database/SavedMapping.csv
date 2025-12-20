@@ -1,0 +1,57 @@
+mapped_field_id,semantic_field_id,tgt_table_name,tgt_table_physical_name,tgt_column_name,tgt_column_physical_name,tgt_comments,source_expression,source_tables,source_tables_physical,source_columns,source_columns_physical,source_descriptions,source_datatypes,source_domain,target_domain,source_relationship_type,transformations_applied,join_metadata,confidence_score,mapping_source,ai_reasoning,ai_generated,mapping_status,project_id,is_approved_pattern,pattern_approved_by,pattern_approved_ts,mapped_by,mapped_ts,updated_by,updated_ts,source_semantic_field
+7,1291,MEMBER CONTACT,MBR_CNTCT,Address 1 Text,ADDR_1_TXT,"First address line of mailing address
+","SELECT DISTINCT
+
+INITCAP(rm.STREET_ADDR_1) AS ADDR_1_TXT
+
+FROM ${USER_BRONZE_CATALOG}.${USER_BRONZE_SCHEMA}.recipient_master rm
+
+JOIN ${SILVER_CATALOG}.${SILVER_SCHEMA}.mbr_fndtn mf ON rm.RECIP_KEY = mf.SRC_KEY_ID AND rm.CURR_REC_IND=1
+
+LEFT JOIN ${SILVER_CATALOG}.${SILVER_SCHEMA}.cnty_cd c ON rm.COUNTY_CD = c.CNTY_ID AND c.CURR_REC_IND=1
+
+WHERE mf.CURR_REC_IND=1
+
+
+UNION DISTINCT
+
+
+SELECT DISTINCT
+
+INITCAP(raa.STREET_ADDR_1) AS ADDR_1_TXT
+
+FROM (SELECT * FROM ${USER_BRONZE_CATALOG}.${USER_BRONZE_SCHEMA}.recipient_alt_addr raa WHERE TRIM(raa.ADDR_TYPE) IN (R,M) AND raa.CURR_IND=Y) a
+
+JOIN ${SILVER_CATALOG}.${SILVER_SCHEMA}.mbr_fndtn mf ON a.RECIP_KEY = mf.SRC_KEY_ID
+
+LEFT JOIN ${SILVER_CATALOG}.${SILVER_SCHEMA}.cnty_cd c ON a.COUNTY= c.COUNTY_CD AND c.CURR_REC_IND=1
+
+WHERE mf.CURR_REC_IND=1",Recipient Alternate Address|Recipient Master|Recipient Master,recipient_alt_addr|recipient_master|recipient_master,Recipient Key|Street Address Line 1|Street Address Line 2,RECIP_KEY|STREET_ADDR_1|STREET_ADDR_2,"Foreign key to recipient master table. Links alternate addresses to main recipient record.|Primary street address of the recipient. Contains house number and street name.|Secondary street address line. Contains apartment number, suite, unit, etc.",BIGINT|STRING|STRING,null,null,MANY_TO_ONE,null,"SELECT DISTINCT
+
+INITCAP(b.ADR_STREET_1) AS ADDR_1_TXT
+
+FROM ${USER_BRONZE_CATALOG}.${USER_BRONZE_SCHEMA}.t_re_base b
+
+JOIN ${SILVER_CATALOG}.${SILVER_SCHEMA}.mbr_fndtn mf ON b.SAK_RECIP = mf.SRC_KEY_ID AND b.CURR_REC_IND=1
+
+LEFT JOIN ${SILVER_CATALOG}.${SILVER_SCHEMA}.cnty_cd c ON b.CDE_COUNTY = c.CNTY_ID AND c.CURR_REC_IND=1
+
+WHERE mf.CURR_REC_IND=1
+
+
+
+UNION DISTINCT
+
+
+
+SELECT DISTINCT
+
+INITCAP(a.ADR_STREET_1) AS ADDR_1_TXT
+
+FROM (SELECT * FROM ${USER_BRONZE_CATALOG}.${USER_BRONZE_SCHEMA}.t_re_multi_address WHERE TRIM(CDE_ADDR_USAGE) IN (R,M) AND CURR_REC_IND=1) a
+
+JOIN ${SILVER_CATALOG}.${SILVER_SCHEMA}.mbr_fndtn mf ON a.SAK_RECIP = mf.SRC_KEY_ID
+
+LEFT JOIN ${SILVER_CATALOG}.${SILVER_SCHEMA}.cnty_cd c ON a.CDE_COUNTY = c.CNTY_ID AND c.CURR_REC_IND=1
+
+WHERE mf.CURR_REC_IND=1",0.9,AI,"The original SQL template was rewritten by replacing the source columns with the users columns based on the provided descriptions. The changes include replacing table names and column names, while keeping the JOINs, WHERE clauses, and UNION structure intact. The transformations (INITCAP, TRIM, etc.) were also preserved. However, a warning was noted for the column CDE_COUNTY as it was not found in the provided source columns.",true,ACTIVE,1,false,null,null,david.galluzzo@gainwelltechnologies.com,2025-12-19T19:03:41.028Z,null,null,"DESCRIPTION: Foreign key to recipient master table. Links alternate addresses to main recipient record.|Primary street address of the recipient. Contains house number and street name.|Secondary street address line. Contains apartment number, suite, unit, etc. | TYPE: BIGINT|STRING|STRING | DOMAIN: "
