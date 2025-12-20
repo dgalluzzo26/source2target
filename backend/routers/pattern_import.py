@@ -11,7 +11,7 @@ Workflow:
 5. POST /session/{id}/save - Save approved patterns to mapped_fields
 6. DELETE /session/{id} - Cancel and delete session
 """
-from fastapi import APIRouter, HTTPException, UploadFile, File, Request, Body
+from fastapi import APIRouter, HTTPException, UploadFile, File, Request, Body, Query
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 import uuid
@@ -173,19 +173,22 @@ async def create_session(
 @router.post("/session/{session_id}/process")
 async def process_patterns(
     session_id: str,
-    request: Request
+    request: Request,
+    limit: Optional[int] = Query(10, description="Limit number of patterns to process")
 ):
     """
     Process patterns in a session - generate join_metadata via LLM.
     
-    This can take time for large files as it calls LLM for each pattern.
+    Default limit is 10 to avoid timeout. Increase for more patterns.
     
     Admin only.
     """
     await require_admin(request)
     
+    print(f"[Pattern Import Router] Processing session {session_id} with limit={limit}")
+    
     try:
-        result = await pattern_import_service.process_patterns(session_id)
+        result = await pattern_import_service.process_patterns(session_id, limit=limit)
         
         if result.get("status") == "error":
             raise HTTPException(status_code=400, detail=result.get("error"))
@@ -195,7 +198,9 @@ async def process_patterns(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[Pattern Import] Error processing patterns: {e}")
+        print(f"[Pattern Import Router] Error processing patterns: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

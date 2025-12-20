@@ -356,23 +356,30 @@ RULES:
     
     async def process_patterns(
         self,
-        session_id: str
+        session_id: str,
+        limit: Optional[int] = None
     ) -> Dict[str, Any]:
         """
-        Process all patterns in a session - generate join_metadata for each.
+        Process patterns in a session - generate join_metadata for each.
         
         Args:
             session_id: Import session ID
+            limit: Optional limit on number of patterns to process
             
         Returns:
             Status dictionary with progress
         """
+        print(f"[Pattern Import] Starting process_patterns for session: {session_id}")
+        print(f"[Pattern Import] Limit: {limit}")
+        
         session = self.get_session(session_id)
         if not session:
+            print(f"[Pattern Import] Session not found: {session_id}")
             return {"status": "error", "error": "Session not found"}
         
         config = self.config_service.get_config()
         llm_endpoint = config.ai_model.foundation_model_endpoint
+        print(f"[Pattern Import] Using LLM endpoint: {llm_endpoint}")
         
         session["status"] = "PROCESSING"
         processed = []
@@ -381,29 +388,57 @@ RULES:
         all_rows = session.get("all_rows", [])
         column_mapping = session.get("column_mapping", {})
         
-        for i, row in enumerate(all_rows):
+        # Apply limit if specified
+        rows_to_process = all_rows[:limit] if limit else all_rows
+        total_rows = len(rows_to_process)
+        
+        print(f"[Pattern Import] Processing {total_rows} rows (out of {len(all_rows)} total)")
+        
+        for i, row in enumerate(rows_to_process):
             try:
+                print(f"[Pattern Import] Processing row {i+1}/{total_rows}")
+                
                 # Map CSV columns to pattern fields
                 pattern = self._map_row_to_pattern(row, column_mapping)
+                
+                target_col = pattern.get("tgt_column_physical_name", "unknown")
+                target_table = pattern.get("tgt_table_physical_name", "unknown")
+                print(f"[Pattern Import] Row {i+1}: {target_table}.{target_col}")
                 
                 # Generate join_metadata if SQL expression exists
                 sql_expr = pattern.get("source_expression", "")
                 if sql_expr:
-                    # Generate metadata asynchronously
-                    loop = asyncio.get_event_loop()
-                    join_metadata = await loop.run_in_executor(
-                        executor,
-                        functools.partial(
-                            self._generate_join_metadata_sync,
-                            llm_endpoint,
-                            sql_expr,
-                            pattern.get("tgt_column_physical_name", ""),
-                            pattern.get("tgt_table_physical_name", ""),
-                            pattern.get("source_tables_physical", ""),
-                            pattern.get("source_columns_physical", "")
+                    print(f"[Pattern Import] Row {i+1}: Calling LLM for join_metadata...")
+                    try:
+                        # Generate metadata with timeout protection
+                        loop = asyncio.get_event_loop()
+                        join_metadata = await asyncio.wait_for(
+                            loop.run_in_executor(
+                                executor,
+                                functools.partial(
+                                    self._generate_join_metadata_sync,
+                                    llm_endpoint,
+                                    sql_expr,
+                                    pattern.get("tgt_column_physical_name", ""),
+                                    pattern.get("tgt_table_physical_name", ""),
+                                    pattern.get("source_tables_physical", ""),
+                                    pattern.get("source_columns_physical", "")
+                                )
+                            ),
+                            timeout=60.0  # 60 second timeout per LLM call
                         )
-                    )
-                    pattern["join_metadata"] = join_metadata
+                        pattern["join_metadata"] = join_metadata
+                        print(f"[Pattern Import] Row {i+1}: LLM call successful")
+                    except asyncio.TimeoutError:
+                        print(f"[Pattern Import] Row {i+1}: LLM call timed out")
+                        pattern["join_metadata"] = None
+                        errors.append({
+                            "row_index": i,
+                            "error": "LLM call timed out after 60 seconds"
+                        })
+                    except Exception as llm_error:
+                        print(f"[Pattern Import] Row {i+1}: LLM error: {llm_error}")
+                        pattern["join_metadata"] = None
                     
                     # Auto-detect relationship type and transformations
                     if not pattern.get("source_relationship_type"):

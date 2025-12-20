@@ -430,13 +430,14 @@ async function createAndProcess() {
     activeStep.value = 2
     processingProgress.value = 0
     
-    // Start processing
-    const processResponse = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/process`, {
+    // Start processing - limit to 10 to avoid timeout
+    const processResponse = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/process?limit=10`, {
       method: 'POST'
     })
     
     if (!processResponse.ok) {
-      throw new Error('Processing failed')
+      const errorData = await processResponse.json().catch(() => ({}))
+      throw new Error(errorData.detail || 'Processing failed')
     }
     
     // Get results
