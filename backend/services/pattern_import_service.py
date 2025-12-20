@@ -93,6 +93,11 @@ class PatternImportService:
         """
         Parse CSV content and extract headers and preview data.
         
+        Handles:
+        - Multi-line fields (quoted with double quotes)
+        - Excel-style CSVs
+        - Various quote styles
+        
         Args:
             csv_content: Raw CSV content string
             
@@ -100,17 +105,36 @@ class PatternImportService:
             Dictionary with headers, preview rows, and row count
         """
         try:
-            # Parse CSV
-            reader = csv.DictReader(io.StringIO(csv_content))
+            # Try to detect the dialect (handles different CSV formats)
+            # Take a sample of the content for dialect detection
+            sample = csv_content[:8192]
+            
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters=',;\t')
+            except csv.Error:
+                # Fall back to excel dialect if detection fails
+                dialect = csv.excel
+            
+            # Parse CSV with detected dialect
+            reader = csv.DictReader(
+                io.StringIO(csv_content),
+                dialect=dialect,
+                quotechar='"',
+                doublequote=True  # Handle "" as escaped quote
+            )
             headers = reader.fieldnames or []
             
             # Get preview rows (first 10)
             preview_rows = []
             all_rows = []
             for i, row in enumerate(reader):
-                all_rows.append(row)
+                # Clean up values - strip whitespace and handle None
+                cleaned_row = {
+                    k: (v.strip() if v else '') for k, v in row.items()
+                }
+                all_rows.append(cleaned_row)
                 if i < 10:
-                    preview_rows.append(row)
+                    preview_rows.append(cleaned_row)
             
             return {
                 "status": "success",
