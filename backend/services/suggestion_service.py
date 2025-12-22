@@ -1851,13 +1851,53 @@ Modify the SQL according to the user's request and return JSON with the result."
             # Parse JSON from response
             import re
             
-            # Strip control characters
-            clean_response = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', response_text)
+            print(f"[AI Assist] Raw LLM response: {response_text[:500]}...")
             
             # Remove markdown code blocks if present (```json ... ``` or ``` ... ```)
+            clean_response = response_text
             json_block_match = re.search(r'```(?:json)?\s*(.*?)\s*```', clean_response, re.DOTALL)
             if json_block_match:
-                clean_response = json_block_match.group(1)
+                clean_response = json_block_match.group(1).strip()
+            
+            # Try to extract SQL directly from the "sql" field
+            # This handles cases where JSON has literal newlines in string values (invalid JSON)
+            sql_start_match = re.search(r'"sql"\s*:\s*"', clean_response)
+            if sql_start_match:
+                sql_start = sql_start_match.end()
+                # Find the closing quote - look for " followed by , or } or "explanation"
+                # But we need to handle escaped quotes \"
+                remaining = clean_response[sql_start:]
+                
+                # Find the end of the SQL string value
+                sql_end = None
+                i = 0
+                while i < len(remaining):
+                    if remaining[i] == '"' and (i == 0 or remaining[i-1] != '\\'):
+                        sql_end = i
+                        break
+                    i += 1
+                
+                if sql_end:
+                    extracted_sql = remaining[:sql_end]
+                    # Unescape any escaped characters
+                    extracted_sql = extracted_sql.replace('\\n', '\n').replace('\\"', '"').replace('\\\\', '\\')
+                    print(f"[AI Assist] Extracted SQL: {extracted_sql[:100]}...")
+                    
+                    # Try to get explanation too
+                    explanation = "SQL modified by AI"
+                    expl_match = re.search(r'"explanation"\s*:\s*"([^"]*)"', clean_response)
+                    if expl_match:
+                        explanation = expl_match.group(1)
+                    
+                    return {
+                        "sql": extracted_sql.strip(),
+                        "explanation": explanation,
+                        "success": True
+                    }
+            
+            # Fallback: try standard JSON parsing
+            # Strip control characters first
+            clean_response = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', clean_response)
             
             # Find JSON object in response
             json_start = clean_response.find('{')
