@@ -434,6 +434,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
 import HelpButton from '@/components/HelpButton.vue'
+import Textarea from 'primevue/textarea'
 
 const userStore = useUserStore()
 
@@ -468,9 +469,21 @@ const config = ref({
     endpoint_name: 's2t_vsendpoint'
   },
   security: {
+    admin_users: ['david.galluzzo@gainwelltechnologies.com'],
     admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
     enable_password_auth: true,
     admin_password_hash: ''
+  }
+})
+
+// Computed property for admin users text (one per line)
+const adminUsersText = computed({
+  get: () => (config.value.security.admin_users || []).join('\n'),
+  set: (val: string) => {
+    config.value.security.admin_users = val
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && s.includes('@'))
   }
 })
 
@@ -598,6 +611,7 @@ const resetConfiguration = async () => {
         endpoint_name: 's2t_vsendpoint'
       },
       security: {
+        admin_users: ['david.galluzzo@gainwelltechnologies.com'],
         admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
         enable_password_auth: true,
         admin_password_hash: ''
