@@ -352,16 +352,25 @@ Return ONLY valid JSON with this structure:
   "reasoning": "<brief explanation of changes made>"
 }}"""
 
-        # Log the full prompt for debugging
-        print(f"\n[LLM PROMPT] ========== REWRITE SQL ==========")
-        print(f"[LLM PROMPT] Target: {target_column}")
-        print(f"[LLM PROMPT] Pattern SQL: {pattern_sql[:300]}..." if len(pattern_sql) > 300 else f"[LLM PROMPT] Pattern SQL: {pattern_sql}")
-        print(f"[LLM PROMPT] Pattern Descriptions: {pattern_descriptions}")
-        print(f"[LLM PROMPT] Matched Sources ({len(matched_sources)} total):")
-        for src in matched_sources:
-            print(f"[LLM PROMPT]   - {src.get('src_table_physical_name', '?')}.{src.get('src_column_physical_name', '?')}: {src.get('src_comments', 'N/A')[:60]}")
-        print(f"[LLM PROMPT] Silver Tables Info: {silver_text}")
-        print(f"[LLM PROMPT] ==========================================\n")
+        # Store prompt for debugging (can be retrieved via API)
+        self._last_llm_prompt = {
+            "target_column": target_column,
+            "pattern_sql": pattern_sql,
+            "pattern_descriptions": pattern_descriptions,
+            "matched_sources": [
+                {
+                    "table": src.get('src_table_physical_name', '?'),
+                    "column": src.get('src_column_physical_name', '?'),
+                    "description": src.get('src_comments', 'N/A')
+                }
+                for src in matched_sources
+            ],
+            "silver_tables": silver_text,
+            "full_prompt": prompt
+        }
+        
+        # Brief log (full details available via debug endpoint)
+        print(f"[LLM] Rewriting for {target_column} with {len(matched_sources)} source columns")
 
         try:
             response = self.workspace_client.serving_endpoints.query(

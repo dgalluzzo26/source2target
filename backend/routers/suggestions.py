@@ -520,3 +520,35 @@ async def ai_sql_assist(request: AIAssistRequest):
             explanation=f"Error: {str(e)}",
             success=False
         )
+
+
+# =============================================================================
+# DEBUG - GET LAST LLM PROMPT
+# =============================================================================
+
+@router.get("/debug/last-prompt")
+async def get_last_llm_prompt():
+    """
+    Get the last LLM prompt used for SQL rewriting.
+    
+    For debugging - shows the full prompt sent to the LLM including:
+    - Target column
+    - Pattern SQL
+    - Matched source columns
+    - Silver tables info
+    - Full prompt text
+    
+    Returns:
+        Last prompt data or empty if none
+    """
+    prompt_data = getattr(suggestion_service, '_last_llm_prompt', None)
+    if prompt_data:
+        return {
+            "status": "ok",
+            "prompt": prompt_data
+        }
+    else:
+        return {
+            "status": "no_prompt",
+            "message": "No LLM prompt captured yet. Run discovery first."
+        }

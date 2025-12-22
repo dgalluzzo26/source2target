@@ -65,11 +65,11 @@ async def get_current_user_email(request: Request) -> Optional[str]:
 
 
 async def get_current_user_is_admin(request: Request) -> bool:
-    """Check if current user is an admin."""
+    """Check if current user is an admin (uses admin_users list from config)."""
     email = await get_current_user_email(request)
     if not email:
         return False
-    return auth_service.check_admin_group_membership(email)
+    return auth_service.is_user_admin(email)
 
 
 def user_can_access_project(project: dict, user_email: Optional[str], is_admin: bool) -> bool:
