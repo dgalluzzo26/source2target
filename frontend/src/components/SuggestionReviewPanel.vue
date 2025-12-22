@@ -662,14 +662,62 @@ const problemFieldsInSQL = computed(() => {
     }
   }
   
-  // Filter out common SQL keywords and table names that might get caught
-  const excludeList = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'AND', 'OR', 'ON', 'AS', 'IN', 'NOT', 'NULL',
-                       'LEFT', 'RIGHT', 'INNER', 'OUTER', 'UNION', 'DISTINCT', 'CURR_REC_IND']
-  // Note: We're NOT excluding CURR_REC_IND anymore since it could be a legitimate problem field
+  // Filter out SQL keywords
   const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'AND', 'OR', 'ON', 'AS', 'IN', 'NOT', 'NULL',
                        'LEFT', 'RIGHT', 'INNER', 'OUTER', 'UNION', 'DISTINCT', 'GROUP', 'BY', 'ORDER',
-                       'HAVING', 'LIMIT', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END']
-  const filtered = problems.filter(p => !sqlKeywords.includes(p.toUpperCase()))
+                       'HAVING', 'LIMIT', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'TRIM', 'INITCAP', 'CONCAT']
+  
+  // Extract silver table aliases from the SQL (tables with "silver" in the path)
+  // Matches patterns like: FROM silver.xxx AS alias, JOIN silver.xxx alias, silver.xxx.yyy mf
+  const sql = editedSQL.value || editingSuggestion.value?.suggested_sql || ''
+  const silverAliases = new Set<string>()
+  
+  // Match: silver.anything AS/followed by alias (1-3 chars typically)
+  const silverPatterns = [
+    /silver[._][^\s]+\s+(?:AS\s+)?(\w{1,4})\b/gi,  // silver.table AS mf or silver.table mf
+    /FROM\s+(\w+)\.[^.]+\.(\w+)\s+(?:AS\s+)?(\w{1,4})\b/gi  // FROM catalog.silver.table mf
+  ]
+  
+  for (const pattern of silverPatterns) {
+    let match
+    while ((match = pattern.exec(sql)) !== null) {
+      // Check if "silver" appears before the alias
+      const fullMatch = match[0].toLowerCase()
+      if (fullMatch.includes('silver')) {
+        const alias = match[match.length - 1] || match[1]
+        if (alias && alias.length <= 4) {
+          silverAliases.add(alias.toLowerCase())
+        }
+      }
+    }
+  }
+  
+  // Also check for direct "silver" in table references
+  const directSilverMatch = sql.match(/\bsilver\.\w+/gi)
+  if (directSilverMatch) {
+    // Mark 'mf' as silver alias if we see silver.mbr_fndtn or similar
+    silverAliases.add('mf')
+  }
+  
+  const filtered = problems.filter(p => {
+    const upper = p.toUpperCase()
+    const lower = p.toLowerCase()
+    
+    // Exclude SQL keywords
+    if (sqlKeywords.includes(upper)) return false
+    
+    // Exclude if this looks like an alias.column from a silver table
+    // Check if any warning mentions this column with a silver table alias
+    for (const alias of silverAliases) {
+      // If the SQL contains alias.COLUMN_NAME, exclude this column
+      const aliasPattern = new RegExp(`\\b${alias}\\.${p}\\b`, 'i')
+      if (aliasPattern.test(sql)) {
+        return false
+      }
+    }
+    
+    return true
+  })
   
   return [...new Set(filtered)] // unique values
 })

@@ -328,12 +328,17 @@ SILVER TABLES (CONSTANT - DO NOT MODIFY):
 {silver_text}
 
 RULES:
-1. Silver tables (from silver_* schemas) and their columns stay EXACTLY as-is
-2. Replace bronze table names with user's source tables
-3. Replace bronze column names with user's source columns based on description matching
-4. Keep all JOINs, WHERE clauses, UNION structure intact
-5. Keep all transformations (TRIM, INITCAP, CONCAT, etc.)
-6. If you cannot find a matching source column, note it in warnings
+1. Tables containing "silver" in their path are CONSTANT - DO NOT modify ANY columns from silver tables
+2. Only replace columns from bronze/source tables (tables NOT containing "silver" in their path)
+3. Replace bronze table names with user's source tables
+4. Replace bronze column names with user's source columns based on description matching
+5. Keep all JOINs, WHERE clauses, UNION structure intact
+6. Keep all transformations (TRIM, INITCAP, CONCAT, etc.)
+
+WARNINGS RULES:
+- ONLY add warnings for columns from bronze/source tables that you cannot match
+- NEVER add warnings for columns from silver tables (any table with "silver" in the name/path)
+- NEVER add warnings for table names or aliases
 
 Return ONLY valid JSON with this structure:
 {{
@@ -342,7 +347,7 @@ Return ONLY valid JSON with this structure:
     {{"type": "table_replace", "original": "<old>", "new": "<new>"}},
     {{"type": "column_replace", "original": "<old>", "new": "<new>"}}
   ],
-  "warnings": ["<any issues or unmatched columns>"],
+  "warnings": ["<only unmatched columns from bronze/source tables>"],
   "confidence": 0.0-1.0,
   "reasoning": "<brief explanation of changes made>"
 }}"""
