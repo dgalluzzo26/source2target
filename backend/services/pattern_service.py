@@ -166,15 +166,26 @@ class PatternService:
         Returns:
             Dictionary mapping column_name -> list of patterns
         """
+        import time
         db_config = self._get_db_config()
         
         print(f"[PatternService] Fetching all patterns for table: {tgt_table}")
+        start_time = time.time()
         
-        with databricks_sql.connect(
-            server_hostname=db_config["host"],
-            http_path=db_config["http_path"]
-        ) as conn:
-            with conn.cursor() as cursor:
+        try:
+            # Use _socket_timeout to prevent hanging connections
+            conn = databricks_sql.connect(
+                server_hostname=db_config["host"],
+                http_path=db_config["http_path"],
+                _socket_timeout=30  # 30 second timeout
+            )
+            
+            try:
+                cursor = conn.cursor()
+                print(f"[PatternService] Connection established in {time.time() - start_time:.2f}s, executing query...")
+                
+                query_start = time.time()
+                # Simplified query - avoid UPPER() for better performance
                 cursor.execute(f"""
                     SELECT 
                         mapped_field_id,
@@ -193,13 +204,17 @@ class PatternService:
                         project_id,
                         is_approved_pattern
                     FROM {db_config['mapped_fields_table']}
-                    WHERE UPPER(tgt_table_physical_name) = UPPER('{tgt_table}')
+                    WHERE tgt_table_physical_name = '{tgt_table}'
                       AND mapping_status = 'ACTIVE'
                     ORDER BY mapped_ts DESC
                 """)
                 
+                print(f"[PatternService] Query executed in {time.time() - query_start:.2f}s, fetching rows...")
+                
                 columns = [desc[0] for desc in cursor.description]
                 rows = cursor.fetchall()
+                
+                print(f"[PatternService] Fetched {len(rows)} rows in {time.time() - query_start:.2f}s total")
                 
                 # Group by column name
                 patterns_by_column: Dict[str, List[Dict[str, Any]]] = {}
@@ -221,8 +236,19 @@ class PatternService:
                         patterns_by_column[col_name] = []
                     patterns_by_column[col_name].append(pattern)
                 
-                print(f"[PatternService] Found patterns for {len(patterns_by_column)} columns")
+                print(f"[PatternService] Found patterns for {len(patterns_by_column)} columns, total time: {time.time() - start_time:.2f}s")
                 return patterns_by_column
+                
+            finally:
+                cursor.close()
+                conn.close()
+                
+        except Exception as e:
+            print(f"[PatternService] ERROR fetching patterns: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return empty dict on error so discovery can continue without patterns
+            return {}
     
     def get_best_pattern_from_cache(
         self,
