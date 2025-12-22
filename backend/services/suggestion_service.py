@@ -357,6 +357,8 @@ Return ONLY valid JSON with this structure:
             "target_column": target_column,
             "pattern_sql": pattern_sql,
             "pattern_descriptions": pattern_descriptions,
+            "join_metadata_raw": join_metadata,  # Raw value to debug
+            "join_metadata_parsed": metadata,    # Parsed dict
             "matched_sources": [
                 {
                     "table": src.get('src_table_physical_name', '?'),
@@ -747,23 +749,31 @@ RULES:
                         
                         # Extract column descriptions from join_metadata for better matching
                         join_metadata_str = pattern.get('join_metadata')
+                        print(f"[Suggestion Service] join_metadata type: {type(join_metadata_str)}, value: {str(join_metadata_str)[:200] if join_metadata_str else 'None'}")
+                        
                         if join_metadata_str:
                             try:
                                 jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
-                                # Get bronze columns from join_metadata (these need to be mapped)
-                                for col in jm.get('bronzeColumns', []):
-                                    if col.get('description'):
-                                        search_terms.append(col['description'])
-                                    if col.get('column'):
-                                        search_terms.append(col['column'])
-                                # Get columns to map
-                                for col in jm.get('userColumnsToMap', []):
-                                    if col.get('description'):
-                                        search_terms.append(col['description'])
-                                    if col.get('originalColumn'):
-                                        search_terms.append(col['originalColumn'])
+                                print(f"[Suggestion Service] Parsed join_metadata keys: {list(jm.keys()) if isinstance(jm, dict) else 'not a dict'}")
+                                
+                                # Get columns to map from userColumnsToMap
+                                user_cols = jm.get('userColumnsToMap', [])
+                                print(f"[Suggestion Service] userColumnsToMap has {len(user_cols)} entries")
+                                
+                                for col in user_cols:
+                                    desc = col.get('description', '')
+                                    orig_col = col.get('originalColumn', '')
+                                    role = col.get('role', '')
+                                    print(f"[Suggestion Service]   -> {role}: {orig_col} - {desc}")
+                                    if desc:
+                                        search_terms.append(desc)
+                                    if orig_col:
+                                        search_terms.append(orig_col)
+                                        
                             except Exception as e:
                                 print(f"[Suggestion Service] Could not parse join_metadata: {e}")
+                                import traceback
+                                traceback.print_exc()
                         
                         search_query = " ".join([t for t in search_terms if t])
                         print(f"[Suggestion Service] Search query: {search_query[:200]}...")
@@ -1084,15 +1094,32 @@ RULES:
                     new_suggestion_data["pattern_description"] = pattern.get("_signature_description")
                     
                     # Step 2: Find matching source columns
-                    search_query = f"{tgt_comments} {pattern.get('source_descriptions', '')}"
+                    # Build search query from target description + pattern descriptions + join column descriptions
+                    search_terms = [tgt_comments, pattern.get('source_descriptions', '')]
                     
-                    # Vector search
+                    # Extract column descriptions from join_metadata for better matching
+                    join_metadata_str = pattern.get('join_metadata')
+                    if join_metadata_str:
+                        try:
+                            jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
+                            for col in jm.get('userColumnsToMap', []):
+                                if col.get('description'):
+                                    search_terms.append(col['description'])
+                                if col.get('originalColumn'):
+                                    search_terms.append(col['originalColumn'])
+                        except Exception as e:
+                            print(f"[Suggestion Service] Could not parse join_metadata: {e}")
+                    
+                    search_query = " ".join([t for t in search_terms if t])
+                    print(f"[Suggestion Service] Regenerate search query: {search_query[:150]}...")
+                    
+                    # Vector search - get more results to cover join/filter columns
                     matched_sources = self._vector_search_source_fields_sync(
                         vs_config["endpoint_name"],
                         vs_config["unmapped_fields_index"],
                         search_query,
                         project_id,
-                        num_results=5
+                        num_results=15
                     )
                     
                     # Fallback to SQL search
@@ -1103,7 +1130,7 @@ RULES:
                             db_config["unmapped_fields_table"],
                             search_query,
                             project_id,
-                            num_results=5
+                            num_results=15
                         )
                     
                     if matched_sources:
