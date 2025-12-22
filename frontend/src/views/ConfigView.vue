@@ -469,7 +469,7 @@ const config = ref({
     endpoint_name: 's2t_vsendpoint'
   },
   security: {
-    admin_users: ['david.galluzzo@gainwelltechnologies.com'],
+    admin_users: ['david.galluzzo@gainwelltechnologies.com', 'meenakshishankar.chandrasekharan@gainwelltechnologies.com', 'santhosh.ravindrabharathy@gainwelltechnologies.com'],
     admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
     enable_password_auth: true,
     admin_password_hash: ''
@@ -611,7 +611,7 @@ const resetConfiguration = async () => {
         endpoint_name: 's2t_vsendpoint'
       },
       security: {
-        admin_users: ['david.galluzzo@gainwelltechnologies.com'],
+        admin_users: ['david.galluzzo@gainwelltechnologies.com', 'meenakshishankar.chandrasekharan@gainwelltechnologies.com', 'santhosh.ravindrabharathy@gainwelltechnologies.com'],
         admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
         enable_password_auth: true,
         admin_password_hash: ''

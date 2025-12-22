@@ -159,7 +159,11 @@ class SecurityConfig(BaseModel):
         admin_password_hash: Hashed admin password (not currently used)
     """
     admin_users: List[str] = Field(
-        default=["david.galluzzo@gainwelltechnologies.com"],
+        default=[
+            "david.galluzzo@gainwelltechnologies.com",
+            "meenakshishankar.chandrasekharan@gainwelltechnologies.com",
+            "santhosh.ravindrabharathy@gainwelltechnologies.com"
+        ],
         description="List of admin user email addresses"
     )
     admin_group_name: str = Field(default="gia-oztest-dev-ue1-data-engineers", description="(Legacy) Admin group name in Databricks workspace")
