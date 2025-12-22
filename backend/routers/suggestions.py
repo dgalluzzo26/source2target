@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from backend.services.suggestion_service import SuggestionService
 from backend.services.target_table_service import TargetTableService
 from backend.services.project_service import ProjectService
+from backend.services.pattern_service import PatternService
 from backend.models.suggestion import (
     MappingSuggestion,
     SuggestionApproveRequest,
@@ -29,6 +30,7 @@ router = APIRouter(prefix="/api/v4/suggestions", tags=["V4 Suggestions"])
 suggestion_service = SuggestionService()
 target_table_service = TargetTableService()
 project_service = ProjectService()
+pattern_service = PatternService()
 
 
 # =============================================================================
@@ -349,21 +351,82 @@ async def bulk_approve_suggestions(request: BulkApproveRequest):
 
 
 # =============================================================================
+# PATTERN ALTERNATIVES
+# =============================================================================
+
+@router.get("/{suggestion_id}/alternatives", response_model=dict)
+async def get_pattern_alternatives(suggestion_id: int):
+    """
+    Get alternative pattern variants for a suggestion.
+    
+    Returns a list of different pattern types (by signature) that could be used
+    for this target column. Each variant shows:
+    - signature: Unique identifier for the pattern type
+    - description: Human-readable description (e.g., "JOIN (2 tables) + COALESCE")
+    - usage_count: How many times this pattern type has been used
+    - latest_mapped_ts: When this pattern type was last used
+    - latest_pattern: The most recent pattern of this type
+    
+    Use the mapped_field_id from latest_pattern to regenerate with a specific pattern.
+    """
+    try:
+        # Get the suggestion to find target table/column
+        suggestion = await suggestion_service.get_suggestion_by_id(suggestion_id)
+        if not suggestion:
+            raise HTTPException(status_code=404, detail="Suggestion not found")
+        
+        tgt_table = suggestion.get("tgt_table_physical_name")
+        tgt_column = suggestion.get("tgt_column_physical_name")
+        
+        # Get all pattern variants
+        variants = pattern_service.get_pattern_variants(tgt_table, tgt_column)
+        
+        # Mark the currently selected pattern
+        current_signature = suggestion.get("pattern_signature")
+        for variant in variants:
+            variant["is_current"] = variant["signature"] == current_signature
+        
+        return {
+            "suggestion_id": suggestion_id,
+            "tgt_table": tgt_table,
+            "tgt_column": tgt_column,
+            "current_signature": current_signature,
+            "variants": variants,
+            "total_variants": len(variants)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Suggestions Router] Error getting alternatives: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # REGENERATE SINGLE SUGGESTION
 # =============================================================================
 
 @router.post("/{suggestion_id}/regenerate", response_model=SuggestionActionResponse)
-async def regenerate_suggestion(suggestion_id: int):
+async def regenerate_suggestion(
+    suggestion_id: int,
+    pattern_id: Optional[int] = None
+):
     """
     Regenerate AI suggestion for a single column.
+    
+    Args:
+        suggestion_id: The suggestion to regenerate
+        pattern_id: Optional specific pattern to use. If provided, uses this pattern
+                   instead of auto-selecting the best one. Get pattern IDs from 
+                   the /alternatives endpoint.
     
     Use this when:
     - User has added new source fields and wants to re-run discovery
     - Previous discovery had an error
-    - User wants to try matching again after uploading more sources
+    - User wants to try a different pattern variant (pass pattern_id)
     
     This will:
-    1. Re-lookup the pattern for this target column
+    1. Look up the pattern (specific or best available)
     2. Re-run vector search to find matching source columns
     3. Re-call the LLM to rewrite the SQL
     4. Update the suggestion with new results
@@ -374,9 +437,15 @@ async def regenerate_suggestion(suggestion_id: int):
     - NO_PATTERN: No pattern exists for this target column
     """
     try:
-        print(f"[Suggestions Router] Regenerating suggestion: {suggestion_id}")
+        if pattern_id:
+            print(f"[Suggestions Router] Regenerating suggestion {suggestion_id} with pattern {pattern_id}")
+        else:
+            print(f"[Suggestions Router] Regenerating suggestion: {suggestion_id}")
         
-        result = await suggestion_service.regenerate_single_suggestion(suggestion_id)
+        result = await suggestion_service.regenerate_single_suggestion(
+            suggestion_id, 
+            pattern_id=pattern_id
+        )
         
         if result.get("error"):
             raise HTTPException(status_code=404, detail=result["error"])

@@ -78,7 +78,17 @@
         <!-- Pattern Info -->
         <div v-if="suggestion.pattern_type" class="pattern-info">
           <Tag :value="suggestion.pattern_type" severity="secondary" size="small" />
-          <span class="pattern-label">Pattern from historical mapping</span>
+          <span class="pattern-label">{{ suggestion.pattern_description || 'Pattern from historical mapping' }}</span>
+          <Button 
+            v-if="suggestion.alternative_patterns_count > 0"
+            :label="`${suggestion.alternative_patterns_count} alternative${suggestion.alternative_patterns_count > 1 ? 's' : ''}`"
+            icon="pi pi-clone"
+            size="small"
+            text
+            severity="info"
+            @click="showAlternatives(suggestion)"
+            v-tooltip.top="'View alternative pattern types'"
+          />
         </div>
 
         <!-- Matched Source Fields -->
@@ -480,6 +490,61 @@
         <Button label="Reject" icon="pi pi-times" @click="handleReject" severity="danger" :loading="saving" :disabled="!rejectReason" />
       </template>
     </Dialog>
+
+    <!-- Pattern Alternatives Dialog -->
+    <Dialog 
+      v-model:visible="showAlternativesDialog" 
+      modal 
+      header="Pattern Alternatives" 
+      :style="{ width: '700px' }"
+    >
+      <div v-if="loadingAlternatives" class="loading-alternatives">
+        <ProgressSpinner />
+        <p>Loading alternatives...</p>
+      </div>
+      
+      <div v-else class="alternatives-content">
+        <p class="alternatives-intro">
+          Multiple teams have mapped <strong>{{ alternativesSuggestion?.tgt_column_physical_name }}</strong> differently.
+          Choose the pattern that best fits your source data.
+        </p>
+        
+        <div 
+          v-for="variant in patternVariants" 
+          :key="variant.signature"
+          class="variant-card"
+          :class="{ 'is-current': variant.is_current }"
+        >
+          <div class="variant-header">
+            <Tag :value="variant.description.split(' + ')[0]" />
+            <span class="variant-transforms">
+              {{ variant.description.includes(' + ') ? variant.description.split(' + ').slice(1).join(' + ') : '' }}
+            </span>
+            <Badge :value="variant.usage_count" severity="info" v-tooltip.top="'Times used'" />
+            <Tag v-if="variant.is_current" value="Current" severity="success" size="small" />
+          </div>
+          
+          <div class="variant-meta">
+            <span><i class="pi pi-calendar"></i> Last used: {{ formatDate(variant.latest_mapped_ts) }}</span>
+            <span><i class="pi pi-user"></i> {{ variant.latest_pattern.created_by || 'Unknown' }}</span>
+          </div>
+          
+          <div class="variant-sql-preview">
+            <code>{{ truncateSql(variant.latest_pattern.source_expression, 120) }}</code>
+          </div>
+          
+          <Button 
+            :label="variant.is_current ? 'Currently Selected' : 'Use This Pattern'"
+            :icon="variant.is_current ? 'pi pi-check' : 'pi pi-arrow-right'"
+            size="small"
+            :disabled="variant.is_current"
+            :severity="variant.is_current ? 'success' : 'info'"
+            @click="useAlternativePattern(variant)"
+            :loading="regeneratingWithPattern === variant.latest_pattern.mapped_field_id"
+          />
+        </div>
+      </div>
+    </Dialog>
   </div>
 </template>
 
@@ -512,8 +577,13 @@ const userStore = useUserStore()
 const showEditDialog = ref(false)
 const showRejectDialog = ref(false)
 const showAIAssist = ref(false)
+const showAlternativesDialog = ref(false)
 const editingSuggestion = ref<MappingSuggestion | null>(null)
 const rejectingSuggestion = ref<MappingSuggestion | null>(null)
+const alternativesSuggestion = ref<MappingSuggestion | null>(null)
+const patternVariants = ref<any[]>([])
+const loadingAlternatives = ref(false)
+const regeneratingWithPattern = ref<number | null>(null)
 const editedSQL = ref('')
 const editNotes = ref('')
 const rejectReason = ref('')
@@ -999,6 +1069,68 @@ async function handleRegenerate(suggestion: MappingSuggestion) {
   } finally {
     regeneratingId.value = null
   }
+}
+
+// Pattern Alternatives
+async function showAlternatives(suggestion: MappingSuggestion) {
+  alternativesSuggestion.value = suggestion
+  showAlternativesDialog.value = true
+  loadingAlternatives.value = true
+  patternVariants.value = []
+  
+  try {
+    const response = await fetch(`/api/v4/suggestions/${suggestion.suggestion_id}/alternatives`)
+    if (!response.ok) throw new Error('Failed to load alternatives')
+    const data = await response.json()
+    patternVariants.value = data.variants || []
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 5000 })
+    showAlternativesDialog.value = false
+  } finally {
+    loadingAlternatives.value = false
+  }
+}
+
+async function useAlternativePattern(variant: any) {
+  if (!alternativesSuggestion.value) return
+  
+  const patternId = variant.latest_pattern.mapped_field_id
+  regeneratingWithPattern.value = patternId
+  
+  try {
+    await projectsStore.regenerateSuggestion(
+      alternativesSuggestion.value.suggestion_id,
+      patternId
+    )
+    
+    toast.add({ 
+      severity: 'success', 
+      summary: 'Pattern Applied', 
+      detail: `Using ${variant.description} pattern`, 
+      life: 3000 
+    })
+    
+    showAlternativesDialog.value = false
+    emit('suggestion-updated')
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 5000 })
+  } finally {
+    regeneratingWithPattern.value = null
+  }
+}
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return 'Unknown'
+  try {
+    return new Date(dateStr).toLocaleDateString()
+  } catch {
+    return dateStr
+  }
+}
+
+function truncateSql(sql: string, maxLen: number): string {
+  if (!sql) return ''
+  return sql.length > maxLen ? sql.substring(0, maxLen) + '...' : sql
 }
 
 function copySQL(sql: string) {
@@ -1981,6 +2113,80 @@ function formatDate(dateStr?: string): string {
 
 .w-full {
   width: 100%;
+}
+
+/* Pattern Alternatives Dialog */
+.loading-alternatives {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  gap: 1rem;
+}
+
+.alternatives-intro {
+  margin: 0 0 1.5rem 0;
+  color: var(--text-color-secondary);
+}
+
+.variant-card {
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  transition: border-color 0.2s;
+}
+
+.variant-card:hover {
+  border-color: var(--primary-color);
+}
+
+.variant-card.is-current {
+  border-color: var(--green-500);
+  background: var(--green-50);
+}
+
+.variant-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.variant-transforms {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.variant-meta {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  margin-bottom: 0.75rem;
+}
+
+.variant-meta i {
+  margin-right: 0.25rem;
+}
+
+.variant-sql-preview {
+  background: var(--surface-100);
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+  overflow-x: auto;
+}
+
+.variant-sql-preview code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  color: var(--primary-700);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>
 

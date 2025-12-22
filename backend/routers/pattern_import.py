@@ -17,13 +17,11 @@ from pydantic import BaseModel
 import uuid
 from backend.services.pattern_import_service import PatternImportService
 from backend.services.auth_service import AuthService
-from backend.services.vector_search_service import VectorSearchService
 
 router = APIRouter(prefix="/api/v4/admin/patterns", tags=["Pattern Import (Admin)"])
 
 pattern_import_service = PatternImportService()
 auth_service = AuthService()
-vector_search_service = VectorSearchService()
 
 
 async def get_current_user_email(request: Request) -> str:
@@ -347,19 +345,4 @@ async def get_mappable_columns(request: Request):
     }
 
 
-@router.post("/sync-vector-index")
-async def sync_vector_index(request: Request):
-    """
-    Manually trigger vector search index sync.
-    
-    Admin only.
-    """
-    await require_admin(request)
-    
-    try:
-        result = await vector_search_service.sync_mapped_fields_index()
-        return result
-    except Exception as e:
-        print(f"[Pattern Import] Error syncing index: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 

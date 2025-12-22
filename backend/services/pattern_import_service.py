@@ -21,7 +21,6 @@ from databricks import sql
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.serving import ChatMessage, ChatMessageRole
 from backend.services.config_service import ConfigService
-from backend.services.vector_search_service import VectorSearchService
 
 # Thread pool for blocking operations
 executor = ThreadPoolExecutor(max_workers=4)
@@ -53,7 +52,6 @@ class PatternImportService:
     
     def __init__(self):
         self.config_service = ConfigService()
-        self.vector_search_service = VectorSearchService()
         self._workspace_client = None
         self._import_sessions: Dict[str, Dict] = {}  # Store import sessions in memory
     
@@ -382,8 +380,10 @@ RULES:
         print(f"[Pattern Import] Using LLM endpoint: {llm_endpoint}")
         
         session["status"] = "PROCESSING"
-        processed = []
-        errors = []
+        session["processed_patterns"] = []  # Initialize empty - will update incrementally
+        session["errors"] = []
+        session["processed_count"] = 0
+        session["total_to_process"] = 0
         
         all_rows = session.get("all_rows", [])
         column_mapping = session.get("column_mapping", {})
@@ -391,6 +391,7 @@ RULES:
         # Apply limit if specified
         rows_to_process = all_rows[:limit] if limit else all_rows
         total_rows = len(rows_to_process)
+        session["total_to_process"] = total_rows
         
         print(f"[Pattern Import] Processing {total_rows} rows (out of {len(all_rows)} total)")
         
@@ -428,19 +429,34 @@ RULES:
                             timeout=60.0  # 60 second timeout per LLM call
                         )
                         pattern["join_metadata"] = join_metadata
+                        pattern["status"] = "READY"
                         print(f"[Pattern Import] Row {i+1}: LLM call successful")
                     except asyncio.TimeoutError:
                         print(f"[Pattern Import] Row {i+1}: LLM call timed out")
                         pattern["join_metadata"] = None
-                        errors.append({
+                        pattern["status"] = "ERROR"
+                        pattern["error"] = "LLM call timed out"
+                        session["errors"].append({
                             "row_index": i,
+                            "column": target_col,
                             "error": "LLM call timed out after 60 seconds"
                         })
                     except Exception as llm_error:
                         print(f"[Pattern Import] Row {i+1}: LLM error: {llm_error}")
                         pattern["join_metadata"] = None
-                    
-                    # Auto-detect relationship type and transformations
+                        pattern["status"] = "ERROR"
+                        pattern["error"] = str(llm_error)
+                        session["errors"].append({
+                            "row_index": i,
+                            "column": target_col,
+                            "error": str(llm_error)
+                        })
+                else:
+                    pattern["status"] = "READY"
+                    pattern["join_metadata"] = None
+                
+                # Auto-detect relationship type and transformations
+                if sql_expr:
                     if not pattern.get("source_relationship_type"):
                         pattern["source_relationship_type"] = self._determine_relationship_type(
                             sql_expr, 
@@ -451,27 +467,41 @@ RULES:
                         pattern["transformations_applied"] = self._extract_transformations(sql_expr)
                 
                 pattern["row_index"] = i
-                pattern["status"] = "READY"
-                processed.append(pattern)
+                
+                # Add pattern to list immediately (for progressive display)
+                session["processed_patterns"].append(pattern)
+                session["processed_count"] = i + 1
                 
             except Exception as e:
-                errors.append({
+                print(f"[Pattern Import] Row {i+1}: Exception: {e}")
+                # Still add a pattern entry so user can see it failed
+                error_pattern = self._map_row_to_pattern(row, column_mapping)
+                error_pattern["row_index"] = i
+                error_pattern["status"] = "ERROR"
+                error_pattern["error"] = str(e)
+                session["processed_patterns"].append(error_pattern)
+                session["errors"].append({
                     "row_index": i,
                     "error": str(e)
                 })
+                session["processed_count"] = i + 1
             
-            # Update progress
-            session["processing_progress"] = int((i + 1) / len(all_rows) * 100)
+            # Update progress percentage
+            session["processing_progress"] = int((i + 1) / total_rows * 100)
         
-        session["processed_patterns"] = processed
-        session["errors"] = errors
         session["status"] = "READY_FOR_REVIEW"
+        
+        successful = len([p for p in session["processed_patterns"] if p.get("status") == "READY"])
+        failed = len([p for p in session["processed_patterns"] if p.get("status") == "ERROR"])
+        
+        print(f"[Pattern Import] Complete: {successful} successful, {failed} failed")
         
         return {
             "status": "success",
             "session_id": session_id,
-            "processed_count": len(processed),
-            "error_count": len(errors)
+            "processed_count": successful,
+            "error_count": failed,
+            "total": total_rows
         }
     
     def _map_row_to_pattern(
@@ -710,15 +740,6 @@ RULES:
                 created_by
             )
         )
-        
-        # Sync vector search index after save
-        if result.get("saved_count", 0) > 0:
-            try:
-                await self.vector_search_service.sync_mapped_fields_index()
-                result["vector_index_synced"] = True
-            except Exception as e:
-                result["vector_index_synced"] = False
-                result["vector_sync_error"] = str(e)
         
         # Update session status
         session["status"] = "COMPLETED"

@@ -139,7 +139,17 @@
       <Card>
         <template #title>Review Patterns</template>
         <template #subtitle>
-          Review generated patterns before saving. {{ processedPatterns.length }} patterns ready.
+          <div class="processing-status">
+            <span v-if="!processingComplete">
+              <i class="pi pi-spin pi-spinner"></i>
+              Processing {{ processedCount }}/{{ totalToProcess }}...
+            </span>
+            <span v-else>
+              <i class="pi pi-check-circle text-green-500"></i>
+              Complete! {{ successfulPatterns.length }} successful, {{ failedPatterns.length }} failed
+            </span>
+          </div>
+          <ProgressBar :value="processingProgress" class="mt-2" style="height: 8px" />
         </template>
         <template #content>
           <DataTable 
@@ -151,6 +161,14 @@
             class="patterns-table"
           >
             <Column selectionMode="multiple" headerStyle="width: 3rem" />
+            
+            <Column field="status" header="Status" sortable style="width: 100px">
+              <template #body="{ data }">
+                <Tag v-if="data.status === 'READY'" value="Ready" severity="success" />
+                <Tag v-else-if="data.status === 'ERROR'" value="Error" severity="danger" />
+                <Tag v-else value="Processing" severity="warning" />
+              </template>
+            </Column>
             
             <Column field="tgt_table_physical_name" header="Target Table" sortable style="min-width: 150px" />
             
@@ -169,6 +187,7 @@
             <Column field="join_metadata" header="Metadata" style="width: 120px">
               <template #body="{ data }">
                 <Tag v-if="data.join_metadata" value="Generated" severity="success" />
+                <Tag v-else-if="data.status === 'ERROR'" value="Failed" severity="danger" />
                 <Tag v-else value="None" severity="warning" />
               </template>
             </Column>
@@ -176,6 +195,7 @@
             <Column field="source_expression" header="SQL Preview" style="min-width: 300px">
               <template #body="{ data }">
                 <code class="sql-preview">{{ truncate(data.source_expression, 100) }}</code>
+                <div v-if="data.error" class="error-text">{{ data.error }}</div>
               </template>
             </Column>
             
@@ -190,21 +210,23 @@
             <h4 class="text-red-500"><i class="pi pi-exclamation-triangle"></i> Errors ({{ processingErrors.length }})</h4>
             <ul>
               <li v-for="(error, i) in processingErrors" :key="i">
-                Row {{ error.row_index }}: {{ error.error }}
+                Row {{ error.row_index + 1 }} ({{ error.column || 'unknown' }}): {{ error.error }}
               </li>
             </ul>
           </div>
         </template>
         <template #footer>
           <div class="step-actions">
-            <Button label="Back" icon="pi pi-arrow-left" severity="secondary" @click="goToStep(1)" />
-            <span class="selection-info">{{ selectedPatterns.length }} of {{ processedPatterns.length }} selected</span>
+            <Button label="Back" icon="pi pi-arrow-left" severity="secondary" @click="goToStep(1)" :disabled="!processingComplete" />
+            <span class="selection-info">
+              {{ selectedPatterns.length }} of {{ successfulPatterns.length }} ready patterns selected
+            </span>
             <Button 
               label="Save Selected Patterns" 
               icon="pi pi-check" 
               @click="savePatterns" 
               :loading="saving" 
-              :disabled="!selectedPatterns.length"
+              :disabled="!processingComplete || !selectedPatterns.length"
             />
           </div>
         </template>
@@ -317,6 +339,9 @@ const columnMapping = ref<Record<string, string>>({})
 const sessionId = ref('')
 const processing = ref(false)
 const processingProgress = ref(0)
+const processingComplete = ref(false)
+const processedCount = ref(0)
+const totalToProcess = ref(0)
 const processedPatterns = ref<any[]>([])
 const processingErrors = ref<any[]>([])
 const selectedPatterns = ref<any[]>([])
@@ -352,6 +377,14 @@ const csvColumnOptions = computed(() => {
     { label: '-- Not Mapped --', value: '' },
     ...parsedData.value.headers.map((h: string) => ({ label: h, value: h }))
   ]
+})
+
+const successfulPatterns = computed(() => {
+  return processedPatterns.value.filter(p => p.status === 'READY')
+})
+
+const failedPatterns = computed(() => {
+  return processedPatterns.value.filter(p => p.status === 'ERROR')
 })
 
 const isMappingValid = computed(() => {
@@ -426,21 +459,58 @@ async function createAndProcess() {
     const sessionData = await createResponse.json()
     sessionId.value = sessionData.session_id
     
-    // Move to processing step
-    activeStep.value = 2
+    // Move to processing step - show review immediately so user sees progress
+    activeStep.value = 3
     processingProgress.value = 0
+    processedPatterns.value = []
+    processingErrors.value = []
+    processingComplete.value = false
+    
+    // Start polling for progress
+    const pollInterval = setInterval(async () => {
+      try {
+        const previewResponse = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/preview`)
+        if (previewResponse.ok) {
+          const preview = await previewResponse.json()
+          processedPatterns.value = preview.patterns || []
+          processingErrors.value = preview.errors || []
+          
+          // Calculate progress
+          const total = preview.total_rows || 10
+          const processed = processedPatterns.value.length
+          processingProgress.value = Math.round((processed / total) * 100)
+          processedCount.value = processed
+          totalToProcess.value = total
+          
+          // Check if complete
+          if (preview.session_status === 'READY_FOR_REVIEW') {
+            clearInterval(pollInterval)
+            processingComplete.value = true
+            processingProgress.value = 100
+            
+            // Select only successful patterns by default
+            selectedPatterns.value = processedPatterns.value.filter(p => p.status === 'READY')
+          }
+        }
+      } catch (e) {
+        console.error('Error polling progress:', e)
+      }
+    }, 2000) // Poll every 2 seconds
     
     // Start processing - limit to 10 to avoid timeout
     const processResponse = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/process?limit=10`, {
       method: 'POST'
     })
     
+    // Clear polling after process completes
+    clearInterval(pollInterval)
+    
     if (!processResponse.ok) {
       const errorData = await processResponse.json().catch(() => ({}))
       throw new Error(errorData.detail || 'Processing failed')
     }
     
-    // Get results
+    // Final fetch of results
     const previewResponse = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/preview`)
     
     if (previewResponse.ok) {
@@ -448,12 +518,10 @@ async function createAndProcess() {
       processedPatterns.value = preview.patterns || []
       processingErrors.value = preview.errors || []
       processingProgress.value = 100
+      processingComplete.value = true
       
-      // Select all by default
-      selectedPatterns.value = [...processedPatterns.value]
-      
-      // Move to review
-      activeStep.value = 3
+      // Select only successful patterns by default
+      selectedPatterns.value = processedPatterns.value.filter(p => p.status === 'READY')
     }
     
   } catch (e: any) {
@@ -688,6 +756,22 @@ onMounted(() => {
 .pattern-detail .detail-row label {
   font-weight: 600;
   min-width: 120px;
+}
+
+.processing-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.processing-status i {
+  font-size: 1rem;
+}
+
+.error-text {
+  color: var(--red-500);
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
 }
 
 .sql-block, .json-block {

@@ -1,13 +1,12 @@
 """
 Vector Search Service for managing Databricks Vector Search indexes.
 
-Provides utilities for syncing vector search indexes after data changes
-to mapped_fields and unmapped_fields tables.
+V4 uses only the unmapped_fields index for source field matching during discovery.
 """
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import functools
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from databricks.sdk import WorkspaceClient
 from backend.services.config_service import ConfigService
 
@@ -82,53 +81,13 @@ class VectorSearchService:
         )
         return result
     
-    async def sync_mapped_fields_index(self) -> Dict[str, Any]:
-        """
-        Sync the mapped_fields vector search index.
-        
-        Call this after inserting/updating mapped_fields records.
-        """
-        config = self.config_service.get_config()
-        index_name = config.vector_search.mapped_fields_index
-        return await self.sync_index(index_name)
-    
     async def sync_unmapped_fields_index(self) -> Dict[str, Any]:
         """
         Sync the unmapped_fields vector search index.
         
         Call this after inserting/updating unmapped_fields records.
+        This is the primary index used for V4 discovery workflow.
         """
         config = self.config_service.get_config()
         index_name = config.vector_search.unmapped_fields_index
         return await self.sync_index(index_name)
-    
-    async def sync_semantic_fields_index(self) -> Dict[str, Any]:
-        """
-        Sync the semantic_fields vector search index.
-        
-        Call this after inserting/updating semantic_fields records.
-        """
-        config = self.config_service.get_config()
-        index_name = config.vector_search.semantic_fields_index
-        return await self.sync_index(index_name)
-    
-    async def sync_all_indexes(self) -> Dict[str, Any]:
-        """
-        Sync all vector search indexes.
-        
-        Returns:
-            Dictionary with results for each index
-        """
-        results = {}
-        
-        # Sync all indexes in parallel
-        mapped_task = self.sync_mapped_fields_index()
-        unmapped_task = self.sync_unmapped_fields_index()
-        semantic_task = self.sync_semantic_fields_index()
-        
-        results["mapped_fields"] = await mapped_task
-        results["unmapped_fields"] = await unmapped_task
-        results["semantic_fields"] = await semantic_task
-        
-        return results
-

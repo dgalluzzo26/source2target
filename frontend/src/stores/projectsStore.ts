@@ -515,10 +515,16 @@ export const useProjectsStore = defineStore('projects', () => {
     }
   }
 
-  async function regenerateSuggestion(suggestionId: number) {
+  async function regenerateSuggestion(suggestionId: number, patternId?: number) {
     error.value = null
     try {
-      const { data } = await api.post(`/api/v4/suggestions/${suggestionId}/regenerate`)
+      // Build URL with optional pattern_id
+      let url = `/api/v4/suggestions/${suggestionId}/regenerate`
+      if (patternId) {
+        url += `?pattern_id=${patternId}`
+      }
+      
+      const { data } = await api.post(url)
       
       // Find the suggestion to get project_id and table_id for refresh
       const suggestion = suggestions.value.find(s => s.suggestion_id === suggestionId)

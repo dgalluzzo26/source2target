@@ -33,6 +33,7 @@ from backend.models.suggestion import (
 from backend.models.project import TableMappingStatus
 from backend.services.config_service import ConfigService
 from backend.services.vector_search_service import VectorSearchService
+from backend.services.pattern_service import PatternService
 
 # Thread pool for blocking database operations
 executor = ThreadPoolExecutor(max_workers=4)
@@ -45,6 +46,7 @@ class SuggestionService:
         """Initialize the suggestion service."""
         self.config_service = ConfigService()
         self.vector_search_service = VectorSearchService()
+        self.pattern_service = PatternService()
         self._workspace_client = None
     
     @property
@@ -77,8 +79,7 @@ class SuggestionService:
         config = self.config_service.get_config()
         return {
             "endpoint_name": config.vector_search.endpoint_name,
-            "unmapped_fields_index": config.vector_search.unmapped_fields_index,
-            "mapped_fields_index": config.vector_search.mapped_fields_index
+            "unmapped_fields_index": config.vector_search.unmapped_fields_index
         }
     
     def _get_llm_config(self) -> Dict[str, str]:
@@ -647,28 +648,14 @@ RULES:
                     
                     print(f"[Suggestion Service] Processing column: {tgt_column_physical}")
                     
-                    # Find past pattern for this column
-                    cursor.execute(f"""
-                        SELECT 
-                            mapped_field_id,
-                            source_expression,
-                            source_tables,
-                            source_columns,
-                            source_descriptions,
-                            source_relationship_type,
-                            join_metadata,
-                            ai_reasoning,
-                            confidence_score
-                        FROM {db_config['mapped_fields_table']}
-                        WHERE UPPER(tgt_table_physical_name) = UPPER('{self._escape_sql(tgt_table_physical_name)}')
-                          AND UPPER(tgt_column_physical_name) = UPPER('{self._escape_sql(tgt_column_physical)}')
-                          AND mapping_status = 'ACTIVE'
-                          AND (is_approved_pattern = true OR is_approved_pattern IS NULL)
-                        ORDER BY confidence_score DESC
-                        LIMIT 1
-                    """)
+                    # Find best pattern using PatternService (handles deduplication)
+                    pattern_result = self.pattern_service.get_best_pattern_with_alternatives(
+                        tgt_table_physical_name,
+                        tgt_column_physical
+                    )
                     
-                    pattern_row = cursor.fetchone()
+                    best_pattern = pattern_result.get("pattern")
+                    alternatives_count = len(pattern_result.get("alternatives", []))
                     
                     # Initialize suggestion data
                     suggestion_data = {
@@ -684,6 +671,9 @@ RULES:
                         "pattern_mapped_field_id": None,
                         "pattern_type": None,
                         "pattern_sql": None,
+                        "pattern_signature": None,
+                        "pattern_description": None,
+                        "alternative_patterns_count": alternatives_count,
                         "matched_source_fields": "[]",
                         "suggested_sql": None,
                         "sql_changes": "[]",
@@ -693,16 +683,17 @@ RULES:
                         "suggestion_status": "NO_PATTERN"
                     }
                     
-                    if pattern_row:
+                    if best_pattern:
                         patterns_found += 1
-                        pattern_cols = ["mapped_field_id", "source_expression", "source_tables", 
-                                       "source_columns", "source_descriptions", "source_relationship_type",
-                                       "join_metadata", "ai_reasoning", "confidence_score"]
-                        pattern = dict(zip(pattern_cols, pattern_row))
+                        pattern = best_pattern
                         
                         suggestion_data["pattern_mapped_field_id"] = pattern["mapped_field_id"]
-                        suggestion_data["pattern_type"] = pattern["source_relationship_type"]
-                        suggestion_data["pattern_sql"] = pattern["source_expression"]
+                        suggestion_data["pattern_type"] = pattern.get("source_relationship_type")
+                        suggestion_data["pattern_sql"] = pattern.get("source_expression")
+                        suggestion_data["pattern_signature"] = pattern.get("_signature")
+                        suggestion_data["pattern_description"] = pattern.get("_signature_description")
+                        
+                        print(f"[Suggestion Service] Found pattern (usage: {pattern.get('_selected_from_count', 1)}, alternatives: {alternatives_count})")
                         
                         # Build search query from target description + pattern descriptions
                         search_query = f"{tgt_comments} {pattern.get('source_descriptions', '')}"
@@ -902,15 +893,20 @@ RULES:
         db_config: Dict[str, str],
         vs_config: Dict[str, str],
         llm_config: Dict[str, str],
-        suggestion_id: int
+        suggestion_id: int,
+        pattern_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Regenerate AI suggestion for a single column.
         
+        Args:
+            suggestion_id: The suggestion to regenerate
+            pattern_id: Optional specific pattern to use (for alternative pattern selection)
+        
         Useful when user has added new source fields and wants to re-run
         discovery for just one column without rediscovering the entire table.
         """
-        print(f"[Suggestion Service] Regenerating suggestion: {suggestion_id}")
+        print(f"[Suggestion Service] Regenerating suggestion: {suggestion_id}, pattern_id: {pattern_id}")
         
         connection = self._get_sql_connection(
             db_config["server_hostname"],
@@ -955,27 +951,26 @@ RULES:
                 print(f"[Suggestion Service] Regenerating for column: {tgt_column_physical}")
                 
                 # Step 1: Find pattern for this target column
-                cursor.execute(f"""
-                    SELECT 
-                        mapped_field_id,
-                        source_expression,
-                        source_tables,
-                        source_columns,
-                        source_descriptions,
-                        source_relationship_type,
-                        transformations_applied,
-                        join_metadata
-                    FROM {db_config['mapped_fields_table']}
-                    WHERE UPPER(tgt_column_physical_name) = UPPER('{self._escape_sql(tgt_column_physical)}')
-                      AND UPPER(tgt_table_physical_name) = UPPER('{self._escape_sql(tgt_table_physical)}')
-                      AND is_approved_pattern = TRUE
-                      AND project_id IS NULL
-                    ORDER BY confidence_score DESC NULLS LAST
-                    LIMIT 1
-                """)
+                # If pattern_id is provided, use that specific pattern
+                # Otherwise, use PatternService to find the best pattern
+                pattern = None
+                alternatives_count = 0
                 
-                pattern_cols = [desc[0] for desc in cursor.description]
-                pattern_row = cursor.fetchone()
+                if pattern_id:
+                    # User selected a specific alternative pattern
+                    pattern = self.pattern_service.get_pattern_by_id(pattern_id)
+                    if pattern:
+                        print(f"[Suggestion Service] Using specified pattern: {pattern_id}")
+                else:
+                    # Use best pattern from PatternService
+                    pattern_result = self.pattern_service.get_best_pattern_with_alternatives(
+                        tgt_table_physical,
+                        tgt_column_physical
+                    )
+                    pattern = pattern_result.get("pattern")
+                    alternatives_count = len(pattern_result.get("alternatives", []))
+                    if pattern:
+                        print(f"[Suggestion Service] Using best pattern (usage: {pattern.get('_selected_from_count', 1)}, alternatives: {alternatives_count})")
                 
                 # Build suggestion data
                 new_suggestion_data = {
@@ -991,6 +986,9 @@ RULES:
                     "pattern_mapped_field_id": None,
                     "pattern_type": None,
                     "pattern_sql": None,
+                    "pattern_signature": None,
+                    "pattern_description": None,
+                    "alternative_patterns_count": alternatives_count,
                     "matched_source_fields": "[]",
                     "suggested_sql": None,
                     "sql_changes": "[]",
@@ -1000,11 +998,12 @@ RULES:
                     "suggestion_status": "NO_PATTERN"
                 }
                 
-                if pattern_row:
-                    pattern = dict(zip(pattern_cols, pattern_row))
+                if pattern:
                     new_suggestion_data["pattern_mapped_field_id"] = pattern["mapped_field_id"]
                     new_suggestion_data["pattern_type"] = pattern.get("source_relationship_type", "SINGLE")
-                    new_suggestion_data["pattern_sql"] = pattern["source_expression"]
+                    new_suggestion_data["pattern_sql"] = pattern.get("source_expression")
+                    new_suggestion_data["pattern_signature"] = pattern.get("_signature")
+                    new_suggestion_data["pattern_description"] = pattern.get("_signature_description")
                     
                     # Step 2: Find matching source columns
                     search_query = f"{tgt_comments} {pattern.get('source_descriptions', '')}"
@@ -1104,8 +1103,18 @@ RULES:
         finally:
             connection.close()
     
-    async def regenerate_single_suggestion(self, suggestion_id: int) -> Dict[str, Any]:
-        """Regenerate AI suggestion for a single column (async wrapper)."""
+    async def regenerate_single_suggestion(
+        self, 
+        suggestion_id: int,
+        pattern_id: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Regenerate AI suggestion for a single column (async wrapper).
+        
+        Args:
+            suggestion_id: The suggestion to regenerate
+            pattern_id: Optional specific pattern to use (for alternative pattern selection)
+        """
         db_config = self._get_db_config()
         vs_config = self._get_vector_search_config()
         llm_config = self._get_llm_config()
@@ -1118,7 +1127,8 @@ RULES:
                 db_config,
                 vs_config,
                 llm_config,
-                suggestion_id
+                suggestion_id,
+                pattern_id
             )
         )
         
@@ -1529,14 +1539,6 @@ RULES:
             )
         )
         
-        # Sync vector search index after successful approval
-        if result.get("mapped_field_id"):
-            try:
-                await self.vector_search_service.sync_mapped_fields_index()
-                print(f"[Suggestion Service] Vector index sync triggered after approval")
-            except Exception as e:
-                print(f"[Suggestion Service] Warning: Vector index sync failed: {e}")
-        
         return result
     
     async def edit_and_approve_suggestion(
@@ -1559,14 +1561,6 @@ RULES:
                 request.edit_notes
             )
         )
-        
-        # Sync vector search index after successful approval
-        if result.get("mapped_field_id"):
-            try:
-                await self.vector_search_service.sync_mapped_fields_index()
-                print(f"[Suggestion Service] Vector index sync triggered after edit+approval")
-            except Exception as e:
-                print(f"[Suggestion Service] Warning: Vector index sync failed: {e}")
         
         return result
     
