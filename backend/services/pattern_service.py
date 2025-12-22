@@ -58,9 +58,11 @@ class PatternService:
                 access_token=access_token
             )
         else:
+            print(f"[PatternService] Using databricks-oauth auth type")
             return databricks_sql.connect(
                 server_hostname=server_hostname,
-                http_path=http_path
+                http_path=http_path,
+                auth_type="databricks-oauth"
             )
     
     def compute_signature(self, join_metadata: Optional[Dict]) -> str:

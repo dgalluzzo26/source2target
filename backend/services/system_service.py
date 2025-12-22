@@ -112,10 +112,11 @@ class SystemService:
                     access_token=access_token
                 )
             else:
-                print(f"[DB Check] Connecting without explicit token (using default auth)")
+                print(f"[DB Check] Connecting with databricks-oauth auth type")
                 conn = sql.connect(
                     server_hostname=hostname,
-                    http_path=http_path
+                    http_path=http_path,
+                    auth_type="databricks-oauth"
                 )
             
             print(f"[DB Check] Connection established, executing test query")

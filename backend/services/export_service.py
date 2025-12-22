@@ -13,6 +13,7 @@ import io
 import re
 from typing import Dict, Any, List, Optional
 from databricks import sql
+from databricks.sdk import WorkspaceClient
 from backend.services.config_service import ConfigService
 
 # Thread pool for blocking operations
@@ -24,6 +25,14 @@ class ExportService:
     
     def __init__(self):
         self.config_service = ConfigService()
+        self._workspace_client = None
+    
+    @property
+    def workspace_client(self) -> WorkspaceClient:
+        """Lazy initialization of workspace client."""
+        if self._workspace_client is None:
+            self._workspace_client = WorkspaceClient()
+        return self._workspace_client
     
     def _get_db_config(self) -> Dict[str, str]:
         """Get database configuration."""
@@ -38,11 +47,29 @@ class ExportService:
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):
-        """Create a SQL connection."""
-        return sql.connect(
-            server_hostname=server_hostname,
-            http_path=http_path
-        )
+        """Get SQL connection with proper OAuth token handling (matches other services)."""
+        # Try to get OAuth token from WorkspaceClient config
+        access_token = None
+        if self.workspace_client and hasattr(self.workspace_client.config, 'authenticate'):
+            try:
+                headers = self.workspace_client.config.authenticate()
+                if headers and 'Authorization' in headers:
+                    access_token = headers['Authorization'].replace('Bearer ', '')
+            except Exception as e:
+                print(f"[Export Service] Could not get OAuth token: {e}")
+        
+        if access_token:
+            return sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path,
+                access_token=access_token
+            )
+        else:
+            return sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path,
+                auth_type="databricks-oauth"
+            )
     
     def _get_mappings_sync(
         self,
