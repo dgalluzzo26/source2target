@@ -582,17 +582,22 @@ RULES:
         Returns:
             Status dictionary with saved count
         """
+        print(f"[Pattern Import Sync] Starting save of {len(patterns)} patterns")
+        print(f"[Pattern Import Sync] DB config: {db_config.get('mapped_fields_table')}")
+        
         connection = self._get_sql_connection(
             db_config["server_hostname"],
             db_config["http_path"]
         )
+        print(f"[Pattern Import Sync] Database connection established")
         
         saved_count = 0
         errors = []
         
         try:
             with connection.cursor() as cursor:
-                for pattern in patterns:
+                for i, pattern in enumerate(patterns):
+                    print(f"[Pattern Import Sync] Saving pattern {i+1}/{len(patterns)}: {pattern.get('tgt_column_physical_name')}")
                     try:
                         # Look up semantic_field_id if possible
                         semantic_field_id = None
@@ -678,13 +683,16 @@ RULES:
                         """)
                         
                         saved_count += 1
+                        print(f"[Pattern Import Sync] Saved successfully: {pattern.get('tgt_column_physical_name')}")
                         
                     except Exception as e:
+                        print(f"[Pattern Import Sync] Error saving {pattern.get('tgt_column_physical_name')}: {e}")
                         errors.append({
                             "pattern": pattern.get("tgt_column_physical_name", "unknown"),
                             "error": str(e)
                         })
                 
+                print(f"[Pattern Import Sync] Complete: {saved_count} saved, {len(errors)} errors")
                 return {
                     "status": "success",
                     "saved_count": saved_count,
@@ -693,7 +701,9 @@ RULES:
                 }
                 
         except Exception as e:
-            print(f"[Pattern Import] Error saving patterns: {e}")
+            print(f"[Pattern Import Sync] Fatal error saving patterns: {e}")
+            import traceback
+            traceback.print_exc()
             raise
         finally:
             connection.close()
@@ -713,37 +723,62 @@ RULES:
         Returns:
             Status dictionary
         """
+        print(f"[Pattern Import] save_patterns called for session: {session_id}")
+        print(f"[Pattern Import] Pattern indices: {pattern_indices}")
+        
         session = self.get_session(session_id)
         if not session:
+            print(f"[Pattern Import] Session not found: {session_id}")
             return {"status": "error", "error": "Session not found"}
         
+        print(f"[Pattern Import] Session found, status: {session.get('status')}")
         patterns = session.get("processed_patterns", [])
+        print(f"[Pattern Import] Total processed patterns in session: {len(patterns)}")
         
         # Filter to specific indices if provided
         if pattern_indices is not None:
             patterns = [p for p in patterns if p.get("row_index") in pattern_indices]
+            print(f"[Pattern Import] Filtered to {len(patterns)} patterns by indices")
         
         if not patterns:
+            print(f"[Pattern Import] No patterns to save after filtering")
             return {"status": "error", "error": "No patterns to save"}
+        
+        # Filter to only READY patterns
+        ready_patterns = [p for p in patterns if p.get("status") == "READY"]
+        print(f"[Pattern Import] {len(ready_patterns)} patterns with READY status")
+        
+        if not ready_patterns:
+            print(f"[Pattern Import] No READY patterns to save")
+            return {"status": "error", "error": "No READY patterns to save"}
         
         db_config = self._get_db_config()
         created_by = session.get("created_by", "unknown")
+        print(f"[Pattern Import] Created by: {created_by}")
         
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            executor,
-            functools.partial(
-                self._save_patterns_sync,
-                db_config,
-                patterns,
-                created_by
+        try:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                executor,
+                functools.partial(
+                    self._save_patterns_sync,
+                    db_config,
+                    ready_patterns,
+                    created_by
+                )
             )
-        )
-        
-        # Update session status
-        session["status"] = "COMPLETED"
-        
-        return result
+            
+            print(f"[Pattern Import] Save result: {result}")
+            
+            # Update session status
+            session["status"] = "COMPLETED"
+            
+            return result
+        except Exception as e:
+            print(f"[Pattern Import] Error in save_patterns: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"status": "error", "error": str(e)}
     
     def delete_session(self, session_id: str) -> bool:
         """Delete an import session."""
