@@ -512,7 +512,8 @@ async function createAndProcess() {
     
     // Start processing in background (returns immediately)
     const processResponse = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/process`, {
-      method: 'POST'
+      method: 'POST',
+      headers: getAuthHeaders()
     })
     
     if (!processResponse.ok) {
@@ -546,7 +547,10 @@ async function savePatterns() {
     
     const response = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/save`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
       body: JSON.stringify({ pattern_indices: indices })
     })
     
