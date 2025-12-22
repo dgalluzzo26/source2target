@@ -497,8 +497,8 @@ async function createAndProcess() {
       }
     }, 2000) // Poll every 2 seconds
     
-    // Start processing - limit to 10 to avoid timeout
-    const processResponse = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/process?limit=10`, {
+    // Start processing all patterns
+    const processResponse = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/process`, {
       method: 'POST'
     })
     

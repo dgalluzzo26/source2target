@@ -172,12 +172,12 @@ async def create_session(
 async def process_patterns(
     session_id: str,
     request: Request,
-    limit: Optional[int] = Query(10, description="Limit number of patterns to process")
+    limit: Optional[int] = Query(None, description="Limit number of patterns to process (None = all)")
 ):
     """
     Process patterns in a session - generate join_metadata via LLM.
     
-    Default limit is 10 to avoid timeout. Increase for more patterns.
+    Processes all patterns by default. Use limit parameter to process in batches.
     
     Admin only.
     """

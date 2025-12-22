@@ -150,22 +150,25 @@ class PatternService:
         except Exception as e:
             return "Unknown"
     
-    def get_all_patterns_for_column(
+    def get_all_patterns_for_table(
         self,
-        tgt_table: str,
-        tgt_column: str
-    ) -> List[Dict[str, Any]]:
+        tgt_table: str
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
-        Get all mapped_fields records for a target column.
+        Get all mapped_fields records for a target table, grouped by column.
+        
+        This fetches ALL patterns for the table in ONE query, then groups them
+        by column name. Much more efficient than querying per-column.
         
         Args:
             tgt_table: Target table physical name
-            tgt_column: Target column physical name
             
         Returns:
-            List of pattern dictionaries
+            Dictionary mapping column_name -> list of patterns
         """
         db_config = self._get_db_config()
+        
+        print(f"[PatternService] Fetching all patterns for table: {tgt_table}")
         
         with databricks_sql.connect(
             server_hostname=db_config["host"],
@@ -180,6 +183,7 @@ class PatternService:
                         source_tables,
                         source_columns,
                         source_expression,
+                        source_descriptions,
                         source_relationship_type,
                         transformations_applied,
                         join_metadata,
@@ -190,7 +194,6 @@ class PatternService:
                         is_approved_pattern
                     FROM {db_config['mapped_fields_table']}
                     WHERE UPPER(tgt_table_physical_name) = UPPER('{tgt_table}')
-                      AND UPPER(tgt_column_physical_name) = UPPER('{tgt_column}')
                       AND mapping_status = 'ACTIVE'
                     ORDER BY mapped_ts DESC
                 """)
@@ -198,9 +201,13 @@ class PatternService:
                 columns = [desc[0] for desc in cursor.description]
                 rows = cursor.fetchall()
                 
-                patterns = []
+                # Group by column name
+                patterns_by_column: Dict[str, List[Dict[str, Any]]] = {}
+                
                 for row in rows:
                     pattern = dict(zip(columns, row))
+                    col_name = pattern.get("tgt_column_physical_name", "").upper()
+                    
                     # Parse join_metadata if it's a string
                     if pattern.get("join_metadata") and isinstance(pattern["join_metadata"], str):
                         try:
@@ -209,9 +216,101 @@ class PatternService:
                             pattern["join_metadata_parsed"] = None
                     else:
                         pattern["join_metadata_parsed"] = pattern.get("join_metadata")
-                    patterns.append(pattern)
+                    
+                    if col_name not in patterns_by_column:
+                        patterns_by_column[col_name] = []
+                    patterns_by_column[col_name].append(pattern)
                 
-                return patterns
+                print(f"[PatternService] Found patterns for {len(patterns_by_column)} columns")
+                return patterns_by_column
+    
+    def get_best_pattern_from_cache(
+        self,
+        patterns_cache: Dict[str, List[Dict[str, Any]]],
+        tgt_column: str
+    ) -> Dict[str, Any]:
+        """
+        Get the best pattern for a column from a pre-fetched cache.
+        
+        Args:
+            patterns_cache: Dictionary from get_all_patterns_for_table()
+            tgt_column: Target column physical name
+            
+        Returns:
+            Dictionary with pattern, alternatives, total_variants
+        """
+        col_key = tgt_column.upper()
+        patterns = patterns_cache.get(col_key, [])
+        
+        if not patterns:
+            return {
+                "pattern": None,
+                "alternatives": [],
+                "total_variants": 0
+            }
+        
+        best = self.select_best_pattern(patterns)
+        variants = self._get_variants_from_patterns(patterns)
+        
+        # Filter out the selected variant from alternatives
+        selected_signature = best.get("_signature") if best else None
+        alternatives = [v for v in variants if v["signature"] != selected_signature]
+        
+        return {
+            "pattern": best,
+            "alternatives": alternatives,
+            "total_variants": len(variants)
+        }
+    
+    def _get_variants_from_patterns(self, patterns: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Get variant summaries from a list of patterns."""
+        groups = self.group_patterns_by_signature(patterns)
+        
+        variants = []
+        for signature, pattern_list in groups.items():
+            latest = max(pattern_list, key=lambda p: p.get("mapped_ts") or "")
+            
+            variants.append({
+                "signature": signature,
+                "description": latest.get("_signature_description", "Unknown"),
+                "usage_count": len(pattern_list),
+                "latest_mapped_ts": str(latest.get("mapped_ts", "")),
+                "latest_pattern": {
+                    "mapped_field_id": latest["mapped_field_id"],
+                    "source_expression": latest.get("source_expression"),
+                    "source_tables": latest.get("source_tables"),
+                    "source_columns": latest.get("source_columns"),
+                    "source_relationship_type": latest.get("source_relationship_type"),
+                    "transformations_applied": latest.get("transformations_applied"),
+                    "confidence_score": latest.get("confidence_score"),
+                    "created_by": latest.get("created_by")
+                }
+            })
+        
+        variants.sort(key=lambda v: (-v["usage_count"], v["latest_mapped_ts"]), reverse=False)
+        return variants
+    
+    def get_all_patterns_for_column(
+        self,
+        tgt_table: str,
+        tgt_column: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all mapped_fields records for a target column.
+        
+        NOTE: For batch processing, use get_all_patterns_for_table() instead
+        to avoid multiple database queries.
+        
+        Args:
+            tgt_table: Target table physical name
+            tgt_column: Target column physical name
+            
+        Returns:
+            List of pattern dictionaries
+        """
+        # Use the table-level fetch and filter
+        all_patterns = self.get_all_patterns_for_table(tgt_table)
+        return all_patterns.get(tgt_column.upper(), [])
     
     def group_patterns_by_signature(
         self,

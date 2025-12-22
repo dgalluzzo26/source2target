@@ -640,6 +640,10 @@ RULES:
                 no_pattern = 0
                 no_match = 0
                 
+                # Fetch ALL patterns for this table in ONE query (much faster)
+                print(f"[Suggestion Service] Pre-fetching patterns for table: {tgt_table_physical_name}")
+                patterns_cache = self.pattern_service.get_all_patterns_for_table(tgt_table_physical_name)
+                
                 for target_col in target_columns:
                     semantic_field_id = target_col["semantic_field_id"]
                     tgt_column_physical = target_col["tgt_column_physical_name"]
@@ -647,9 +651,9 @@ RULES:
                     
                     print(f"[Suggestion Service] Processing column: {tgt_column_physical}")
                     
-                    # Find best pattern using PatternService (handles deduplication)
-                    pattern_result = self.pattern_service.get_best_pattern_with_alternatives(
-                        tgt_table_physical_name,
+                    # Find best pattern from cache (no additional DB queries)
+                    pattern_result = self.pattern_service.get_best_pattern_from_cache(
+                        patterns_cache,
                         tgt_column_physical
                     )
                     
