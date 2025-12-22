@@ -152,17 +152,22 @@ class SuggestionService:
                     "src_comments",
                     "src_physical_datatype",
                     "domain",
-                    "source_semantic_field"
+                    "source_semantic_field",
+                    "project_id"
                 ],
                 query_text=query_text,
-                num_results=num_results * 2,  # Get extra to filter by project
-                filters={"project_id": project_id}  # Filter by project
+                num_results=num_results * 3  # Get extra to filter by project after
             )
             
             matches = []
             for item in results.result.data_array:
                 # Parse the result based on column order
-                if len(item) >= 9:
+                if len(item) >= 10:
+                    item_project_id = item[9]
+                    # Filter by project_id after getting results
+                    if project_id is not None and item_project_id != project_id:
+                        continue
+                    
                     match = {
                         "unmapped_field_id": item[0],
                         "src_table_name": item[1],
@@ -172,11 +177,16 @@ class SuggestionService:
                         "src_comments": item[5],
                         "src_physical_datatype": item[6],
                         "domain": item[7],
+                        "project_id": item[9],
                         "score": item[-1] if isinstance(item[-1], (int, float)) else 0.0
                     }
                     matches.append(match)
+                    
+                    # Stop once we have enough matches
+                    if len(matches) >= num_results:
+                        break
             
-            # Take top N results
+            # Take top N results (in case we got more)
             matches = matches[:num_results]
             print(f"[Suggestion Service] Found {len(matches)} matching source fields")
             
