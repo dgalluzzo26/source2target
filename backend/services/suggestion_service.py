@@ -642,20 +642,29 @@ RULES:
                 
                 # Fetch ALL patterns for this table in ONE query (much faster)
                 print(f"[Suggestion Service] Pre-fetching patterns for table: {tgt_table_physical_name}")
+                import time
+                start_time = time.time()
                 patterns_cache = self.pattern_service.get_all_patterns_for_table(tgt_table_physical_name)
+                print(f"[Suggestion Service] Pattern cache loaded in {time.time() - start_time:.2f}s, columns with patterns: {len(patterns_cache)}")
+                
+                col_idx = 0
+                total_cols = len(target_columns)
                 
                 for target_col in target_columns:
+                    col_idx += 1
+                    col_start = time.time()
                     semantic_field_id = target_col["semantic_field_id"]
                     tgt_column_physical = target_col["tgt_column_physical_name"]
                     tgt_comments = target_col.get("tgt_comments", "")
                     
-                    print(f"[Suggestion Service] Processing column: {tgt_column_physical}")
+                    print(f"[Suggestion Service] Processing column {col_idx}/{total_cols}: {tgt_column_physical}")
                     
                     # Find best pattern from cache (no additional DB queries)
                     pattern_result = self.pattern_service.get_best_pattern_from_cache(
                         patterns_cache,
                         tgt_column_physical
                     )
+                    print(f"[Suggestion Service]   -> Pattern lookup: {time.time() - col_start:.2f}s")
                     
                     best_pattern = pattern_result.get("pattern")
                     alternatives_count = len(pattern_result.get("alternatives", []))
@@ -702,6 +711,7 @@ RULES:
                         search_query = f"{tgt_comments} {pattern.get('source_descriptions', '')}"
                         
                         # Vector search for matching source fields
+                        vs_start = time.time()
                         matched_sources = self._vector_search_source_fields_sync(
                             vs_config["endpoint_name"],
                             vs_config["unmapped_fields_index"],
@@ -709,9 +719,11 @@ RULES:
                             project_id,
                             num_results=5
                         )
+                        print(f"[Suggestion Service]   -> Vector search: {time.time() - vs_start:.2f}s, found {len(matched_sources) if matched_sources else 0}")
                         
                         # Fallback to SQL search if vector search returns nothing
                         if not matched_sources:
+                            sql_start = time.time()
                             matched_sources = self._sql_search_source_fields_sync(
                                 db_config["server_hostname"],
                                 db_config["http_path"],
@@ -720,6 +732,7 @@ RULES:
                                 project_id,
                                 num_results=5
                             )
+                            print(f"[Suggestion Service]   -> SQL fallback: {time.time() - sql_start:.2f}s, found {len(matched_sources) if matched_sources else 0}")
                         
                         if matched_sources:
                             # Store matched source fields
@@ -739,6 +752,7 @@ RULES:
                             suggestion_data["matched_source_fields"] = matched_fields_json
                             
                             # Rewrite SQL with LLM
+                            llm_start = time.time()
                             rewrite_result = self._rewrite_sql_with_llm_sync(
                                 llm_config["endpoint_name"],
                                 pattern["source_expression"],
@@ -747,6 +761,7 @@ RULES:
                                 matched_sources,
                                 tgt_column_physical
                             )
+                            print(f"[Suggestion Service]   -> LLM rewrite: {time.time() - llm_start:.2f}s")
                             
                             suggestion_data["suggested_sql"] = rewrite_result.get("rewritten_sql")
                             suggestion_data["sql_changes"] = json.dumps(rewrite_result.get("changes", []))
@@ -765,6 +780,7 @@ RULES:
                         suggestion_data["suggestion_status"] = "NO_PATTERN"
                     
                     # Insert suggestion
+                    print(f"[Suggestion Service]   -> Total column time: {time.time() - col_start:.2f}s, status: {suggestion_data['suggestion_status']}")
                     cursor.execute(f"""
                         INSERT INTO {db_config['mapping_suggestions_table']} (
                             project_id,
