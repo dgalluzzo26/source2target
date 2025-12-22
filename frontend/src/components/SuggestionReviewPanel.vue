@@ -1119,15 +1119,6 @@ async function useAlternativePattern(variant: any) {
   }
 }
 
-function formatDate(dateStr: string): string {
-  if (!dateStr) return 'Unknown'
-  try {
-    return new Date(dateStr).toLocaleDateString()
-  } catch {
-    return dateStr
-  }
-}
-
 function truncateSql(sql: string, maxLen: number): string {
   if (!sql) return ''
   return sql.length > maxLen ? sql.substring(0, maxLen) + '...' : sql
