@@ -67,17 +67,6 @@
 
           <!-- Database Settings Form -->
           <div class="config-form">
-            <div class="field">
-              <label for="warehouse_name">Warehouse Name</label>
-              <InputText 
-                id="warehouse_name"
-                v-model="config.database.warehouse_name"
-                placeholder="Name of the Databricks SQL warehouse to use"
-                class="w-full"
-              />
-              <small>Name of the Databricks SQL warehouse to use</small>
-            </div>
-
             <div class="field-group">
               <div class="field flex-3">
                 <label for="server_hostname">Server Hostname</label>
@@ -129,75 +118,18 @@
               <InputText 
                 id="schema"
                 v-model="config.database.schema"
-                placeholder="e.g., source2target"
+                placeholder="e.g., smartmapper"
                 class="w-full"
               />
-              <small>Databricks schema name</small>
+              <small>Databricks schema name - all tables use standard names within this schema</small>
             </div>
 
-            <Divider />
-
-            <h4>Table Configuration</h4>
             <Message severity="info" :closable="false" class="table-config-note">
-              <strong>Note:</strong> Enter table names only. The catalog and schema specified above will be automatically prepended.
+              <strong>Standard Tables:</strong> The following tables are used automatically within your catalog.schema:
               <br />
-              Example: Enter <code>semantic_fields</code> instead of <code>catalog.schema.semantic_fields</code>
+              <code>semantic_fields</code>, <code>unmapped_fields</code>, <code>mapped_fields</code>, 
+              <code>mapping_projects</code>, <code>target_table_status</code>, <code>mapping_suggestions</code>, <code>mapping_feedback</code>
             </Message>
-
-            <div class="field">
-              <label for="semantic_fields_table">Semantic Fields Table</label>
-              <InputText 
-                id="semantic_fields_table"
-                v-model="config.database.semantic_fields_table"
-                placeholder="semantic_fields"
-                class="w-full"
-              />
-              <small>Target field definitions for AI mapping (table name only)</small>
-            </div>
-
-            <div class="field">
-              <label for="unmapped_fields_table">Unmapped Fields Table</label>
-              <InputText 
-                id="unmapped_fields_table"
-                v-model="config.database.unmapped_fields_table"
-                placeholder="unmapped_fields"
-                class="w-full"
-              />
-              <small>Source fields awaiting mapping (table name only)</small>
-            </div>
-
-            <div class="field">
-              <label for="mapped_fields_table">Mapped Fields Table</label>
-              <InputText 
-                id="mapped_fields_table"
-                v-model="config.database.mapped_fields_table"
-                placeholder="mapped_fields"
-                class="w-full"
-              />
-              <small>Complete mappings with SQL expressions (table name only)</small>
-            </div>
-
-            <div class="field">
-              <label for="mapping_feedback_table">Mapping Feedback Table</label>
-              <InputText 
-                id="mapping_feedback_table"
-                v-model="config.database.mapping_feedback_table"
-                placeholder="mapping_feedback"
-                class="w-full"
-              />
-              <small>User feedback on AI suggestions (table name only)</small>
-            </div>
-
-            <div class="field">
-              <label for="transformation_library_table">Transformation Library Table</label>
-              <InputText 
-                id="transformation_library_table"
-                v-model="config.database.transformation_library_table"
-                placeholder="transformation_library"
-                class="w-full"
-              />
-              <small>Reusable transformation templates (table name only)</small>
-            </div>
           </div>
         </div>
       </TabPanel>
@@ -225,17 +157,6 @@
             </div>
 
             <div class="field">
-              <label for="previous_mappings_table">Previous Mappings Table</label>
-              <InputText 
-                id="previous_mappings_table"
-                v-model="config.ai_model.previous_mappings_table_name"
-                placeholder="mapped_fields"
-                class="w-full"
-              />
-              <small>Table containing historical mappings for training context (table name only)</small>
-            </div>
-
-            <div class="field">
               <label for="default_prompt">Default AI Prompt Template</label>
               <Textarea 
                 id="default_prompt"
@@ -258,29 +179,18 @@
         </template>
         <div class="config-section">
           <h3>Vector Search Configuration</h3>
-          <p>Configure vector search index for semantic field matching.</p>
+          <p>Configure vector search index for source field matching during AI discovery.</p>
 
           <div class="config-form">
             <div class="field">
-              <label for="semantic_fields_index">Semantic Fields VS Index</label>
+              <label for="unmapped_fields_index">Unmapped Fields VS Index</label>
               <InputText 
-                id="semantic_fields_index"
-                v-model="config.vector_search.semantic_fields_index"
-                placeholder="catalog.schema.semantic_fields_vs"
+                id="unmapped_fields_index"
+                v-model="config.vector_search.unmapped_fields_index"
+                placeholder="catalog.schema.unmapped_fields_vs"
                 class="w-full"
               />
-              <small>Vector search index for TARGET field matching (fully qualified: catalog.schema.index_name)</small>
-            </div>
-
-            <div class="field">
-              <label for="mapped_fields_index">Mapped Fields VS Index</label>
-              <InputText 
-                id="mapped_fields_index"
-                v-model="config.vector_search.mapped_fields_index"
-                placeholder="catalog.schema.mapped_fields_vs"
-                class="w-full"
-              />
-              <small>Vector search index for historical MAPPING PATTERNS (fully qualified: catalog.schema.index_name)</small>
+              <small>Vector search index for matching SOURCE fields to patterns (fully qualified: catalog.schema.index_name)</small>
             </div>
 
             <div class="field-group">
@@ -307,69 +217,6 @@
               </div>
             </div>
 
-            <Divider />
-
-            <h4>Score Thresholds</h4>
-            <Message severity="info" :closable="false" class="threshold-info">
-              <strong>Tuning Guide:</strong> Higher threshold = fewer but more relevant results. 
-              Lower threshold = more results but may include noise.
-              <br/>
-              <span style="color: var(--green-600);">Typical good scores: 0.005-0.012</span> | 
-              <span style="color: var(--orange-600);">Borderline: 0.003-0.005</span> | 
-              <span style="color: var(--red-600);">Noise: &lt;0.003</span>
-            </Message>
-
-            <div class="field threshold-field">
-              <label for="target_threshold">
-                Target Threshold: <strong>{{ config.vector_search.target_score_threshold.toFixed(3) }}</strong>
-              </label>
-              <div class="slider-container">
-                <span class="slider-label">More Results</span>
-                <Slider 
-                  id="target_threshold"
-                  v-model="config.vector_search.target_score_threshold"
-                  :min="0"
-                  :max="0.050"
-                  :step="0.001"
-                  class="threshold-slider"
-                />
-                <span class="slider-label">More Precise</span>
-              </div>
-              <small>
-                0-0.050. Default: 0.015. Excellent: ≥0.035 | Strong: ≥0.020 | Good: ≥0.012
-              </small>
-            </div>
-
-            <div class="field threshold-field">
-              <label for="pattern_threshold">
-                Pattern Threshold: <strong>{{ config.vector_search.pattern_score_threshold.toFixed(3) }}</strong>
-              </label>
-              <div class="slider-container">
-                <span class="slider-label">More Patterns</span>
-                <Slider 
-                  id="pattern_threshold"
-                  v-model="config.vector_search.pattern_score_threshold"
-                  :min="0"
-                  :max="0.040"
-                  :step="0.001"
-                  class="threshold-slider"
-                />
-                <span class="slider-label">More Precise</span>
-              </div>
-              <small>
-                0-0.040. Default: 0.010. Lower = more historical patterns shown.
-              </small>
-            </div>
-
-            <div class="threshold-actions">
-              <Button 
-                label="Reset to Defaults"
-                icon="pi pi-refresh"
-                severity="secondary"
-                outlined
-                @click="resetThresholds"
-              />
-            </div>
           </div>
         </div>
       </TabPanel>
@@ -585,19 +432,12 @@ const isAuthenticated = computed(() => true) // userStore.isAdmin
 // V3 Schema: 5 core tables (semantic_fields, unmapped_fields, mapped_fields, mapping_feedback, transformation_library)
 const config = ref({
   database: {
-    warehouse_name: 'gia-oztest-dev-data-warehouse',
     catalog: 'oztest_dev',
     schema: 'smartmapper',
-    semantic_fields_table: 'semantic_fields',
-    unmapped_fields_table: 'unmapped_fields',
-    mapped_fields_table: 'mapped_fields',
-    mapping_feedback_table: 'mapping_feedback',
-    transformation_library_table: 'transformation_library',
     server_hostname: 'Acuity-oz-test-ue1.cloud.databricks.com',
     http_path: '/sql/1.0/warehouses/173ea239ed13be7d'
   },
   ai_model: {
-    previous_mappings_table_name: 'mapped_fields',
     foundation_model_endpoint: 'databricks-meta-llama-3-3-70b-instruct',
     default_prompt: ''
   },
@@ -610,11 +450,8 @@ const config = ref({
     support_url: 'https://mygainwell.sharepoint.com'
   },
   vector_search: {
-    semantic_fields_index: 'oztest_dev.smartmapper.semantic_fields_vs',
-    mapped_fields_index: 'oztest_dev.smartmapper.mapped_fields_vs',
-    endpoint_name: 's2t_vsendpoint',
-    target_score_threshold: 0.015,
-    pattern_score_threshold: 0.010
+    unmapped_fields_index: 'oztest_dev.smartmapper.unmapped_fields_vs',
+    endpoint_name: 's2t_vsendpoint'
   },
   security: {
     admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
@@ -724,19 +561,12 @@ const resetConfiguration = async () => {
     // Reset to V3 default values (table names only, catalog.schema prepended automatically)
     config.value = {
       database: {
-        warehouse_name: 'gia-oztest-dev-data-warehouse',
         catalog: 'oztest_dev',
         schema: 'smartmapper',
-        semantic_fields_table: 'semantic_fields',
-        unmapped_fields_table: 'unmapped_fields',
-        mapped_fields_table: 'mapped_fields',
-        mapping_feedback_table: 'mapping_feedback',
-        transformation_library_table: 'transformation_library',
         server_hostname: 'Acuity-oz-test-ue1.cloud.databricks.com',
         http_path: '/sql/1.0/warehouses/173ea239ed13be7d'
       },
       ai_model: {
-        previous_mappings_table_name: 'mapped_fields',
         foundation_model_endpoint: 'databricks-meta-llama-3-3-70b-instruct',
         default_prompt: ''
       },
@@ -749,11 +579,8 @@ const resetConfiguration = async () => {
         support_url: 'https://mygainwell.sharepoint.com'
       },
       vector_search: {
-        semantic_fields_index: 'oztest_dev.smartmapper.semantic_fields_vs',
-        mapped_fields_index: 'oztest_dev.smartmapper.mapped_fields_vs',
-        endpoint_name: 's2t_vsendpoint',
-        target_score_threshold: 0.015,
-        pattern_score_threshold: 0.010
+        unmapped_fields_index: 'oztest_dev.smartmapper.unmapped_fields_vs',
+        endpoint_name: 's2t_vsendpoint'
       },
       security: {
         admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
@@ -764,13 +591,6 @@ const resetConfiguration = async () => {
     console.log('Configuration reset to defaults')
     loading.value.reset = false
   }, 1000)
-}
-
-// Reset thresholds to recommended defaults (calibrated for new semantic_field format)
-const resetThresholds = () => {
-  config.value.vector_search.target_score_threshold = 0.015
-  config.value.vector_search.pattern_score_threshold = 0.010
-  console.log('Thresholds reset to defaults: target=0.015, pattern=0.010')
 }
 
 onMounted(() => {

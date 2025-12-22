@@ -24,12 +24,10 @@ class PatternService:
     def _get_db_config(self) -> Dict[str, str]:
         """Get database configuration."""
         config = self.config_service.get_config()
-        catalog = config.databricks.catalog
-        schema = config.databricks.schema
         return {
-            "host": config.databricks.host,
-            "http_path": config.databricks.http_path,
-            "mapped_fields_table": f"{catalog}.{schema}.mapped_fields"
+            "host": config.database.server_hostname,
+            "http_path": config.database.http_path,
+            "mapped_fields_table": config.database.mapped_fields_table
         }
     
     def compute_signature(self, join_metadata: Optional[Dict]) -> str:

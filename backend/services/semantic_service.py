@@ -87,10 +87,11 @@ class SemanticService:
     def _get_db_config(self) -> Dict[str, str]:
         """Get database configuration."""
         config = self.config_service.get_config()
+        db = config.database
         return {
-            "server_hostname": config.database.server_hostname,
-            "http_path": config.database.http_path,
-            "semantic_fields_table": self.config_service.get_fully_qualified_table_name(config.database.semantic_fields_table)
+            "server_hostname": db.server_hostname,
+            "http_path": db.http_path,
+            "semantic_fields_table": db.semantic_fields_table
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):

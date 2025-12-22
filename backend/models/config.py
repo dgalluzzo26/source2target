@@ -22,37 +22,58 @@ from typing import Optional
 
 class DatabaseConfig(BaseModel):
     """
-    Database connection configuration for Databricks SQL Warehouse (V3 Schema).
+    Database connection configuration for Databricks SQL Warehouse.
     
-    V3 simplified schema uses 5 core tables:
-    - semantic_fields: Target field definitions (vector indexed)
-    - unmapped_fields: Source fields awaiting mapping
-    - mapped_fields: Complete mappings with SQL expressions (vector indexed)
+    V4 uses standard table names derived from catalog.schema:
+    - semantic_fields: Target field definitions
+    - unmapped_fields: Source fields awaiting mapping  
+    - mapped_fields: Complete mappings with SQL expressions
+    - mapping_projects: User projects
+    - target_table_status: Table-level mapping status
+    - mapping_suggestions: AI-generated suggestions
     - mapping_feedback: Rejected suggestions for AI learning
-    - transformation_library: Reusable transformation templates
+    
+    Just configure catalog and schema - table names are standard.
     
     Attributes:
-        warehouse_name: Display name of the SQL warehouse
         catalog: Databricks catalog name
-        schema: Databricks schema name
-        semantic_fields_table: Target field definitions
-        unmapped_fields_table: Source fields awaiting mapping
-        mapped_fields_table: Complete mappings with SQL expressions
-        mapping_feedback_table: Rejected AI suggestions
-        transformation_library_table: Reusable transformation templates
+        schema: Databricks schema name  
         server_hostname: Databricks workspace hostname
         http_path: SQL warehouse HTTP path for connections
     """
-    warehouse_name: str = Field(default="gia-oztest-dev-data-warehouse", description="SQL warehouse display name")
     catalog: str = Field(default="oztest_dev", description="Databricks catalog name")
     schema: str = Field(default="smartmapper", description="Databricks schema name")
-    semantic_fields_table: str = Field(default="semantic_fields", description="Target field definitions")
-    unmapped_fields_table: str = Field(default="unmapped_fields", description="Source fields awaiting mapping")
-    mapped_fields_table: str = Field(default="mapped_fields", description="Complete mappings with SQL expressions")
-    mapping_feedback_table: str = Field(default="mapping_feedback", description="Rejected AI suggestions")
-    transformation_library_table: str = Field(default="transformation_library", description="Reusable transformations")
     server_hostname: str = Field(default="Acuity-oz-test-ue1.cloud.databricks.com", description="Databricks workspace hostname")
     http_path: str = Field(default="/sql/1.0/warehouses/173ea239ed13be7d", description="SQL warehouse HTTP path")
+    
+    # Computed table names - not configurable, derived from catalog.schema
+    @property
+    def semantic_fields_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.semantic_fields"
+    
+    @property
+    def unmapped_fields_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.unmapped_fields"
+    
+    @property
+    def mapped_fields_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.mapped_fields"
+    
+    @property
+    def mapping_projects_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.mapping_projects"
+    
+    @property
+    def target_table_status_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.target_table_status"
+    
+    @property
+    def mapping_suggestions_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.mapping_suggestions"
+    
+    @property
+    def mapping_feedback_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.mapping_feedback"
 
 
 class AIModelConfig(BaseModel):

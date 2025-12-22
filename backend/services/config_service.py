@@ -91,11 +91,12 @@ class ConfigService:
         """
         Get vector search configuration.
         Convenience method for system status checks.
+        V4 only uses unmapped_fields_index for source field matching.
         """
         config = self.get_config()
         return {
             "endpoint_name": config.vector_search.endpoint_name,
-            "index_name": config.vector_search.index_name
+            "index_name": config.vector_search.unmapped_fields_index
         }
     
     def get_ai_model_endpoint(self) -> str:
@@ -121,32 +122,11 @@ class ConfigService:
         """
         config = self.get_config()
         return {
-            "warehouse_name": config.database.warehouse_name,
+            "catalog": config.database.catalog,
+            "schema": config.database.schema,
             "server_hostname": config.database.server_hostname,
             "http_path": config.database.http_path
         }
-    
-    def get_fully_qualified_table_name(self, table_name: str) -> str:
-        """
-        Get the fully qualified table name (catalog.schema.table).
-        
-        If table_name already contains dots (.), assumes it's fully qualified.
-        Otherwise, prepends catalog.schema from config.
-        
-        Args:
-            table_name: Table name (may or may not be fully qualified)
-            
-        Returns:
-            Fully qualified table name (catalog.schema.table)
-        """
-        config = self.get_config()
-        
-        # If already fully qualified (contains dots), return as-is
-        if '.' in table_name:
-            return table_name
-        
-        # Otherwise, prepend catalog.schema
-        return f"{config.database.catalog}.{config.database.schema}.{table_name}"
 
 
 # Global instance

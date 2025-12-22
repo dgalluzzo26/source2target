@@ -54,17 +54,16 @@ class ProjectService:
     def _get_db_config(self) -> Dict[str, str]:
         """Get database configuration."""
         config = self.config_service.get_config()
-        catalog = config.database.catalog
-        schema = config.database.schema
+        db = config.database
         
         return {
-            "server_hostname": config.database.server_hostname,
-            "http_path": config.database.http_path,
-            "projects_table": f"{catalog}.{schema}.mapping_projects",
-            "target_table_status_table": f"{catalog}.{schema}.target_table_status",
-            "semantic_fields_table": f"{catalog}.{schema}.semantic_fields",
-            "unmapped_fields_table": f"{catalog}.{schema}.unmapped_fields",
-            "mapping_suggestions_table": f"{catalog}.{schema}.mapping_suggestions"
+            "server_hostname": db.server_hostname,
+            "http_path": db.http_path,
+            "projects_table": db.mapping_projects_table,
+            "target_table_status_table": db.target_table_status_table,
+            "semantic_fields_table": db.semantic_fields_table,
+            "unmapped_fields_table": db.unmapped_fields_table,
+            "mapping_suggestions_table": db.mapping_suggestions_table
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):

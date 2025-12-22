@@ -28,12 +28,13 @@ class ExportService:
     def _get_db_config(self) -> Dict[str, str]:
         """Get database configuration."""
         config = self.config_service.get_config()
+        db = config.database
         return {
-            "server_hostname": config.database.server_hostname,
-            "http_path": config.database.http_path,
-            "catalog": config.database.catalog,
-            "schema": config.database.schema,
-            "mapped_fields_table": f"{config.database.catalog}.{config.database.schema}.{config.database.mapped_fields_table}"
+            "server_hostname": db.server_hostname,
+            "http_path": db.http_path,
+            "catalog": db.catalog,
+            "schema": db.schema,
+            "mapped_fields_table": db.mapped_fields_table
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):

@@ -41,10 +41,11 @@ class UnmappedFieldsService:
             Dictionary with server_hostname, http_path, and unmapped_fields_table
         """
         config = self.config_service.get_config()
+        db = config.database
         return {
-            "server_hostname": config.database.server_hostname,
-            "http_path": config.database.http_path,
-            "unmapped_fields_table": self.config_service.get_fully_qualified_table_name(config.database.unmapped_fields_table)
+            "server_hostname": db.server_hostname,
+            "http_path": db.http_path,
+            "unmapped_fields_table": db.unmapped_fields_table
         }
     
     def _get_vector_search_config(self) -> Dict[str, str]:
