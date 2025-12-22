@@ -12,6 +12,7 @@ import json
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
 from databricks import sql as databricks_sql
+from databricks.sdk import WorkspaceClient
 from backend.services.config_service import ConfigService
 
 
@@ -20,6 +21,14 @@ class PatternService:
     
     def __init__(self):
         self.config_service = ConfigService()
+        self._workspace_client = None
+    
+    @property
+    def workspace_client(self):
+        """Lazy initialization of WorkspaceClient."""
+        if self._workspace_client is None:
+            self._workspace_client = WorkspaceClient()
+        return self._workspace_client
     
     def _get_db_config(self) -> Dict[str, str]:
         """Get database configuration."""
@@ -29,6 +38,30 @@ class PatternService:
             "http_path": config.database.http_path,
             "mapped_fields_table": config.database.mapped_fields_table
         }
+    
+    def _get_sql_connection(self, server_hostname: str, http_path: str):
+        """Get SQL connection with proper OAuth token handling."""
+        # Try to get OAuth token from WorkspaceClient config
+        access_token = None
+        if self.workspace_client and hasattr(self.workspace_client.config, 'authenticate'):
+            try:
+                headers = self.workspace_client.config.authenticate()
+                if headers and 'Authorization' in headers:
+                    access_token = headers['Authorization'].replace('Bearer ', '')
+            except Exception as e:
+                print(f"[PatternService] Could not get OAuth token: {e}")
+        
+        if access_token:
+            return databricks_sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path,
+                access_token=access_token
+            )
+        else:
+            return databricks_sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path
+            )
     
     def compute_signature(self, join_metadata: Optional[Dict]) -> str:
         """
@@ -173,12 +206,8 @@ class PatternService:
         start_time = time.time()
         
         try:
-            # Use _socket_timeout to prevent hanging connections
-            conn = databricks_sql.connect(
-                server_hostname=db_config["host"],
-                http_path=db_config["http_path"],
-                _socket_timeout=30  # 30 second timeout
-            )
+            print(f"[PatternService] Attempting database connection with OAuth...")
+            conn = self._get_sql_connection(db_config["host"], db_config["http_path"])
             
             try:
                 cursor = conn.cursor()
@@ -501,10 +530,8 @@ class PatternService:
         """
         db_config = self._get_db_config()
         
-        with databricks_sql.connect(
-            server_hostname=db_config["host"],
-            http_path=db_config["http_path"]
-        ) as conn:
+        conn = self._get_sql_connection(db_config["host"], db_config["http_path"])
+        try:
             with conn.cursor() as cursor:
                 cursor.execute(f"""
                     SELECT 
@@ -542,6 +569,8 @@ class PatternService:
                         pattern["join_metadata_parsed"] = None
                 
                 return pattern
+        finally:
+            conn.close()
 
 
 # Singleton instance
