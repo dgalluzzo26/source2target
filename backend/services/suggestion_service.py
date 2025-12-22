@@ -352,6 +352,17 @@ Return ONLY valid JSON with this structure:
   "reasoning": "<brief explanation of changes made>"
 }}"""
 
+        # Log the full prompt for debugging
+        print(f"\n[LLM PROMPT] ========== REWRITE SQL ==========")
+        print(f"[LLM PROMPT] Target: {target_column}")
+        print(f"[LLM PROMPT] Pattern SQL: {pattern_sql[:300]}..." if len(pattern_sql) > 300 else f"[LLM PROMPT] Pattern SQL: {pattern_sql}")
+        print(f"[LLM PROMPT] Pattern Descriptions: {pattern_descriptions}")
+        print(f"[LLM PROMPT] Matched Sources ({len(matched_sources)} total):")
+        for src in matched_sources:
+            print(f"[LLM PROMPT]   - {src.get('src_table_physical_name', '?')}.{src.get('src_column_physical_name', '?')}: {src.get('src_comments', 'N/A')[:60]}")
+        print(f"[LLM PROMPT] Silver Tables Info: {silver_text}")
+        print(f"[LLM PROMPT] ==========================================\n")
+
         try:
             response = self.workspace_client.serving_endpoints.query(
                 name=llm_endpoint,
@@ -722,17 +733,41 @@ RULES:
                         
                         print(f"[Suggestion Service] Found pattern (usage: {pattern.get('_selected_from_count', 1)}, alternatives: {alternatives_count})")
                         
-                        # Build search query from target description + pattern descriptions
-                        search_query = f"{tgt_comments} {pattern.get('source_descriptions', '')}"
+                        # Build search query from target description + pattern descriptions + join column descriptions
+                        search_terms = [tgt_comments, pattern.get('source_descriptions', '')]
+                        
+                        # Extract column descriptions from join_metadata for better matching
+                        join_metadata_str = pattern.get('join_metadata')
+                        if join_metadata_str:
+                            try:
+                                jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
+                                # Get bronze columns from join_metadata (these need to be mapped)
+                                for col in jm.get('bronzeColumns', []):
+                                    if col.get('description'):
+                                        search_terms.append(col['description'])
+                                    if col.get('column'):
+                                        search_terms.append(col['column'])
+                                # Get columns to map
+                                for col in jm.get('userColumnsToMap', []):
+                                    if col.get('description'):
+                                        search_terms.append(col['description'])
+                                    if col.get('originalColumn'):
+                                        search_terms.append(col['originalColumn'])
+                            except Exception as e:
+                                print(f"[Suggestion Service] Could not parse join_metadata: {e}")
+                        
+                        search_query = " ".join([t for t in search_terms if t])
+                        print(f"[Suggestion Service] Search query: {search_query[:200]}...")
                         
                         # Vector search for matching source fields
+                        # Get more results to cover output columns, join keys, and filter columns
                         vs_start = time.time()
                         matched_sources = self._vector_search_source_fields_sync(
                             vs_config["endpoint_name"],
                             vs_config["unmapped_fields_index"],
                             search_query,
                             project_id,
-                            num_results=5
+                            num_results=15  # Increased to cover join/filter columns
                         )
                         print(f"[Suggestion Service]   -> Vector search: {time.time() - vs_start:.2f}s, found {len(matched_sources) if matched_sources else 0}")
                         
