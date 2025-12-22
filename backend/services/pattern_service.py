@@ -217,7 +217,8 @@ class PatternService:
                 
                 query_start = time.time()
                 # Use UPPER() for case-insensitive matching
-                cursor.execute(f"""
+                table_name = db_config['mapped_fields_table']
+                query = f"""
                     SELECT 
                         mapped_field_id,
                         tgt_table_physical_name,
@@ -231,14 +232,23 @@ class PatternService:
                         join_metadata,
                         confidence_score,
                         mapped_ts,
-                        created_by,
+                        mapped_by,
                         project_id,
                         is_approved_pattern
-                    FROM {db_config['mapped_fields_table']}
+                    FROM {table_name}
                     WHERE UPPER(tgt_table_physical_name) = UPPER('{tgt_table}')
                       AND mapping_status = 'ACTIVE'
                     ORDER BY mapped_ts DESC
-                """)
+                """
+                print(f"[PatternService] Query table: {table_name}")
+                print(f"[PatternService] Search for: UPPER('{tgt_table}')")
+                
+                # Debug: Check what tables exist in mapped_fields (without status filter)
+                cursor.execute(f"SELECT DISTINCT tgt_table_physical_name, mapping_status, COUNT(*) as cnt FROM {table_name} GROUP BY tgt_table_physical_name, mapping_status")
+                existing_tables = cursor.fetchall()
+                print(f"[PatternService] DEBUG - All patterns by table and status: {existing_tables}")
+                
+                cursor.execute(query)
                 
                 print(f"[PatternService] Query executed in {time.time() - query_start:.2f}s, fetching rows...")
                 
@@ -350,7 +360,7 @@ class PatternService:
                     "source_relationship_type": latest.get("source_relationship_type"),
                     "transformations_applied": latest.get("transformations_applied"),
                     "confidence_score": latest.get("confidence_score"),
-                    "created_by": latest.get("created_by")
+                    "mapped_by": latest.get("mapped_by")
                 }
             })
         
@@ -439,7 +449,7 @@ class PatternService:
                     "source_relationship_type": latest.get("source_relationship_type"),
                     "transformations_applied": latest.get("transformations_applied"),
                     "confidence_score": latest.get("confidence_score"),
-                    "created_by": latest.get("created_by")
+                    "mapped_by": latest.get("mapped_by")
                 }
             })
         
@@ -559,7 +569,7 @@ class PatternService:
                         join_metadata,
                         confidence_score,
                         mapped_ts,
-                        created_by,
+                        mapped_by,
                         project_id,
                         is_approved_pattern
                     FROM {db_config['mapped_fields_table']}
