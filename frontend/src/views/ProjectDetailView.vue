@@ -276,8 +276,10 @@
       modal 
       header="Upload Source Fields" 
       :style="{ width: '600px' }"
+      :closable="!uploading"
     >
-      <div class="upload-content">
+      <!-- Show upload form when not uploading -->
+      <div v-if="!uploading" class="upload-content">
         <Message severity="info" :closable="false">
           <strong>Important:</strong> The <code>src_comments</code> field is essential for AI matching. 
           Without descriptions, the AI cannot find the best source columns for your target fields.
@@ -323,19 +325,35 @@
         </div>
       </div>
 
+      <!-- Show progress when uploading -->
+      <div v-else class="upload-progress">
+        <div class="progress-icon">
+          <i class="pi pi-spin pi-spinner" style="font-size: 3rem; color: var(--primary-color);"></i>
+        </div>
+        <h3>Uploading Source Fields...</h3>
+        <p class="progress-message">
+          Processing <strong>{{ selectedFile?.name }}</strong>
+        </p>
+        <ProgressBar mode="indeterminate" style="height: 6px; margin-top: 1rem;" />
+        <p class="progress-hint">
+          This may take a minute for larger files. Each field is being indexed for AI matching.
+        </p>
+      </div>
+
       <template #footer>
         <Button 
           label="Cancel" 
           icon="pi pi-times" 
           @click="showUploadDialog = false" 
           severity="secondary"
+          :disabled="uploading"
         />
         <Button 
           label="Upload" 
           icon="pi pi-upload" 
           @click="handleUpload"
           :loading="uploading"
-          :disabled="!selectedFile"
+          :disabled="!selectedFile || uploading"
         />
       </template>
     </Dialog>
@@ -1593,6 +1611,34 @@ async function handleExport() {
   padding: 0.75rem;
   background: var(--surface-100);
   border-radius: 6px;
+}
+
+.upload-progress {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.upload-progress .progress-icon {
+  margin-bottom: 1.5rem;
+}
+
+.upload-progress h3 {
+  margin: 0 0 0.5rem 0;
+  color: var(--primary-color);
+  font-size: 1.25rem;
+}
+
+.upload-progress .progress-message {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 1rem;
+}
+
+.upload-progress .progress-hint {
+  margin: 1.5rem 0 0 0;
+  color: var(--text-color-secondary);
+  font-size: 0.875rem;
+  font-style: italic;
 }
 
 .w-full {

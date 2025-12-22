@@ -204,7 +204,7 @@ class PatternService:
         import time
         db_config = self._get_db_config()
         
-        print(f"[PatternService] Fetching all patterns for table: {tgt_table}")
+        print(f"[PatternService] Fetching all patterns for table: '{tgt_table}'")
         start_time = time.time()
         
         try:
@@ -216,7 +216,7 @@ class PatternService:
                 print(f"[PatternService] Connection established in {time.time() - start_time:.2f}s, executing query...")
                 
                 query_start = time.time()
-                # Simplified query - avoid UPPER() for better performance
+                # Use UPPER() for case-insensitive matching
                 cursor.execute(f"""
                     SELECT 
                         mapped_field_id,
@@ -235,7 +235,7 @@ class PatternService:
                         project_id,
                         is_approved_pattern
                     FROM {db_config['mapped_fields_table']}
-                    WHERE tgt_table_physical_name = '{tgt_table}'
+                    WHERE UPPER(tgt_table_physical_name) = UPPER('{tgt_table}')
                       AND mapping_status = 'ACTIVE'
                     ORDER BY mapped_ts DESC
                 """)
@@ -245,7 +245,17 @@ class PatternService:
                 columns = [desc[0] for desc in cursor.description]
                 rows = cursor.fetchall()
                 
-                print(f"[PatternService] Fetched {len(rows)} rows in {time.time() - query_start:.2f}s total")
+                print(f"[PatternService] Fetched {len(rows)} patterns in {time.time() - query_start:.2f}s total")
+                
+                # Log first few patterns for debugging
+                if rows:
+                    sample_cols = set()
+                    for row in rows[:5]:
+                        # Index 2 is tgt_column_physical_name
+                        sample_cols.add(row[2] if len(row) > 2 else "?")
+                    print(f"[PatternService] Sample columns with patterns: {list(sample_cols)[:5]}")
+                else:
+                    print(f"[PatternService] WARNING: No patterns found for table '{tgt_table}'")
                 
                 # Group by column name
                 patterns_by_column: Dict[str, List[Dict[str, Any]]] = {}

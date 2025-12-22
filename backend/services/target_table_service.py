@@ -160,7 +160,7 @@ class TargetTableService:
                     table = dict(zip(columns, row))
                     tables.append(table)
                 
-                print(f"[Target Table Service] Found {len(tables)} tables")
+                # Only log if debugging is needed (removed to reduce log spam during polling)
                 return tables
                 
         except Exception as e:
