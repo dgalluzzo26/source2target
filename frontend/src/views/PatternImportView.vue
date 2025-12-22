@@ -497,39 +497,28 @@ async function createAndProcess() {
       }
     }, 2000) // Poll every 2 seconds
     
-    // Start processing all patterns
+    // Start processing in background (returns immediately)
     const processResponse = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/process`, {
       method: 'POST'
     })
     
-    // Clear polling after process completes
-    clearInterval(pollInterval)
-    
     if (!processResponse.ok) {
+      clearInterval(pollInterval)
       const errorData = await processResponse.json().catch(() => ({}))
-      throw new Error(errorData.detail || 'Processing failed')
+      throw new Error(errorData.detail || 'Failed to start processing')
     }
     
-    // Final fetch of results
-    const previewResponse = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/preview`)
-    
-    if (previewResponse.ok) {
-      const preview = await previewResponse.json()
-      processedPatterns.value = preview.patterns || []
-      processingErrors.value = preview.errors || []
-      processingProgress.value = 100
-      processingComplete.value = true
-      
-      // Select only successful patterns by default
-      selectedPatterns.value = processedPatterns.value.filter(p => p.status === 'READY')
-    }
+    // Processing started in background - polling will track progress
+    // The pollInterval will detect when session_status === 'READY_FOR_REVIEW'
+    // and set processingComplete = true
+    console.log('Processing started in background, polling for progress...')
     
   } catch (e: any) {
     mappingError.value = e.message
     activeStep.value = 1  // Go back to mapping
-  } finally {
     processing.value = false
   }
+  // Note: Don't set processing = false here since polling continues
 }
 
 async function savePatterns() {

@@ -11,7 +11,7 @@ Workflow:
 5. POST /session/{id}/save - Save approved patterns to mapped_fields
 6. DELETE /session/{id} - Cancel and delete session
 """
-from fastapi import APIRouter, HTTPException, UploadFile, File, Request, Body, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Request, Body, Query, BackgroundTasks
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 import uuid
@@ -172,31 +172,42 @@ async def create_session(
 async def process_patterns(
     session_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     limit: Optional[int] = Query(None, description="Limit number of patterns to process (None = all)")
 ):
     """
     Process patterns in a session - generate join_metadata via LLM.
     
-    Processes all patterns by default. Use limit parameter to process in batches.
+    This runs in the background and returns immediately. Poll /preview to get progress.
     
     Admin only.
     """
     await require_admin(request)
     
-    print(f"[Pattern Import Router] Processing session {session_id} with limit={limit}")
+    print(f"[Pattern Import Router] Starting background processing for session {session_id}")
     
     try:
-        result = await pattern_import_service.process_patterns(session_id, limit=limit)
+        # Run processing in background so request doesn't timeout
+        async def run_processing():
+            try:
+                result = await pattern_import_service.process_patterns(session_id, limit=limit)
+                print(f"[Pattern Import Router] Background processing complete: {result.get('status')}")
+            except Exception as e:
+                print(f"[Pattern Import Router] Background processing error: {e}")
+                import traceback
+                traceback.print_exc()
         
-        if result.get("status") == "error":
-            raise HTTPException(status_code=400, detail=result.get("error"))
+        background_tasks.add_task(run_processing)
         
-        return result
+        # Return immediately - client should poll /preview for progress
+        return {
+            "status": "processing",
+            "message": "Processing started in background. Poll /preview for progress.",
+            "session_id": session_id
+        }
         
-    except HTTPException:
-        raise
     except Exception as e:
-        print(f"[Pattern Import Router] Error processing patterns: {e}")
+        print(f"[Pattern Import Router] Error starting processing: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

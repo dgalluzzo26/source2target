@@ -1,0 +1,33 @@
+src_table_name,src_column_name,src_table_physical_name,src_column_physical_name,src_physical_datatype,src_nullable,src_comments,domain
+Recipient Base,Street Address Line 1,RECIP_BASE,STREET_ADDR_1,STRING,YES,The primary street address line for the recipient or member,Member
+Recipient Base,Street Address Line 2,RECIP_BASE,STREET_ADDR_2,STRING,YES,Secondary street address line for the recipient,Member
+Recipient Base,City,RECIP_BASE,CITY,STRING,YES,City name from the recipient address record,Member
+Recipient Base,State,RECIP_BASE,STATE_CODE,STRING,YES,Two-letter state code for recipient address,Member
+Recipient Base,Zip Code,RECIP_BASE,POSTAL_CODE,STRING,YES,5-digit ZIP code for the recipient address,Member
+Recipient Base,Zip Plus 4,RECIP_BASE,POSTAL_CODE_EXT,STRING,YES,4-digit ZIP code extension,Member
+Recipient Base,Recipient Key,RECIP_BASE,RECIP_KEY,BIGINT,NO,Unique identifier for the recipient in the base table,Member
+Recipient Base,Current Record Flag,RECIP_BASE,CURRENT_IND,STRING,YES,Y/N indicator for current active record,Member
+Recipient Base,County Code,RECIP_BASE,COUNTY_CD,STRING,YES,Coded identifier for the county,Member
+Recipient Base,Address Source,RECIP_BASE,ADDR_SRC_CD,STRING,YES,Source code indicating where address originated from,Member
+Recipient Base,Latitude,RECIP_BASE,LAT_NUM,DECIMAL,YES,Latitude coordinate of the address location,Member
+Recipient Base,Longitude,RECIP_BASE,LONG_NUM,DECIMAL,YES,Longitude coordinate of the address location,Member
+Member Address,Address Line 1,MBR_ADDR,ADDR_LN_1,STRING,YES,First line of member mailing address,Member
+Member Address,Address Line 2,MBR_ADDR,ADDR_LN_2,STRING,YES,Second line of member mailing address,Member
+Member Address,Address Line 3,MBR_ADDR,ADDR_LN_3,STRING,YES,Third line of member mailing address,Member
+Member Address,City Name,MBR_ADDR,CITY_NM,STRING,YES,City of the member address,Member
+Member Address,State Code,MBR_ADDR,ST_CD,STRING,YES,State abbreviation for member address,Member
+Member Address,ZIP,MBR_ADDR,ZIP_5,STRING,YES,5-digit postal code,Member
+Member Address,ZIP Extension,MBR_ADDR,ZIP_4,STRING,YES,4-digit postal code extension,Member
+Member Address,Address Type,MBR_ADDR,ADDR_TYP_CD,STRING,YES,Code indicating type of address (R=Residential M=Mailing),Member
+Member Address,County ID,MBR_ADDR,CNTY_ID,STRING,YES,County identifier code,Member
+Member Address,Member Key,MBR_ADDR,MBR_KEY,BIGINT,NO,Foreign key to member foundation table,Member
+Member Address,Active Flag,MBR_ADDR,ACTV_FLG,STRING,YES,Indicates if this is the active address record,Member
+County Reference,County Name,CNTY_REF,COUNTY_NAME,STRING,YES,Full name of the county,Member
+County Reference,County ID,CNTY_REF,CNTY_ID,STRING,NO,Unique county identifier,Member
+County Reference,State Code,CNTY_REF,STATE_CD,STRING,YES,State where county is located,Member
+County Reference,Active Indicator,CNTY_REF,CURR_REC_IND,STRING,YES,Current record indicator Y/N,Member
+Member Foundation,Member Surrogate Key,MBR_FNDTN,MBR_SK,BIGINT,NO,Surrogate key for the member entity,Member
+Member Foundation,Source Key ID,MBR_FNDTN,SRC_KEY_ID,BIGINT,NO,Source system key identifier for the member,Member
+Member Foundation,Tenant Code,MBR_FNDTN,TENANT_CD,STRING,YES,Multi-tenant identifier code,Member
+Member Foundation,Source System Code,MBR_FNDTN,SRC_SYS_CD,STRING,YES,Code identifying the source system,Member
+Member Foundation,Current Record Indicator,MBR_FNDTN,CURR_REC_IND,STRING,YES,Y/N to indicate current active record,Member
