@@ -67,6 +67,17 @@
 
           <!-- Database Settings Form -->
           <div class="config-form">
+            <div class="field">
+              <label for="warehouse_name">Warehouse Name</label>
+              <InputText 
+                id="warehouse_name"
+                v-model="config.database.warehouse_name"
+                placeholder="Name of the Databricks SQL warehouse"
+                class="w-full"
+              />
+              <small>Display name of the SQL warehouse (for status messages)</small>
+            </div>
+
             <div class="field-group">
               <div class="field flex-3">
                 <label for="server_hostname">Server Hostname</label>
@@ -432,6 +443,7 @@ const isAuthenticated = computed(() => true) // userStore.isAdmin
 // V3 Schema: 5 core tables (semantic_fields, unmapped_fields, mapped_fields, mapping_feedback, transformation_library)
 const config = ref({
   database: {
+    warehouse_name: 'gia-oztest-dev-data-warehouse',
     catalog: 'oztest_dev',
     schema: 'smartmapper',
     server_hostname: 'Acuity-oz-test-ue1.cloud.databricks.com',
@@ -561,6 +573,7 @@ const resetConfiguration = async () => {
     // Reset to V3 default values (table names only, catalog.schema prepended automatically)
     config.value = {
       database: {
+        warehouse_name: 'gia-oztest-dev-data-warehouse',
         catalog: 'oztest_dev',
         schema: 'smartmapper',
         server_hostname: 'Acuity-oz-test-ue1.cloud.databricks.com',

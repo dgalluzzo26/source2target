@@ -1850,15 +1850,23 @@ Modify the SQL according to the user's request and return JSON with the result."
             
             # Parse JSON from response
             import re
-            json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', response_text)
             
-            # Find JSON in response
-            json_start = json_str.find('{')
-            json_end = json_str.rfind('}') + 1
+            # Strip control characters
+            clean_response = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', response_text)
+            
+            # Remove markdown code blocks if present (```json ... ``` or ``` ... ```)
+            json_block_match = re.search(r'```(?:json)?\s*(.*?)\s*```', clean_response, re.DOTALL)
+            if json_block_match:
+                clean_response = json_block_match.group(1)
+            
+            # Find JSON object in response
+            json_start = clean_response.find('{')
+            json_end = clean_response.rfind('}') + 1
             
             if json_start >= 0 and json_end > json_start:
+                json_str = clean_response[json_start:json_end]
                 try:
-                    result = json.loads(json_str[json_start:json_end])
+                    result = json.loads(json_str)
                     return {
                         "sql": result.get("sql", current_sql),
                         "explanation": result.get("explanation", "SQL modified"),
@@ -1866,19 +1874,34 @@ Modify the SQL according to the user's request and return JSON with the result."
                     }
                 except json.JSONDecodeError as e:
                     print(f"[AI Assist] JSON parse error: {e}")
-                    # Try to extract SQL directly from response
-                    sql_match = re.search(r'```sql\s*(.*?)\s*```', response_text, re.DOTALL)
-                    if sql_match:
-                        return {
-                            "sql": sql_match.group(1).strip(),
-                            "explanation": "SQL extracted from response",
-                            "success": True
-                        }
+                    print(f"[AI Assist] JSON string was: {json_str[:200]}...")
+            
+            # Try to extract SQL directly from code block in original response
+            sql_match = re.search(r'```sql\s*(.*?)\s*```', response_text, re.DOTALL)
+            if sql_match:
+                return {
+                    "sql": sql_match.group(1).strip(),
+                    "explanation": "SQL extracted from response",
+                    "success": True
+                }
+            
+            # Last resort - if response looks like SQL (no JSON), use it directly
+            if clean_response.strip() and not clean_response.strip().startswith('{'):
+                # Check if it looks like SQL (contains common SQL keywords)
+                sql_keywords = ['SELECT', 'COALESCE', 'CASE', 'WHEN', 'FROM', 'JOIN', 'CONCAT', 'TRIM', 'UPPER', 'LOWER']
+                if any(kw in clean_response.upper() for kw in sql_keywords):
+                    print(f"[AI Assist] Response appears to be raw SQL, using directly")
+                    return {
+                        "sql": clean_response.strip(),
+                        "explanation": "SQL from LLM response",
+                        "success": True
+                    }
             
             # Fallback - return original
+            print(f"[AI Assist] Could not parse response: {response_text[:300]}...")
             return {
                 "sql": current_sql,
-                "explanation": "Could not parse LLM response",
+                "explanation": "Could not parse LLM response - try rephrasing your request",
                 "success": False
             }
             

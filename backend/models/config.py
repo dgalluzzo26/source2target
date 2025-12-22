@@ -36,11 +36,13 @@ class DatabaseConfig(BaseModel):
     Just configure catalog and schema - table names are standard.
     
     Attributes:
+        warehouse_name: Display name of the SQL warehouse
         catalog: Databricks catalog name
         schema: Databricks schema name  
         server_hostname: Databricks workspace hostname
         http_path: SQL warehouse HTTP path for connections
     """
+    warehouse_name: str = Field(default="gia-oztest-dev-data-warehouse", description="SQL warehouse display name")
     catalog: str = Field(default="oztest_dev", description="Databricks catalog name")
     schema: str = Field(default="smartmapper", description="Databricks schema name")
     server_hostname: str = Field(default="Acuity-oz-test-ue1.cloud.databricks.com", description="Databricks workspace hostname")

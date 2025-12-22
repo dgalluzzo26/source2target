@@ -122,6 +122,7 @@ class ConfigService:
         """
         config = self.get_config()
         return {
+            "warehouse_name": config.database.warehouse_name,
             "catalog": config.database.catalog,
             "schema": config.database.schema,
             "server_hostname": config.database.server_hostname,
