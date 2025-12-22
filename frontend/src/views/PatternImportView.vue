@@ -320,6 +320,15 @@ const router = useRouter()
 const toast = useToast()
 const userStore = useUserStore()
 
+// Helper to get auth headers with user email
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {}
+  if (userStore.userEmail) {
+    headers['X-User-Email'] = userStore.userEmail
+  }
+  return headers
+}
+
 // Steps
 const steps = ref([
   { label: 'Upload' },
@@ -410,6 +419,7 @@ async function onFileSelect(event: any) {
     
     const response = await fetch('/api/v4/admin/patterns/upload', {
       method: 'POST',
+      headers: getAuthHeaders(),
       body: formData
     })
     
@@ -449,6 +459,7 @@ async function createAndProcess() {
     
     const createResponse = await fetch('/api/v4/admin/patterns/session', {
       method: 'POST',
+      headers: getAuthHeaders(),
       body: formData
     })
     
@@ -469,7 +480,9 @@ async function createAndProcess() {
     // Start polling for progress
     const pollInterval = setInterval(async () => {
       try {
-        const previewResponse = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/preview`)
+        const previewResponse = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/preview`, {
+          headers: getAuthHeaders()
+        })
         if (previewResponse.ok) {
           const preview = await previewResponse.json()
           processedPatterns.value = preview.patterns || []

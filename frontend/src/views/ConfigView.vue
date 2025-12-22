@@ -316,25 +316,27 @@
 
           <div class="config-form">
             <div class="field">
-              <label for="admin_group_name">Admin Group Name</label>
+              <label for="admin_users">Admin Users</label>
+              <Textarea 
+                id="admin_users"
+                v-model="adminUsersText"
+                placeholder="david.galluzzo@gainwelltechnologies.com&#10;another.admin@company.com"
+                class="w-full"
+                rows="4"
+              />
+              <small>Email addresses of admin users (one per line). Admins can access Settings, Import Patterns, and Semantic Management.</small>
+            </div>
+
+            <div class="field">
+              <label for="admin_group_name">Admin Group Name (Legacy)</label>
               <InputText 
                 id="admin_group_name"
                 v-model="config.security.admin_group_name"
                 placeholder="gia-oztest-dev-ue1-data-engineers"
                 class="w-full"
+                disabled
               />
-              <small>Databricks group name for administrator access</small>
-            </div>
-
-            <div class="field">
-              <label class="checkbox-label">
-                <Checkbox 
-                  v-model="config.security.enable_password_auth"
-                  :binary="true"
-                />
-                <span>Enable Password Authentication</span>
-              </label>
-              <small>Allow password-based authentication as fallback</small>
+              <small>Legacy: Databricks group membership check (not currently used)</small>
             </div>
           </div>
         </div>

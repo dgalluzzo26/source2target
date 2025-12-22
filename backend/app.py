@@ -110,8 +110,8 @@ async def get_current_user(request: Request):
             user_info["email"] = forwarded_email
             user_info["display_name"] = forwarded_email.split('@')[0].replace('.', ' ').title()
             user_info["detection_method"] = "X-Forwarded-Email header"
-            # Check admin status
-            user_info["is_admin"] = auth_service.check_admin_group_membership(forwarded_email)
+            # Check admin status using config list
+            user_info["is_admin"] = await auth_service.is_user_admin(forwarded_email)
             return user_info
         
         # Method 2: Check other common headers
@@ -126,8 +126,8 @@ async def get_current_user(request: Request):
                 user_info["email"] = value
                 user_info["display_name"] = value.split('@')[0].replace('.', ' ').title()
                 user_info["detection_method"] = f"{header} header"
-                # Check admin status
-                user_info["is_admin"] = auth_service.check_admin_group_membership(value)
+                # Check admin status using config list
+                user_info["is_admin"] = await auth_service.is_user_admin(value)
                 return user_info
         
         # Method 3: Check environment variables
@@ -136,8 +136,8 @@ async def get_current_user(request: Request):
             user_info["email"] = databricks_user
             user_info["display_name"] = databricks_user.split('@')[0].replace('.', ' ').title()
             user_info["detection_method"] = "DATABRICKS_USER env"
-            # Check admin status
-            user_info["is_admin"] = auth_service.check_admin_group_membership(databricks_user)
+            # Check admin status using config list
+            user_info["is_admin"] = await auth_service.is_user_admin(databricks_user)
             return user_info
         
         # Method 4: Try Databricks WorkspaceClient (if available)
@@ -166,8 +166,8 @@ async def get_current_user(request: Request):
                         user_info["email"] = email
                         user_info["display_name"] = email.split('@')[0].replace('.', ' ').title()
                         user_info["detection_method"] = "WorkspaceClient API"
-                        # Check admin status
-                        user_info["is_admin"] = auth_service.check_admin_group_membership(email)
+                        # Check admin status using config list
+                        user_info["is_admin"] = await auth_service.is_user_admin(email)
                         return user_info
             except Exception as e:
                 print(f"WorkspaceClient error: {str(e)}")

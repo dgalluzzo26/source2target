@@ -14,6 +14,8 @@
  * @module services/api
  */
 
+import { useUserStore } from '../stores/user'
+
 /**
  * Base URL for all API requests.
  * 
@@ -21,6 +23,21 @@
  * For local development, can be overridden via VITE_API_URL environment variable.
  */
 const API_BASE_URL = import.meta.env.VITE_API_URL || ''
+
+/**
+ * Get headers with user email for authenticated requests.
+ * The X-User-Email header tells the backend who the current user is.
+ */
+export function getAuthHeaders(): Record<string, string> {
+  const userStore = useUserStore()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (userStore.userEmail) {
+    headers['X-User-Email'] = userStore.userEmail
+  }
+  return headers
+}
 
 /**
  * Standard API response wrapper
