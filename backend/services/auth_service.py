@@ -5,7 +5,7 @@ Based on the original Streamlit app's auth.py
 from databricks.sdk import WorkspaceClient
 from databricks import sql
 from backend.services.config_service import ConfigService
-from typing import Optional
+from typing import Optional, List
 
 
 class AuthService:
@@ -22,6 +22,45 @@ class AuthService:
         if self._workspace_client is None:
             self._workspace_client = WorkspaceClient()
         return self._workspace_client
+    
+    async def is_user_admin(self, user_email: str) -> bool:
+        """
+        Check if user is an admin.
+        
+        First checks the admin_users list in config (simple email match).
+        Falls back to group membership check if configured.
+        
+        Args:
+            user_email: User's email address
+            
+        Returns:
+            True if user is admin, False otherwise
+        """
+        if not user_email:
+            print(f"[Auth Service] No user email provided - denying admin access")
+            return False
+        
+        try:
+            config = self.config_service.get_config()
+            admin_users: List[str] = config.security.admin_users or []
+            
+            # Check if user is in the admin_users list (case-insensitive)
+            user_email_lower = user_email.lower().strip()
+            for admin_email in admin_users:
+                if admin_email.lower().strip() == user_email_lower:
+                    print(f"[Auth Service] ✓ User {user_email} is in admin_users list")
+                    return True
+            
+            print(f"[Auth Service] User {user_email} not in admin_users list: {admin_users}")
+            
+            # If no match in list, could fall back to group check (disabled for now)
+            # return self.check_admin_group_membership(user_email)
+            
+            return False
+            
+        except Exception as e:
+            print(f"[Auth Service] Error checking admin status: {e}")
+            return False
     
     def check_admin_group_membership(self, user_email: str) -> bool:
         """

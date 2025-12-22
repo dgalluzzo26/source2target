@@ -17,7 +17,7 @@ Models:
 - AppConfig: Root configuration containing all sections
 """
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
 
 class DatabaseConfig(BaseModel):
@@ -148,15 +148,21 @@ class SecurityConfig(BaseModel):
     """
     Security and authorization configuration.
     
-    Defines admin access control through Databricks workspace groups.
-    Users in the admin_group_name have access to configuration management.
+    Defines admin access control through a list of admin user emails.
+    Users in the admin_users list have access to configuration management
+    and admin-only features like pattern import.
     
     Attributes:
-        admin_group_name: Databricks workspace group name for admin users
+        admin_users: List of admin user email addresses
+        admin_group_name: (Legacy) Databricks workspace group name for admin users
         enable_password_auth: Whether to enable password authentication (not currently used)
         admin_password_hash: Hashed admin password (not currently used)
     """
-    admin_group_name: str = Field(default="gia-oztest-dev-ue1-data-engineers", description="Admin group name in Databricks workspace")
+    admin_users: List[str] = Field(
+        default=["david.galluzzo@gainwelltechnologies.com"],
+        description="List of admin user email addresses"
+    )
+    admin_group_name: str = Field(default="gia-oztest-dev-ue1-data-engineers", description="(Legacy) Admin group name in Databricks workspace")
     enable_password_auth: bool = Field(default=True, description="Enable password auth (unused)")
     admin_password_hash: str = Field(default="", description="Admin password hash (unused)")
 

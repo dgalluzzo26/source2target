@@ -34,10 +34,11 @@ async def require_admin(request: Request) -> str:
     user_email = await get_current_user_email(request)
     try:
         is_admin = await auth_service.is_user_admin(user_email)
+        print(f"[Pattern Import] Admin check for {user_email}: {is_admin}")
         if not is_admin:
             raise HTTPException(
                 status_code=403, 
-                detail="Admin access required for pattern import"
+                detail=f"Admin access required for pattern import. User {user_email} is not in admin list."
             )
         return user_email
     except HTTPException:
@@ -290,15 +291,21 @@ async def save_patterns(
     
     Admin only.
     """
+    print(f"[Pattern Import Save] Received save request for session: {session_id}")
+    print(f"[Pattern Import Save] Pattern indices: {body.pattern_indices}")
+    
     await require_admin(request)
     
     try:
+        print(f"[Pattern Import Save] Calling save_patterns service...")
         result = await pattern_import_service.save_patterns(
             session_id,
             body.pattern_indices
         )
+        print(f"[Pattern Import Save] Result: {result}")
         
         if result.get("status") == "error":
+            print(f"[Pattern Import Save] Error from service: {result.get('error')}")
             raise HTTPException(status_code=400, detail=result.get("error"))
         
         return result
@@ -306,7 +313,9 @@ async def save_patterns(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[Pattern Import] Error saving patterns: {e}")
+        print(f"[Pattern Import Save] Exception: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

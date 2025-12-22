@@ -529,11 +529,15 @@ async function savePatterns() {
   try {
     const indices = selectedPatterns.value.map(p => p.row_index)
     
+    console.log('Saving patterns - session:', sessionId.value, 'indices:', indices)
+    
     const response = await fetch(`/api/v4/admin/patterns/session/${sessionId.value}/save`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pattern_indices: indices })
     })
+    
+    console.log('Save response status:', response.status)
     
     if (response.ok) {
       const result = await response.json()
