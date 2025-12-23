@@ -642,8 +642,7 @@
       </template>
     </Dialog>
 
-    <!-- Confirm Delete Dialog -->
-    <ConfirmDialog />
+    <!-- ConfirmDialog is global in App.vue -->
   </div>
 </template>
 
@@ -669,7 +668,7 @@ import Menu from 'primevue/menu'
 import FileUpload from 'primevue/fileupload'
 import Dropdown from 'primevue/dropdown'
 import Textarea from 'primevue/textarea'
-import ConfirmDialog from 'primevue/confirmdialog'
+// ConfirmDialog is global in App.vue
 import { useConfirm } from 'primevue/useconfirm'
 import SuggestionReviewPanel from '@/components/SuggestionReviewPanel.vue'
 

@@ -280,8 +280,7 @@
       </template>
     </Dialog>
 
-    <!-- Delete Confirmation -->
-    <ConfirmDialog />
+    <!-- ConfirmDialog is global in App.vue - don't duplicate here -->
   </div>
 </template>
 
@@ -302,7 +301,7 @@ import ProgressBar from 'primevue/progressbar'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Dialog from 'primevue/dialog'
-import ConfirmDialog from 'primevue/confirmdialog'
+// ConfirmDialog is global in App.vue
 import Menu from 'primevue/menu'
 
 const router = useRouter()
