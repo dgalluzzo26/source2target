@@ -738,7 +738,14 @@ RULES:
             "processing_progress": session.get("processing_progress", 0),
             "patterns": session.get("processed_patterns", []),
             "errors": session.get("errors", []),
-            "total_rows": session.get("total_rows", 0)
+            "total_rows": session.get("total_rows", 0),
+            # Save progress tracking
+            "save_status": session.get("save_status"),  # None, SAVING, COMPLETE, FAILED
+            "save_progress": session.get("save_progress", 0),
+            "save_total": session.get("save_total", 0),
+            "save_current": session.get("save_current", 0),
+            "save_current_pattern": session.get("save_current_pattern"),
+            "save_errors": session.get("save_errors", [])
         }
     
     # =========================================================================
@@ -749,7 +756,8 @@ RULES:
         self,
         db_config: Dict[str, str],
         patterns: List[Dict[str, Any]],
-        created_by: str
+        created_by: str,
+        session: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Save approved patterns to mapped_fields (synchronous).
@@ -758,12 +766,21 @@ RULES:
             db_config: Database configuration
             patterns: List of pattern dictionaries to save
             created_by: User email
+            session: Optional session dict for progress tracking
             
         Returns:
             Status dictionary with saved count
         """
         print(f"[Pattern Import Sync] Starting save of {len(patterns)} patterns")
         print(f"[Pattern Import Sync] DB config: {db_config.get('mapped_fields_table')}")
+        
+        # Initialize save progress tracking
+        if session:
+            session["save_status"] = "SAVING"
+            session["save_progress"] = 0
+            session["save_total"] = len(patterns)
+            session["save_current"] = 0
+            session["save_errors"] = []
         
         connection = self._get_sql_connection(
             db_config["server_hostname"],
@@ -778,6 +795,12 @@ RULES:
             with connection.cursor() as cursor:
                 for i, pattern in enumerate(patterns):
                     print(f"[Pattern Import Sync] Saving pattern {i+1}/{len(patterns)}: {pattern.get('tgt_column_physical_name')}")
+                    
+                    # Update progress in session for polling
+                    if session:
+                        session["save_current"] = i + 1
+                        session["save_progress"] = int((i + 1) / len(patterns) * 100)
+                        session["save_current_pattern"] = pattern.get('tgt_column_physical_name', 'unknown')
                     try:
                         # Look up semantic_field_id if possible
                         semantic_field_id = None
@@ -873,6 +896,13 @@ RULES:
                         })
                 
                 print(f"[Pattern Import Sync] Complete: {saved_count} saved, {len(errors)} errors")
+                
+                # Mark save as complete in session
+                if session:
+                    session["save_status"] = "COMPLETE"
+                    session["save_progress"] = 100
+                    session["save_errors"] = errors
+                
                 return {
                     "status": "success",
                     "saved_count": saved_count,
@@ -884,6 +914,12 @@ RULES:
             print(f"[Pattern Import Sync] Fatal error saving patterns: {e}")
             import traceback
             traceback.print_exc()
+            
+            # Mark save as failed in session
+            if session:
+                session["save_status"] = "FAILED"
+                session["save_errors"] = [{"error": str(e)}]
+            
             raise
         finally:
             connection.close()
@@ -944,7 +980,8 @@ RULES:
                     self._save_patterns_sync,
                     db_config,
                     ready_patterns,
-                    created_by
+                    created_by,
+                    session  # Pass session for progress tracking
                 )
             )
             

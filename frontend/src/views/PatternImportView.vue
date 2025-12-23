@@ -217,7 +217,7 @@
         </template>
         <template #footer>
           <div class="step-actions">
-            <Button label="Back" icon="pi pi-arrow-left" severity="secondary" @click="goToStep(1)" :disabled="!processingComplete" />
+            <Button label="Back" icon="pi pi-arrow-left" severity="secondary" @click="goToStep(1)" :disabled="!processingComplete || saving" />
             <span class="selection-info">
               {{ selectedPatterns.length }} of {{ successfulPatterns.length }} ready patterns selected
             </span>
@@ -226,8 +226,21 @@
               icon="pi pi-check" 
               @click="savePatterns" 
               :loading="saving" 
-              :disabled="!processingComplete || !selectedPatterns.length"
+              :disabled="!processingComplete || !selectedPatterns.length || saving"
             />
+          </div>
+          
+          <!-- Save Progress -->
+          <div v-if="saving" class="save-progress mt-4">
+            <div class="progress-header">
+              <span>Saving patterns to database...</span>
+              <span class="progress-text">{{ saveProgress.current }} / {{ saveProgress.total }}</span>
+            </div>
+            <ProgressBar :value="saveProgress.percent" :showValue="false" class="mt-2" />
+            <div v-if="saveProgress.currentPattern" class="current-pattern mt-2">
+              <i class="pi pi-spin pi-spinner mr-2"></i>
+              Saving: <strong>{{ saveProgress.currentPattern }}</strong>
+            </div>
           </div>
         </template>
       </Card>
@@ -356,6 +369,13 @@ const processingErrors = ref<any[]>([])
 const selectedPatterns = ref<any[]>([])
 const saving = ref(false)
 const savedCount = ref(0)
+const saveProgress = ref({
+  percent: 0,
+  current: 0,
+  total: 0,
+  currentPattern: ''
+})
+const savePollingInterval = ref<number | null>(null)
 const showDetailDialog = ref(false)
 const detailPattern = ref<any>(null)
 
@@ -539,6 +559,15 @@ async function savePatterns() {
   if (!selectedPatterns.value.length) return
   
   saving.value = true
+  saveProgress.value = {
+    percent: 0,
+    current: 0,
+    total: selectedPatterns.value.length,
+    currentPattern: ''
+  }
+  
+  // Start polling for save progress
+  startSaveProgressPolling()
   
   try {
     const indices = selectedPatterns.value.map(p => p.row_index)
@@ -560,6 +589,14 @@ async function savePatterns() {
       const result = await response.json()
       savedCount.value = result.saved_count || 0
       
+      // Update progress to 100%
+      saveProgress.value = {
+        percent: 100,
+        current: savedCount.value,
+        total: selectedPatterns.value.length,
+        currentPattern: ''
+      }
+      
       toast.add({
         severity: 'success',
         summary: 'Patterns Saved',
@@ -574,7 +611,40 @@ async function savePatterns() {
   } catch (e: any) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 3000 })
   } finally {
+    stopSaveProgressPolling()
     saving.value = false
+  }
+}
+
+function startSaveProgressPolling() {
+  // Poll every 500ms for save progress
+  savePollingInterval.value = window.setInterval(async () => {
+    try {
+      const response = await fetch(
+        `/api/v4/admin/patterns/session/${sessionId.value}/preview`,
+        { headers: getAuthHeaders() }
+      )
+      if (response.ok) {
+        const data = await response.json()
+        if (data.save_status === 'SAVING') {
+          saveProgress.value = {
+            percent: data.save_progress || 0,
+            current: data.save_current || 0,
+            total: data.save_total || selectedPatterns.value.length,
+            currentPattern: data.save_current_pattern || ''
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Save progress poll error:', e)
+    }
+  }, 500)
+}
+
+function stopSaveProgressPolling() {
+  if (savePollingInterval.value) {
+    clearInterval(savePollingInterval.value)
+    savePollingInterval.value = null
   }
 }
 
@@ -792,6 +862,30 @@ onMounted(() => {
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Save Progress */
+.save-progress {
+  background: var(--surface-50);
+  border: 1px solid var(--surface-200);
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.progress-text {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.current-pattern {
+  font-size: 0.9rem;
+  color: var(--text-color-secondary);
 }
 </style>
 
