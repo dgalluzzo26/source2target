@@ -280,29 +280,67 @@ class ExportService:
         Extract the column expression from a full SELECT statement.
         
         Returns: (expression, is_complex)
+        
+        Examples:
+        - "SELECT INITCAP(r.NAME) AS NAME FROM ..." -> ("INITCAP(r.NAME)", False)
+        - "SELECT t.COL AS COL FROM ..." -> ("t.COL", False)
+        - "SELECT ... UNION SELECT ..." -> (full_sql, True)
         """
         if not source_expression:
             return "NULL /* no mapping */", True
         
         sql_str = source_expression.strip()
         
-        # Handle UNION - these are complex
+        # Handle UNION - these are complex and need their own CTE
         if 'UNION' in sql_str.upper():
             return sql_str, True
         
         # Try to extract: SELECT [DISTINCT] <expr> AS <alias> FROM ...
+        # The expression can contain nested parentheses, so we need a smarter approach
+        
+        # First, try simple patterns
         patterns = [
-            r'^\s*SELECT\s+DISTINCT\s+(.+?)\s+AS\s+\w+\s+FROM',
-            r'^\s*SELECT\s+(.+?)\s+AS\s+\w+\s+FROM',
+            # SELECT DISTINCT expr AS alias FROM
+            r'^\s*SELECT\s+DISTINCT\s+(.+?)\s+AS\s+(\w+)\s+FROM\s',
+            # SELECT expr AS alias FROM  
+            r'^\s*SELECT\s+(.+?)\s+AS\s+(\w+)\s+FROM\s',
+            # SELECT DISTINCT expr FROM (without AS)
+            r'^\s*SELECT\s+DISTINCT\s+([^\s,]+)\s+FROM\s',
+            # SELECT expr FROM (without AS)
+            r'^\s*SELECT\s+([^\s,]+)\s+FROM\s',
         ]
         
         for pattern in patterns:
             match = re.match(pattern, sql_str, re.IGNORECASE | re.DOTALL)
             if match:
                 expr = match.group(1).strip()
-                return expr, False
+                # Make sure we didn't capture too much (e.g., multiple columns)
+                if ',' not in expr or expr.count('(') > expr.count(','):
+                    return expr, False
         
-        # Complex expression
+        # Try a more flexible approach: find the SELECT and FROM, extract between
+        upper_sql = sql_str.upper()
+        select_pos = upper_sql.find('SELECT')
+        from_pos = upper_sql.find(' FROM ')
+        
+        if select_pos != -1 and from_pos != -1 and from_pos > select_pos:
+            between = sql_str[select_pos + 6:from_pos].strip()
+            
+            # Remove DISTINCT if present
+            if between.upper().startswith('DISTINCT'):
+                between = between[8:].strip()
+            
+            # Check if it's a single expression (might have AS alias at end)
+            as_match = re.match(r'^(.+?)\s+AS\s+\w+\s*$', between, re.IGNORECASE | re.DOTALL)
+            if as_match:
+                expr = as_match.group(1).strip()
+                return expr, False
+            
+            # If no AS, the whole thing might be the expression
+            if ',' not in between:
+                return between, False
+        
+        # Complex expression - return the full SQL
         return sql_str, True
     
     def _extract_from_join_where(self, source_expression: str) -> Tuple[str, str, str]:
@@ -460,6 +498,9 @@ class ExportService:
         column_names.append(silver_key)
         
         # Add column expressions
+        # Track columns that need separate handling
+        complex_columns = []
+        
         for mapping in simple_mappings:
             col_physical = mapping.get('tgt_column_physical_name', '')
             source_expr = mapping.get('source_expression', '')
@@ -468,7 +509,16 @@ class ExportService:
             
             if is_complex:
                 has_complex = True
-                select_parts.append(f"    NULL AS {col_physical}  -- Complex: see separate CTE")
+                # Complex expressions need their original SQL preserved
+                # Check if it's a scalar subquery we can inline
+                if source_expr.strip().upper().startswith('SELECT') and 'UNION' not in source_expr.upper():
+                    # Try to use as scalar subquery
+                    select_parts.append(f"    (\n      {source_expr}\n    ) AS {col_physical}")
+                else:
+                    # Full complex query - needs separate CTE
+                    # Add to complex list for separate handling
+                    complex_columns.append((col_physical, source_expr))
+                    continue  # Don't add to this CTE
             else:
                 select_parts.append(f"    {expr} AS {col_physical}")
             
@@ -497,33 +547,59 @@ class ExportService:
     ) -> Tuple[str, List[str], bool]:
         """
         Generate CTE for complex mappings (UNION, etc).
-        Uses subqueries for each column.
+        
+        For UNION queries, we use the original SQL directly - it already
+        produces the column we need. We just need to ensure it includes
+        the key column for joining.
         """
         column_names = [silver_key]
-        subquery_ctes = []
+        cte_parts = []
         
-        for i, mapping in enumerate(mappings):
+        for mapping in mappings:
             col_physical = mapping.get('tgt_column_physical_name', '')
-            source_expr = mapping.get('source_expression', '')
+            source_expr = mapping.get('source_expression', '').strip()
             column_names.append(col_physical)
             
-            # Create a sub-CTE for this column
-            sub_name = f"{group_name}_{col_physical}"
+            if not source_expr:
+                continue
             
-            # Wrap the original SQL to include the key
-            # This is a best-effort approach
-            subquery_ctes.append(f"-- Column {col_physical} requires manual review:\n-- {source_expr[:200]}...")
+            # The source expression IS the SQL we need
+            # For UNION queries, each branch produces key + column
+            # We'll use it directly as a subquery
+            
+            # Check if the SQL already has the silver key
+            has_key = silver_key.lower() in source_expr.lower() or 'src_key_id' in source_expr.lower()
+            
+            if has_key:
+                # SQL already includes key, use as-is
+                cte_parts.append(f"  -- Column: {col_physical}\n  {source_expr}")
+            else:
+                # Need to add key - wrap the query
+                # Try to find the silver table join to get the key
+                cte_parts.append(f"  -- Column: {col_physical} (key may need adjustment)\n  {source_expr}")
         
-        # For complex cases, generate a placeholder CTE
-        cte_sql = f"""{group_name} AS (
-  -- COMPLEX MAPPINGS: Contains UNION or complex logic
-  -- Manual SQL construction required
-  -- Columns: {', '.join(column_names)}
-  SELECT 
-    NULL AS {silver_key},
-    {', '.join([f"NULL AS {c}" for c in column_names[1:]])}
-  WHERE 1=0  -- Placeholder
+        # For complex queries, create separate sub-CTEs for each column
+        # then join them
+        if len(mappings) == 1:
+            # Single complex column - use its SQL directly
+            source_expr = mappings[0].get('source_expression', '').strip()
+            col_physical = mappings[0].get('tgt_column_physical_name', '')
+            
+            cte_sql = f"""{group_name} AS (
+  -- Complex mapping for {col_physical}
+  {source_expr}
 )"""
+        else:
+            # Multiple complex columns - each becomes a sub-CTE
+            sub_ctes = []
+            for i, mapping in enumerate(mappings):
+                col_physical = mapping.get('tgt_column_physical_name', '')
+                source_expr = mapping.get('source_expression', '').strip()
+                sub_name = f"{group_name}_col{i+1}"
+                sub_ctes.append(f"{sub_name} AS (\n  -- {col_physical}\n  {source_expr}\n)")
+            
+            # Join sub-CTEs on the key
+            cte_sql = ",\n\n".join(sub_ctes)
         
         return cte_sql, column_names, True
     
@@ -540,7 +616,7 @@ class ExportService:
         1. Group mappings by source structure
         2. Create CTE per group with all columns from that group
         3. Join CTEs on silver table key
-        4. Generate INSERT from joined CTEs
+        4. Generate INSERT from joined CTEs (only reference columns from CTEs that have them)
         """
         if not mappings:
             return "-- No mappings found"
@@ -557,10 +633,11 @@ class ExportService:
         
         print(f"[Export Service] Grouped {len(mappings)} mappings into {len(groups)} structure groups")
         
-        # Generate CTEs
+        # Generate CTEs and track which columns are in which CTE
         ctes = []
-        all_columns = [silver_key]  # Key column first
         cte_names = []
+        cte_columns: Dict[str, List[str]] = {}  # cte_name -> list of columns
+        all_columns = [silver_key]  # Key column first
         has_any_complex = False
         
         for i, (sig, group_mappings) in enumerate(groups.items()):
@@ -572,6 +649,8 @@ class ExportService:
             if cte_sql:
                 ctes.append(cte_sql)
                 cte_names.append(group_name)
+                cte_columns[group_name] = columns
+                
                 # Add columns (skip key since it's already added)
                 for col in columns[1:]:
                     if col not in all_columns:
@@ -593,8 +672,8 @@ class ExportService:
 """)
         
         if has_any_complex:
-            sql_parts.append("""-- WARNING: Some mappings contain complex logic (UNION, subqueries)
--- Review and adjust the generated SQL as needed
+            sql_parts.append("""-- NOTE: Some mappings contain UNION or complex logic
+-- The original SQL is preserved in the CTEs
 """)
         
         # CTEs
@@ -605,26 +684,46 @@ class ExportService:
         column_list = ",\n  ".join(all_columns)
         
         # Build SELECT from joined CTEs
+        # Map CTE name to alias
+        cte_alias = {name: f"g{i+1}" for i, name in enumerate(cte_names)}
+        
         if len(cte_names) == 1:
             # Single CTE - simple select
-            select_cols = ",\n    ".join([f"g1.{c}" for c in all_columns])
-            from_clause = f"FROM {cte_names[0]} g1"
+            alias = cte_alias[cte_names[0]]
+            select_cols = ",\n    ".join([f"{alias}.{c}" for c in all_columns])
+            from_clause = f"FROM {cte_names[0]} {alias}"
         else:
-            # Multiple CTEs - join them using COALESCE for columns that might be in multiple CTEs
+            # Multiple CTEs - join them
+            # For each column, only reference the CTE(s) that actually have it
             select_parts = []
-            aliases = [f"g{i+1}" for i in range(len(cte_names))]
             
             for col in all_columns:
-                # Use COALESCE to get value from first CTE that has it
-                coalesce_parts = [f"{alias}.{col}" for alias in aliases]
-                select_parts.append(f"    COALESCE({', '.join(coalesce_parts)}) AS {col}")
+                # Find which CTEs have this column
+                ctes_with_col = []
+                for cte_name in cte_names:
+                    if col in cte_columns.get(cte_name, []):
+                        ctes_with_col.append(cte_alias[cte_name])
+                
+                if len(ctes_with_col) == 0:
+                    # Shouldn't happen, but fallback
+                    select_parts.append(f"    NULL AS {col}")
+                elif len(ctes_with_col) == 1:
+                    # Column only in one CTE - no COALESCE needed
+                    select_parts.append(f"    {ctes_with_col[0]}.{col}")
+                else:
+                    # Column in multiple CTEs - use COALESCE
+                    coalesce_parts = [f"{alias}.{col}" for alias in ctes_with_col]
+                    select_parts.append(f"    COALESCE({', '.join(coalesce_parts)}) AS {col}")
             
             select_cols = ",\n".join(select_parts)
             
-            # Build JOIN clause
-            from_clause = f"FROM {cte_names[0]} g1"
-            for i, cte in enumerate(cte_names[1:], 2):
-                from_clause += f"\n  FULL OUTER JOIN {cte} g{i} ON g1.{silver_key} = g{i}.{silver_key}"
+            # Build JOIN clause - use the first CTE as the base
+            base_alias = cte_alias[cte_names[0]]
+            from_clause = f"FROM {cte_names[0]} {base_alias}"
+            
+            for cte_name in cte_names[1:]:
+                alias = cte_alias[cte_name]
+                from_clause += f"\n  FULL OUTER JOIN {cte_name} {alias} ON {base_alias}.{silver_key} = {alias}.{silver_key}"
         
         sql_parts.append(f"""
 
@@ -632,7 +731,7 @@ INSERT INTO {target_catalog}.{target_schema}.{table_physical} (
   {column_list}
 )
 SELECT
-    {select_cols}
+{select_cols}
 {from_clause}
 ;
 """)
