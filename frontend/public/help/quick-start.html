@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quick Start Guide - Source-to-Target Mapping</title>
+    <title>Quick Start Guide - Smart Mapper V4</title>
     <style>
         * {
             margin: 0;
@@ -12,10 +12,10 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.6;
             color: #333;
-            background-color: #f5f5f5;
+            background-color: #f8f9fa;
             padding: 2rem;
         }
 
@@ -25,7 +25,7 @@
         }
 
         .header {
-            background: linear-gradient(135deg, #003366, #38a169);
+            background: linear-gradient(135deg, #4a5568, #38a169);
             color: white;
             padding: 2.5rem 2rem;
             border-radius: 12px;
@@ -45,18 +45,84 @@
             opacity: 0.95;
         }
 
+        .workflow-overview {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            margin-bottom: 2rem;
+            border-left: 5px solid #38a169;
+        }
+
+        .workflow-overview h2 {
+            color: #4a5568;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .workflow-steps {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .workflow-step {
+            flex: 1;
+            min-width: 140px;
+            text-align: center;
+            padding: 1rem;
+            background: linear-gradient(135deg, #e8f4fd, #f0f8ff);
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .workflow-step::after {
+            content: '→';
+            position: absolute;
+            right: -15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #38a169;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .workflow-step:last-child::after {
+            display: none;
+        }
+
+        .workflow-step .step-num {
+            display: inline-block;
+            background: #4a5568;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            line-height: 30px;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .workflow-step strong {
+            display: block;
+            color: #4a5568;
+            font-size: 0.9rem;
+        }
+
         .step {
             background: white;
             margin: 1.5rem 0;
             padding: 2rem;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-            border-left: 5px solid #003366;
+            border-left: 5px solid #4a5568;
         }
 
         .step-number {
             display: inline-block;
-            background: #003366;
+            background: #4a5568;
             color: white;
             width: 45px;
             height: 45px;
@@ -69,7 +135,7 @@
         }
 
         .step h2 {
-            color: #003366;
+            color: #4a5568;
             margin-bottom: 1rem;
             font-size: 1.5rem;
         }
@@ -79,19 +145,14 @@
             color: #555;
         }
 
-        .step ul {
+        .step ul, .step ol {
             margin-left: 2rem;
             margin-bottom: 1rem;
         }
 
-        .step ul li {
+        .step ul li, .step ol li {
             margin: 0.5rem 0;
             color: #555;
-        }
-
-        .step ul ul {
-            margin-left: 1.5rem;
-            margin-top: 0.5rem;
         }
 
         .tip {
@@ -103,12 +164,21 @@
         }
 
         .tip strong {
-            color: #003366;
+            color: #4a5568;
             font-size: 1.05rem;
         }
 
-        .tip ul {
-            margin-top: 0.5rem;
+        .warning {
+            background: linear-gradient(135deg, #fff3cd, #ffe8a1);
+            padding: 1.25rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #ffc107;
+        }
+
+        .warning strong {
+            color: #856404;
+            font-size: 1.05rem;
         }
 
         .success-box {
@@ -137,6 +207,30 @@
             border-radius: 4px;
             font-family: 'Courier New', monospace;
             color: #c7254e;
+            font-size: 0.9rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        table th {
+            background: #4a5568;
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        table tr:hover {
+            background: #f8f9fa;
         }
 
         .icon {
@@ -144,15 +238,18 @@
             margin-right: 0.5rem;
         }
 
-        .highlight {
-            background: #fff3cd;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-weight: 500;
+        strong {
+            color: #4a5568;
         }
 
-        strong {
-            color: #003366;
+        .action-button {
+            display: inline-block;
+            background: #38a169;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 0.25rem 0;
         }
     </style>
 </head>
@@ -160,172 +257,159 @@
     <div class="container">
         <div class="header">
             <h1>⚡ Quick Start Guide</h1>
-            <p>Get started mapping source fields to target fields in minutes!</p>
+            <p>Get mapping with Smart Mapper V4 in 5 minutes!</p>
+        </div>
+
+        <div class="workflow-overview">
+            <h2>🎯 V4 Target-First Workflow</h2>
+            <p>Smart Mapper V4 uses a <strong>Target-First</strong> approach. Instead of mapping one source field at a time, you work through entire target tables with AI assistance.</p>
+            
+            <div class="workflow-steps">
+                <div class="workflow-step">
+                    <span class="step-num">1</span>
+                    <strong>Create Project</strong>
+                </div>
+                <div class="workflow-step">
+                    <span class="step-num">2</span>
+                    <strong>Upload Sources</strong>
+                </div>
+                <div class="workflow-step">
+                    <span class="step-num">3</span>
+                    <strong>AI Discovery</strong>
+                </div>
+                <div class="workflow-step">
+                    <span class="step-num">4</span>
+                    <strong>Review & Approve</strong>
+                </div>
+                <div class="workflow-step">
+                    <span class="step-num">5</span>
+                    <strong>Export</strong>
+                </div>
+            </div>
         </div>
 
         <div class="step">
             <div class="step-number">1</div>
-            <h2><span class="icon">📋</span> Select Source Field(s)</h2>
-            <p>Choose one or more source fields to map:</p>
-            <ul>
-                <li>Navigate to <strong>Field Mapping</strong> in the left sidebar</li>
-                <li>Click the <strong>Unmapped Fields</strong> tab</li>
-                <li>Select one or more source fields from the table (use checkboxes for multiple)</li>
-                <li><strong>Multi-field mapping:</strong> Select multiple related fields (e.g., FIRST_NAME + LAST_NAME) to combine into a single target field</li>
-            </ul>
+            <h2><span class="icon">📁</span> Create a Project</h2>
+            <ol>
+                <li>Click <strong class="action-button">+ New Project</strong> from the Projects page</li>
+                <li>Enter a <strong>Project Name</strong> (e.g., "DMES Member Migration")</li>
+                <li>Add optional <strong>Description</strong> and <strong>Source System</strong></li>
+                <li>Set <strong>Target Domains</strong> to filter which tables to map (e.g., "Member")</li>
+                <li>Click <strong>Create Project</strong></li>
+            </ol>
             <div class="tip">
-                <strong>💡 Tip:</strong> Multi-field mappings are powerful! Combine related fields like name components, address parts, or date/time fields into a single target field.
+                <strong>💡 Tip:</strong> Add team member emails to collaborate on the project!
             </div>
-            <p style="margin-top: 1rem;"><a href="multi_field_mapping_mockup.html" style="color: #003366; text-decoration: underline; font-weight: 600;">📸 View Multi-Field Mapping Demo →</a></p>
         </div>
 
         <div class="step">
             <div class="step-number">2</div>
-            <h2><span class="icon">🎯</span> Choose Target Field</h2>
-            <p>Select or let AI suggest the target field:</p>
-            <ul>
-                <li><strong>AI Suggestions (Recommended):</strong> Click <strong>Get AI Suggestions</strong> to see AI-recommended target fields based on semantic similarity</li>
-                <li><strong>Manual Selection:</strong> Browse the semantic table and manually select a target field</li>
-                <li>Review the suggested target field's table name, column name, data type, and description</li>
-                <li>Accept the suggestion or modify it</li>
-            </ul>
-            <div class="tip">
-                <strong>🤖 AI Power:</strong> The AI analyzes field names, descriptions, and data types to suggest the best target matches. It's especially good at detecting multi-field patterns like "full_name" for FIRST_NAME + LAST_NAME.
+            <h2><span class="icon">📤</span> Upload Source Fields</h2>
+            <p>The AI needs to know your source data to make suggestions:</p>
+            <ol>
+                <li>Click <strong class="action-button">Upload Sources</strong></li>
+                <li>Download the <strong>CSV Template</strong></li>
+                <li>Fill in your source tables and columns with descriptions</li>
+                <li>Upload the completed CSV</li>
+            </ol>
+            
+            <div class="warning">
+                <strong>⚠️ Important:</strong> The <code>src_comments</code> column is <strong>essential</strong> for AI matching. Include clear descriptions of what each field contains.
             </div>
+            
+            <p><strong>Required columns:</strong></p>
+            <table>
+                <tr><th>Column</th><th>Example</th></tr>
+                <tr><td>src_table_physical_name</td><td>RECIP_BASE</td></tr>
+                <tr><td>src_column_physical_name</td><td>RECIP_KEY</td></tr>
+                <tr><td>src_physical_datatype</td><td>BIGINT</td></tr>
+                <tr><td>src_comments</td><td>Unique identifier for recipient</td></tr>
+            </table>
         </div>
 
         <div class="step">
             <div class="step-number">3</div>
-            <h2><span class="icon">🔄</span> Configure Transformations</h2>
-            <p>Apply SQL transformations to each source field:</p>
+            <h2><span class="icon">🤖</span> Start AI Discovery</h2>
+            <p>Let the AI analyze your sources and suggest mappings:</p>
+            <ol>
+                <li>From the project page, find the target table you want to map</li>
+                <li>Click the <strong class="action-button">Discover</strong> button</li>
+                <li>Watch progress: "Discovering 5/25..." updates in real-time</li>
+                <li>Wait for status to change to <strong>SUGGESTIONS_READY</strong></li>
+            </ol>
+            
+            <p><strong>What happens during discovery:</strong></p>
             <ul>
-                <li>For each selected source field, choose a transformation from the dropdown:
-                    <ul>
-                        <li><strong>TRIM + INITCAP</strong> - Capitalize first letter of each word, remove spaces</li>
-                        <li><strong>TRIM + UPPER</strong> - Convert to uppercase, remove spaces</li>
-                        <li><strong>TRIM + LOWER</strong> - Convert to lowercase, remove spaces</li>
-                        <li><strong>TO_DATE</strong> - Convert string to date format</li>
-                        <li><strong>No Transformation</strong> - Use the field as-is</li>
-                    </ul>
-                </li>
-                <li>Transformations are applied <strong>before</strong> concatenation</li>
-                <li>Custom transformations can be managed in <strong>Administration → Transformation Management</strong></li>
+                <li>AI searches for historical mapping patterns</li>
+                <li>Vector search finds semantically similar source columns</li>
+                <li>LLM rewrites SQL with your source columns</li>
+                <li>Confidence scores are calculated</li>
             </ul>
+            
+            <div class="tip">
+                <strong>💡 Tip:</strong> Discovery takes 1-5 minutes depending on table size. You can work on other tables while waiting!
+            </div>
         </div>
 
         <div class="step">
             <div class="step-number">4</div>
-            <h2><span class="icon">🔗</span> Set Concatenation Strategy</h2>
-            <p>Define how multiple source fields are combined:</p>
+            <h2><span class="icon">✅</span> Review Suggestions</h2>
+            <p>Click on the table to open the suggestion review panel:</p>
+            
+            <p><strong>For each suggestion, you can:</strong></p>
             <ul>
-                <li><strong>SPACE</strong> - Combine with space: "John" + "Doe" → "John Doe"</li>
-                <li><strong>COMMA</strong> - Combine with comma: "John" + "Doe" → "John,Doe"</li>
-                <li><strong>PIPE</strong> - Combine with pipe: "John" + "Doe" → "John|Doe"</li>
-                <li><strong>CUSTOM</strong> - Specify your own separator (e.g., " - ", ", ")</li>
-                <li><strong>NONE</strong> - No concatenation (for single-field mappings)</li>
+                <li><strong>Approve</strong> ✓ - Accept the mapping as-is</li>
+                <li><strong>Edit</strong> ✏️ - Modify the SQL then approve</li>
+                <li><strong>Reject</strong> ✗ - Mark as incorrect (provide feedback)</li>
+                <li><strong>Skip</strong> → - Skip for now, come back later</li>
+                <li><strong>Regenerate</strong> 🔄 - Re-run AI for this column</li>
             </ul>
+            
+            <p><strong>Confidence Scores:</strong></p>
+            <table>
+                <tr><th>Score</th><th>Meaning</th><th>Action</th></tr>
+                <tr><td>85-100% ✅</td><td>High confidence</td><td>Usually safe to approve</td></tr>
+                <tr><td>70-84% ⚠️</td><td>Medium confidence</td><td>Review carefully</td></tr>
+                <tr><td>Below 70% 🟠</td><td>Low confidence</td><td>Edit or regenerate</td></tr>
+            </table>
+
             <div class="tip">
-                <strong>💡 Tip:</strong> Choose SPACE for names, COMMA for address components, PIPE for data exports, or CUSTOM for special formatting needs.
+                <strong>💡 Tip:</strong> Suggestions are sorted alphabetically by column name. Work through them systematically!
             </div>
         </div>
 
         <div class="step">
             <div class="step-number">5</div>
-            <h2><span class="icon">🔀</span> Define Join Conditions (Optional)</h2>
-            <p>If mapping fields from multiple source tables, define how they join:</p>
-            <ul>
-                <li>Click <strong>Add Join Condition</strong> to create a join</li>
-                <li>Specify:
-                    <ul>
-                        <li><strong>Left Table & Column</strong> - First join key</li>
-                        <li><strong>Join Type</strong> - INNER, LEFT, RIGHT, FULL OUTER</li>
-                        <li><strong>Join Operator</strong> - = (equals), != (not equals), &lt;, &gt;, etc.</li>
-                        <li><strong>Right Table & Column</strong> - Second join key</li>
-                    </ul>
-                </li>
-                <li>Add multiple join conditions if needed (joined with AND)</li>
-            </ul>
-            <div class="tip">
-                <strong>💡 Tip:</strong> Most joins use INNER with = operator. Only needed when combining fields from different source tables.
-            </div>
-        </div>
-
-        <div class="step">
-            <div class="step-number">6</div>
-            <h2><span class="icon">💾</span> Review & Save Mapping</h2>
-            <p>Preview the SQL transformation and save:</p>
-            <ul>
-                <li>Review the <strong>Transformation Expression Preview</strong> showing the generated SQL</li>
-                <li>Verify:
-                    <ul>
-                        <li>Source fields are in the correct order</li>
-                        <li>Transformations are applied correctly</li>
-                        <li>Concatenation strategy is appropriate</li>
-                        <li>Join conditions (if any) are accurate</li>
-                    </ul>
-                </li>
-                <li>Click <strong>Save Mapping</strong> to commit the mapping</li>
-                <li>The mapping appears in the <strong>Mapped Fields</strong> tab</li>
-            </ul>
-            <div class="tip">
-                <strong>✅ Success!</strong> Your mapping is now saved and can be exported for use in ETL processes. You can edit transformations, joins, and concatenation strategy later, but cannot change the target field or add/remove source fields without creating a new mapping.
-            </div>
+            <h2><span class="icon">📊</span> Export Mappings</h2>
+            <p>When you've approved all mappings for a table:</p>
+            <ol>
+                <li>Table status changes to <strong>COMPLETE</strong></li>
+                <li>Click <strong class="action-button">Export Mappings</strong> on the project page</li>
+                <li>Download CSV with all approved mappings and SQL expressions</li>
+            </ol>
         </div>
 
         <div class="success-box">
-            <h3>🎉 Congratulations!</h3>
-            <p>You've completed your first field mapping!</p>
-            <p style="margin-top: 0.5rem;">Continue mapping more fields using the same process.</p>
-        </div>
-
-        <div class="step">
-            <h2><span class="icon">📚</span> Pro Tips for Better Mappings</h2>
-            <ul>
-                <li>✅ <strong>Group related fields</strong> - Map name components, address parts, or dates together for multi-field mappings</li>
-                <li>✅ <strong>Use AI suggestions first</strong> - AI is excellent at detecting multi-field patterns and semantic matches</li>
-                <li>✅ <strong>Order matters</strong> - Arrange source fields in the correct order (e.g., FIRST_NAME before LAST_NAME)</li>
-                <li>✅ <strong>Choose appropriate transformations</strong> - Use INITCAP for names, UPPER for codes, TO_DATE for dates</li>
-                <li>✅ <strong>Preview the SQL</strong> - Always review the transformation expression before saving</li>
-                <li>✅ <strong>Test concatenation</strong> - Make sure SPACE, COMMA, or PIPE produces the desired output format</li>
-                <li>✅ <strong>Verify data types</strong> - Ensure source and target data types are compatible</li>
-                <li>✅ <strong>Add field descriptions</strong> - Better descriptions improve AI suggestions</li>
-                <li>✅ <strong>Export mappings</strong> - Use the Export button in Mapped Fields to download SQL for ETL processes</li>
-            </ul>
-        </div>
-
-        <div class="step">
-            <h2><span class="icon">❓</span> Common Questions</h2>
-            
-            <p><strong>Q: Can I map multiple source fields to one target field?</strong></p>
-            <p>A: Yes! Select multiple source fields (e.g., FIRST_NAME + LAST_NAME) and map them to a single target field (e.g., full_name). Choose a concatenation strategy to combine them.</p>
-            
-            <p style="margin-top: 1rem;"><strong>Q: Can I edit a mapping after saving it?</strong></p>
-            <p>A: Yes! You can edit transformations, join conditions, and concatenation strategy. However, you cannot change the target field or add/remove source fields - those require creating a new mapping.</p>
-            
-            <p style="margin-top: 1rem;"><strong>Q: What transformations are available?</strong></p>
-            <p>A: System transformations include TRIM, INITCAP, UPPER, LOWER, and TO_DATE. Admins can add custom transformations in <strong>Administration → Transformation Management</strong>.</p>
-            
-            <p style="margin-top: 1rem;"><strong>Q: When do I need join conditions?</strong></p>
-            <p>A: Only when mapping fields from multiple source tables. For example, combining T_MEMBER.FIRST_NAME and T_ADDRESS.CITY requires a join condition linking the tables.</p>
-            
-            <p style="margin-top: 1rem;"><strong>Q: How do I export my mappings?</strong></p>
-            <p>A: Go to the <strong>Mapped Fields</strong> tab and click the <strong>Export Mappings</strong> button. You'll get a CSV with all mapping details and generated SQL expressions.</p>
-            
-            <p style="margin-top: 1rem;"><strong>Q: Can I bulk upload unmapped fields?</strong></p>
-            <p>A: Yes! Use the <strong>Upload Template</strong> button in Unmapped Fields to bulk add source fields via CSV.</p>
+            <h3>🎉 You're Ready!</h3>
+            <p>That's all you need to start mapping with Smart Mapper V4.</p>
+            <p style="margin-top: 0.5rem;">For detailed documentation, click the <strong>User Guide</strong> button!</p>
         </div>
 
         <div class="step" style="background: linear-gradient(135deg, #e8f4fd, #f0f8ff); border-left-color: #38a169;">
-            <h2><span class="icon">🚀</span> Next Steps</h2>
-            <p>Now that you know the basics, explore these advanced features:</p>
-            <ul>
-                <li><strong>✅ Mapped Fields Tab</strong> - View all your mappings, edit transformations/joins, export to CSV</li>
-                <li><strong>📁 Templates</strong> - Download a CSV template of unmapped fields, or upload new fields in bulk</li>
-                <li><strong>📊 Semantic Management</strong> (Admin only) - Manage target field definitions in the semantic table</li>
-                <li><strong>🛡️ Transformation Management</strong> (Admin only) - Add, edit, or delete SQL transformation templates <a href="config_mockup.html" style="color: #003366; text-decoration: underline; font-weight: 600;">(📸 View Config Demo)</a></li>
-                <li><strong>⚙️ Configuration</strong> (Admin only) - Adjust database, vector search, and AI model settings</li>
-            </ul>
-            <p style="margin-top: 1rem; font-weight: 500;">For detailed information on all features, click the <strong>User Guide</strong> button!</p>
+            <h2><span class="icon">🚀</span> Quick Reference</h2>
+            <table>
+                <tr><th>Task</th><th>Where</th><th>Action</th></tr>
+                <tr><td>Create project</td><td>Projects page</td><td>+ New Project button</td></tr>
+                <tr><td>Upload sources</td><td>Project detail</td><td>Upload Sources button</td></tr>
+                <tr><td>Start discovery</td><td>Project detail</td><td>Discover button on table row</td></tr>
+                <tr><td>Review suggestions</td><td>Project detail</td><td>Click on table with SUGGESTIONS_READY</td></tr>
+                <tr><td>Export mappings</td><td>Project detail</td><td>Export Mappings button</td></tr>
+            </table>
+            
+            <p style="margin-top: 1.5rem; text-align: center; color: #666;">
+                <strong>Version:</strong> Smart Mapper V4 | <strong>Workflow:</strong> Target-First
+            </p>
         </div>
     </div>
 </body>
