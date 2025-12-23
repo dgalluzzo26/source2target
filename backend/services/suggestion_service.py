@@ -148,7 +148,16 @@ class SuggestionService:
         Execute a single vector search query (synchronous).
         
         Returns matches filtered by project_id.
+        
+        Note: We over-fetch significantly because with many projects having similar
+        columns, the top results may be spread across projects. The PROJECT prefix
+        in the query boosts same-project results, but we still filter to be certain.
         """
+        # Over-fetch multiplier: With N projects having similar columns,
+        # we need to fetch N * num_results to ensure we get enough from target project.
+        # Using 10x as a safe default for up to ~10 similar projects.
+        OVER_FETCH_MULTIPLIER = 10
+        
         try:
             results = self.workspace_client.vector_search_indexes.query_index(
                 index_name=index_name,
@@ -165,17 +174,22 @@ class SuggestionService:
                     "project_id"
                 ],
                 query_text=query_text,
-                num_results=num_results * 2  # Get extra to filter by project
+                num_results=num_results * OVER_FETCH_MULTIPLIER  # Fetch 10x to ensure coverage across many projects
             )
             
             matches = []
+            total_raw = 0
+            other_projects = 0
+            
             for item in results.result.data_array:
                 if len(item) >= 10:
+                    total_raw += 1
                     item_project_id = item[9]
                     score = item[-1] if isinstance(item[-1], (int, float)) else 0.0
                     
                     # Filter by project_id
                     if project_id is not None and item_project_id != project_id:
+                        other_projects += 1
                         continue
                     
                     match = {
@@ -194,6 +208,10 @@ class SuggestionService:
                     
                     if len(matches) >= num_results:
                         break
+            
+            # Log filter efficiency
+            if other_projects > 0:
+                print(f"[VS Single] Raw: {total_raw}, filtered out {other_projects} from other projects, kept {len(matches)} for project {project_id}")
             
             return matches
             
@@ -326,8 +344,11 @@ class SuggestionService:
             "filtered_results": []
         }
         
+        # Over-fetch multiplier for many projects with similar columns
+        OVER_FETCH_MULTIPLIER = 10
+        
         print(f"[VS Debug] Query: {query_with_project[:200]}...")
-        print(f"[VS Debug] Requesting {num_results * 3} results, filtering to project {project_id}")
+        print(f"[VS Debug] Requesting {num_results * OVER_FETCH_MULTIPLIER} results, filtering to project {project_id}")
         
         # Log equivalent Databricks SQL for debugging
         escaped_query = query_with_project.replace("'", "''")[:500]
@@ -361,7 +382,7 @@ LIMIT {num_results};
                     "project_id"
                 ],
                 query_text=query_with_project,
-                num_results=num_results * 3  # Get extra to filter by project after
+                num_results=num_results * OVER_FETCH_MULTIPLIER  # Fetch 10x to ensure coverage across many projects
             )
             
             print(f"[VS Debug] Raw results count: {len(results.result.data_array) if results.result.data_array else 0}")
