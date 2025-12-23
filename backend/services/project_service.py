@@ -63,7 +63,8 @@ class ProjectService:
             "target_table_status_table": db.target_table_status_table,
             "semantic_fields_table": db.semantic_fields_table,
             "unmapped_fields_table": db.unmapped_fields_table,
-            "mapping_suggestions_table": db.mapping_suggestions_table
+            "mapping_suggestions_table": db.mapping_suggestions_table,
+            "mapped_fields_table": db.mapped_fields_table
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):
@@ -783,13 +784,13 @@ class ProjectService:
         target_table_status_table: str,
         mapping_suggestions_table: str,
         unmapped_fields_table: str,
+        mapped_fields_table: str,
         project_id: int
     ) -> Dict[str, Any]:
         """
         Delete a project and all related data.
         
-        Deletes: target_table_status, mapping_suggestions
-        Updates: unmapped_fields (sets project_id to NULL)
+        Deletes: mapping_suggestions, target_table_status, unmapped_fields, mapped_fields, project
         """
         print(f"[Project Service] Deleting project: {project_id}")
         
@@ -797,24 +798,33 @@ class ProjectService:
         
         try:
             with connection.cursor() as cursor:
-                # Delete suggestions
+                # Delete suggestions first (references target_table_status)
                 cursor.execute(f"""
                     DELETE FROM {mapping_suggestions_table}
                     WHERE project_id = {project_id}
                 """)
+                print(f"[Project Service]   -> Deleted mapping_suggestions")
+                
+                # Delete mapped_fields (completed mappings)
+                cursor.execute(f"""
+                    DELETE FROM {mapped_fields_table}
+                    WHERE project_id = {project_id}
+                """)
+                print(f"[Project Service]   -> Deleted mapped_fields")
                 
                 # Delete target table status
                 cursor.execute(f"""
                     DELETE FROM {target_table_status_table}
                     WHERE project_id = {project_id}
                 """)
+                print(f"[Project Service]   -> Deleted target_table_status")
                 
-                # Unlink source fields (don't delete, just unlink)
+                # Delete source fields (they belong to this project)
                 cursor.execute(f"""
-                    UPDATE {unmapped_fields_table}
-                    SET project_id = NULL
+                    DELETE FROM {unmapped_fields_table}
                     WHERE project_id = {project_id}
                 """)
+                print(f"[Project Service]   -> Deleted unmapped_fields")
                 
                 # Delete project
                 cursor.execute(f"""
@@ -846,6 +856,7 @@ class ProjectService:
                 db_config["target_table_status_table"],
                 db_config["mapping_suggestions_table"],
                 db_config["unmapped_fields_table"],
+                db_config["mapped_fields_table"],
                 project_id
             )
         )

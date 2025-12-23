@@ -5,6 +5,8 @@
 -- This script creates a small test project with completed mappings
 -- to test the export functionality.
 --
+-- Based on actual MBR_FNDTN semantic fields from MEMBERFOUND.csv
+--
 -- Replace ${CATALOG_SCHEMA} with your catalog.schema (e.g., oz_dev.silver_dmes_de)
 -- ============================================================================
 
@@ -40,7 +42,7 @@ INSERT INTO ${CATALOG_SCHEMA}.mapping_projects (
 );
 
 -- Get the project ID (use this in subsequent queries)
--- You may need to query: SELECT MAX(project_id) FROM ${CATALOG_SCHEMA}.mapping_projects;
+-- SELECT MAX(project_id) as new_project_id FROM ${CATALOG_SCHEMA}.mapping_projects;
 
 
 -- ============================================================================
@@ -56,12 +58,12 @@ INSERT INTO ${CATALOG_SCHEMA}.unmapped_fields (
   src_physical_datatype, src_nullable, src_comments, domain,
   mapping_status, source_semantic_field
 ) VALUES
--- Test Person Table
-(PROJECT_ID, 'Test Person', 'TEST_PERSON', 'Person ID', 'PERSON_ID', 'BIGINT', 'NO', 'Unique identifier for the person', 'Member', 'MAPPED', 'PROJECT: PROJECT_ID | DESCRIPTION: Unique identifier for the person | TYPE: BIGINT | DOMAIN: Member'),
-(PROJECT_ID, 'Test Person', 'TEST_PERSON', 'First Name', 'FIRST_NAME', 'STRING', 'YES', 'First name of the person', 'Member', 'MAPPED', 'PROJECT: PROJECT_ID | DESCRIPTION: First name of the person | TYPE: STRING | DOMAIN: Member'),
-(PROJECT_ID, 'Test Person', 'TEST_PERSON', 'Last Name', 'LAST_NAME', 'STRING', 'YES', 'Last name of the person', 'Member', 'MAPPED', 'PROJECT: PROJECT_ID | DESCRIPTION: Last name of the person | TYPE: STRING | DOMAIN: Member'),
-(PROJECT_ID, 'Test Person', 'TEST_PERSON', 'Birth Date', 'BIRTH_DT', 'DATE', 'YES', 'Date of birth', 'Member', 'MAPPED', 'PROJECT: PROJECT_ID | DESCRIPTION: Date of birth | TYPE: DATE | DOMAIN: Member'),
-(PROJECT_ID, 'Test Person', 'TEST_PERSON', 'SSN', 'SSN_NUM', 'STRING', 'YES', 'Social security number (masked)', 'Member', 'MAPPED', 'PROJECT: PROJECT_ID | DESCRIPTION: Social security number (masked) | TYPE: STRING | DOMAIN: Member');
+-- Test Recipient Table - maps to MBR_FNDTN columns
+(PROJECT_ID, 'Recipient Base', 'T_RE_BASE', 'SAK Recip', 'SAK_RECIP', 'VARCHAR(32)', 'NO', 'Unique identifier for the recipient - maps to member key', 'Member', 'MAPPED', 'PROJECT: PROJECT_ID | DESCRIPTION: Unique identifier for the recipient - maps to member key | TYPE: VARCHAR(32) | DOMAIN: Member'),
+(PROJECT_ID, 'Recipient Base', 'T_RE_BASE', 'Source System', 'SRC_SYS', 'VARCHAR(20)', 'NO', 'Code identifying the source system', 'Member', 'MAPPED', 'PROJECT: PROJECT_ID | DESCRIPTION: Code identifying the source system | TYPE: VARCHAR(20) | DOMAIN: Member'),
+(PROJECT_ID, 'Recipient Base', 'T_RE_BASE', 'Current Record', 'CURR_REC', 'CHAR(1)', 'NO', 'Y/N indicator for current active record', 'Member', 'MAPPED', 'PROJECT: PROJECT_ID | DESCRIPTION: Y/N indicator for current active record | TYPE: CHAR(1) | DOMAIN: Member'),
+(PROJECT_ID, 'Recipient Base', 'T_RE_BASE', 'Created By', 'CREATED_BY', 'VARCHAR(10)', 'NO', 'User ID who created the record', 'Member', 'MAPPED', 'PROJECT: PROJECT_ID | DESCRIPTION: User ID who created the record | TYPE: VARCHAR(10) | DOMAIN: Member'),
+(PROJECT_ID, 'Recipient Base', 'T_RE_BASE', 'Created Date', 'CREATED_DT', 'TIMESTAMP', 'NO', 'Date and time when record was created', 'Member', 'MAPPED', 'PROJECT: PROJECT_ID | DESCRIPTION: Date and time when record was created | TYPE: TIMESTAMP | DOMAIN: Member');
 
 
 -- ============================================================================
@@ -80,37 +82,23 @@ INSERT INTO ${CATALOG_SCHEMA}.target_table_status (
   completed_by, completed_ts
 ) VALUES (
   PROJECT_ID,
-  'Member Foundation', 'MBR_FNDTN',
-  'Core member demographic information',
+  'MEMBER FOUNDATION', 'MBR_FNDTN',
+  'Core member foundation table with demographic and tracking information',
   'COMPLETE',
   5,
   5,
   5,
-  0.92,
+  0.93,
   'test@example.com', CURRENT_TIMESTAMP()
 );
 
 
 -- ============================================================================
--- STEP 4: Get Semantic Field IDs (run this to find IDs)
+-- STEP 4: Add Completed Mappings (mapped_fields)
 -- ============================================================================
+-- Uses actual semantic_field_ids from MEMBERFOUND.csv
 
--- SELECT semantic_field_id, tgt_table_physical_name, tgt_column_physical_name
--- FROM ${CATALOG_SCHEMA}.semantic_fields
--- WHERE tgt_table_physical_name = 'MBR_FNDTN'
--- LIMIT 10;
-
-
--- ============================================================================
--- STEP 5: Add Completed Mappings (mapped_fields)
--- ============================================================================
-
--- Note: Replace SEMANTIC_FIELD_ID with actual IDs from semantic_fields
--- and PROJECT_ID with the project ID from step 1
-
--- Example mappings (adjust semantic_field_id values):
-
--- Mapping 1: Member Key
+-- Mapping 1: SRC_KEY_ID (Source Key Id) - semantic_field_id: 56
 INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
   semantic_field_id,
   tgt_table_name, tgt_table_physical_name,
@@ -127,13 +115,13 @@ INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
   project_id,
   is_approved_pattern
 ) VALUES (
-  SEMANTIC_FIELD_ID_1,  -- Replace with actual ID
-  'Member Foundation', 'MBR_FNDTN',
-  'Member Key', 'MBR_KEY',
-  'SELECT p.PERSON_ID AS MBR_KEY FROM TEST_PERSON p',
-  'Test Person', 'TEST_PERSON',
-  'Person ID', 'PERSON_ID',
-  'Unique identifier for the person',
+  56,
+  'MEMBER FOUNDATION', 'MBR_FNDTN',
+  'Source Key Id', 'SRC_KEY_ID',
+  'SELECT CAST(r.SAK_RECIP AS VARCHAR(32)) AS SRC_KEY_ID FROM T_RE_BASE r WHERE r.CURR_REC = ''Y''',
+  'Recipient Base', 'T_RE_BASE',
+  'SAK Recip', 'SAK_RECIP',
+  'Unique identifier for the recipient - maps to member key',
   'SINGLE',
   0.95,
   'AI', true,
@@ -143,77 +131,7 @@ INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
   false
 );
 
--- Mapping 2: First Name
-INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
-  semantic_field_id,
-  tgt_table_name, tgt_table_physical_name,
-  tgt_column_name, tgt_column_physical_name,
-  source_expression,
-  source_tables, source_tables_physical,
-  source_columns, source_columns_physical,
-  source_descriptions,
-  source_relationship_type,
-  transformations_applied,
-  confidence_score,
-  mapping_source, ai_generated,
-  mapping_status,
-  mapped_by, mapped_ts,
-  project_id,
-  is_approved_pattern
-) VALUES (
-  SEMANTIC_FIELD_ID_2,  -- Replace with actual ID
-  'Member Foundation', 'MBR_FNDTN',
-  'First Name', 'FRST_NM',
-  'SELECT INITCAP(TRIM(p.FIRST_NAME)) AS FRST_NM FROM TEST_PERSON p',
-  'Test Person', 'TEST_PERSON',
-  'First Name', 'FIRST_NAME',
-  'First name of the person',
-  'SINGLE',
-  'INITCAP, TRIM',
-  0.92,
-  'AI', true,
-  'ACTIVE',
-  'test@example.com', CURRENT_TIMESTAMP(),
-  PROJECT_ID,
-  false
-);
-
--- Mapping 3: Last Name
-INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
-  semantic_field_id,
-  tgt_table_name, tgt_table_physical_name,
-  tgt_column_name, tgt_column_physical_name,
-  source_expression,
-  source_tables, source_tables_physical,
-  source_columns, source_columns_physical,
-  source_descriptions,
-  source_relationship_type,
-  transformations_applied,
-  confidence_score,
-  mapping_source, ai_generated,
-  mapping_status,
-  mapped_by, mapped_ts,
-  project_id,
-  is_approved_pattern
-) VALUES (
-  SEMANTIC_FIELD_ID_3,  -- Replace with actual ID
-  'Member Foundation', 'MBR_FNDTN',
-  'Last Name', 'LAST_NM',
-  'SELECT INITCAP(TRIM(p.LAST_NAME)) AS LAST_NM FROM TEST_PERSON p',
-  'Test Person', 'TEST_PERSON',
-  'Last Name', 'LAST_NAME',
-  'Last name of the person',
-  'SINGLE',
-  'INITCAP, TRIM',
-  0.91,
-  'AI', true,
-  'ACTIVE',
-  'test@example.com', CURRENT_TIMESTAMP(),
-  PROJECT_ID,
-  false
-);
-
--- Mapping 4: Birth Date
+-- Mapping 2: SRC_SYS_CD (Source System Code) - semantic_field_id: 58
 INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
   semantic_field_id,
   tgt_table_name, tgt_table_physical_name,
@@ -230,13 +148,13 @@ INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
   project_id,
   is_approved_pattern
 ) VALUES (
-  SEMANTIC_FIELD_ID_4,  -- Replace with actual ID
-  'Member Foundation', 'MBR_FNDTN',
-  'Birth Date', 'BRTH_DT',
-  'SELECT CAST(p.BIRTH_DT AS DATE) AS BRTH_DT FROM TEST_PERSON p',
-  'Test Person', 'TEST_PERSON',
-  'Birth Date', 'BIRTH_DT',
-  'Date of birth',
+  58,
+  'MEMBER FOUNDATION', 'MBR_FNDTN',
+  'Src_Sys_Cd', 'SRC_SYS_CD',
+  'SELECT UPPER(TRIM(r.SRC_SYS)) AS SRC_SYS_CD FROM T_RE_BASE r',
+  'Recipient Base', 'T_RE_BASE',
+  'Source System', 'SRC_SYS',
+  'Code identifying the source system',
   'SINGLE',
   0.94,
   'AI', true,
@@ -246,7 +164,7 @@ INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
   false
 );
 
--- Mapping 5: SSN (masked)
+-- Mapping 3: CURR_REC_IND (Current Record Indicator) - semantic_field_id: 60
 INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
   semantic_field_id,
   tgt_table_name, tgt_table_physical_name,
@@ -256,7 +174,6 @@ INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
   source_columns, source_columns_physical,
   source_descriptions,
   source_relationship_type,
-  transformations_applied,
   confidence_score,
   mapping_source, ai_generated,
   mapping_status,
@@ -264,16 +181,81 @@ INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
   project_id,
   is_approved_pattern
 ) VALUES (
-  SEMANTIC_FIELD_ID_5,  -- Replace with actual ID
-  'Member Foundation', 'MBR_FNDTN',
-  'SSN', 'SSN_TXT',
-  'SELECT CONCAT(''XXX-XX-'', RIGHT(p.SSN_NUM, 4)) AS SSN_TXT FROM TEST_PERSON p',
-  'Test Person', 'TEST_PERSON',
-  'SSN', 'SSN_NUM',
-  'Social security number (masked)',
+  60,
+  'MEMBER FOUNDATION', 'MBR_FNDTN',
+  'Curr_Rec_Ind', 'CURR_REC_IND',
+  'SELECT CASE WHEN r.CURR_REC = ''Y'' THEN ''Y'' ELSE ''N'' END AS CURR_REC_IND FROM T_RE_BASE r',
+  'Recipient Base', 'T_RE_BASE',
+  'Current Record', 'CURR_REC',
+  'Y/N indicator for current active record',
   'SINGLE',
-  'CONCAT, RIGHT',
-  0.88,
+  0.96,
+  'AI', true,
+  'ACTIVE',
+  'test@example.com', CURRENT_TIMESTAMP(),
+  PROJECT_ID,
+  false
+);
+
+-- Mapping 4: CRT_BY_USER_ID (Created By User) - semantic_field_id: 59
+INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
+  semantic_field_id,
+  tgt_table_name, tgt_table_physical_name,
+  tgt_column_name, tgt_column_physical_name,
+  source_expression,
+  source_tables, source_tables_physical,
+  source_columns, source_columns_physical,
+  source_descriptions,
+  source_relationship_type,
+  confidence_score,
+  mapping_source, ai_generated,
+  mapping_status,
+  mapped_by, mapped_ts,
+  project_id,
+  is_approved_pattern
+) VALUES (
+  59,
+  'MEMBER FOUNDATION', 'MBR_FNDTN',
+  'Crt_By_User_Id', 'CRT_BY_USER_ID',
+  'SELECT UPPER(TRIM(r.CREATED_BY)) AS CRT_BY_USER_ID FROM T_RE_BASE r',
+  'Recipient Base', 'T_RE_BASE',
+  'Created By', 'CREATED_BY',
+  'User ID who created the record',
+  'SINGLE',
+  0.92,
+  'AI', true,
+  'ACTIVE',
+  'test@example.com', CURRENT_TIMESTAMP(),
+  PROJECT_ID,
+  false
+);
+
+-- Mapping 5: CRT_DTTM (Created Datetime) - semantic_field_id: 61
+INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
+  semantic_field_id,
+  tgt_table_name, tgt_table_physical_name,
+  tgt_column_name, tgt_column_physical_name,
+  source_expression,
+  source_tables, source_tables_physical,
+  source_columns, source_columns_physical,
+  source_descriptions,
+  source_relationship_type,
+  confidence_score,
+  mapping_source, ai_generated,
+  mapping_status,
+  mapped_by, mapped_ts,
+  project_id,
+  is_approved_pattern
+) VALUES (
+  61,
+  'MEMBER FOUNDATION', 'MBR_FNDTN',
+  'Crt_Dt', 'CRT_DTTM',
+  'SELECT CAST(r.CREATED_DT AS TIMESTAMP) AS CRT_DTTM FROM T_RE_BASE r',
+  'Recipient Base', 'T_RE_BASE',
+  'Created Date', 'CREATED_DT',
+  'Date and time when record was created',
+  'SINGLE',
+  0.91,
   'AI', true,
   'ACTIVE',
   'test@example.com', CURRENT_TIMESTAMP(),
@@ -283,16 +265,36 @@ INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
 
 
 -- ============================================================================
--- STEP 6: Verify the Data
+-- STEP 5: Verify the Data
 -- ============================================================================
 
 -- Check project:
 -- SELECT * FROM ${CATALOG_SCHEMA}.mapping_projects WHERE project_name = 'Export Test Project';
 
+-- Check target table status:
+-- SELECT * FROM ${CATALOG_SCHEMA}.target_table_status WHERE project_id = PROJECT_ID;
+
 -- Check mappings:
--- SELECT mf.mapped_field_id, mf.tgt_column_physical_name, mf.source_expression, mf.confidence_score
+-- SELECT 
+--   mf.mapped_field_id, 
+--   mf.tgt_column_physical_name, 
+--   mf.source_expression, 
+--   mf.confidence_score,
+--   mf.mapping_status
 -- FROM ${CATALOG_SCHEMA}.mapped_fields mf
--- WHERE mf.project_id = PROJECT_ID;
+-- WHERE mf.project_id = PROJECT_ID
+-- ORDER BY mf.tgt_column_physical_name;
 
--- Now you can test the Export Mappings button on the project detail page!
-
+-- ============================================================================
+-- EXPECTED EXPORT OUTPUT
+-- ============================================================================
+-- When you export this project, you should see 5 mappings:
+--
+-- | Target Column    | Source Column | SQL Expression                                      |
+-- |------------------|---------------|-----------------------------------------------------|
+-- | SRC_KEY_ID       | SAK_RECIP     | SELECT CAST(r.SAK_RECIP...) AS SRC_KEY_ID           |
+-- | SRC_SYS_CD       | SRC_SYS       | SELECT UPPER(TRIM(r.SRC_SYS)) AS SRC_SYS_CD         |
+-- | CURR_REC_IND     | CURR_REC      | SELECT CASE WHEN r.CURR_REC... AS CURR_REC_IND      |
+-- | CRT_BY_USER_ID   | CREATED_BY    | SELECT UPPER(TRIM(r.CREATED_BY)) AS CRT_BY_USER_ID  |
+-- | CRT_DTTM         | CREATED_DT    | SELECT CAST(r.CREATED_DT AS TIMESTAMP) AS CRT_DTTM  |
+-- ============================================================================
