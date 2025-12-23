@@ -69,7 +69,7 @@ async def get_current_user_is_admin(request: Request) -> bool:
     email = await get_current_user_email(request)
     if not email:
         return False
-    return auth_service.is_user_admin(email)
+    return await auth_service.is_user_admin(email)
 
 
 def user_can_access_project(project: dict, user_email: Optional[str], is_admin: bool) -> bool:

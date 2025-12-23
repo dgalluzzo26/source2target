@@ -552,3 +552,30 @@ async def get_last_llm_prompt():
             "status": "no_prompt",
             "message": "No LLM prompt captured yet. Run discovery first."
         }
+
+
+@router.get("/debug/last-vector-search")
+async def get_last_vector_search():
+    """
+    Get the last vector search details for debugging.
+    
+    Shows:
+    - Query text sent to vector search
+    - Raw results before project_id filtering
+    - Filtered results after project_id filtering
+    - Scores for each result
+    
+    Returns:
+        Last vector search data or empty if none
+    """
+    vs_data = getattr(suggestion_service, '_last_vector_search', None)
+    if vs_data:
+        return {
+            "status": "ok",
+            "vector_search": vs_data
+        }
+    else:
+        return {
+            "status": "no_data",
+            "message": "No vector search captured yet. Run discovery first."
+        }

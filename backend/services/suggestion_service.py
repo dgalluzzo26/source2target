@@ -137,7 +137,50 @@ class SuggestionService:
         Searches unmapped_fields for fields matching the query description.
         Filters by project_id to only return user's source fields.
         """
-        print(f"[Suggestion Service] Vector search for: {query_text[:50]}...")
+        # Store for debugging
+        self._last_vector_search = {
+            "query_text": query_text,
+            "project_id": project_id,
+            "num_results": num_results,
+            "raw_results": [],
+            "filtered_results": []
+        }
+        
+        print(f"[VS Debug] Query length: {len(query_text)} chars")
+        print(f"[VS Debug] Query preview: {query_text[:200]}...")
+        print(f"[VS Debug] Requesting {num_results * 3} results, filtering to project {project_id}")
+        
+        # Log equivalent Databricks SQL for debugging
+        escaped_query = query_text.replace("'", "''")[:500]  # Escape and truncate for SQL
+        sql_equivalent = f"""
+-- Databricks SQL equivalent for vector search debugging:
+SELECT * FROM VECTOR_SEARCH(
+    index => '{index_name}',
+    query => '{escaped_query}',
+    num_results => {num_results * 3}
+)
+WHERE project_id = {project_id}
+ORDER BY score DESC
+LIMIT {num_results};
+
+-- Or using the table directly with ai_similarity_search:
+SELECT 
+    src_table_physical_name,
+    src_column_physical_name,
+    src_comments,
+    project_id
+FROM {index_name.replace('_index', '').replace('_vs', '')}
+WHERE project_id = {project_id}
+ORDER BY ai_similarity(
+    src_comments, 
+    '{escaped_query[:200]}'
+) DESC
+LIMIT {num_results};
+"""
+        print(f"[VS Debug] SQL Equivalent:\n{sql_equivalent}")
+        
+        # Store for debug endpoint
+        self._last_vector_search["sql_equivalent"] = sql_equivalent
         
         try:
             # Use vector search to find similar source fields
@@ -159,11 +202,25 @@ class SuggestionService:
                 num_results=num_results * 3  # Get extra to filter by project after
             )
             
+            print(f"[VS Debug] Raw results count: {len(results.result.data_array) if results.result.data_array else 0}")
+            
             matches = []
+            all_raw = []
+            
             for item in results.result.data_array:
                 # Parse the result based on column order
                 if len(item) >= 10:
                     item_project_id = item[9]
+                    score = item[-1] if isinstance(item[-1], (int, float)) else 0.0
+                    
+                    raw_match = {
+                        "column": f"{item[2]}.{item[4]}",
+                        "description": str(item[5])[:50] if item[5] else "",
+                        "project_id": item_project_id,
+                        "score": score
+                    }
+                    all_raw.append(raw_match)
+                    
                     # Filter by project_id after getting results
                     if project_id is not None and item_project_id != project_id:
                         continue
@@ -178,7 +235,7 @@ class SuggestionService:
                         "src_physical_datatype": item[6],
                         "domain": item[7],
                         "project_id": item[9],
-                        "score": item[-1] if isinstance(item[-1], (int, float)) else 0.0
+                        "score": score
                     }
                     matches.append(match)
                     
@@ -186,14 +243,28 @@ class SuggestionService:
                     if len(matches) >= num_results:
                         break
             
+            self._last_vector_search["raw_results"] = all_raw
+            
+            # Log what columns we found
+            print(f"[VS Debug] All raw results:")
+            for r in all_raw[:20]:
+                print(f"[VS Debug]   {r['column']} (proj={r['project_id']}, score={r['score']:.3f}): {r['description']}")
+            
             # Take top N results (in case we got more)
             matches = matches[:num_results]
-            print(f"[Suggestion Service] Found {len(matches)} matching source fields")
+            self._last_vector_search["filtered_results"] = [
+                {"column": f"{m['src_table_physical_name']}.{m['src_column_physical_name']}", "score": m['score']}
+                for m in matches
+            ]
+            
+            print(f"[VS Debug] After project filter: {len(matches)} matches")
             
             return matches
             
         except Exception as e:
             print(f"[Suggestion Service] Vector search error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             # Fall back to SQL-based search if vector search fails
             return []
     
@@ -305,7 +376,7 @@ class SuggestionService:
         # Identify silver tables (constant) from metadata or SQL
         silver_tables = metadata.get("silverTables", [])
         silver_text = "\n".join([
-            f"- {t.get('schema', 'silver')}.{t.get('name', '')} AS {t.get('alias', '')} (DO NOT CHANGE)"
+            f"- {t.get('physicalName', 'silver.*')} AS {t.get('alias', '')} (DO NOT CHANGE)"
             for t in silver_tables
         ]) if silver_tables else "Silver tables: Keep any tables from 'silver_*' schemas unchanged"
         
@@ -802,6 +873,40 @@ RULES:
                                 num_results=5
                             )
                             print(f"[Suggestion Service]   -> SQL fallback: {time.time() - sql_start:.2f}s, found {len(matched_sources) if matched_sources else 0}")
+                        
+                        # Supplementary: Search for columns by name pattern from join_metadata
+                        # This catches columns that vector search might miss due to semantic distance
+                        if join_metadata_str and matched_sources:
+                            try:
+                                jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
+                                pattern_columns = [col.get('originalColumn', '') for col in jm.get('userColumnsToMap', [])]
+                                matched_col_names = {m.get('src_column_physical_name', '').upper() for m in matched_sources}
+                                
+                                # Find pattern columns not yet matched
+                                missing_patterns = [pc for pc in pattern_columns if pc and pc.upper() not in matched_col_names]
+                                
+                                if missing_patterns:
+                                    print(f"[Suggestion Service]   -> Pattern columns not matched: {missing_patterns}")
+                                    # Do targeted SQL search for similar column names
+                                    for pattern_col in missing_patterns[:5]:  # Limit to 5
+                                        extra_matches = self._sql_search_source_fields_sync(
+                                            db_config["server_hostname"],
+                                            db_config["http_path"],
+                                            db_config["unmapped_fields_table"],
+                                            pattern_col,  # Search by column name
+                                            project_id,
+                                            num_results=3
+                                        )
+                                        if extra_matches:
+                                            # Add new matches that aren't already present
+                                            for em in extra_matches:
+                                                em_col = em.get('src_column_physical_name', '').upper()
+                                                if em_col not in matched_col_names:
+                                                    matched_sources.append(em)
+                                                    matched_col_names.add(em_col)
+                                                    print(f"[Suggestion Service]   -> Added: {em.get('src_table_physical_name')}.{em_col} for pattern col {pattern_col}")
+                            except Exception as e:
+                                print(f"[Suggestion Service] Error in supplementary search: {e}")
                         
                         if matched_sources:
                             # Store matched source fields
