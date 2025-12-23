@@ -982,29 +982,62 @@ async function pollForDiscovery(tableId: number) {
   // Clear the starting state - now we're in polling mode
   startingDiscoveryTableId.value = null
   
-  // Poll every 5 seconds for up to 5 minutes
-  const maxAttempts = 60
+  // Poll every 3 seconds for up to 10 minutes
+  const maxAttempts = 200
   let attempts = 0
   
-  const interval = setInterval(async () => {
+  const poll = async () => {
     attempts++
-    await projectsStore.fetchTargetTables(projectId.value)
     
-    const table = targetTables.value.find(t => t.target_table_status_id === tableId)
-    
-    if (!table || table.mapping_status !== 'DISCOVERING' || attempts >= maxAttempts) {
-      clearInterval(interval)
+    try {
+      await projectsStore.fetchTargetTables(projectId.value)
       
-      if (table?.mapping_status === 'SUGGESTIONS_READY') {
+      // Small delay to let Vue reactivity process the update
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      const table = targetTables.value.find(t => t.target_table_status_id === tableId)
+      
+      if (!table || table.mapping_status !== 'DISCOVERING') {
+        // Discovery complete or table removed
+        if (table?.mapping_status === 'SUGGESTIONS_READY') {
+          toast.add({ 
+            severity: 'success', 
+            summary: 'Discovery Complete', 
+            detail: `${table.tgt_table_name} has ${table.columns_pending_review} suggestions ready for review`,
+            life: 5000 
+          })
+        } else if (table?.mapping_status === 'NOT_STARTED') {
+          // Discovery may have errored out
+          toast.add({ 
+            severity: 'warn', 
+            summary: 'Discovery Stopped', 
+            detail: `Discovery for ${table.tgt_table_name} was stopped. Check logs for details.`,
+            life: 5000 
+          })
+        }
+        return // Stop polling
+      }
+      
+      if (attempts >= maxAttempts) {
         toast.add({ 
-          severity: 'success', 
-          summary: 'Discovery Complete', 
-          detail: `${table.tgt_table_name} has ${table.columns_pending_review} suggestions ready for review`,
+          severity: 'warn', 
+          summary: 'Discovery Timeout', 
+          detail: 'Discovery is taking longer than expected. Please refresh the page.',
           life: 5000 
         })
+        return // Stop polling
       }
+      
+      // Continue polling
+      setTimeout(poll, 3000)
+    } catch (e) {
+      console.error('Poll error:', e)
+      setTimeout(poll, 5000) // Retry with longer delay on error
     }
-  }, 5000)
+  }
+  
+  // Start polling
+  setTimeout(poll, 3000)
 }
 
 function handleReviewTable(table: TargetTableStatus) {

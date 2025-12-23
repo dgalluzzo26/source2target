@@ -590,9 +590,10 @@ RULES:
 6. Keep all transformations (TRIM, INITCAP, CONCAT, etc.)
 
 WARNINGS RULES:
-- ONLY add warnings for columns from bronze/source tables that you cannot match
-- NEVER add warnings for columns from silver tables (any table with "silver" in the name/path)
-- NEVER add warnings for table names or aliases
+- ONLY warn about PATTERN columns (columns in the original SQL template) that you could NOT find a matching source column for
+- Do NOT warn about extra source columns that were provided but not needed
+- NEVER warn about silver table columns (any table with "silver" in the path)
+- Pattern columns to match are ONLY those from bronze tables in the original SQL, NOT the source columns provided
 
 Return ONLY valid JSON with this structure:
 {{
