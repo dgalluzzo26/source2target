@@ -1,2 +1,0 @@
-unmapped_field_id,src_table_name,src_column_name,src_table_physical_name,src_column_physical_name,src_nullable,src_physical_datatype,src_comments,domain,uploaded_by,uploaded_ts,created_by,created_ts,updated_by,updated_ts
-47,Current Members,Current First Name,curr_mbr,curr_firstName,YES,VARCHAR(75),First name of the managing employee.,MEMBER,david.galluzzo@gainwelltechnologies.com,2025-12-08T23:10:58.413Z,system,2025-12-08T23:10:58.419Z,null,null

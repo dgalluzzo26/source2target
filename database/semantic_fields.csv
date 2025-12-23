@@ -1,3 +1,0 @@
-semantic_field
-TABLE: MANAGING EMPLOYEE | COLUMN: First Name | TYPE: VARCHAR(50) | DESCRIPTION: First name of the managing employee. | DOMAIN: MANAGING
-TABLE: MANAGING EMPLOYEE | COLUMN: Middle Name Initial | TYPE: CHAR(1) | DESCRIPTION: Middle initial of the managing employee | DOMAIN: MANAGING

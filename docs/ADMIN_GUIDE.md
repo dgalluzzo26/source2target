@@ -33,7 +33,7 @@ As a Smart Mapper V4 administrator, you are responsible for:
 Admins are identified by:
 - Green **"Admin"** badge in the header
 - Access to **Administration** section in sidebar
-- Membership in the configured admin group
+- Email listed in the configured admin users list (Settings → Security)
 
 ### V4 Key Changes from V3
 
@@ -641,98 +641,96 @@ CALL oztest_dev.smartmapper.sp_approve_mapping_as_pattern(
 
 ---
 
-## Loading Historical Mappings
+## Loading Historical Mappings (Pattern Import)
 
 ### Purpose
 
-Load past migration mappings as patterns for the AI to learn from.
+Load past migration mappings as patterns for the AI to learn from. The **Pattern Import** feature in the UI provides a guided workflow for this.
 
-### Step 1: Prepare Data
+### Using Pattern Import (Recommended)
 
-Create a CSV or table with historical mappings:
+1. Navigate to **Administration** → **Pattern Import**
+2. **Step 1 - Upload**: Upload a CSV file with historical mappings
+3. **Step 2 - Map Columns**: Map your CSV columns to required fields
+4. **Step 3 - Process**: AI analyzes patterns and generates join_metadata
+5. **Step 4 - Review**: Review processed patterns before saving
+6. **Step 5 - Save**: Save patterns to the mapped_fields table
 
-| Column | Description |
-|--------|-------------|
-| tgt_table_name | Target table logical name |
-| tgt_column_name | Target column logical name |
-| source_expression | Complete SQL expression |
-| source_tables | Pipe-separated source tables |
-| source_columns | Pipe-separated source columns |
-| source_descriptions | Descriptions for semantic field |
-| join_metadata | JSON structure for complex patterns |
+### CSV Format
 
-### Step 2: Load into Staging
+Your CSV should include these columns:
 
-Upload CSV to Unity Catalog as a table:
+| Column | Required | Description |
+|--------|----------|-------------|
+| `tgt_table_name` | ✅ | Target table name (e.g., "MBR_CNTCT") |
+| `tgt_column_name` | ✅ | Target column name (e.g., "ADDR_1_TXT") |
+| `source_expression` | ✅ | Complete SQL expression |
+| `source_tables` | Optional | Pipe-separated source tables |
+| `source_columns` | Optional | Pipe-separated source columns |
+| `join_column_descriptions` | Optional | Descriptions for join/filter columns |
+
+### Special Case Handling
+
+The Pattern Import automatically handles special source expressions:
+
+| Source Expression | Pattern Type | Behavior |
+|-------------------|--------------|----------|
+| `Auto Generated` | AUTO_GENERATED | No SQL generated, marked as auto-mapped |
+| `Hard coded as NULL` | HARDCODED | Generates `SELECT NULL AS column` |
+| `Hard coded as 'value'` | HARDCODED | Generates `SELECT 'value' AS column` |
+| `N/A` | NOT_APPLICABLE | Marked for review, may not need mapping |
+
+### Manual SQL Loading (Alternative)
+
+For bulk loading via SQL:
+
 ```sql
-CREATE TABLE oztest_dev.smartmapper.historical_mappings_staging
-USING CSV
-OPTIONS (header = true, path = '/path/to/historical_mappings.csv');
-```
-
-### Step 3: Insert as Patterns
-
-```sql
-INSERT INTO oztest_dev.smartmapper.mapped_fields (
+INSERT INTO ${CATALOG_SCHEMA}.mapped_fields (
   semantic_field_id,
+  tgt_table_name, tgt_table_physical_name,
+  tgt_column_name, tgt_column_physical_name,
   source_expression,
-  source_tables,
-  source_columns,
-  source_descriptions,
-  source_semantic_field,
+  source_tables, source_tables_physical,
+  source_columns, source_columns_physical,
   join_metadata,
-  mapping_status,
-  mapping_source,
-  project_id,
-  is_approved_pattern,
-  pattern_approved_by,
-  pattern_approved_ts,
-  mapped_by,
-  mapped_ts
+  mapping_status, mapping_source,
+  is_approved_pattern, pattern_approved_by, pattern_approved_ts,
+  mapped_by, mapped_ts
 )
 SELECT 
   sf.semantic_field_id,
+  sf.tgt_table_name, sf.tgt_table_physical_name,
+  sf.tgt_column_name, sf.tgt_column_physical_name,
   h.source_expression,
-  h.source_tables,
-  h.source_columns,
-  h.source_descriptions,
-  CONCAT(
-    'SOURCE TABLES: ', COALESCE(h.source_tables, ''),
-    ' | SOURCE COLUMNS: ', COALESCE(h.source_columns, ''),
-    ' | DESCRIPTIONS: ', COALESCE(h.source_descriptions, '')
-  ) AS source_semantic_field,
+  h.source_tables, h.source_tables,
+  h.source_columns, h.source_columns,
   h.join_metadata,
-  'ACTIVE',
-  'BULK_UPLOAD',
-  NULL,  -- No project = global pattern
-  TRUE,  -- Mark as approved pattern
-  'admin@example.com',
-  CURRENT_TIMESTAMP(),
-  'admin@example.com',
-  CURRENT_TIMESTAMP()
-FROM historical_mappings_staging h
+  'ACTIVE', 'BULK_UPLOAD',
+  TRUE, 'admin@example.com', CURRENT_TIMESTAMP(),
+  'admin@example.com', CURRENT_TIMESTAMP()
+FROM your_staging_table h
 JOIN semantic_fields sf 
-  ON h.tgt_table_name = sf.tgt_table_name 
-  AND h.tgt_column_name = sf.tgt_column_name;
-```
-
-### Step 4: Sync Vector Index
-
-After loading patterns, sync the vector search index:
-```sql
--- The system auto-syncs, but you can force it:
-REFRESH VECTOR SEARCH INDEX oztest_dev.smartmapper.mapped_fields_vs;
+  ON UPPER(h.tgt_table_name) = UPPER(sf.tgt_table_physical_name) 
+  AND UPPER(h.tgt_column_name) = UPPER(sf.tgt_column_physical_name);
 ```
 
 ---
 
 ## User & Team Management
 
-### Admin Group Configuration
+### Admin Users Configuration
 
 1. Navigate to **Settings** → **Security**
-2. Set **Admin Group Name** to your Databricks workspace group
-3. Users in this group see "Admin" badge and access Administration menu
+2. Edit the **Admin Users** list - add email addresses of users who should have admin access
+3. Users in this list see "Admin" badge and access Administration menu
+
+**Example admin users:**
+```
+david.galluzzo@gainwelltechnologies.com
+jane.doe@gainwelltechnologies.com
+```
+
+> **Note**: The legacy "Admin Group Name" field is still present but admin users list takes precedence.
 
 ### Project Team Access
 
@@ -905,13 +903,30 @@ GROUP BY tgt_table_name;
 
 ### Authentication
 - Users authenticated via **Databricks OAuth**
-- Email captured from `X-Forwarded-Email` header
+- Email captured from `X-Forwarded-Email` header (or `X-User-Email` from frontend)
 - No separate login required
 
 ### Authorization
-- Admin access via **Databricks group membership**
+- Admin access via **configured admin users list** (Settings → Security)
 - Project access via `created_by` or `team_members`
 - Stored procedures use `SQL SECURITY INVOKER`
+
+### Admin Users Configuration
+
+Admin access is controlled by a list of email addresses in `app_config.json`:
+
+```json
+{
+  "security": {
+    "admin_users": [
+      "david.galluzzo@gainwelltechnologies.com",
+      "jane.doe@company.com"
+    ]
+  }
+}
+```
+
+This can also be edited in the UI: **Settings** → **Security** → **Admin Users**
 
 ### Data Access
 - Users see only projects they own or are team members of
@@ -937,10 +952,9 @@ GROUP BY tgt_table_name;
 - **Architecture**: [architecture/TARGET_FIRST_WORKFLOW.md](architecture/TARGET_FIRST_WORKFLOW.md)
 
 ### Database Files
-- **V4 Schema**: `database/V4_TARGET_FIRST_SCHEMA.sql`
-- **Stored Procedures**: `database/V4_STORED_PROCEDURES.sql`
-- **Test Data**: `database/V4_TEST_DATA.sql`
-- **Load Historical**: `database/V4_LOAD_HISTORICAL_MAPPINGS.sql`
+- **V4 Schema**: `database/V4_TARGET_FIRST_SCHEMA.sql` - Core schema for projects, tables, suggestions
+- **Mapped Fields Updates**: `database/V4_MAPPED_FIELDS_RECREATE.sql` - Pattern approval columns
+- **Unmapped Fields**: `database/V4_UNMAPPED_FIELDS_WITH_PROJECT.sql` - Project-aware source fields
 
 ---
 

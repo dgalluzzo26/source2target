@@ -253,7 +253,7 @@ Click **"Review Suggestions"** to proceed.
 
 ### Suggestion Panel Layout
 
-Each suggestion shows:
+Suggestions are displayed sorted alphabetically by column name. Each suggestion shows:
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -276,6 +276,16 @@ Each suggestion shows:
 │ [✓ Approve] [✎ Edit] [✗ Reject] [→ Skip]                      │
 └────────────────────────────────────────────────────────────────┘
 ```
+
+### Special Case Suggestions
+
+Some patterns are auto-handled based on their source expression:
+
+| Pattern Type | What It Means | Suggested Action |
+|--------------|---------------|------------------|
+| **AUTO_MAPPED** | Field is auto-generated (e.g., identity column) | No SQL needed, just approve |
+| **HARDCODED** | Fixed value like `NULL` or a constant | Review the value, approve if correct |
+| **N/A** | Field not applicable for this migration | Review and skip if not needed |
 
 ### Understanding Confidence Scores
 
