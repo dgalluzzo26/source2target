@@ -1007,16 +1007,16 @@ RULES:
                                 pattern_type = jm.get('patternType', '')
                                 mapping_action = jm.get('mappingAction', '')
                                 
-                            if pattern_type == 'AUTO_GENERATED':
-                                is_special_case = True
-                                print(f"[Suggestion Service] Special case: AUTO_GENERATED - auto-mapping (no SQL needed)")
-                                suggestion_data["suggested_sql"] = None  # No SQL needed - field auto-populates on INSERT
-                                suggestion_data["sql_changes"] = json.dumps([{"type": "auto_generated", "description": "Column auto-populated on insert - no mapping required"}])
-                                suggestion_data["confidence_score"] = 1.0
-                                suggestion_data["ai_reasoning"] = "AUTO-GENERATED FIELD: This column is automatically populated by the database on INSERT (identity, sequence, timestamp, or computed column). No source mapping or SQL is required."
-                                suggestion_data["warnings"] = json.dumps([])
-                                suggestion_data["suggestion_status"] = "AUTO_MAPPED"  # Special status for auto-generated
-                                suggestion_data["matched_source_fields"] = json.dumps([])
+                                if pattern_type == 'AUTO_GENERATED':
+                                    is_special_case = True
+                                    print(f"[Suggestion Service] Special case: AUTO_GENERATED - auto-mapping (no SQL needed)")
+                                    suggestion_data["suggested_sql"] = None  # No SQL needed - field auto-populates on INSERT
+                                    suggestion_data["sql_changes"] = json.dumps([{"type": "auto_generated", "description": "Column auto-populated on insert - no mapping required"}])
+                                    suggestion_data["confidence_score"] = 1.0
+                                    suggestion_data["ai_reasoning"] = "AUTO-GENERATED FIELD: This column is automatically populated by the database on INSERT (identity, sequence, timestamp, or computed column). No source mapping or SQL is required."
+                                    suggestion_data["warnings"] = json.dumps([])
+                                    suggestion_data["suggestion_status"] = "AUTO_MAPPED"  # Special status for auto-generated
+                                    suggestion_data["matched_source_fields"] = json.dumps([])
                                     
                                 elif pattern_type == 'HARDCODED':
                                     is_special_case = True
