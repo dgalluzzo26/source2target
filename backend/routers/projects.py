@@ -265,29 +265,41 @@ async def delete_project(project_id: int, request: Request):
     
     Access Control: User must be creator or admin (team members cannot delete).
     """
+    print(f"[Projects Router] DELETE request received for project_id={project_id}")
+    
     try:
         # Check access - only creator or admin can delete
         project = await project_service.get_project_by_id(project_id)
         if not project:
+            print(f"[Projects Router] Project {project_id} not found - returning 404")
             raise HTTPException(status_code=404, detail="Project not found")
+        
+        print(f"[Projects Router] Project found: {project.get('project_name')}")
         
         user_email = await get_current_user_email(request)
         is_admin = await get_current_user_is_admin(request)
         
+        print(f"[Projects Router] User: {user_email}, is_admin: {is_admin}")
+        
         # For delete, only creator or admin (not just team member)
         created_by = (project.get("created_by") or "").lower()
         if not is_admin and (not user_email or created_by != user_email):
+            print(f"[Projects Router] Permission denied - created_by: {created_by}, user: {user_email}")
             raise HTTPException(
                 status_code=403, 
                 detail="Only the project creator or admin can delete a project"
             )
         
+        print(f"[Projects Router] Permission granted, deleting project {project_id}")
         result = await project_service.delete_project(project_id)
+        print(f"[Projects Router] Delete result: {result}")
         return result
     except HTTPException:
         raise
     except Exception as e:
         print(f"[Projects Router] Error deleting project: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

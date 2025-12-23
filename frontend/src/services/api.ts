@@ -590,9 +590,7 @@ const api = {
   async get<T = any>(endpoint: string): Promise<{ data: T }> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
     })
 
     // Handle 304 Not Modified - return empty array/object (cached response)
@@ -621,9 +619,7 @@ const api = {
   async post<T = any>(endpoint: string, body: any): Promise<{ data: T }> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify(body),
     })
 
@@ -648,9 +644,7 @@ const api = {
   async put<T = any>(endpoint: string, body: any): Promise<{ data: T }> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify(body),
     })
 
@@ -675,9 +669,7 @@ const api = {
   async delete<T = any>(endpoint: string): Promise<{ data: T }> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
     })
 
     if (!response.ok) {
