@@ -1255,6 +1255,27 @@ RULES:
                     """)
                     
                     suggestions_created += 1
+                    
+                    # Track status for final counts
+                    status = suggestion_data['suggestion_status']
+                    if status == 'AUTO_MAPPED':
+                        # AUTO_MAPPED counts as mapped
+                        pass
+                    elif status == 'NO_MATCH':
+                        pass  # already counted above
+                    elif status == 'NO_PATTERN':
+                        pass  # already counted above
+                    
+                    # Incremental progress update (every column)
+                    current_pending = suggestions_created - no_pattern - no_match
+                    cursor.execute(f"""
+                        UPDATE {db_config['target_table_status_table']}
+                        SET 
+                            columns_with_pattern = {patterns_found},
+                            columns_pending_review = {current_pending},
+                            columns_no_match = {no_match}
+                        WHERE target_table_status_id = {target_table_status_id}
+                    """)
                 
                 # Update table status
                 pending_count = suggestions_created - no_pattern - no_match
