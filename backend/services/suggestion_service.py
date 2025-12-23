@@ -123,6 +123,62 @@ def clean_llm_json(text: str) -> str:
     return ''.join(result)
 
 
+def filter_false_positive_warnings(warnings: List[str], changes: List[Dict[str, Any]]) -> List[str]:
+    """
+    Filter out warnings that mention columns which were actually successfully replaced.
+    
+    LLMs sometimes incorrectly list columns as "not found" even though they appear
+    in the changes array as successfully replaced. This filters those out.
+    
+    Args:
+        warnings: List of warning strings from LLM
+        changes: List of change objects with 'original', 'new', 'type' fields
+        
+    Returns:
+        Filtered list of warnings
+    """
+    if not warnings or not changes:
+        return warnings
+    
+    # Build set of column names that were successfully replaced (case-insensitive)
+    replaced_columns = set()
+    for change in changes:
+        if change.get("type") == "column_replace" or change.get("new"):
+            original = change.get("original", "")
+            # Extract just the column name (handle TABLE.COLUMN format)
+            if "." in original:
+                original = original.split(".")[-1]
+            if original:
+                replaced_columns.add(original.upper())
+    
+    if not replaced_columns:
+        return warnings
+    
+    # Filter out warnings that mention successfully replaced columns
+    filtered_warnings = []
+    for warning in warnings:
+        warning_upper = warning.upper()
+        # Check if any replaced column is mentioned in this warning
+        is_false_positive = False
+        for col in replaced_columns:
+            # Check various patterns: column name alone or with table prefix
+            if col in warning_upper:
+                # Make sure it's a word boundary match (not part of another word)
+                import re
+                pattern = r'\b' + re.escape(col) + r'\b'
+                if re.search(pattern, warning_upper):
+                    is_false_positive = True
+                    break
+        
+        if not is_false_positive:
+            filtered_warnings.append(warning)
+    
+    if len(warnings) != len(filtered_warnings):
+        print(f"[Suggestion Service] Filtered {len(warnings) - len(filtered_warnings)} false positive warnings")
+    
+    return filtered_warnings
+
+
 class SuggestionService:
     """Service for generating and managing AI mapping suggestions."""
     
@@ -1278,11 +1334,16 @@ RULES:
                                 )
                                 print(f"[Suggestion Service]   -> LLM rewrite: {time.time() - llm_start:.2f}s")
                                 
+                                # Filter out false positive warnings (columns listed as missing but actually replaced)
+                                changes = rewrite_result.get("changes", [])
+                                raw_warnings = rewrite_result.get("warnings", [])
+                                filtered_warnings = filter_false_positive_warnings(raw_warnings, changes)
+                                
                                 suggestion_data["suggested_sql"] = rewrite_result.get("rewritten_sql")
-                                suggestion_data["sql_changes"] = json.dumps(rewrite_result.get("changes", []))
+                                suggestion_data["sql_changes"] = json.dumps(changes)
                                 suggestion_data["confidence_score"] = rewrite_result.get("confidence", 0.5)
                                 suggestion_data["ai_reasoning"] = rewrite_result.get("reasoning", "")
-                                suggestion_data["warnings"] = json.dumps(rewrite_result.get("warnings", []))
+                                suggestion_data["warnings"] = json.dumps(filtered_warnings)
                                 suggestion_data["suggestion_status"] = "PENDING"
                             else:
                                 # Pattern found but no matching sources
@@ -1696,11 +1757,16 @@ RULES:
                                 tgt_column_physical
                             )
                             
+                            # Filter out false positive warnings (columns listed as missing but actually replaced)
+                            changes = rewrite_result.get("changes", [])
+                            raw_warnings = rewrite_result.get("warnings", [])
+                            filtered_warnings = filter_false_positive_warnings(raw_warnings, changes)
+                            
                             new_suggestion_data["suggested_sql"] = rewrite_result.get("rewritten_sql")
-                            new_suggestion_data["sql_changes"] = json.dumps(rewrite_result.get("changes", []))
+                            new_suggestion_data["sql_changes"] = json.dumps(changes)
                             new_suggestion_data["confidence_score"] = rewrite_result.get("confidence", 0.5)
                             new_suggestion_data["ai_reasoning"] = rewrite_result.get("reasoning", "")
-                            new_suggestion_data["warnings"] = json.dumps(rewrite_result.get("warnings", []))
+                            new_suggestion_data["warnings"] = json.dumps(filtered_warnings)
                             new_suggestion_data["suggestion_status"] = "PENDING"
                         else:
                             new_suggestion_data["suggestion_status"] = "NO_MATCH"

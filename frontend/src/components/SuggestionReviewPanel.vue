@@ -844,7 +844,42 @@ function getMatchedFields(suggestion: MappingSuggestion): MatchedSourceField[] {
 function getWarnings(suggestion: MappingSuggestion): string[] {
   if (!suggestion.warnings) return []
   try {
-    return JSON.parse(suggestion.warnings)
+    const warnings = JSON.parse(suggestion.warnings) as string[]
+    if (!warnings || warnings.length === 0) return []
+    
+    // Get the changes to filter out false positives
+    const changes = getChanges(suggestion)
+    if (!changes || changes.length === 0) return warnings
+    
+    // Build set of successfully replaced columns (case-insensitive)
+    const replacedColumns = new Set<string>()
+    for (const change of changes) {
+      if (change.type === 'column_replace' || change.new) {
+        let original = change.original || ''
+        // Extract just column name if TABLE.COLUMN format
+        if (original.includes('.')) {
+          original = original.split('.').pop() || original
+        }
+        if (original) {
+          replacedColumns.add(original.toUpperCase())
+        }
+      }
+    }
+    
+    if (replacedColumns.size === 0) return warnings
+    
+    // Filter out warnings that mention successfully replaced columns
+    return warnings.filter(warning => {
+      const warningUpper = warning.toUpperCase()
+      for (const col of replacedColumns) {
+        // Check if column is mentioned with word boundaries
+        const regex = new RegExp(`\\b${col}\\b`, 'i')
+        if (regex.test(warningUpper)) {
+          return false // This is a false positive, filter it out
+        }
+      }
+      return true
+    })
   } catch {
     return []
   }
