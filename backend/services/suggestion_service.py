@@ -123,35 +123,214 @@ class SuggestionService:
     # VECTOR SEARCH: Find matching source fields
     # =========================================================================
     
-    def _vector_search_source_fields_sync(
+    def _build_vs_query(self, description: str, project_id: int, column_name: str = "") -> str:
+        """
+        Build a vector search query string with project context.
+        
+        Format: PROJECT: {id} | DESCRIPTION: {desc} | COLUMN: {name}
+        This format matches the indexed source_semantic_field for better similarity.
+        """
+        parts = [f"PROJECT: {project_id}"]
+        if description:
+            parts.append(f"DESCRIPTION: {description}")
+        if column_name:
+            parts.append(f"COLUMN: {column_name}")
+        return " | ".join(parts)
+    
+    def _vector_search_single_query_sync(
         self,
-        endpoint_name: str,
         index_name: str,
         query_text: str,
         project_id: int,
         num_results: int = 5
     ) -> List[Dict[str, Any]]:
         """
+        Execute a single vector search query (synchronous).
+        
+        Returns matches filtered by project_id.
+        """
+        try:
+            results = self.workspace_client.vector_search_indexes.query_index(
+                index_name=index_name,
+                columns=[
+                    "unmapped_field_id",
+                    "src_table_name",
+                    "src_table_physical_name", 
+                    "src_column_name",
+                    "src_column_physical_name",
+                    "src_comments",
+                    "src_physical_datatype",
+                    "domain",
+                    "source_semantic_field",
+                    "project_id"
+                ],
+                query_text=query_text,
+                num_results=num_results * 2  # Get extra to filter by project
+            )
+            
+            matches = []
+            for item in results.result.data_array:
+                if len(item) >= 10:
+                    item_project_id = item[9]
+                    score = item[-1] if isinstance(item[-1], (int, float)) else 0.0
+                    
+                    # Filter by project_id
+                    if project_id is not None and item_project_id != project_id:
+                        continue
+                    
+                    match = {
+                        "unmapped_field_id": item[0],
+                        "src_table_name": item[1],
+                        "src_table_physical_name": item[2],
+                        "src_column_name": item[3],
+                        "src_column_physical_name": item[4],
+                        "src_comments": item[5],
+                        "src_physical_datatype": item[6],
+                        "domain": item[7],
+                        "project_id": item[9],
+                        "score": score
+                    }
+                    matches.append(match)
+                    
+                    if len(matches) >= num_results:
+                        break
+            
+            return matches
+            
+        except Exception as e:
+            print(f"[VS] Single query error: {e}")
+            return []
+    
+    def _vector_search_parallel_sync(
+        self,
+        index_name: str,
+        columns_to_search: List[Dict[str, str]],
+        project_id: int,
+        num_results_per_column: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Execute parallel vector searches for multiple columns.
+        
+        Args:
+            index_name: Vector search index name
+            columns_to_search: List of {description, column_name, role} dicts
+            project_id: Project ID to filter results
+            num_results_per_column: Results per search
+            
+        Returns:
+            Merged and deduplicated list of matches
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        print(f"[VS Parallel] Starting {len(columns_to_search)} parallel searches for project {project_id}")
+        
+        all_matches = []
+        seen_ids = set()
+        
+        # Store for debugging
+        self._last_parallel_searches = []
+        
+        def search_column(col_info: Dict[str, str]) -> List[Dict[str, Any]]:
+            """Search for a single column."""
+            query = self._build_vs_query(
+                col_info.get('description', ''),
+                project_id,
+                col_info.get('column_name', '')
+            )
+            results = self._vector_search_single_query_sync(
+                index_name, query, project_id, num_results_per_column
+            )
+            return {
+                "query": query,
+                "role": col_info.get('role', 'unknown'),
+                "results": results
+            }
+        
+        # Execute searches in parallel using ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(len(columns_to_search), 5)) as executor:
+            futures = {executor.submit(search_column, col): col for col in columns_to_search}
+            
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    self._last_parallel_searches.append({
+                        "query": result["query"],
+                        "role": result["role"],
+                        "count": len(result["results"]),
+                        "columns": [f"{r['src_table_physical_name']}.{r['src_column_physical_name']}" for r in result["results"][:3]]
+                    })
+                    
+                    # Merge results, avoiding duplicates
+                    for match in result["results"]:
+                        field_id = match["unmapped_field_id"]
+                        if field_id not in seen_ids:
+                            seen_ids.add(field_id)
+                            all_matches.append(match)
+                            
+                except Exception as e:
+                    print(f"[VS Parallel] Search error: {e}")
+        
+        # Sort by score descending
+        all_matches.sort(key=lambda x: x.get('score', 0), reverse=True)
+        
+        print(f"[VS Parallel] Completed: {len(all_matches)} unique matches from {len(columns_to_search)} searches")
+        for search_result in self._last_parallel_searches:
+            print(f"[VS Parallel]   {search_result['role']}: {search_result['count']} results - {search_result['columns']}")
+        
+        return all_matches
+    
+    def _vector_search_source_fields_sync(
+        self,
+        endpoint_name: str,
+        index_name: str,
+        query_text: str,
+        project_id: int,
+        num_results: int = 5,
+        columns_to_map: List[Dict[str, str]] = None
+    ) -> List[Dict[str, Any]]:
+        """
         Vector search for matching source fields (synchronous).
         
-        Searches unmapped_fields for fields matching the query description.
-        Filters by project_id to only return user's source fields.
+        If columns_to_map is provided, uses parallel searches for each column.
+        Otherwise, falls back to single combined search.
+        
+        Args:
+            endpoint_name: Vector search endpoint
+            index_name: Index to search
+            query_text: Combined query text (used if columns_to_map not provided)
+            project_id: Project ID to filter results
+            num_results: Number of results to return
+            columns_to_map: Optional list of columns from join_metadata for parallel search
         """
+        # If we have specific columns to search, use parallel search
+        if columns_to_map and len(columns_to_map) > 0:
+            print(f"[VS] Using parallel search for {len(columns_to_map)} columns")
+            return self._vector_search_parallel_sync(
+                index_name,
+                columns_to_map,
+                project_id,
+                num_results_per_column=5
+            )
+        
+        # Fall back to single combined search
+        # Build query with project context
+        query_with_project = self._build_vs_query(query_text, project_id)
+        
         # Store for debugging
         self._last_vector_search = {
-            "query_text": query_text,
+            "query_text": query_with_project,
+            "original_query": query_text,
             "project_id": project_id,
             "num_results": num_results,
             "raw_results": [],
             "filtered_results": []
         }
         
-        print(f"[VS Debug] Query length: {len(query_text)} chars")
-        print(f"[VS Debug] Query preview: {query_text[:200]}...")
+        print(f"[VS Debug] Query: {query_with_project[:200]}...")
         print(f"[VS Debug] Requesting {num_results * 3} results, filtering to project {project_id}")
         
         # Log equivalent Databricks SQL for debugging
-        escaped_query = query_text.replace("'", "''")[:500]  # Escape and truncate for SQL
+        escaped_query = query_with_project.replace("'", "''")[:500]
         sql_equivalent = f"""
 -- Databricks SQL equivalent for vector search debugging:
 SELECT * FROM VECTOR_SEARCH(
@@ -162,24 +341,7 @@ SELECT * FROM VECTOR_SEARCH(
 WHERE project_id = {project_id}
 ORDER BY score DESC
 LIMIT {num_results};
-
--- Or using the table directly with ai_similarity_search:
-SELECT 
-    src_table_physical_name,
-    src_column_physical_name,
-    src_comments,
-    project_id
-FROM {index_name.replace('_index', '').replace('_vs', '')}
-WHERE project_id = {project_id}
-ORDER BY ai_similarity(
-    src_comments, 
-    '{escaped_query[:200]}'
-) DESC
-LIMIT {num_results};
 """
-        print(f"[VS Debug] SQL Equivalent:\n{sql_equivalent}")
-        
-        # Store for debug endpoint
         self._last_vector_search["sql_equivalent"] = sql_equivalent
         
         try:
@@ -198,7 +360,7 @@ LIMIT {num_results};
                     "source_semantic_field",
                     "project_id"
                 ],
-                query_text=query_text,
+                query_text=query_with_project,
                 num_results=num_results * 3  # Get extra to filter by project after
             )
             
@@ -815,10 +977,63 @@ RULES:
                         
                         print(f"[Suggestion Service] Found pattern (usage: {pattern.get('_selected_from_count', 1)}, alternatives: {alternatives_count})")
                         
-                        # Build search query from target description + pattern descriptions + join column descriptions
+                        # Check for special case patterns (auto-generated, hardcoded, N/A)
+                        is_special_case = False
+                        join_metadata_str = pattern.get('join_metadata')
+                        if join_metadata_str:
+                            try:
+                                jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
+                                pattern_type = jm.get('patternType', '')
+                                mapping_action = jm.get('mappingAction', '')
+                                
+                            if pattern_type == 'AUTO_GENERATED':
+                                is_special_case = True
+                                print(f"[Suggestion Service] Special case: AUTO_GENERATED - auto-mapping (no SQL needed)")
+                                suggestion_data["suggested_sql"] = None  # No SQL needed - field auto-populates on INSERT
+                                suggestion_data["sql_changes"] = json.dumps([{"type": "auto_generated", "description": "Column auto-populated on insert - no mapping required"}])
+                                suggestion_data["confidence_score"] = 1.0
+                                suggestion_data["ai_reasoning"] = "AUTO-GENERATED FIELD: This column is automatically populated by the database on INSERT (identity, sequence, timestamp, or computed column). No source mapping or SQL is required."
+                                suggestion_data["warnings"] = json.dumps([])
+                                suggestion_data["suggestion_status"] = "AUTO_MAPPED"  # Special status for auto-generated
+                                suggestion_data["matched_source_fields"] = json.dumps([])
+                                    
+                                elif pattern_type == 'HARDCODED':
+                                    is_special_case = True
+                                    hardcoded_value = jm.get('hardcodedValue', 'NULL')
+                                    generated_sql = jm.get('generatedSql', f"SELECT {hardcoded_value} AS {tgt_column_physical}")
+                                    print(f"[Suggestion Service] Special case: HARDCODED = {hardcoded_value}")
+                                    suggestion_data["suggested_sql"] = generated_sql
+                                    suggestion_data["sql_changes"] = json.dumps([{"type": "hardcoded", "value": hardcoded_value}])
+                                    suggestion_data["confidence_score"] = 1.0
+                                    suggestion_data["ai_reasoning"] = f"This column is hardcoded to a constant value: {hardcoded_value}. No source column mapping needed."
+                                    suggestion_data["warnings"] = json.dumps([])
+                                    suggestion_data["suggestion_status"] = "PENDING"
+                                    suggestion_data["matched_source_fields"] = json.dumps([])
+                                    
+                                elif pattern_type == 'NOT_APPLICABLE':
+                                    is_special_case = True
+                                    print(f"[Suggestion Service] Special case: NOT_APPLICABLE - suggesting skip")
+                                    suggestion_data["suggested_sql"] = None
+                                    suggestion_data["sql_changes"] = json.dumps([])
+                                    suggestion_data["confidence_score"] = 1.0
+                                    suggestion_data["ai_reasoning"] = "This column is marked as Not Applicable / Not In Use in the historical pattern. Recommended action: SKIP this column."
+                                    suggestion_data["warnings"] = json.dumps(["Column not applicable - consider skipping"])
+                                    suggestion_data["suggestion_status"] = "PENDING"
+                                    suggestion_data["matched_source_fields"] = json.dumps([])
+                                    
+                            except Exception as e:
+                                print(f"[Suggestion Service] Could not check for special case: {e}")
+                        
+                        if is_special_case:
+                            # Skip vector search and LLM for special cases
+                            all_suggestions.append(suggestion_data)
+                            processed += 1
+                            continue
+                        
+                        # Extract columns to map from join_metadata for PARALLEL vector search
+                        columns_to_map = []
                         search_terms = [tgt_comments, pattern.get('source_descriptions', '')]
                         
-                        # Extract column descriptions from join_metadata for better matching
                         join_metadata_str = pattern.get('join_metadata')
                         print(f"[Suggestion Service] join_metadata type: {type(join_metadata_str)}, value: {str(join_metadata_str)[:200] if join_metadata_str else 'None'}")
                         
@@ -827,7 +1042,7 @@ RULES:
                                 jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
                                 print(f"[Suggestion Service] Parsed join_metadata keys: {list(jm.keys()) if isinstance(jm, dict) else 'not a dict'}")
                                 
-                                # Get columns to map from userColumnsToMap
+                                # Get columns to map from userColumnsToMap for parallel search
                                 user_cols = jm.get('userColumnsToMap', [])
                                 print(f"[Suggestion Service] userColumnsToMap has {len(user_cols)} entries")
                                 
@@ -836,6 +1051,15 @@ RULES:
                                     orig_col = col.get('originalColumn', '')
                                     role = col.get('role', '')
                                     print(f"[Suggestion Service]   -> {role}: {orig_col} - {desc}")
+                                    
+                                    # Build columns_to_map for parallel vector search
+                                    columns_to_map.append({
+                                        'description': desc if desc else orig_col,
+                                        'column_name': orig_col,
+                                        'role': role
+                                    })
+                                    
+                                    # Also build combined search_terms for fallback
                                     if desc:
                                         search_terms.append(desc)
                                     if orig_col:
@@ -846,18 +1070,28 @@ RULES:
                                 import traceback
                                 traceback.print_exc()
                         
+                        # Add the output column itself as a search target
+                        if tgt_comments:
+                            columns_to_map.insert(0, {
+                                'description': tgt_comments,
+                                'column_name': tgt_column_physical,
+                                'role': 'output'
+                            })
+                        
                         search_query = " ".join([t for t in search_terms if t])
                         print(f"[Suggestion Service] Search query: {search_query[:200]}...")
+                        print(f"[Suggestion Service] Columns to parallel search: {len(columns_to_map)}")
                         
                         # Vector search for matching source fields
-                        # Get more results to cover output columns, join keys, and filter columns
+                        # Use parallel search if we have columns_to_map
                         vs_start = time.time()
                         matched_sources = self._vector_search_source_fields_sync(
                             vs_config["endpoint_name"],
                             vs_config["unmapped_fields_index"],
                             search_query,
                             project_id,
-                            num_results=15  # Increased to cover join/filter columns
+                            num_results=15,
+                            columns_to_map=columns_to_map if columns_to_map else None
                         )
                         print(f"[Suggestion Service]   -> Vector search: {time.time() - vs_start:.2f}s, found {len(matched_sources) if matched_sources else 0}")
                         
@@ -1198,82 +1432,150 @@ RULES:
                     new_suggestion_data["pattern_signature"] = pattern.get("_signature")
                     new_suggestion_data["pattern_description"] = pattern.get("_signature_description")
                     
-                    # Step 2: Find matching source columns
-                    # Build search query from target description + pattern descriptions + join column descriptions
-                    search_terms = [tgt_comments, pattern.get('source_descriptions', '')]
-                    
-                    # Extract column descriptions from join_metadata for better matching
+                    # Check for special case patterns (auto-generated, hardcoded, N/A)
+                    is_special_case = False
                     join_metadata_str = pattern.get('join_metadata')
                     if join_metadata_str:
                         try:
                             jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
-                            for col in jm.get('userColumnsToMap', []):
-                                if col.get('description'):
-                                    search_terms.append(col['description'])
-                                if col.get('originalColumn'):
-                                    search_terms.append(col['originalColumn'])
+                            pattern_type = jm.get('patternType', '')
+                            
+                            if pattern_type == 'AUTO_GENERATED':
+                                is_special_case = True
+                                print(f"[Suggestion Service] Special case: AUTO_GENERATED - auto-mapping (no SQL needed)")
+                                new_suggestion_data["suggested_sql"] = None  # No SQL needed - field auto-populates on INSERT
+                                new_suggestion_data["sql_changes"] = json.dumps([{"type": "auto_generated", "description": "Column auto-populated on insert - no mapping required"}])
+                                new_suggestion_data["confidence_score"] = 1.0
+                                new_suggestion_data["ai_reasoning"] = "AUTO-GENERATED FIELD: This column is automatically populated by the database on INSERT (identity, sequence, timestamp, or computed column). No source mapping or SQL is required."
+                                new_suggestion_data["warnings"] = json.dumps([])
+                                new_suggestion_data["suggestion_status"] = "AUTO_MAPPED"  # Special status for auto-generated
+                                new_suggestion_data["matched_source_fields"] = json.dumps([])
+                                
+                            elif pattern_type == 'HARDCODED':
+                                is_special_case = True
+                                hardcoded_value = jm.get('hardcodedValue', 'NULL')
+                                generated_sql = jm.get('generatedSql', f"SELECT {hardcoded_value} AS {tgt_column_physical}")
+                                print(f"[Suggestion Service] Special case: HARDCODED = {hardcoded_value}")
+                                new_suggestion_data["suggested_sql"] = generated_sql
+                                new_suggestion_data["sql_changes"] = json.dumps([{"type": "hardcoded", "value": hardcoded_value}])
+                                new_suggestion_data["confidence_score"] = 1.0
+                                new_suggestion_data["ai_reasoning"] = f"This column is hardcoded to a constant value: {hardcoded_value}. No source column mapping needed."
+                                new_suggestion_data["warnings"] = json.dumps([])
+                                new_suggestion_data["suggestion_status"] = "PENDING"
+                                new_suggestion_data["matched_source_fields"] = json.dumps([])
+                                
+                            elif pattern_type == 'NOT_APPLICABLE':
+                                is_special_case = True
+                                print(f"[Suggestion Service] Special case: NOT_APPLICABLE - suggesting skip")
+                                new_suggestion_data["suggested_sql"] = None
+                                new_suggestion_data["sql_changes"] = json.dumps([])
+                                new_suggestion_data["confidence_score"] = 1.0
+                                new_suggestion_data["ai_reasoning"] = "This column is marked as Not Applicable / Not In Use in the historical pattern. Recommended action: SKIP this column."
+                                new_suggestion_data["warnings"] = json.dumps(["Column not applicable - consider skipping"])
+                                new_suggestion_data["suggestion_status"] = "PENDING"
+                                new_suggestion_data["matched_source_fields"] = json.dumps([])
                         except Exception as e:
-                            print(f"[Suggestion Service] Could not parse join_metadata: {e}")
+                            print(f"[Suggestion Service] Could not check for special case: {e}")
                     
-                    search_query = " ".join([t for t in search_terms if t])
-                    print(f"[Suggestion Service] Regenerate search query: {search_query[:150]}...")
+                    if not is_special_case:
+                        # Step 2: Find matching source columns (only for regular patterns)
+                        # Extract columns to map for PARALLEL vector search
+                        columns_to_map = []
+                        search_terms = [tgt_comments, pattern.get('source_descriptions', '')]
+                        
+                        # Extract column descriptions from join_metadata for parallel search
+                        if join_metadata_str:
+                            try:
+                                jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
+                                for col in jm.get('userColumnsToMap', []):
+                                    desc = col.get('description', '')
+                                    orig_col = col.get('originalColumn', '')
+                                    role = col.get('role', '')
+                                    
+                                    # Build columns_to_map for parallel vector search
+                                    columns_to_map.append({
+                                        'description': desc if desc else orig_col,
+                                        'column_name': orig_col,
+                                        'role': role
+                                    })
+                                    
+                                    # Also build combined search_terms for fallback
+                                    if desc:
+                                        search_terms.append(desc)
+                                    if orig_col:
+                                        search_terms.append(orig_col)
+                            except Exception as e:
+                                print(f"[Suggestion Service] Could not parse join_metadata: {e}")
+                        
+                        # Add the output column itself as a search target
+                        if tgt_comments:
+                            columns_to_map.insert(0, {
+                                'description': tgt_comments,
+                                'column_name': tgt_column_physical,
+                                'role': 'output'
+                            })
+                        
+                        search_query = " ".join([t for t in search_terms if t])
+                        print(f"[Suggestion Service] Regenerate search query: {search_query[:150]}...")
+                        print(f"[Suggestion Service] Columns to parallel search: {len(columns_to_map)}")
                     
-                    # Vector search - get more results to cover join/filter columns
-                    matched_sources = self._vector_search_source_fields_sync(
-                        vs_config["endpoint_name"],
-                        vs_config["unmapped_fields_index"],
-                        search_query,
-                        project_id,
-                        num_results=15
-                    )
-                    
-                    # Fallback to SQL search
-                    if not matched_sources:
-                        matched_sources = self._sql_search_source_fields_sync(
-                            db_config["server_hostname"],
-                            db_config["http_path"],
-                            db_config["unmapped_fields_table"],
+                        # Vector search - use parallel search for better coverage
+                        matched_sources = self._vector_search_source_fields_sync(
+                            vs_config["endpoint_name"],
+                            vs_config["unmapped_fields_index"],
                             search_query,
                             project_id,
-                            num_results=15
-                        )
-                    
-                    if matched_sources:
-                        # Store matched sources
-                        matched_fields_json = json.dumps([
-                            {
-                                "unmapped_field_id": m["unmapped_field_id"],
-                                "src_table_name": m.get("src_table_name", ""),
-                                "src_table_physical_name": m.get("src_table_physical_name", ""),
-                                "src_column_name": m.get("src_column_name", ""),
-                                "src_column_physical_name": m.get("src_column_physical_name", ""),
-                                "src_comments": m.get("src_comments", ""),
-                                "src_physical_datatype": m.get("src_physical_datatype", ""),
-                                "match_score": m.get("score", 0.5)
-                            }
-                            for m in matched_sources
-                        ])
-                        new_suggestion_data["matched_source_fields"] = matched_fields_json
-                        
-                        # Step 3: Rewrite SQL with LLM
-                        rewrite_result = self._rewrite_sql_with_llm_sync(
-                            llm_config["endpoint_name"],
-                            pattern["source_expression"],
-                            pattern.get("join_metadata"),
-                            pattern.get("source_descriptions", ""),
-                            matched_sources,
-                            tgt_column_physical
+                            num_results=15,
+                            columns_to_map=columns_to_map if columns_to_map else None
                         )
                         
-                        new_suggestion_data["suggested_sql"] = rewrite_result.get("rewritten_sql")
-                        new_suggestion_data["sql_changes"] = json.dumps(rewrite_result.get("changes", []))
-                        new_suggestion_data["confidence_score"] = rewrite_result.get("confidence", 0.5)
-                        new_suggestion_data["ai_reasoning"] = rewrite_result.get("reasoning", "")
-                        new_suggestion_data["warnings"] = json.dumps(rewrite_result.get("warnings", []))
-                        new_suggestion_data["suggestion_status"] = "PENDING"
-                    else:
-                        new_suggestion_data["suggestion_status"] = "NO_MATCH"
-                        new_suggestion_data["warnings"] = json.dumps(["No matching source fields found for this pattern"])
+                        # Fallback to SQL search
+                        if not matched_sources:
+                            matched_sources = self._sql_search_source_fields_sync(
+                                db_config["server_hostname"],
+                                db_config["http_path"],
+                                db_config["unmapped_fields_table"],
+                                search_query,
+                                project_id,
+                                num_results=15
+                            )
+                        
+                        if matched_sources:
+                            # Store matched sources
+                            matched_fields_json = json.dumps([
+                                {
+                                    "unmapped_field_id": m["unmapped_field_id"],
+                                    "src_table_name": m.get("src_table_name", ""),
+                                    "src_table_physical_name": m.get("src_table_physical_name", ""),
+                                    "src_column_name": m.get("src_column_name", ""),
+                                    "src_column_physical_name": m.get("src_column_physical_name", ""),
+                                    "src_comments": m.get("src_comments", ""),
+                                    "src_physical_datatype": m.get("src_physical_datatype", ""),
+                                    "match_score": m.get("score", 0.5)
+                                }
+                                for m in matched_sources
+                            ])
+                            new_suggestion_data["matched_source_fields"] = matched_fields_json
+                            
+                            # Step 3: Rewrite SQL with LLM
+                            rewrite_result = self._rewrite_sql_with_llm_sync(
+                                llm_config["endpoint_name"],
+                                pattern["source_expression"],
+                                pattern.get("join_metadata"),
+                                pattern.get("source_descriptions", ""),
+                                matched_sources,
+                                tgt_column_physical
+                            )
+                            
+                            new_suggestion_data["suggested_sql"] = rewrite_result.get("rewritten_sql")
+                            new_suggestion_data["sql_changes"] = json.dumps(rewrite_result.get("changes", []))
+                            new_suggestion_data["confidence_score"] = rewrite_result.get("confidence", 0.5)
+                            new_suggestion_data["ai_reasoning"] = rewrite_result.get("reasoning", "")
+                            new_suggestion_data["warnings"] = json.dumps(rewrite_result.get("warnings", []))
+                            new_suggestion_data["suggestion_status"] = "PENDING"
+                        else:
+                            new_suggestion_data["suggestion_status"] = "NO_MATCH"
+                            new_suggestion_data["warnings"] = json.dumps(["No matching source fields found for this pattern"])
                 
                 # Step 4: Update the existing suggestion
                 cursor.execute(f"""

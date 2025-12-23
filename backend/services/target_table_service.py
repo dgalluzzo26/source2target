@@ -533,10 +533,11 @@ class TargetTableService:
                 # Get counts by status
                 cursor.execute(f"""
                     SELECT
-                        COUNT(CASE WHEN suggestion_status IN ('APPROVED', 'EDITED') THEN 1 END) AS columns_mapped,
+                        COUNT(CASE WHEN suggestion_status IN ('APPROVED', 'EDITED', 'AUTO_MAPPED') THEN 1 END) AS columns_mapped,
                         COUNT(CASE WHEN suggestion_status = 'PENDING' THEN 1 END) AS columns_pending_review,
                         COUNT(CASE WHEN suggestion_status IN ('NO_PATTERN', 'NO_MATCH') THEN 1 END) AS columns_no_match,
                         COUNT(CASE WHEN suggestion_status = 'SKIPPED' THEN 1 END) AS columns_skipped,
+                        COUNT(CASE WHEN suggestion_status = 'AUTO_MAPPED' THEN 1 END) AS columns_auto_mapped,
                         AVG(CASE WHEN confidence_score IS NOT NULL THEN confidence_score END) AS avg_confidence,
                         MIN(CASE WHEN confidence_score IS NOT NULL THEN confidence_score END) AS min_confidence
                     FROM {mapping_suggestions_table}
@@ -548,8 +549,11 @@ class TargetTableService:
                 columns_pending = row[1] or 0
                 columns_no_match = row[2] or 0
                 columns_skipped = row[3] or 0
-                avg_confidence = row[4]
-                min_confidence = row[5]
+                columns_auto_mapped = row[4] or 0
+                avg_confidence = row[5]
+                min_confidence = row[6]
+                
+                print(f"[Target Table] Status update - Mapped: {columns_mapped} (incl. {columns_auto_mapped} auto-generated), Pending: {columns_pending}")
                 
                 # Update table status
                 cursor.execute(f"""
