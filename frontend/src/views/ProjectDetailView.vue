@@ -169,7 +169,7 @@
         <Column header="Status" :sortable="true" style="min-width: 10rem">
           <template #body="{ data }">
             <Tag 
-              :value="formatStatus(data.mapping_status)" 
+              :value="formatStatusWithProgress(data)" 
               :severity="getTableStatusSeverity(data.mapping_status)"
               :icon="getTableStatusIcon(data.mapping_status)"
             />
@@ -185,8 +185,9 @@
                 class="table-progress-bar"
               />
               <span class="progress-text">
-                {{ data.columns_mapped }} / {{ data.total_columns }}
+                {{ getColumnsProcessed(data) }} / {{ data.total_columns }}
                 ({{ getTableProgress(data) }}%)
+                <span v-if="data.mapping_status === 'DISCOVERING'" class="discovering-label">discovering...</span>
               </span>
             </div>
           </template>
@@ -1076,9 +1077,25 @@ function formatStatus(status: string): string {
   return status.replace(/_/g, ' ')
 }
 
+function formatStatusWithProgress(table: TargetTableStatus): string {
+  if (table.mapping_status === 'DISCOVERING') {
+    const progress = getDiscoveryProgress(table)
+    return `DISCOVERING ${progress}`
+  }
+  return table.mapping_status.replace(/_/g, ' ')
+}
+
 function getTableProgress(table: TargetTableStatus): number {
   if (!table.total_columns) return 0
   return Math.round((table.columns_mapped / table.total_columns) * 100)
+}
+
+function getDiscoveryProgress(table: TargetTableStatus): string {
+  if (table.mapping_status !== 'DISCOVERING') return ''
+  const columnsProcessed = (table.columns_mapped || 0) + 
+                           (table.columns_pending_review || 0) + 
+                           (table.columns_no_match || 0)
+  return `${columnsProcessed}/${table.total_columns || 0}`
 }
 
 function getConfidenceClass(confidence: number): string {
