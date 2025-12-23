@@ -154,6 +154,7 @@
               icon="pi pi-pencil"
               size="small"
               severity="warning"
+              :disabled="isOperationInProgress(suggestion.suggestion_id)"
               @click="openEditDialog(suggestion)"
             />
           </template>
@@ -164,6 +165,8 @@
             icon="pi pi-check"
             size="small"
             severity="success"
+            :loading="approvingId === suggestion.suggestion_id"
+            :disabled="isOperationInProgress(suggestion.suggestion_id)"
             @click="handleApprove(suggestion)"
           />
           <Button 
@@ -172,6 +175,7 @@
             size="small"
             severity="info"
             outlined
+            :disabled="isOperationInProgress(suggestion.suggestion_id)"
             @click="openEditDialog(suggestion)"
           />
           </template>
@@ -181,6 +185,7 @@
             size="small"
             severity="danger"
             outlined
+            :disabled="isOperationInProgress(suggestion.suggestion_id)"
             @click="openRejectDialog(suggestion)"
           />
           <Button 
@@ -189,6 +194,7 @@
             severity="secondary"
             text
             :loading="regeneratingId === suggestion.suggestion_id"
+            :disabled="isOperationInProgress(suggestion.suggestion_id)"
             @click="handleRegenerate(suggestion)"
             v-tooltip.top="'Regenerate this suggestion'"
           />
@@ -198,6 +204,8 @@
             size="small"
             severity="secondary"
             text
+            :loading="skippingId === suggestion.suggestion_id"
+            :disabled="isOperationInProgress(suggestion.suggestion_id)"
             @click="handleSkip(suggestion)"
           />
         </div>
@@ -210,6 +218,7 @@
             size="small"
             severity="info"
             :loading="regeneratingId === suggestion.suggestion_id"
+            :disabled="isOperationInProgress(suggestion.suggestion_id)"
             @click="handleRegenerate(suggestion)"
             v-tooltip.top="'Re-run AI discovery for this column'"
           />
@@ -219,6 +228,7 @@
             size="small"
             severity="secondary"
             outlined
+            :disabled="isOperationInProgress(suggestion.suggestion_id)"
             @click="$emit('manual-mapping', suggestion)"
           />
           <Button 
@@ -227,6 +237,8 @@
             size="small"
             severity="secondary"
             text
+            :loading="skippingId === suggestion.suggestion_id"
+            :disabled="isOperationInProgress(suggestion.suggestion_id)"
             @click="handleSkip(suggestion)"
           />
         </div>
@@ -598,6 +610,8 @@ const leftPanelCollapsed = ref(false)
 const aiChangesCollapsed = ref(false)
 const sqlPreviewCollapsed = ref(false)
 const sqlTextarea = ref<any>(null)
+const skippingId = ref<number | null>(null)
+const approvingId = ref<number | null>(null)
 
 // Computed
 const suggestions = computed(() => projectsStore.suggestions)
@@ -612,6 +626,14 @@ const approvedCount = computed(() =>
 const noMatchCount = computed(() => 
   suggestions.value.filter(s => s.suggestion_status === 'NO_MATCH' || s.suggestion_status === 'NO_PATTERN').length
 )
+
+// Check if any operation is in progress for a specific suggestion
+function isOperationInProgress(suggestionId: number): boolean {
+  return skippingId.value === suggestionId || 
+         approvingId.value === suggestionId || 
+         regeneratingId.value === suggestionId ||
+         saving.value
+}
 
 // Problem fields from AI warnings that need user attention
 // NOTE: We only highlight fields from WARNINGS (missing/not found), 
@@ -822,12 +844,15 @@ function getWarnings(suggestion: MappingSuggestion): string[] {
 }
 
 async function handleApprove(suggestion: MappingSuggestion) {
+  approvingId.value = suggestion.suggestion_id
   try {
     await projectsStore.approveSuggestion(suggestion.suggestion_id, userStore.userEmail || 'unknown')
     toast.add({ severity: 'success', summary: 'Approved', detail: 'Mapping created', life: 2000 })
     emit('suggestion-updated')
   } catch (e: any) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 5000 })
+  } finally {
+    approvingId.value = null
   }
 }
 
@@ -1092,12 +1117,15 @@ async function handleReject() {
 }
 
 async function handleSkip(suggestion: MappingSuggestion) {
+  skippingId.value = suggestion.suggestion_id
   try {
     await projectsStore.skipSuggestion(suggestion.suggestion_id, userStore.userEmail || 'unknown')
     toast.add({ severity: 'info', summary: 'Skipped', detail: 'Column skipped', life: 2000 })
     emit('suggestion-updated')
   } catch (e: any) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 5000 })
+  } finally {
+    skippingId.value = null
   }
 }
 
