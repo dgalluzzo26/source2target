@@ -761,19 +761,31 @@ Generate a JSON object with this EXACT structure:
     }}
   ],
   "userColumnsToMap": [
-    {{"role": "join_key|output|filter", "originalColumn": "<column>", "description": "<what user provides>"}}
+    {{"role": "output|join_key|filter", "originalColumn": "<column_name>", "description": "<semantic description>"}}
   ],
   "userTablesToMap": [
     {{"role": "bronze_primary|bronze_secondary", "originalTable": "<table>", "description": "<what user replaces>"}}
   ]
 }}
 
+CRITICAL - userColumnsToMap MUST include ALL columns from bronze tables:
+- role="output": Columns in SELECT clause that produce the output value
+- role="join_key": Columns used in JOIN ON conditions from bronze tables (e.g., SAK_RECIP, CDE_COUNTY)
+- role="filter": Columns used in WHERE clauses from bronze tables (e.g., CURR_REC_IND, CDE_ADDR_USAGE)
+
+IMPORTANT: Extract EVERY bronze column referenced in the SQL, not just the output column!
+For example, if SQL has: "b.SAK_RECIP = mf.SRC_KEY_ID AND b.CURR_REC_IND=1"
+Then userColumnsToMap MUST include:
+- {{"role": "join_key", "originalColumn": "SAK_RECIP", "description": "Recipient key for joining to member foundation"}}
+- {{"role": "filter", "originalColumn": "CURR_REC_IND", "description": "Current record indicator flag"}}
+
 RULES:
 1. silverTables = tables from silver_* schemas (CONSTANT, user does NOT replace)
 2. bronzeTables/userTablesToMap = tables from bronze_* schemas (user REPLACES with their tables)
 3. For UNION, create separate unionBranches for each SELECT
 4. If no JOINs/UNIONs, use patternType "SINGLE" and set unionBranches to empty array []
-5. Return ONLY the JSON object, no explanation"""
+5. userColumnsToMap must include ALL bronze columns: output columns, join key columns, AND filter columns
+6. Return ONLY the JSON object, no explanation"""
 
         try:
             response = self.workspace_client.serving_endpoints.query(
