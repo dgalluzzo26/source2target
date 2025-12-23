@@ -220,7 +220,7 @@
           <template #body="{ data }">
             <div class="action-buttons">
               <Button 
-                v-if="data.mapping_status === 'NOT_STARTED'"
+                v-if="data.mapping_status === 'NOT_STARTED' && startingDiscoveryTableId !== data.target_table_status_id"
                 icon="pi pi-play" 
                 label="Discover"
                 size="small"
@@ -228,7 +228,7 @@
                 v-tooltip.top="'Start AI Discovery'"
               />
               <Button 
-                v-else-if="data.mapping_status === 'DISCOVERING'"
+                v-else-if="data.mapping_status === 'DISCOVERING' || startingDiscoveryTableId === data.target_table_status_id"
                 icon="pi pi-spinner pi-spin" 
                 label="Discovering..."
                 size="small"
@@ -710,6 +710,7 @@ const sourceTableFilter = ref<string | null>(null)
 const selectedSourceFields = ref<any[]>([])
 const editingSourceField = ref<any>(null)
 const savingSourceField = ref(false)
+const startingDiscoveryTableId = ref<number | null>(null)  // Track which table is starting discovery
 const confirm = useConfirm()
 
 // Computed
@@ -944,6 +945,9 @@ async function handleInitializeTables() {
 }
 
 async function handleStartDiscovery(table: TargetTableStatus) {
+  // Immediately show loading state
+  startingDiscoveryTableId.value = table.target_table_status_id
+  
   try {
     await projectsStore.startDiscovery(
       projectId.value,
@@ -961,6 +965,9 @@ async function handleStartDiscovery(table: TargetTableStatus) {
     // Poll for completion
     pollForDiscovery(table.target_table_status_id)
   } catch (e: any) {
+    // Clear loading state on error
+    startingDiscoveryTableId.value = null
+    
     toast.add({ 
       severity: 'error', 
       summary: 'Discovery Failed', 
@@ -971,6 +978,9 @@ async function handleStartDiscovery(table: TargetTableStatus) {
 }
 
 async function pollForDiscovery(tableId: number) {
+  // Clear the starting state - now we're in polling mode
+  startingDiscoveryTableId.value = null
+  
   // Poll every 5 seconds for up to 5 minutes
   const maxAttempts = 60
   let attempts = 0
