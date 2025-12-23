@@ -672,6 +672,7 @@ import Textarea from 'primevue/textarea'
 // ConfirmDialog is global in App.vue
 import { useConfirm } from 'primevue/useconfirm'
 import SuggestionReviewPanel from '@/components/SuggestionReviewPanel.vue'
+import { getAuthHeaders } from '@/services/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -1164,7 +1165,9 @@ watch(showExportDialog, async (visible) => {
 async function loadSourceFields() {
   loadingSourceFields.value = true
   try {
-    const response = await fetch(`/api/v4/projects/${projectId.value}/source-fields`)
+    const response = await fetch(`/api/v4/projects/${projectId.value}/source-fields`, {
+      headers: getAuthHeaders()
+    })
     if (response.ok) {
       sourceFields.value = await response.json()
     } else {
@@ -1191,7 +1194,7 @@ async function saveSourceField() {
       `/api/v4/projects/${projectId.value}/source-fields/${editingSourceField.value.unmapped_field_id}`,
       {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           src_table_name: editingSourceField.value.src_table_name,
           src_column_name: editingSourceField.value.src_column_name,
@@ -1232,7 +1235,7 @@ async function deleteSourceField(fieldId: number) {
   try {
     const response = await fetch(
       `/api/v4/projects/${projectId.value}/source-fields/${fieldId}`,
-      { method: 'DELETE' }
+      { method: 'DELETE', headers: getAuthHeaders() }
     )
     
     if (response.ok) {
@@ -1285,7 +1288,7 @@ async function deleteAllSources() {
       ? `/api/v4/projects/${projectId.value}/source-fields?table_name=${encodeURIComponent(sourceTableFilter.value)}`
       : `/api/v4/projects/${projectId.value}/source-fields`
     
-    const response = await fetch(url, { method: 'DELETE' })
+    const response = await fetch(url, { method: 'DELETE', headers: getAuthHeaders() })
     
     if (response.ok) {
       const result = await response.json()
@@ -1311,7 +1314,9 @@ async function deleteAllSources() {
 
 async function loadExportableTables() {
   try {
-    const response = await fetch(`/api/v4/projects/${projectId.value}/export/tables`)
+    const response = await fetch(`/api/v4/projects/${projectId.value}/export/tables`, {
+      headers: getAuthHeaders()
+    })
     if (response.ok) {
       const data = await response.json()
       exportableTables.value = data.tables || []
@@ -1319,6 +1324,8 @@ async function loadExportableTables() {
       if (exportableTables.value.length > 0) {
         exportSelectedTable.value = exportableTables.value[0].tgt_table_physical_name
       }
+    } else {
+      console.error('Error loading exportable tables:', response.status, await response.text())
     }
   } catch (e: any) {
     console.error('Error loading exportable tables:', e)
@@ -1352,7 +1359,9 @@ async function handleExport() {
       filename = `${exportSelectedTable.value}_insert.sql`
     }
     
-    const response = await fetch(url)
+    const response = await fetch(url, {
+      headers: getAuthHeaders()
+    })
     
     if (response.ok) {
       const content = await response.text()

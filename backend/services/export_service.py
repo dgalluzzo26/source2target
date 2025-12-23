@@ -428,6 +428,30 @@ SELECT
         
         try:
             with connection.cursor() as cursor:
+                # First, debug - check total mappings for this project
+                cursor.execute(f"""
+                    SELECT project_id, mapping_status, COUNT(*) as cnt
+                    FROM {db_config['mapped_fields_table']}
+                    WHERE project_id = {project_id}
+                    GROUP BY project_id, mapping_status
+                """)
+                debug_rows = cursor.fetchall()
+                print(f"[Export Service] Mappings for project {project_id}:")
+                for row in debug_rows:
+                    print(f"  - project_id={row[0]}, status={row[1]}, count={row[2]}")
+                
+                if not debug_rows:
+                    # Check if any mappings exist at all
+                    cursor.execute(f"""
+                        SELECT project_id, COUNT(*) as cnt
+                        FROM {db_config['mapped_fields_table']}
+                        GROUP BY project_id
+                        LIMIT 10
+                    """)
+                    all_mappings = cursor.fetchall()
+                    print(f"[Export Service] All mappings by project: {all_mappings}")
+                
+                # Now get the exportable tables
                 cursor.execute(f"""
                     SELECT 
                         tgt_table_name,
@@ -442,6 +466,8 @@ SELECT
                 
                 columns = [desc[0] for desc in cursor.description]
                 rows = cursor.fetchall()
+                
+                print(f"[Export Service] Found {len(rows)} exportable tables for project {project_id}")
                 
                 return [dict(zip(columns, row)) for row in rows]
                 
