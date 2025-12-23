@@ -614,7 +614,14 @@ const skippingId = ref<number | null>(null)
 const approvingId = ref<number | null>(null)
 
 // Computed
-const suggestions = computed(() => projectsStore.suggestions)
+// Sort suggestions by column name for consistent display
+const suggestions = computed(() => {
+  return [...projectsStore.suggestions].sort((a, b) => {
+    const nameA = (a.tgt_column_physical_name || a.tgt_column_name || '').toLowerCase()
+    const nameB = (b.tgt_column_physical_name || b.tgt_column_name || '').toLowerCase()
+    return nameA.localeCompare(nameB)
+  })
+})
 const loading = computed(() => projectsStore.loading)
 
 const pendingCount = computed(() => 

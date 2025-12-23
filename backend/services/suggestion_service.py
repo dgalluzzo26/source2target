@@ -38,6 +38,90 @@ from backend.services.pattern_service import PatternService
 # Thread pool for blocking database operations
 executor = ThreadPoolExecutor(max_workers=4)
 
+import re
+
+def clean_llm_json(text: str) -> str:
+    """
+    Clean LLM response text to extract valid JSON.
+    
+    Handles common issues:
+    - Control characters (null bytes, form feeds, etc.)
+    - Windows line endings
+    - Trailing commas in JSON
+    - Markdown code blocks
+    - Literal newlines inside JSON string values (must be escaped as \\n)
+    """
+    if not text:
+        return ""
+    
+    # Extract JSON from markdown code blocks if present
+    code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
+    if code_block_match:
+        text = code_block_match.group(1).strip()
+    
+    # Find the JSON object
+    json_start = text.find('{')
+    json_end = text.rfind('}') + 1
+    
+    if json_start < 0 or json_end <= json_start:
+        return ""
+    
+    json_str = text[json_start:json_end]
+    
+    # Remove control characters (except newlines and tabs)
+    # \x00-\x08: null through backspace
+    # \x0b: vertical tab
+    # \x0c: form feed
+    # \x0e-\x1f: shift out through unit separator
+    # \x7f: DEL
+    json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', json_str)
+    
+    # Normalize line endings
+    json_str = json_str.replace('\r\n', '\n').replace('\r', '\n')
+    
+    # Remove trailing commas before closing braces/brackets (common LLM mistake)
+    json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
+    
+    # Fix literal newlines inside JSON string values
+    # This is the tricky part - LLMs often put actual newlines in SQL strings
+    # We need to escape them as \n for valid JSON
+    # Strategy: Replace newlines that appear to be inside string values
+    
+    # Approach: Process character by character to handle strings properly
+    result = []
+    in_string = False
+    escape_next = False
+    
+    for char in json_str:
+        if escape_next:
+            result.append(char)
+            escape_next = False
+            continue
+            
+        if char == '\\':
+            result.append(char)
+            escape_next = True
+            continue
+            
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            result.append(char)
+            continue
+        
+        # If we're inside a string and hit a newline, escape it
+        if in_string and char == '\n':
+            result.append('\\n')
+            continue
+        
+        # If we're inside a string and hit a tab, escape it  
+        if in_string and char == '\t':
+            result.append('\\t')
+            continue
+            
+        result.append(char)
+    
+    return ''.join(result)
+
 
 class SuggestionService:
     """Service for generating and managing AI mapping suggestions."""
@@ -640,22 +724,10 @@ Return ONLY valid JSON with this structure:
             
             response_text = response.choices[0].message.content
             
-            # Parse JSON from response
-            json_start = response_text.find('{')
-            json_end = response_text.rfind('}') + 1
+            # Clean and extract JSON using helper
+            json_str = clean_llm_json(response_text)
             
-            if json_start >= 0 and json_end > json_start:
-                json_str = response_text[json_start:json_end]
-                
-                # Remove control characters that can break JSON parsing
-                # Keep newlines (\n) and tabs (\t) but remove other control chars
-                import re
-                json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', json_str)
-                
-                # Also handle escaped newlines in SQL that might cause issues
-                # Replace literal \n in strings with escaped version
-                json_str = json_str.replace('\r\n', '\\n').replace('\r', '\\n')
-                
+            if json_str:
                 try:
                     result = json.loads(json_str)
                     print(f"[Suggestion Service] SQL rewritten with confidence: {result.get('confidence', 0)}")
@@ -664,19 +736,22 @@ Return ONLY valid JSON with this structure:
                     print(f"[Suggestion Service] JSON parse error: {str(je)}")
                     print(f"[Suggestion Service] Raw JSON (first 500 chars): {json_str[:500]}")
                     
-                    # Try a more aggressive cleanup
+                    # Try even more aggressive cleanup - replace all control chars with spaces
                     json_str_clean = re.sub(r'[\x00-\x1f\x7f]', ' ', json_str)
+                    # Also try to fix unescaped newlines in string values
+                    json_str_clean = re.sub(r'(?<!\\)\n', ' ', json_str_clean)
                     try:
                         result = json.loads(json_str_clean)
-                        print(f"[Suggestion Service] SQL rewritten after cleanup with confidence: {result.get('confidence', 0)}")
+                        print(f"[Suggestion Service] SQL rewritten after aggressive cleanup with confidence: {result.get('confidence', 0)}")
                         return result
-                    except:
+                    except json.JSONDecodeError as je2:
+                        print(f"[Suggestion Service] JSON parse still failed after cleanup: {str(je2)}")
                         return {
                             "rewritten_sql": pattern_sql,
                             "changes": [],
                             "warnings": [f"JSON parse error: {str(je)}"],
                             "confidence": 0.3,
-                            "reasoning": "LLM response contained invalid characters"
+                            "reasoning": "LLM response contained invalid JSON"
                         }
             else:
                 return {
@@ -799,28 +874,29 @@ RULES:
             
             response_text = response.choices[0].message.content
             
-            # Extract JSON from response
-            json_start = response_text.find('{')
-            json_end = response_text.rfind('}') + 1
+            # Clean and extract JSON using helper
+            json_str = clean_llm_json(response_text)
             
-            if json_start >= 0 and json_end > json_start:
-                json_str = response_text[json_start:json_end]
-                
-                # Clean control characters
-                import re
-                json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', json_str)
-                
-                # Validate it's valid JSON
-                json.loads(json_str)
-                print(f"[Suggestion Service] Generated join_metadata successfully")
-                return json_str
+            if json_str:
+                try:
+                    # Validate it's valid JSON
+                    json.loads(json_str)
+                    print(f"[Suggestion Service] Generated join_metadata successfully")
+                    return json_str
+                except json.JSONDecodeError as e:
+                    print(f"[Suggestion Service] Failed to parse join_metadata JSON: {e}")
+                    # Try aggressive cleanup
+                    json_str_clean = re.sub(r'[\x00-\x1f\x7f]', ' ', json_str)
+                    json_str_clean = re.sub(r'(?<!\\)\n', ' ', json_str_clean)
+                    try:
+                        json.loads(json_str_clean)
+                        print(f"[Suggestion Service] Generated join_metadata after cleanup")
+                        return json_str_clean
+                    except:
+                        return None
             else:
                 print(f"[Suggestion Service] No JSON found in LLM response for join_metadata")
                 return None
-                
-        except json.JSONDecodeError as e:
-            print(f"[Suggestion Service] Failed to parse join_metadata JSON: {e}")
-            return None
         except Exception as e:
             print(f"[Suggestion Service] LLM error generating join_metadata: {str(e)}")
             return None
