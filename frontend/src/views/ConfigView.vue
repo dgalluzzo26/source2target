@@ -496,9 +496,28 @@ const loading = ref({
   reset: false
 })
 
-// Methods (Frontend-only mode with dummy data)
+// Methods
 const loadConfiguration = async () => {
-  console.log('Configuration loaded from dummy data')
+  try {
+    const response = await fetch('/api/config')
+    if (response.ok) {
+      const savedConfig = await response.json()
+      // Merge saved config with defaults to ensure all fields exist
+      config.value = {
+        database: { ...config.value.database, ...savedConfig.database },
+        ai_model: { ...config.value.ai_model, ...savedConfig.ai_model },
+        ui: { ...config.value.ui, ...savedConfig.ui },
+        support: { ...config.value.support, ...savedConfig.support },
+        vector_search: { ...config.value.vector_search, ...savedConfig.vector_search },
+        security: { ...config.value.security, ...savedConfig.security }
+      }
+      console.log('Configuration loaded from backend')
+    } else {
+      console.log('Failed to load config from backend, using defaults')
+    }
+  } catch (error) {
+    console.log('Config API not available, using defaults:', error)
+  }
 }
 
 const testDatabaseConnection = async () => {
@@ -520,25 +539,25 @@ const testVectorSearch = async () => {
 const saveConfiguration = async () => {
   loading.value.save = true
   try {
-    // Try to save configuration to backend
+    // Save configuration to backend using PUT
     const response = await fetch('/api/config', {
-      method: 'POST',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config.value)
     })
     
     if (response.ok) {
-      console.log('Configuration saved successfully')
-      // Show success (would use toast in full implementation)
+      const result = await response.json()
+      console.log('Configuration saved successfully:', result)
       alert('Configuration saved successfully!')
     } else {
-      // Backend doesn't support dynamic config save - show manual instructions
-      console.log('Configuration save not supported by backend')
-      alert('Configuration saved to session only.\n\nTo persist changes permanently, update app_config.json and restart the server.')
+      const errorText = await response.text()
+      console.error('Failed to save configuration:', errorText)
+      alert(`Failed to save configuration: ${errorText}`)
     }
   } catch (error) {
-    console.log('Config API not available - showing manual instructions')
-    alert('Configuration saved to session only.\n\nTo persist changes permanently, edit app_config.json and restart the backend server.')
+    console.error('Config API error:', error)
+    alert('Failed to save configuration. Please check the console for details.')
   } finally {
     loading.value.save = false
   }
