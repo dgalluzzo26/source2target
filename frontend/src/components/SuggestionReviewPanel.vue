@@ -100,7 +100,7 @@
               icon="pi pi-list"
               size="small"
               text
-              severity="help"
+              severity="info"
               @click="showVSCandidates(suggestion)"
               v-tooltip.top="'See all source field candidates from vector search'"
             />
@@ -454,7 +454,7 @@
                 icon="pi pi-list"
                 size="small"
                 text
-                severity="help"
+                severity="info"
                 @click="showVSCandidates(editingSuggestion)"
                 v-tooltip.top="'See all source field candidates from vector search'"
                 class="view-alternatives-btn"
@@ -1313,6 +1313,24 @@ async function showVSCandidates(suggestion: MappingSuggestion) {
     const response = await fetch(`/api/v4/suggestions/${suggestion.suggestion_id}/vs-candidates`)
     if (!response.ok) throw new Error('Failed to load vector search candidates')
     const data = await response.json()
+    
+    // Mark which candidates were actually selected by comparing to matched_source_fields
+    if (data.candidates_by_column) {
+      const matchedFields = getMatchedFields(suggestion)
+      const selectedKeys = new Set(
+        matchedFields.map(f => 
+          `${f.src_table_physical_name}.${f.src_column_physical_name}`.toUpperCase()
+        )
+      )
+      
+      for (const columnName in data.candidates_by_column) {
+        for (const candidate of data.candidates_by_column[columnName]) {
+          const key = `${candidate.src_table_physical_name}.${candidate.src_column_physical_name}`.toUpperCase()
+          candidate.was_selected = selectedKeys.has(key)
+        }
+      }
+    }
+    
     vsCandidatesData.value = data
   } catch (e: any) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 5000 })
