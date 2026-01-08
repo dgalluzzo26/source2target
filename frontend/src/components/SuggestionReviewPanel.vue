@@ -1314,28 +1314,43 @@ async function showVSCandidates(suggestion: MappingSuggestion) {
     if (!response.ok) throw new Error('Failed to load vector search candidates')
     const data = await response.json()
     
-    // Mark which candidates were actually used by checking the sql_changes
-    // The sql_changes array contains the actual column replacements made by the LLM
+    // Mark which candidates were actually used for EACH specific pattern column
+    // by matching the sql_changes (original -> new) to the VS groups
     if (data.candidates_by_column) {
       const changes = getChanges(suggestion)
       
-      // Extract column names that were actually used in replacements
-      // Format in changes: "new": "mf.MEMBER_ID" or "new": "MEMBER_ID"
-      const usedColumns = new Set<string>()
+      // Build a map: pattern column name -> selected source column name
+      // e.g., { "STREET_ADDR_1": "ADDR_LN_1", "CNTY_ID": "CNTY_ID" }
+      const patternToSelectedColumn = new Map<string, string>()
+      
       for (const change of changes) {
         if (change.new && (change.type === 'column_replace' || change.type === 'replaced')) {
-          // Extract column name from potentially qualified name (e.g., "mf.MEMBER_ID" -> "MEMBER_ID")
+          // Extract the original pattern column (e.g., "p.STREET_ADDR_1" -> "STREET_ADDR_1")
+          const origVal = String(change.original || '').toUpperCase()
+          const origParts = origVal.split('.')
+          const origCol = origParts[origParts.length - 1]
+          
+          // Extract the new source column (e.g., "mf.ADDR_LN_1" -> "ADDR_LN_1")
           const newVal = String(change.new).toUpperCase()
-          const parts = newVal.split('.')
-          const colName = parts[parts.length - 1] // Get last part after any dots
-          usedColumns.add(colName)
+          const newParts = newVal.split('.')
+          const newCol = newParts[newParts.length - 1]
+          
+          if (origCol && newCol) {
+            patternToSelectedColumn.set(origCol, newCol)
+          }
         }
       }
       
-      for (const columnName in data.candidates_by_column) {
-        for (const candidate of data.candidates_by_column[columnName]) {
+      // For each VS group (keyed by pattern column), mark only the candidate 
+      // that was specifically selected for THAT pattern column
+      for (const patternColumnName in data.candidates_by_column) {
+        const patternColUpper = patternColumnName.toUpperCase()
+        const selectedColForThisPattern = patternToSelectedColumn.get(patternColUpper)
+        
+        for (const candidate of data.candidates_by_column[patternColumnName]) {
           const candidateCol = (candidate.src_column_physical_name || '').toUpperCase()
-          candidate.was_selected = usedColumns.has(candidateCol)
+          // Only mark as selected if this candidate's column was chosen for THIS specific pattern column
+          candidate.was_selected = selectedColForThisPattern === candidateCol
         }
       }
     }
