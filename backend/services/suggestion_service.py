@@ -764,12 +764,17 @@ WARNINGS RULES:
 - Do NOT warn about extra source columns that were provided but not used
 - NEVER warn about silver table columns
 
+CRITICAL CHANGE REPORTING:
+- "original" = the EXACT column/table name FROM THE ORIGINAL SQL TEMPLATE (e.g., "a.CURR_REC_IND", "b.ADR_STREET_1")
+- "new" = the column/table name you are substituting FROM THE USER'S SOURCE (e.g., "MBR_ADDR.ACTV_FLG", "RECIP_BASE.STREET_ADDR_1")
+- Do NOT use the source column name in "original" - that's what you're replacing TO, not FROM
+
 Return ONLY valid JSON with this structure:
 {{
   "rewritten_sql": "<the complete rewritten SQL - must have IDENTICAL structure to original>",
   "changes": [
-    {{"type": "table_replace", "original": "<pattern_table>", "new": "<source_table>"}},
-    {{"type": "column_replace", "original": "<pattern_column>", "new": "<source_column>"}}
+    {{"type": "table_replace", "original": "<table_name_from_pattern>", "new": "<table_name_from_user_source>"}},
+    {{"type": "column_replace", "original": "<column_name_from_pattern>", "new": "<column_name_from_user_source>"}}
   ],
   "warnings": ["<only unmatched pattern columns from bronze tables>"],
   "confidence": 0.0-1.0,
