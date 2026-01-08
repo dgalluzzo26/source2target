@@ -610,42 +610,75 @@ async def get_suggestion_vs_candidates(suggestion_id: int):
         if not suggestion:
             raise HTTPException(status_code=404, detail="Suggestion not found")
         
+        import json
+        
         # Parse the vector_search_candidates JSON
         vs_candidates_raw = suggestion.get("vector_search_candidates")
         vs_candidates = {}
         
         if vs_candidates_raw:
-            import json
             try:
                 vs_candidates = json.loads(vs_candidates_raw)
             except:
                 pass
         
-        # Get the matched source fields (what the LLM actually selected)
-        matched_fields_raw = suggestion.get("matched_source_fields")
-        matched_fields = []
+        # Parse sql_changes to determine what was ACTUALLY selected
+        # sql_changes has: {type: "column_replace", original: "PATTERN_COL", new: "SOURCE_COL"}
+        sql_changes_raw = suggestion.get("sql_changes")
+        sql_changes = []
         
-        if matched_fields_raw:
-            import json
+        if sql_changes_raw:
             try:
-                matched_fields = json.loads(matched_fields_raw)
+                sql_changes = json.loads(sql_changes_raw)
             except:
                 pass
         
-        # Create a set of selected field IDs for easy comparison
-        selected_ids = {m.get("unmapped_field_id") for m in matched_fields}
+        # Build map: pattern column (original) -> selected source column (new)
+        # e.g., {"ADR_STREET_1": "STREET_ADDR_1", "SAK_RECIP": "RECIP_KEY"}
+        pattern_to_selected = {}
         
-        # Mark which candidates were selected by the LLM
-        for column, candidates in vs_candidates.items():
+        # Also build map: pattern table (original) -> selected source table (new)
+        # e.g., {"t_re_base": "RECIP_BASE", "t_re_multi_address": "MBR_ADDR"}
+        table_to_selected = {}
+        
+        for change in sql_changes:
+            change_type = change.get("type", "")
+            orig = str(change.get("original", ""))
+            new = str(change.get("new", ""))
+            
+            if change_type in ("column_replace", "replaced") and orig and new:
+                # Extract column name from qualified name (e.g., "b.ADR_STREET_1" -> "ADR_STREET_1")
+                orig_col = orig.split(".")[-1].upper()
+                new_col = new.split(".")[-1].upper()
+                if orig_col and new_col:
+                    pattern_to_selected[orig_col] = new_col
+            
+            elif change_type == "table_replace" and orig and new:
+                # Table replacement (e.g., "t_re_base" -> "RECIP_BASE")
+                table_to_selected[orig.upper()] = new.upper()
+        
+        # Mark which candidates were selected by matching:
+        # VS group key (pattern column) -> sql_changes original
+        # Candidate column -> sql_changes new
+        for pattern_column, candidates in vs_candidates.items():
+            # Extract column name from group key
+            pattern_col_upper = pattern_column.split(".")[-1].upper()
+            
+            # What source column was selected for this pattern column?
+            selected_source_col = pattern_to_selected.get(pattern_col_upper)
+            
             for candidate in candidates:
-                candidate["was_selected"] = candidate.get("unmapped_field_id") in selected_ids
+                candidate_col = str(candidate.get("src_column_physical_name", "")).upper()
+                # Mark as selected only if this candidate matches what was chosen for this pattern column
+                candidate["was_selected"] = (selected_source_col == candidate_col)
         
         return {
             "suggestion_id": suggestion_id,
             "tgt_column": suggestion.get("tgt_column_physical_name"),
             "tgt_table": suggestion.get("tgt_table_physical_name"),
             "candidates_by_column": vs_candidates,
-            "selected_fields": matched_fields,
+            "pattern_to_selected": pattern_to_selected,  # Column mappings: pattern -> selected
+            "table_to_selected": table_to_selected,  # Table mappings: pattern -> selected
             "has_candidates": bool(vs_candidates)
         }
         

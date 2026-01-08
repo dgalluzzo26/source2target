@@ -593,17 +593,34 @@
       
       <div v-else-if="vsCandidatesData" class="vs-candidates-content">
         <p class="vs-candidates-intro">
-          These are all the source fields that vector search found as potential matches for 
-          <strong>{{ vsCandidatesSuggestion?.tgt_column_physical_name }}</strong>. 
-          The AI selected from these candidates.
+          Vector search candidates for <strong>{{ vsCandidatesSuggestion?.tgt_column_physical_name }}</strong>.
+          Shows what the AI selected from available options.
         </p>
+        
+        <!-- Table Mappings Section -->
+        <div v-if="vsCandidatesData.table_to_selected && Object.keys(vsCandidatesData.table_to_selected).length > 0" class="table-mappings-section">
+          <h4><i class="pi pi-table"></i> Table Mappings</h4>
+          <div class="table-mappings-list">
+            <div 
+              v-for="(selectedTable, patternTable) in vsCandidatesData.table_to_selected" 
+              :key="patternTable"
+              class="table-mapping-item"
+            >
+              <span class="pattern-table">{{ patternTable }}</span>
+              <i class="pi pi-arrow-right"></i>
+              <Tag :value="selectedTable" severity="success" />
+            </div>
+          </div>
+        </div>
         
         <div v-if="!vsCandidatesData.has_candidates" class="no-candidates-message">
           <i class="pi pi-info-circle"></i>
           <span>No vector search candidate data available for this suggestion. It may be an older suggestion or a special case.</span>
         </div>
         
+        <!-- Column Candidates Section -->
         <div v-else class="candidates-by-column">
+          <h4><i class="pi pi-list"></i> Column Candidates</h4>
           <div 
             v-for="(candidates, columnName) in vsCandidatesData.candidates_by_column" 
             :key="columnName"
@@ -1314,51 +1331,8 @@ async function showVSCandidates(suggestion: MappingSuggestion) {
     if (!response.ok) throw new Error('Failed to load vector search candidates')
     const data = await response.json()
     
-    // Match VS groups to sql_changes:
-    // - VS groups are keyed by pattern column name (e.g., "ADDR_LINE_1")
-    // - sql_changes has: original = pattern column, new = selected source column
-    // - For each group, find the change where original matches, mark candidate where column matches new
-    if (data.candidates_by_column) {
-      const changes = getChanges(suggestion)
-      
-      // Build map: pattern column (original) -> selected source column (new)
-      // e.g., { "ADDR_LINE_1": "STREET_ADDR_1", "CNTY_ID": "COUNTY_CD" }
-      const patternToSelected = new Map<string, string>()
-      
-      for (const change of changes) {
-        if (change.original && change.new && (change.type === 'column_replace' || change.type === 'replaced')) {
-          // Extract column name from original (e.g., "a.ADDR_LINE_1" -> "ADDR_LINE_1")
-          const origParts = String(change.original).toUpperCase().split('.')
-          const origCol = origParts[origParts.length - 1]
-          
-          // Extract column name from new (e.g., "mf.STREET_ADDR_1" -> "STREET_ADDR_1")
-          const newParts = String(change.new).toUpperCase().split('.')
-          const newCol = newParts[newParts.length - 1]
-          
-          if (origCol && newCol) {
-            patternToSelected.set(origCol, newCol)
-          }
-        }
-      }
-      
-      // For each VS group (keyed by pattern column), mark only the candidate
-      // whose column matches what was selected for THAT specific pattern column
-      for (const groupName in data.candidates_by_column) {
-        // Extract column name from group key (e.g., "a.ADDR_LINE_1" -> "ADDR_LINE_1")
-        const groupParts = groupName.toUpperCase().split('.')
-        const groupCol = groupParts[groupParts.length - 1]
-        
-        // What source column was selected for this pattern column?
-        const selectedCol = patternToSelected.get(groupCol)
-        
-        for (const candidate of data.candidates_by_column[groupName]) {
-          const candidateCol = (candidate.src_column_physical_name || '').toUpperCase()
-          // Mark as selected only if this candidate's column was chosen for THIS pattern column
-          candidate.was_selected = (selectedCol === candidateCol)
-        }
-      }
-    }
-    
+    // Backend now correctly marks was_selected using sql_changes
+    // No need to recompute here - just use the data as-is
     vsCandidatesData.value = data
   } catch (e: any) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 5000 })
@@ -2496,10 +2470,59 @@ function formatDate(dateStr?: string): string {
   color: var(--text-color-secondary);
 }
 
+/* Table Mappings Section */
+.table-mappings-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--surface-50);
+  border-radius: 8px;
+  border: 1px solid var(--surface-border);
+}
+
+.table-mappings-section h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.9rem;
+  color: var(--text-color-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.table-mappings-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.table-mapping-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-0);
+  border-radius: 6px;
+  border: 1px solid var(--surface-200);
+}
+
+.pattern-table {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+}
+
 .candidates-by-column {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+.candidates-by-column h4 {
+  margin: 0 0 1rem 0;
+  font-size: 0.9rem;
+  color: var(--text-color-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .column-candidates {

@@ -1271,13 +1271,9 @@ RULES:
                                     import traceback
                                     traceback.print_exc()
                             
-                            # Add the output column itself as a search target
-                            if tgt_comments:
-                                columns_to_map.insert(0, {
-                                    'description': tgt_comments,
-                                    'column_name': tgt_column_physical,
-                                    'role': 'output'
-                                })
+                            # NOTE: We no longer add the target column to VS search
+                            # Only pattern columns (userColumnsToMap) should be searched
+                            # This keeps VS candidates grouped by pattern column, not target column
                             
                             search_query = " ".join([t for t in search_terms if t])
                             print(f"[Suggestion Service] Search query: {search_query[:200]}...")
@@ -1766,13 +1762,9 @@ RULES:
                             except Exception as e:
                                 print(f"[Suggestion Service] Could not parse join_metadata: {e}")
                         
-                        # Add the output column itself as a search target
-                        if tgt_comments:
-                            columns_to_map.insert(0, {
-                                'description': tgt_comments,
-                                'column_name': tgt_column_physical,
-                                'role': 'output'
-                            })
+                        # NOTE: We no longer add the target column to VS search
+                        # Only pattern columns (userColumnsToMap) should be searched
+                        # This keeps VS candidates grouped by pattern column, not target column
                         
                         search_query = " ".join([t for t in search_terms if t])
                         print(f"[Suggestion Service] Regenerate search query: {search_query[:150]}...")
