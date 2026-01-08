@@ -449,6 +449,16 @@
                   severity="secondary"
                 />
               </div>
+              <Button
+                label="View Alternatives"
+                icon="pi pi-list"
+                size="small"
+                text
+                severity="help"
+                @click="showVSCandidates(editingSuggestion)"
+                v-tooltip.top="'See all source field candidates from vector search'"
+                class="view-alternatives-btn"
+              />
             </div>
 
             <!-- Edit Notes (compact) -->
@@ -2198,6 +2208,12 @@ function formatDate(dateStr?: string): string {
   flex-wrap: wrap;
   gap: 0.35rem;
   align-items: center;
+  flex: 1;
+}
+
+.view-alternatives-btn {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 /* Notes Row */
