@@ -722,7 +722,10 @@ LIMIT {num_results};
             for t in silver_tables
         ]) if silver_tables else "Silver tables: Keep any tables from 'silver_*' schemas unchanged"
         
-        prompt = f"""You are rewriting a SQL mapping template by replacing source columns with the user's columns.
+        prompt = f"""You are performing a STRICT column substitution on a SQL mapping template.
+
+CRITICAL: You must PRESERVE THE EXACT STRUCTURE of the SQL. Do NOT add, remove, or reorganize anything.
+Only substitute column and table NAMES - the SQL logic, JOINs, WHERE clauses, and UNION structure must remain IDENTICAL.
 
 TARGET COLUMN: {target_column}
 
@@ -734,36 +737,43 @@ ORIGINAL SQL TEMPLATE:
 ORIGINAL COLUMN DESCRIPTIONS FROM PATTERN:
 {pattern_descriptions}
 
-USER'S MATCHING SOURCE COLUMNS:
+USER'S MATCHING SOURCE COLUMNS (use these for substitutions):
 {sources_text}
 
 SILVER TABLES (CONSTANT - DO NOT MODIFY):
 {silver_text}
 
-RULES:
-1. Tables containing "silver" in their path are CONSTANT - DO NOT modify ANY columns from silver tables
-2. Only replace columns from bronze/source tables (tables NOT containing "silver" in their path)
-3. Replace bronze table names with user's source tables
-4. Replace bronze column names with user's source columns based on description matching
-5. Keep all JOINs, WHERE clauses, UNION structure intact
-6. Keep all transformations (TRIM, INITCAP, CONCAT, etc.)
+STRICT SUBSTITUTION RULES:
+1. PRESERVE SQL STRUCTURE EXACTLY - same number of SELECTs, same JOINs, same WHERE conditions
+2. Only perform 1-to-1 column substitutions - replace each pattern column with ONE matching source column
+3. Only perform 1-to-1 table substitutions - replace each pattern table with ONE matching source table  
+4. Tables containing "silver" in their path are CONSTANT - never modify silver table references
+5. Do NOT add new columns that weren't in the original SQL
+6. Do NOT remove columns that were in the original SQL
+7. Do NOT change join conditions (e.g., if original joins on SAK_RECIP, the new SQL must also join on the equivalent column)
+8. Keep all transformations (TRIM, INITCAP, CONCAT, CAST, etc.) exactly as they appear
+9. Keep all literals and constants unchanged (e.g., =1, ='Y', in ('R','M'))
+
+MATCHING STRATEGY:
+- Match columns by semantic meaning using the descriptions provided
+- If a pattern column has no clear match, keep it unchanged and add a warning
+- Prefer exact name matches when descriptions are similar
 
 WARNINGS RULES:
-- ONLY warn about PATTERN columns (columns in the original SQL template) that you could NOT find a matching source column for
-- Do NOT warn about extra source columns that were provided but not needed
-- NEVER warn about silver table columns (any table with "silver" in the path)
-- Pattern columns to match are ONLY those from bronze tables in the original SQL, NOT the source columns provided
+- ONLY warn about pattern columns you could NOT find a matching source column for
+- Do NOT warn about extra source columns that were provided but not used
+- NEVER warn about silver table columns
 
 Return ONLY valid JSON with this structure:
 {{
-  "rewritten_sql": "<the complete rewritten SQL>",
+  "rewritten_sql": "<the complete rewritten SQL - must have IDENTICAL structure to original>",
   "changes": [
-    {{"type": "table_replace", "original": "<old>", "new": "<new>"}},
-    {{"type": "column_replace", "original": "<old>", "new": "<new>"}}
+    {{"type": "table_replace", "original": "<pattern_table>", "new": "<source_table>"}},
+    {{"type": "column_replace", "original": "<pattern_column>", "new": "<source_column>"}}
   ],
-  "warnings": ["<only unmatched columns from bronze/source tables>"],
+  "warnings": ["<only unmatched pattern columns from bronze tables>"],
   "confidence": 0.0-1.0,
-  "reasoning": "<brief explanation of changes made>"
+  "reasoning": "<brief explanation of substitutions made>"
 }}"""
 
         # Store prompt for debugging (can be retrieved via API)
