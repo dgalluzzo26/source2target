@@ -1314,43 +1314,33 @@ async function showVSCandidates(suggestion: MappingSuggestion) {
     if (!response.ok) throw new Error('Failed to load vector search candidates')
     const data = await response.json()
     
-    // Mark which candidates were actually used for EACH specific pattern column
-    // by matching the sql_changes (original -> new) to the VS groups
+    // Mark which candidates were actually used in the SQL for this target column
+    // by checking if their column name appears in any sql_change replacement
     if (data.candidates_by_column) {
       const changes = getChanges(suggestion)
       
-      // Build a map: pattern column name -> selected source column name
-      // e.g., { "STREET_ADDR_1": "ADDR_LN_1", "CNTY_ID": "CNTY_ID" }
-      const patternToSelectedColumn = new Map<string, string>()
+      // Collect all source columns that were actually used in the rewritten SQL
+      // These are the "new" values from column_replace changes
+      const usedSourceColumns = new Set<string>()
       
       for (const change of changes) {
         if (change.new && (change.type === 'column_replace' || change.type === 'replaced')) {
-          // Extract the original pattern column (e.g., "p.STREET_ADDR_1" -> "STREET_ADDR_1")
-          const origVal = String(change.original || '').toUpperCase()
-          const origParts = origVal.split('.')
-          const origCol = origParts[origParts.length - 1]
-          
-          // Extract the new source column (e.g., "mf.ADDR_LN_1" -> "ADDR_LN_1")
+          // Extract column name from qualified name (e.g., "mf.ADDR_LN_1" -> "ADDR_LN_1")
           const newVal = String(change.new).toUpperCase()
-          const newParts = newVal.split('.')
-          const newCol = newParts[newParts.length - 1]
-          
-          if (origCol && newCol) {
-            patternToSelectedColumn.set(origCol, newCol)
+          const parts = newVal.split('.')
+          const colName = parts[parts.length - 1]
+          if (colName) {
+            usedSourceColumns.add(colName)
           }
         }
       }
       
-      // For each VS group (keyed by pattern column), mark only the candidate 
-      // that was specifically selected for THAT pattern column
-      for (const patternColumnName in data.candidates_by_column) {
-        const patternColUpper = patternColumnName.toUpperCase()
-        const selectedColForThisPattern = patternToSelectedColumn.get(patternColUpper)
-        
-        for (const candidate of data.candidates_by_column[patternColumnName]) {
+      // Mark candidates as selected if their column was used in any replacement
+      // Since this dialog is for ONE target column, all replacements are relevant
+      for (const groupName in data.candidates_by_column) {
+        for (const candidate of data.candidates_by_column[groupName]) {
           const candidateCol = (candidate.src_column_physical_name || '').toUpperCase()
-          // Only mark as selected if this candidate's column was chosen for THIS specific pattern column
-          candidate.was_selected = selectedColForThisPattern === candidateCol
+          candidate.was_selected = usedSourceColumns.has(candidateCol)
         }
       }
     }
