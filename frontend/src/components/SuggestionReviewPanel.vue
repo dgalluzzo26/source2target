@@ -1314,19 +1314,28 @@ async function showVSCandidates(suggestion: MappingSuggestion) {
     if (!response.ok) throw new Error('Failed to load vector search candidates')
     const data = await response.json()
     
-    // Mark which candidates were actually selected by comparing to matched_source_fields
+    // Mark which candidates were actually used by checking the sql_changes
+    // The sql_changes array contains the actual column replacements made by the LLM
     if (data.candidates_by_column) {
-      const matchedFields = getMatchedFields(suggestion)
-      const selectedKeys = new Set(
-        matchedFields.map(f => 
-          `${f.src_table_physical_name}.${f.src_column_physical_name}`.toUpperCase()
-        )
-      )
+      const changes = getChanges(suggestion)
+      
+      // Extract column names that were actually used in replacements
+      // Format in changes: "new": "mf.MEMBER_ID" or "new": "MEMBER_ID"
+      const usedColumns = new Set<string>()
+      for (const change of changes) {
+        if (change.new && (change.type === 'column_replace' || change.type === 'replaced')) {
+          // Extract column name from potentially qualified name (e.g., "mf.MEMBER_ID" -> "MEMBER_ID")
+          const newVal = String(change.new).toUpperCase()
+          const parts = newVal.split('.')
+          const colName = parts[parts.length - 1] // Get last part after any dots
+          usedColumns.add(colName)
+        }
+      }
       
       for (const columnName in data.candidates_by_column) {
         for (const candidate of data.candidates_by_column[columnName]) {
-          const key = `${candidate.src_table_physical_name}.${candidate.src_column_physical_name}`.toUpperCase()
-          candidate.was_selected = selectedKeys.has(key)
+          const candidateCol = (candidate.src_column_physical_name || '').toUpperCase()
+          candidate.was_selected = usedColumns.has(candidateCol)
         }
       }
     }
