@@ -579,3 +579,136 @@ async def get_last_vector_search():
             "status": "no_data",
             "message": "No vector search captured yet. Run discovery first."
         }
+
+
+# =============================================================================
+# VECTOR SEARCH CANDIDATES FOR A SUGGESTION
+# =============================================================================
+
+@router.get("/{suggestion_id}/vs-candidates", response_model=dict)
+async def get_suggestion_vs_candidates(suggestion_id: int):
+    """
+    Get vector search candidates for a suggestion.
+    
+    Returns all the source field alternatives that were found during vector search,
+    organized by pattern column. This allows users to see what options the LLM
+    had when making its selection.
+    
+    Each pattern column shows:
+    - The candidates found by vector search (up to 10 per column)
+    - Similarity scores
+    - Source table/column info
+    - Descriptions
+    
+    Use this to:
+    - Understand why the AI chose certain matches
+    - See alternative source fields that could be used
+    - Verify the AI made the right choice or identify better alternatives
+    """
+    try:
+        suggestion = await suggestion_service.get_suggestion_by_id(suggestion_id)
+        if not suggestion:
+            raise HTTPException(status_code=404, detail="Suggestion not found")
+        
+        # Parse the vector_search_candidates JSON
+        vs_candidates_raw = suggestion.get("vector_search_candidates")
+        vs_candidates = {}
+        
+        if vs_candidates_raw:
+            import json
+            try:
+                vs_candidates = json.loads(vs_candidates_raw)
+            except:
+                pass
+        
+        # Get the matched source fields (what the LLM actually selected)
+        matched_fields_raw = suggestion.get("matched_source_fields")
+        matched_fields = []
+        
+        if matched_fields_raw:
+            import json
+            try:
+                matched_fields = json.loads(matched_fields_raw)
+            except:
+                pass
+        
+        # Create a set of selected field IDs for easy comparison
+        selected_ids = {m.get("unmapped_field_id") for m in matched_fields}
+        
+        # Mark which candidates were selected by the LLM
+        for column, candidates in vs_candidates.items():
+            for candidate in candidates:
+                candidate["was_selected"] = candidate.get("unmapped_field_id") in selected_ids
+        
+        return {
+            "suggestion_id": suggestion_id,
+            "tgt_column": suggestion.get("tgt_column_physical_name"),
+            "tgt_table": suggestion.get("tgt_table_physical_name"),
+            "candidates_by_column": vs_candidates,
+            "selected_fields": matched_fields,
+            "has_candidates": bool(vs_candidates)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Suggestions Router] Error getting VS candidates: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{suggestion_id}/llm-debug", response_model=dict)
+async def get_suggestion_llm_debug(suggestion_id: int):
+    """
+    Get LLM debug info for a suggestion.
+    
+    Returns the full prompt sent to the LLM and its raw response.
+    This is for admins/power users to debug AI decisions.
+    
+    Includes:
+    - prompt_sent: The full prompt text
+    - raw_response: The LLM's raw response
+    - model_endpoint: Which model was used
+    - latency_ms: How long the LLM call took
+    - timestamp: When the call was made
+    
+    Use this to:
+    - Debug why the AI generated certain SQL
+    - Understand the AI's reasoning
+    - Identify issues with prompts or responses
+    """
+    try:
+        suggestion = await suggestion_service.get_suggestion_by_id(suggestion_id)
+        if not suggestion:
+            raise HTTPException(status_code=404, detail="Suggestion not found")
+        
+        # Parse the llm_debug_info JSON
+        debug_info_raw = suggestion.get("llm_debug_info")
+        debug_info = None
+        
+        if debug_info_raw:
+            import json
+            try:
+                debug_info = json.loads(debug_info_raw)
+            except:
+                pass
+        
+        if not debug_info:
+            return {
+                "suggestion_id": suggestion_id,
+                "has_debug_info": False,
+                "message": "No LLM debug info available for this suggestion. This may be an older suggestion or a special case (auto-generated, hardcoded, etc.)"
+            }
+        
+        return {
+            "suggestion_id": suggestion_id,
+            "has_debug_info": True,
+            "tgt_column": suggestion.get("tgt_column_physical_name"),
+            "tgt_table": suggestion.get("tgt_table_physical_name"),
+            "debug_info": debug_info
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Suggestions Router] Error getting LLM debug info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

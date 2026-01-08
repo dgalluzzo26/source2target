@@ -93,7 +93,18 @@
 
         <!-- Matched Source Fields -->
         <div v-if="getMatchedFields(suggestion).length > 0" class="matched-sources">
-          <h4>Matched Source Fields:</h4>
+          <div class="matched-sources-header">
+            <h4>Matched Source Fields:</h4>
+            <Button
+              label="View Alternatives"
+              icon="pi pi-list"
+              size="small"
+              text
+              severity="help"
+              @click="showVSCandidates(suggestion)"
+              v-tooltip.top="'See all source field candidates from vector search'"
+            />
+          </div>
           <div class="source-tags">
             <Tag 
               v-for="(field, idx) in getMatchedFields(suggestion).slice(0, 3)" 
@@ -557,6 +568,74 @@
         </div>
       </div>
     </Dialog>
+
+    <!-- Vector Search Candidates Dialog -->
+    <Dialog 
+      v-model:visible="showVSCandidatesDialog" 
+      modal 
+      header="Source Field Alternatives" 
+      :style="{ width: '800px', maxHeight: '80vh' }"
+    >
+      <div v-if="loadingVSCandidates" class="loading-alternatives">
+        <ProgressSpinner />
+        <p>Loading alternatives...</p>
+      </div>
+      
+      <div v-else-if="vsCandidatesData" class="vs-candidates-content">
+        <p class="vs-candidates-intro">
+          These are all the source fields that vector search found as potential matches for 
+          <strong>{{ vsCandidatesSuggestion?.tgt_column_physical_name }}</strong>. 
+          The AI selected from these candidates.
+        </p>
+        
+        <div v-if="!vsCandidatesData.has_candidates" class="no-candidates-message">
+          <i class="pi pi-info-circle"></i>
+          <span>No vector search candidate data available for this suggestion. It may be an older suggestion or a special case.</span>
+        </div>
+        
+        <div v-else class="candidates-by-column">
+          <div 
+            v-for="(candidates, columnName) in vsCandidatesData.candidates_by_column" 
+            :key="columnName"
+            class="column-candidates"
+          >
+            <div class="column-candidates-header">
+              <strong>{{ columnName }}</strong>
+              <Badge :value="candidates.length" severity="secondary" />
+            </div>
+            
+            <div class="candidates-list">
+              <div 
+                v-for="(candidate, idx) in candidates" 
+                :key="idx"
+                class="candidate-item"
+                :class="{ 'was-selected': candidate.was_selected }"
+              >
+                <div class="candidate-main">
+                  <span class="candidate-column">
+                    {{ candidate.src_table_physical_name }}.{{ candidate.src_column_physical_name }}
+                  </span>
+                  <Tag 
+                    v-if="candidate.was_selected" 
+                    value="Selected" 
+                    severity="success" 
+                    size="small" 
+                  />
+                  <span class="candidate-score">{{ (candidate.score * 100).toFixed(1) }}%</span>
+                </div>
+                <div class="candidate-meta" v-if="candidate.src_comments">
+                  {{ candidate.src_comments }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <template #footer>
+        <Button label="Close" @click="showVSCandidatesDialog = false" />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -590,11 +669,15 @@ const showEditDialog = ref(false)
 const showRejectDialog = ref(false)
 const showAIAssist = ref(false)
 const showAlternativesDialog = ref(false)
+const showVSCandidatesDialog = ref(false)
 const editingSuggestion = ref<MappingSuggestion | null>(null)
 const rejectingSuggestion = ref<MappingSuggestion | null>(null)
 const alternativesSuggestion = ref<MappingSuggestion | null>(null)
+const vsCandidatesSuggestion = ref<MappingSuggestion | null>(null)
+const vsCandidatesData = ref<any>(null)
 const patternVariants = ref<any[]>([])
 const loadingAlternatives = ref(false)
+const loadingVSCandidates = ref(false)
 const regeneratingWithPattern = ref<number | null>(null)
 const editedSQL = ref('')
 const editNotes = ref('')
@@ -1206,6 +1289,26 @@ async function showAlternatives(suggestion: MappingSuggestion) {
     showAlternativesDialog.value = false
   } finally {
     loadingAlternatives.value = false
+  }
+}
+
+// Vector Search Candidates
+async function showVSCandidates(suggestion: MappingSuggestion) {
+  vsCandidatesSuggestion.value = suggestion
+  showVSCandidatesDialog.value = true
+  loadingVSCandidates.value = true
+  vsCandidatesData.value = null
+  
+  try {
+    const response = await fetch(`/api/v4/suggestions/${suggestion.suggestion_id}/vs-candidates`)
+    if (!response.ok) throw new Error('Failed to load vector search candidates')
+    const data = await response.json()
+    vsCandidatesData.value = data
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 5000 })
+    showVSCandidatesDialog.value = false
+  } finally {
+    loadingVSCandidates.value = false
   }
 }
 
@@ -2296,6 +2399,111 @@ function formatDate(dateStr?: string): string {
   color: var(--primary-700);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Matched Sources Header */
+.matched-sources-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.matched-sources-header h4 {
+  margin: 0;
+}
+
+/* VS Candidates Dialog */
+.vs-candidates-content {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.vs-candidates-intro {
+  margin: 0 0 1.5rem 0;
+  color: var(--text-color-secondary);
+}
+
+.no-candidates-message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--surface-100);
+  border-radius: 6px;
+  color: var(--text-color-secondary);
+}
+
+.candidates-by-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.column-candidates {
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.column-candidates-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: var(--surface-100);
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.candidates-list {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.candidate-item {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--surface-border);
+  transition: background 0.15s;
+}
+
+.candidate-item:last-child {
+  border-bottom: none;
+}
+
+.candidate-item:hover {
+  background: var(--surface-50);
+}
+
+.candidate-item.was-selected {
+  background: var(--green-50);
+  border-left: 3px solid var(--green-500);
+}
+
+.candidate-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.candidate-column {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--primary-700);
+}
+
+.candidate-score {
+  margin-left: auto;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-color-secondary);
+}
+
+.candidate-meta {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-color-secondary);
+  padding-left: 0.25rem;
 }
 </style>
 

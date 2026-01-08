@@ -92,6 +92,37 @@ class SuggestionWarning(BaseModel):
     severity: str = Field(default="warning", description="warning, error, info")
 
 
+class VectorSearchCandidate(BaseModel):
+    """
+    A single vector search candidate for a pattern column.
+    
+    Represents one potential source field match found by vector search,
+    before the LLM made its selection.
+    """
+    unmapped_field_id: int = Field(..., description="FK to unmapped_fields")
+    src_table_physical_name: str = Field(..., description="Source table physical name")
+    src_column_physical_name: str = Field(..., description="Source column physical name")
+    src_table_name: Optional[str] = Field(None, description="Source table logical name")
+    src_column_name: Optional[str] = Field(None, description="Source column logical name")
+    src_comments: Optional[str] = Field(None, description="Source column description")
+    src_physical_datatype: Optional[str] = Field(None, description="Source data type")
+    score: float = Field(..., description="Vector search similarity score")
+    
+    
+class LLMDebugInfo(BaseModel):
+    """
+    Debug information about the LLM call.
+    
+    Stores the full prompt sent to the LLM and its raw response
+    for debugging and transparency.
+    """
+    prompt_sent: str = Field(..., description="Full prompt sent to LLM")
+    raw_response: Optional[str] = Field(None, description="Raw LLM response text")
+    model_endpoint: str = Field(..., description="LLM endpoint name")
+    latency_ms: Optional[int] = Field(None, description="LLM call latency in milliseconds")
+    timestamp: Optional[str] = Field(None, description="When LLM was called (ISO format)")
+
+
 # =============================================================================
 # MAPPING SUGGESTION MODELS
 # =============================================================================
@@ -166,6 +197,13 @@ class MappingSuggestion(BaseModel):
     ai_reasoning: Optional[str] = Field(None, description="AI explanation")
     warnings: Optional[str] = Field(None, description="JSON array of SuggestionWarning")
     
+    # Vector search candidates (all options before LLM chose)
+    # JSON object keyed by pattern column name, values are arrays of VectorSearchCandidate
+    vector_search_candidates: Optional[str] = Field(None, description="JSON: VS results per pattern column before LLM selection")
+    
+    # LLM debug info (prompt, response, timing)
+    llm_debug_info: Optional[str] = Field(None, description="JSON: LLM prompt, response, timing for debugging")
+    
     # Status
     suggestion_status: SuggestionStatus = Field(
         default=SuggestionStatus.PROCESSING,
@@ -228,6 +266,37 @@ class MappingSuggestion(BaseModel):
             return [SuggestionWarning(**item) for item in data]
         except:
             return []
+    
+    def get_vector_search_candidates_dict(self) -> dict:
+        """
+        Parse vector_search_candidates JSON to dictionary.
+        
+        Returns:
+            Dict mapping pattern column names to lists of VectorSearchCandidate
+        """
+        if not self.vector_search_candidates:
+            return {}
+        import json
+        try:
+            data = json.loads(self.vector_search_candidates)
+            # Convert each candidate list to VectorSearchCandidate objects
+            result = {}
+            for column, candidates in data.items():
+                result[column] = [VectorSearchCandidate(**c) for c in candidates]
+            return result
+        except:
+            return {}
+    
+    def get_llm_debug_info(self) -> Optional[LLMDebugInfo]:
+        """Parse llm_debug_info JSON to LLMDebugInfo object."""
+        if not self.llm_debug_info:
+            return None
+        import json
+        try:
+            data = json.loads(self.llm_debug_info)
+            return LLMDebugInfo(**data)
+        except:
+            return None
 
 
 class MappingSuggestionCreate(BaseModel):
@@ -258,6 +327,10 @@ class MappingSuggestionCreate(BaseModel):
     confidence_score: Optional[float] = None
     ai_reasoning: Optional[str] = None
     warnings: Optional[str] = None  # JSON string
+    
+    # Vector search candidates and LLM debug info
+    vector_search_candidates: Optional[str] = None  # JSON string
+    llm_debug_info: Optional[str] = None  # JSON string
     
     # Status
     suggestion_status: SuggestionStatus = SuggestionStatus.PROCESSING
@@ -325,6 +398,15 @@ class SuggestionReviewItem(BaseModel):
     ai_reasoning: Optional[str] = None
     warnings: List[SuggestionWarning] = []
     has_warnings: bool = False
+    
+    # Vector search alternatives (keyed by pattern column name)
+    vector_search_candidates: Optional[dict] = Field(
+        default=None, 
+        description="Dict mapping pattern column names to lists of alternative candidates"
+    )
+    
+    # LLM debug info (for admin view)
+    has_debug_info: bool = Field(default=False, description="Whether debug info is available")
     
     # Status
     suggestion_status: SuggestionStatus

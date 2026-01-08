@@ -387,6 +387,8 @@ class SuggestionService:
         
         # Store for debugging
         self._last_parallel_searches = []
+        # Store full results per column for VS candidates feature
+        self._last_parallel_search = {}
         
         def search_column(col_info: Dict[str, str]) -> List[Dict[str, Any]]:
             """Search for a single column."""
@@ -409,6 +411,7 @@ class SuggestionService:
             futures = {executor.submit(search_column, col): col for col in columns_to_search}
             
             for future in as_completed(futures):
+                col_info = futures[future]
                 try:
                     result = future.result()
                     self._last_parallel_searches.append({
@@ -417,6 +420,22 @@ class SuggestionService:
                         "count": len(result["results"]),
                         "columns": [f"{r['src_table_physical_name']}.{r['src_column_physical_name']}" for r in result["results"][:3]]
                     })
+                    
+                    # Store full results per pattern column for VS candidates
+                    pattern_col = col_info.get('column_name', result["role"])
+                    self._last_parallel_search[pattern_col] = [
+                        {
+                            "unmapped_field_id": r.get("unmapped_field_id"),
+                            "src_table_physical_name": r.get("src_table_physical_name", ""),
+                            "src_column_physical_name": r.get("src_column_physical_name", ""),
+                            "src_table_name": r.get("src_table_name", ""),
+                            "src_column_name": r.get("src_column_name", ""),
+                            "src_comments": r.get("src_comments", ""),
+                            "src_physical_datatype": r.get("src_physical_datatype", ""),
+                            "score": r.get("score", 0)
+                        }
+                        for r in result["results"][:10]  # Keep top 10 per column
+                    ]
                     
                     # Merge results, avoiding duplicates
                     for match in result["results"]:
@@ -768,6 +787,17 @@ Return ONLY valid JSON with this structure:
         
         # Brief log (full details available via debug endpoint)
         print(f"[LLM] Rewriting for {target_column} with {len(matched_sources)} source columns")
+        
+        # Initialize debug info
+        import time as time_module
+        llm_start_time = time_module.time()
+        self._last_llm_debug_info = {
+            "prompt_sent": prompt,
+            "raw_response": None,
+            "model_endpoint": llm_endpoint,
+            "latency_ms": None,
+            "timestamp": datetime.now().isoformat()
+        }
 
         try:
             response = self.workspace_client.serving_endpoints.query(
@@ -779,6 +809,10 @@ Return ONLY valid JSON with this structure:
             )
             
             response_text = response.choices[0].message.content
+            
+            # Capture debug info
+            self._last_llm_debug_info["raw_response"] = response_text
+            self._last_llm_debug_info["latency_ms"] = int((time_module.time() - llm_start_time) * 1000)
             
             # Clean and extract JSON using helper
             json_str = clean_llm_json(response_text)
@@ -820,6 +854,8 @@ Return ONLY valid JSON with this structure:
                 
         except Exception as e:
             print(f"[Suggestion Service] LLM error: {str(e)}")
+            self._last_llm_debug_info["latency_ms"] = int((time_module.time() - llm_start_time) * 1000)
+            self._last_llm_debug_info["raw_response"] = f"ERROR: {str(e)}"
             return {
                 "rewritten_sql": pattern_sql,
                 "changes": [],
@@ -1128,6 +1164,8 @@ RULES:
                         "confidence_score": None,
                         "ai_reasoning": None,
                         "warnings": "[]",
+                        "vector_search_candidates": "{}",  # VS results per pattern column
+                        "llm_debug_info": None,  # LLM prompt/response for debugging
                         "suggestion_status": "NO_PATTERN"
                     }
                     
@@ -1258,6 +1296,27 @@ RULES:
                             )
                             print(f"[Suggestion Service]   -> Vector search: {time.time() - vs_start:.2f}s, found {len(matched_sources) if matched_sources else 0}")
                             
+                            # Capture VS candidates per pattern column for transparency
+                            vs_candidates_by_column = {}
+                            if hasattr(self, '_last_parallel_search') and self._last_parallel_search:
+                                # Parallel search stores results per column
+                                vs_candidates_by_column = self._last_parallel_search
+                            elif hasattr(self, '_last_vector_search') and self._last_vector_search:
+                                # Single search - group all results under "combined"
+                                raw_results = self._last_vector_search.get("raw_results", [])
+                                if raw_results:
+                                    vs_candidates_by_column["combined"] = [
+                                        {
+                                            "unmapped_field_id": r.get("unmapped_field_id"),
+                                            "src_table_physical_name": r.get("table", ""),
+                                            "src_column_physical_name": r.get("column", ""),
+                                            "src_comments": r.get("description", ""),
+                                            "score": r.get("score", 0)
+                                        }
+                                        for r in raw_results[:10]  # Limit to top 10 per column
+                                    ]
+                            suggestion_data["vector_search_candidates"] = json.dumps(vs_candidates_by_column)
+                            
                             # Fallback to SQL search if vector search returns nothing
                             if not matched_sources:
                                 sql_start = time.time()
@@ -1345,6 +1404,10 @@ RULES:
                                 suggestion_data["ai_reasoning"] = rewrite_result.get("reasoning", "")
                                 suggestion_data["warnings"] = json.dumps(filtered_warnings)
                                 suggestion_data["suggestion_status"] = "PENDING"
+                                
+                                # Capture LLM debug info for transparency
+                                if hasattr(self, '_last_llm_debug_info') and self._last_llm_debug_info:
+                                    suggestion_data["llm_debug_info"] = json.dumps(self._last_llm_debug_info)
                             else:
                                 # Pattern found but no matching sources
                                 no_match += 1
@@ -1378,6 +1441,8 @@ RULES:
                             confidence_score,
                             ai_reasoning,
                             warnings,
+                            vector_search_candidates,
+                            llm_debug_info,
                             suggestion_status,
                             created_ts
                         ) VALUES (
@@ -1399,6 +1464,8 @@ RULES:
                             {suggestion_data['confidence_score'] if suggestion_data['confidence_score'] else 'NULL'},
                             {f"'{self._escape_sql(suggestion_data['ai_reasoning'])}'" if suggestion_data['ai_reasoning'] else 'NULL'},
                             '{self._escape_sql(suggestion_data['warnings'])}',
+                            {f"'{self._escape_sql(suggestion_data['vector_search_candidates'])}'" if suggestion_data.get('vector_search_candidates') else 'NULL'},
+                            {f"'{self._escape_sql(suggestion_data['llm_debug_info'])}'" if suggestion_data.get('llm_debug_info') else 'NULL'},
                             '{suggestion_data['suggestion_status']}',
                             CURRENT_TIMESTAMP()
                         )
@@ -1612,6 +1679,8 @@ RULES:
                     "confidence_score": None,
                     "ai_reasoning": None,
                     "warnings": "[]",
+                    "vector_search_candidates": "{}",
+                    "llm_debug_info": None,
                     "suggestion_status": "NO_PATTERN"
                 }
                 
@@ -1719,6 +1788,25 @@ RULES:
                             columns_to_map=columns_to_map if columns_to_map else None
                         )
                         
+                        # Capture VS candidates per pattern column for transparency
+                        vs_candidates_by_column = {}
+                        if hasattr(self, '_last_parallel_search') and self._last_parallel_search:
+                            vs_candidates_by_column = self._last_parallel_search
+                        elif hasattr(self, '_last_vector_search') and self._last_vector_search:
+                            raw_results = self._last_vector_search.get("raw_results", [])
+                            if raw_results:
+                                vs_candidates_by_column["combined"] = [
+                                    {
+                                        "unmapped_field_id": r.get("unmapped_field_id"),
+                                        "src_table_physical_name": r.get("table", ""),
+                                        "src_column_physical_name": r.get("column", ""),
+                                        "src_comments": r.get("description", ""),
+                                        "score": r.get("score", 0)
+                                    }
+                                    for r in raw_results[:10]
+                                ]
+                        new_suggestion_data["vector_search_candidates"] = json.dumps(vs_candidates_by_column)
+                        
                         # Fallback to SQL search
                         if not matched_sources:
                             matched_sources = self._sql_search_source_fields_sync(
@@ -1768,6 +1856,10 @@ RULES:
                             new_suggestion_data["ai_reasoning"] = rewrite_result.get("reasoning", "")
                             new_suggestion_data["warnings"] = json.dumps(filtered_warnings)
                             new_suggestion_data["suggestion_status"] = "PENDING"
+                            
+                            # Capture LLM debug info for transparency
+                            if hasattr(self, '_last_llm_debug_info') and self._last_llm_debug_info:
+                                new_suggestion_data["llm_debug_info"] = json.dumps(self._last_llm_debug_info)
                         else:
                             new_suggestion_data["suggestion_status"] = "NO_MATCH"
                             new_suggestion_data["warnings"] = json.dumps(["No matching source fields found for this pattern"])
@@ -1785,6 +1877,8 @@ RULES:
                         confidence_score = {new_suggestion_data['confidence_score'] if new_suggestion_data['confidence_score'] else 'NULL'},
                         ai_reasoning = {f"'{self._escape_sql(new_suggestion_data['ai_reasoning'])}'" if new_suggestion_data['ai_reasoning'] else 'NULL'},
                         warnings = '{self._escape_sql(new_suggestion_data['warnings'])}',
+                        vector_search_candidates = {f"'{self._escape_sql(new_suggestion_data['vector_search_candidates'])}'" if new_suggestion_data.get('vector_search_candidates') else 'NULL'},
+                        llm_debug_info = {f"'{self._escape_sql(new_suggestion_data['llm_debug_info'])}'" if new_suggestion_data.get('llm_debug_info') else 'NULL'},
                         suggestion_status = '{new_suggestion_data['suggestion_status']}',
                         edited_sql = NULL,
                         edited_source_fields = NULL,
