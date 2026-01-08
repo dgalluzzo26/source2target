@@ -1314,34 +1314,47 @@ async function showVSCandidates(suggestion: MappingSuggestion) {
     if (!response.ok) throw new Error('Failed to load vector search candidates')
     const data = await response.json()
     
-    // Mark which candidates were actually used in the SQL for this target column
-    // Match by FULL table.column name to avoid false positives
+    // Match VS groups to sql_changes:
+    // - VS groups are keyed by pattern column name (e.g., "ADDR_LINE_1")
+    // - sql_changes has: original = pattern column, new = selected source column
+    // - For each group, find the change where original matches, mark candidate where column matches new
     if (data.candidates_by_column) {
       const changes = getChanges(suggestion)
       
-      // Collect full TABLE.COLUMN names that were actually used
-      // Format in changes: "new": "MBR_ADDR.CNTY_ID" (already table.column)
-      const usedFullNames = new Set<string>()
+      // Build map: pattern column (original) -> selected source column (new)
+      // e.g., { "ADDR_LINE_1": "STREET_ADDR_1", "CNTY_ID": "COUNTY_CD" }
+      const patternToSelected = new Map<string, string>()
       
       for (const change of changes) {
-        if (change.new && (change.type === 'column_replace' || change.type === 'replaced')) {
-          // The "new" value should be in format TABLE.COLUMN or alias.COLUMN
-          // We need to match against candidate's table.column
-          const newVal = String(change.new).toUpperCase()
+        if (change.original && change.new && (change.type === 'column_replace' || change.type === 'replaced')) {
+          // Extract column name from original (e.g., "a.ADDR_LINE_1" -> "ADDR_LINE_1")
+          const origParts = String(change.original).toUpperCase().split('.')
+          const origCol = origParts[origParts.length - 1]
           
-          // If it's alias.column (e.g., "mf.ADDR_LN_1"), we can't match directly
-          // But if it's TABLE.COLUMN (e.g., "MBR_ADDR.ADDR_LN_1"), we can
-          if (newVal.includes('.')) {
-            usedFullNames.add(newVal)
+          // Extract column name from new (e.g., "mf.STREET_ADDR_1" -> "STREET_ADDR_1")
+          const newParts = String(change.new).toUpperCase().split('.')
+          const newCol = newParts[newParts.length - 1]
+          
+          if (origCol && newCol) {
+            patternToSelected.set(origCol, newCol)
           }
         }
       }
       
-      // Mark candidates as selected only if their FULL table.column matches
+      // For each VS group (keyed by pattern column), mark only the candidate
+      // whose column matches what was selected for THAT specific pattern column
       for (const groupName in data.candidates_by_column) {
+        // Extract column name from group key (e.g., "a.ADDR_LINE_1" -> "ADDR_LINE_1")
+        const groupParts = groupName.toUpperCase().split('.')
+        const groupCol = groupParts[groupParts.length - 1]
+        
+        // What source column was selected for this pattern column?
+        const selectedCol = patternToSelected.get(groupCol)
+        
         for (const candidate of data.candidates_by_column[groupName]) {
-          const candidateFullName = `${(candidate.src_table_physical_name || '').toUpperCase()}.${(candidate.src_column_physical_name || '').toUpperCase()}`
-          candidate.was_selected = usedFullNames.has(candidateFullName)
+          const candidateCol = (candidate.src_column_physical_name || '').toUpperCase()
+          // Mark as selected only if this candidate's column was chosen for THIS pattern column
+          candidate.was_selected = (selectedCol === candidateCol)
         }
       }
     }
