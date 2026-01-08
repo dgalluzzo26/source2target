@@ -1315,32 +1315,33 @@ async function showVSCandidates(suggestion: MappingSuggestion) {
     const data = await response.json()
     
     // Mark which candidates were actually used in the SQL for this target column
-    // by checking if their column name appears in any sql_change replacement
+    // Match by FULL table.column name to avoid false positives
     if (data.candidates_by_column) {
       const changes = getChanges(suggestion)
       
-      // Collect all source columns that were actually used in the rewritten SQL
-      // These are the "new" values from column_replace changes
-      const usedSourceColumns = new Set<string>()
+      // Collect full TABLE.COLUMN names that were actually used
+      // Format in changes: "new": "MBR_ADDR.CNTY_ID" (already table.column)
+      const usedFullNames = new Set<string>()
       
       for (const change of changes) {
         if (change.new && (change.type === 'column_replace' || change.type === 'replaced')) {
-          // Extract column name from qualified name (e.g., "mf.ADDR_LN_1" -> "ADDR_LN_1")
+          // The "new" value should be in format TABLE.COLUMN or alias.COLUMN
+          // We need to match against candidate's table.column
           const newVal = String(change.new).toUpperCase()
-          const parts = newVal.split('.')
-          const colName = parts[parts.length - 1]
-          if (colName) {
-            usedSourceColumns.add(colName)
+          
+          // If it's alias.column (e.g., "mf.ADDR_LN_1"), we can't match directly
+          // But if it's TABLE.COLUMN (e.g., "MBR_ADDR.ADDR_LN_1"), we can
+          if (newVal.includes('.')) {
+            usedFullNames.add(newVal)
           }
         }
       }
       
-      // Mark candidates as selected if their column was used in any replacement
-      // Since this dialog is for ONE target column, all replacements are relevant
+      // Mark candidates as selected only if their FULL table.column matches
       for (const groupName in data.candidates_by_column) {
         for (const candidate of data.candidates_by_column[groupName]) {
-          const candidateCol = (candidate.src_column_physical_name || '').toUpperCase()
-          candidate.was_selected = usedSourceColumns.has(candidateCol)
+          const candidateFullName = `${(candidate.src_table_physical_name || '').toUpperCase()}.${(candidate.src_column_physical_name || '').toUpperCase()}`
+          candidate.was_selected = usedFullNames.has(candidateFullName)
         }
       }
     }
