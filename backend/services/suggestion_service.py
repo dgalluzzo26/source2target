@@ -123,26 +123,34 @@ def clean_llm_json(text: str) -> str:
     return ''.join(result)
 
 
-def filter_false_positive_warnings(warnings: List[str], changes: List[Dict[str, Any]]) -> List[str]:
+def filter_false_positive_warnings(
+    warnings: List[str], 
+    changes: List[Dict[str, Any]],
+    pattern_columns: List[str] = None,
+    pattern_tables: List[str] = None
+) -> List[str]:
     """
-    Filter out warnings that mention columns which were actually successfully replaced.
-    
-    LLMs sometimes incorrectly list columns as "not found" even though they appear
-    in the changes array as successfully replaced. This filters those out.
+    Filter out warnings that are false positives:
+    1. Warnings about columns that were actually successfully replaced
+    2. Warnings about user source tables/columns (not pattern tables/columns)
     
     Args:
         warnings: List of warning strings from LLM
         changes: List of change objects with 'original', 'new', 'type' fields
+        pattern_columns: List of original pattern column names (e.g., ["ADR_STREET_1", "SAK_RECIP"])
+        pattern_tables: List of original pattern table names (e.g., ["t_re_base", "t_re_multi_address"])
         
     Returns:
         Filtered list of warnings
     """
-    if not warnings or not changes:
+    if not warnings:
         return warnings
+    
+    import re
     
     # Build set of column names that were successfully replaced (case-insensitive)
     replaced_columns = set()
-    for change in changes:
+    for change in changes or []:
         if change.get("type") == "column_replace" or change.get("new"):
             original = change.get("original", "")
             # Extract just the column name (handle TABLE.COLUMN format)
@@ -151,30 +159,67 @@ def filter_false_positive_warnings(warnings: List[str], changes: List[Dict[str, 
             if original:
                 replaced_columns.add(original.upper())
     
-    if not replaced_columns:
-        return warnings
+    # Build set of valid pattern columns/tables (warnings should only reference these)
+    valid_pattern_columns = set()
+    if pattern_columns:
+        for col in pattern_columns:
+            valid_pattern_columns.add(col.upper())
     
-    # Filter out warnings that mention successfully replaced columns
+    valid_pattern_tables = set()
+    if pattern_tables:
+        for tbl in pattern_tables:
+            # Handle full paths like "oz_dev.bronze_dmes_de.t_re_base"
+            tbl_name = tbl.split(".")[-1] if "." in tbl else tbl
+            valid_pattern_tables.add(tbl_name.upper())
+    
+    # Common user source table names that should NOT appear in warnings
+    # (these are user's source tables, not pattern tables)
+    user_source_tables = {"CNTY_REF", "MBR_ADDR", "RECIP_BASE", "MBR_FNDTN", "MBR_CNTCT"}
+    
     filtered_warnings = []
     for warning in warnings:
         warning_upper = warning.upper()
-        # Check if any replaced column is mentioned in this warning
         is_false_positive = False
+        
+        # Check 1: Warning mentions a successfully replaced column
         for col in replaced_columns:
-            # Check various patterns: column name alone or with table prefix
-            if col in warning_upper:
-                # Make sure it's a word boundary match (not part of another word)
-                import re
-                pattern = r'\b' + re.escape(col) + r'\b'
+            pattern = r'\b' + re.escape(col) + r'\b'
+            if re.search(pattern, warning_upper):
+                is_false_positive = True
+                print(f"[Warning Filter] Filtered (replaced column): {warning[:80]}...")
+                break
+        
+        # Check 2: Warning mentions a user source table (not a pattern table)
+        if not is_false_positive:
+            for user_table in user_source_tables:
+                pattern = r'\b' + re.escape(user_table) + r'\b'
                 if re.search(pattern, warning_upper):
-                    is_false_positive = True
+                    # Only filter if this is NOT also a pattern table
+                    if user_table not in valid_pattern_tables:
+                        is_false_positive = True
+                        print(f"[Warning Filter] Filtered (user source table): {warning[:80]}...")
+                        break
+        
+        # Check 3: If we have pattern columns, only keep warnings that reference them
+        if not is_false_positive and valid_pattern_columns:
+            mentions_pattern_col = False
+            for pat_col in valid_pattern_columns:
+                pattern = r'\b' + re.escape(pat_col) + r'\b'
+                if re.search(pattern, warning_upper):
+                    mentions_pattern_col = True
                     break
+            if not mentions_pattern_col:
+                # Warning doesn't mention any pattern column - might be about user source
+                # Only filter if it mentions something that looks like a table/column reference
+                if "TABLE" in warning_upper or "COLUMN" in warning_upper or "MATCH" in warning_upper:
+                    is_false_positive = True
+                    print(f"[Warning Filter] Filtered (no pattern column ref): {warning[:80]}...")
         
         if not is_false_positive:
             filtered_warnings.append(warning)
     
     if len(warnings) != len(filtered_warnings):
-        print(f"[Suggestion Service] Filtered {len(warnings) - len(filtered_warnings)} false positive warnings")
+        print(f"[Suggestion Service] Filtered {len(warnings) - len(filtered_warnings)} false positive warnings out of {len(warnings)}")
     
     return filtered_warnings
 
@@ -759,10 +804,13 @@ MATCHING STRATEGY:
 - If a pattern column has no clear match, keep it unchanged and add a warning
 - Prefer exact name matches when descriptions are similar
 
-WARNINGS RULES:
-- ONLY warn about pattern columns you could NOT find a matching source column for
-- Do NOT warn about extra source columns that were provided but not used
-- NEVER warn about silver table columns
+WARNINGS RULES (BE VERY STRICT):
+- ONLY warn about columns FROM THE ORIGINAL SQL TEMPLATE that you could not find a match for
+- The warning must reference the PATTERN column name (e.g., "ADR_STREET_1", "SAK_RECIP"), NOT a user source column
+- Do NOT warn about user source columns/tables that were provided but not used (e.g., CNTY_REF, MBR_FNDTN)
+- Do NOT warn about silver table columns (tables with "silver" in their path)
+- Do NOT warn about successful substitutions - only warn if you could NOT find ANY match
+- If you found a match and made a substitution, that is NOT a warning - it's a successful change
 
 CRITICAL CHANGE REPORTING:
 - "original" = the EXACT column/table name FROM THE ORIGINAL SQL TEMPLATE (e.g., "a.CURR_REC_IND", "b.ADR_STREET_1")
@@ -800,8 +848,11 @@ Return ONLY valid JSON with this structure:
             "full_prompt": prompt
         }
         
-        # Brief log (full details available via debug endpoint)
+        # Log prompt for debugging (since debug endpoint may not have data)
         print(f"[LLM] Rewriting for {target_column} with {len(matched_sources)} source columns")
+        print(f"[LLM] ===== PROMPT START =====")
+        print(prompt)
+        print(f"[LLM] ===== PROMPT END =====")
         
         # Initialize debug info
         import time as time_module
@@ -824,6 +875,11 @@ Return ONLY valid JSON with this structure:
             )
             
             response_text = response.choices[0].message.content
+            
+            # Log response for debugging
+            print(f"[LLM] ===== RESPONSE START =====")
+            print(response_text)
+            print(f"[LLM] ===== RESPONSE END =====")
             
             # Capture debug info
             self._last_llm_debug_info["raw_response"] = response_text
@@ -1404,10 +1460,19 @@ RULES:
                                 )
                                 print(f"[Suggestion Service]   -> LLM rewrite: {time.time() - llm_start:.2f}s")
                                 
+                                # Extract pattern columns/tables for warning filtering
+                                pattern_columns = []
+                                pattern_tables = []
+                                if 'jm' in dir() and jm:
+                                    pattern_columns = [c.get('originalColumn', '') for c in jm.get('userColumnsToMap', [])]
+                                    pattern_tables = [t.get('originalTable', '') for t in jm.get('userTablesToMap', [])]
+                                
                                 # Filter out false positive warnings (columns listed as missing but actually replaced)
                                 changes = rewrite_result.get("changes", [])
                                 raw_warnings = rewrite_result.get("warnings", [])
-                                filtered_warnings = filter_false_positive_warnings(raw_warnings, changes)
+                                filtered_warnings = filter_false_positive_warnings(
+                                    raw_warnings, changes, pattern_columns, pattern_tables
+                                )
                                 
                                 suggestion_data["suggested_sql"] = rewrite_result.get("rewritten_sql")
                                 suggestion_data["sql_changes"] = json.dumps(changes)
@@ -1852,10 +1917,19 @@ RULES:
                                 tgt_column_physical
                             )
                             
+                            # Extract pattern columns/tables for warning filtering
+                            pattern_columns = []
+                            pattern_tables = []
+                            if 'jm' in dir() and jm:
+                                pattern_columns = [c.get('originalColumn', '') for c in jm.get('userColumnsToMap', [])]
+                                pattern_tables = [t.get('originalTable', '') for t in jm.get('userTablesToMap', [])]
+                            
                             # Filter out false positive warnings (columns listed as missing but actually replaced)
                             changes = rewrite_result.get("changes", [])
                             raw_warnings = rewrite_result.get("warnings", [])
-                            filtered_warnings = filter_false_positive_warnings(raw_warnings, changes)
+                            filtered_warnings = filter_false_positive_warnings(
+                                raw_warnings, changes, pattern_columns, pattern_tables
+                            )
                             
                             new_suggestion_data["suggested_sql"] = rewrite_result.get("rewritten_sql")
                             new_suggestion_data["sql_changes"] = json.dumps(changes)
@@ -1867,6 +1941,9 @@ RULES:
                             # Capture LLM debug info for transparency
                             if hasattr(self, '_last_llm_debug_info') and self._last_llm_debug_info:
                                 new_suggestion_data["llm_debug_info"] = json.dumps(self._last_llm_debug_info)
+                                print(f"[Suggestion Service] Captured LLM debug info: {len(new_suggestion_data['llm_debug_info'])} chars")
+                            else:
+                                print(f"[Suggestion Service] WARNING: No LLM debug info to capture (hasattr: {hasattr(self, '_last_llm_debug_info')}, value: {bool(getattr(self, '_last_llm_debug_info', None))})")
                         else:
                             new_suggestion_data["suggestion_status"] = "NO_MATCH"
                             new_suggestion_data["warnings"] = json.dumps(["No matching source fields found for this pattern"])
