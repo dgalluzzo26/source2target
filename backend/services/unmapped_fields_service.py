@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 from databricks import sql
 from databricks.sdk import WorkspaceClient
 from backend.models.shared import UnmappedFieldV2, UnmappedFieldCreateV2, UnmappedFieldStatusUpdate
-from backend.services.config_service import ConfigService
+from backend.services.config_service import config_service
 
 
 # Thread pool for blocking database operations
@@ -23,7 +23,7 @@ class UnmappedFieldsService:
     
     def __init__(self):
         """Initialize the unmapped fields service."""
-        self.config_service = ConfigService()
+        self.config_service = config_service  # Use global instance for shared config
         self._workspace_client = None
     
     @property

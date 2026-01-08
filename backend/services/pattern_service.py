@@ -13,14 +13,14 @@ from typing import Dict, List, Any, Optional
 from collections import defaultdict
 from databricks import sql as databricks_sql
 from databricks.sdk import WorkspaceClient
-from backend.services.config_service import ConfigService
+from backend.services.config_service import config_service
 
 
 class PatternService:
     """Service for pattern management, deduplication, and selection."""
     
     def __init__(self):
-        self.config_service = ConfigService()
+        self.config_service = config_service  # Use global instance for shared config
         self._workspace_client = None
     
     @property

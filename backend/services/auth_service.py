@@ -4,7 +4,7 @@ Based on the original Streamlit app's auth.py
 """
 from databricks.sdk import WorkspaceClient
 from databricks import sql
-from backend.services.config_service import ConfigService
+from backend.services.config_service import config_service
 from typing import Optional, List
 
 
@@ -13,7 +13,7 @@ class AuthService:
     
     def __init__(self):
         """Initialize the auth service."""
-        self.config_service = ConfigService()
+        self.config_service = config_service  # Use global instance for shared config
         self._workspace_client = None
     
     @property

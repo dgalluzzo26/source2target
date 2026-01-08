@@ -20,7 +20,7 @@ from backend.models.project import (
     TargetTableProgress,
     TableMappingStatus
 )
-from backend.services.config_service import ConfigService
+from backend.services.config_service import config_service
 
 # Thread pool for blocking database operations
 executor = ThreadPoolExecutor(max_workers=3)
@@ -31,7 +31,7 @@ class TargetTableService:
     
     def __init__(self):
         """Initialize the target table service."""
-        self.config_service = ConfigService()
+        self.config_service = config_service  # Use global instance for shared config
         self._workspace_client = None
     
     @property

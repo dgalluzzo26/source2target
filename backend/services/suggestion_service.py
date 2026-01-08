@@ -31,7 +31,7 @@ from backend.models.suggestion import (
     SuggestionWarning
 )
 from backend.models.project import TableMappingStatus
-from backend.services.config_service import ConfigService
+from backend.services.config_service import config_service
 from backend.services.vector_search_service import VectorSearchService
 from backend.services.pattern_service import PatternService
 
@@ -229,7 +229,7 @@ class SuggestionService:
     
     def __init__(self):
         """Initialize the suggestion service."""
-        self.config_service = ConfigService()
+        self.config_service = config_service  # Use global instance for shared config
         self.vector_search_service = VectorSearchService()
         self.pattern_service = PatternService()
         self._workspace_client = None

@@ -25,7 +25,7 @@ from backend.models.project import (
     ProjectStatus,
     TableMappingStatus
 )
-from backend.services.config_service import ConfigService
+from backend.services.config_service import config_service
 
 # Thread pool for blocking database operations
 # Use more workers to handle concurrent requests
@@ -37,7 +37,7 @@ class ProjectService:
     
     def __init__(self):
         """Initialize the project service."""
-        self.config_service = ConfigService()
+        self.config_service = config_service  # Use global instance for shared config
         self._workspace_client = None
     
     @property

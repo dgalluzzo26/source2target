@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import functools
 from typing import Dict, Any
 from databricks.sdk import WorkspaceClient
-from backend.services.config_service import ConfigService
+from backend.services.config_service import config_service
 
 # Thread pool for blocking operations
 executor = ThreadPoolExecutor(max_workers=2)
@@ -18,7 +18,7 @@ class VectorSearchService:
     """Service for managing vector search index synchronization."""
     
     def __init__(self):
-        self.config_service = ConfigService()
+        self.config_service = config_service  # Use global instance for shared config
         self._workspace_client = None
     
     @property

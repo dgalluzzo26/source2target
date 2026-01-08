@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional
 from databricks import sql
 from databricks.sdk import WorkspaceClient
 from backend.models.shared import MappingFeedbackV2, MappingFeedbackCreateV2
-from backend.services.config_service import ConfigService
+from backend.services.config_service import config_service
 
 # Thread pool for blocking database operations
 executor = ThreadPoolExecutor(max_workers=3)
@@ -21,7 +21,7 @@ class FeedbackService:
     
     def __init__(self):
         """Initialize the feedback service."""
-        self.config_service = ConfigService()
+        self.config_service = config_service  # Use global instance for shared config
         self._workspace_client = None
     
     @property

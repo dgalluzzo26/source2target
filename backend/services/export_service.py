@@ -21,7 +21,7 @@ import hashlib
 from typing import Dict, Any, List, Optional, Tuple
 from databricks import sql
 from databricks.sdk import WorkspaceClient
-from backend.services.config_service import ConfigService
+from backend.services.config_service import config_service
 
 # Thread pool for blocking operations
 executor = ThreadPoolExecutor(max_workers=2)
@@ -31,7 +31,7 @@ class ExportService:
     """Service for exporting mappings as CSV or SQL."""
     
     def __init__(self):
-        self.config_service = ConfigService()
+        self.config_service = config_service  # Use global instance for shared config
         self._workspace_client = None
     
     @property
