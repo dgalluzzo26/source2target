@@ -715,15 +715,22 @@ async def get_suggestion_llm_debug(suggestion_id: int):
             raise HTTPException(status_code=404, detail="Suggestion not found")
         
         # Parse the llm_debug_info JSON
-        debug_info_raw = suggestion.get("llm_debug_info")
+        # Try both lowercase and uppercase column names (Databricks may return either)
+        debug_info_raw = suggestion.get("llm_debug_info") or suggestion.get("LLM_DEBUG_INFO")
         debug_info = None
+        
+        # Debug: log what we found
+        print(f"[LLM Debug] Suggestion keys: {list(suggestion.keys())}")
+        print(f"[LLM Debug] debug_info_raw type: {type(debug_info_raw)}, length: {len(str(debug_info_raw)) if debug_info_raw else 0}")
         
         if debug_info_raw:
             import json
             try:
                 debug_info = json.loads(debug_info_raw)
-            except:
-                pass
+                print(f"[LLM Debug] Parsed successfully, keys: {list(debug_info.keys()) if isinstance(debug_info, dict) else 'not a dict'}")
+            except Exception as parse_error:
+                print(f"[LLM Debug] JSON parse error: {parse_error}")
+                print(f"[LLM Debug] Raw value preview: {str(debug_info_raw)[:200]}")
         
         if not debug_info:
             return {

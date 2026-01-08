@@ -799,7 +799,18 @@ STRICT SUBSTITUTION RULES:
 8. Keep all transformations (TRIM, INITCAP, CONCAT, CAST, etc.) exactly as they appear
 9. Keep all literals and constants unchanged (e.g., =1, ='Y', in ('R','M'))
 
+CRITICAL TABLE-COLUMN CONSISTENCY (VERY IMPORTANT):
+- When you substitute a column, you MUST also substitute the table it comes from
+- The user's source columns are formatted as TABLE.COLUMN (e.g., "RECIP_BASE.STREET_ADDR_1")
+- If you use RECIP_BASE.STREET_ADDR_1, you MUST replace the pattern table (e.g., "t_re_base") with "RECIP_BASE"
+- If you use MBR_ADDR.ADDR_LN_1, you MUST replace the pattern table (e.g., "t_re_multi_address") with "MBR_ADDR"
+- The resulting SQL must be VALID - columns must exist in the tables they reference
+- Pattern bronze tables (non-silver) should be replaced with the user's source table names
+- Example: If original is "FROM t_re_base b" and you use columns from RECIP_BASE, change to "FROM RECIP_BASE b"
+
 MATCHING STRATEGY:
+- First, identify which user source table best matches each pattern bronze table based on column similarity
+- Then substitute columns from that matched source table consistently
 - Match columns by semantic meaning using the descriptions provided
 - If a pattern column has no clear match, keep it unchanged and add a warning
 - Prefer exact name matches when descriptions are similar
@@ -813,9 +824,12 @@ WARNINGS RULES (BE VERY STRICT):
 - If you found a match and made a substitution, that is NOT a warning - it's a successful change
 
 CRITICAL CHANGE REPORTING:
-- "original" = the EXACT column/table name FROM THE ORIGINAL SQL TEMPLATE (e.g., "a.CURR_REC_IND", "b.ADR_STREET_1")
-- "new" = the column/table name you are substituting FROM THE USER'S SOURCE (e.g., "MBR_ADDR.ACTV_FLG", "RECIP_BASE.STREET_ADDR_1")
+- "original" = the EXACT column/table name FROM THE ORIGINAL SQL TEMPLATE (e.g., "a.CURR_REC_IND", "b.ADR_STREET_1", "t_re_base")
+- "new" = the column/table name you are substituting FROM THE USER'S SOURCE (e.g., "MBR_ADDR.ACTV_FLG", "RECIP_BASE.STREET_ADDR_1", "RECIP_BASE")
 - Do NOT use the source column name in "original" - that's what you're replacing TO, not FROM
+- For table_replace: "original" must be the PATTERN table name, "new" must be the USER SOURCE table name
+- If original equals new, that is NOT a valid change - do not include it
+- Every bronze pattern table should have a corresponding table_replace entry with a DIFFERENT new value
 
 Return ONLY valid JSON with this structure:
 {{
