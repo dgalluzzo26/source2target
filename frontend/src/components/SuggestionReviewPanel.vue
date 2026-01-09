@@ -300,7 +300,7 @@
             </div>
             
             <div v-if="!leftPanelCollapsed" class="left-panel-content">
-              <!-- AI Changes Section - Collapsible -->
+              <!-- AI Changes Section - Collapsible, Grouped by Table -->
               <div v-if="getChanges(editingSuggestion).length > 0 || getWarnings(editingSuggestion).length > 0" class="changes-section">
                 <div class="section-header" @click="aiChangesCollapsed = !aiChangesCollapsed">
                   <i :class="aiChangesCollapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-down'"></i>
@@ -311,20 +311,33 @@
                   />
                 </div>
                 <div v-if="!aiChangesCollapsed" class="change-list">
-                  <div 
-                    v-for="(change, idx) in getChanges(editingSuggestion)" 
-                    :key="'c'+idx"
-                    class="change-item"
-                    :class="{ 'is-problem': isProblemChange(change) }"
-                    @click="highlightInSQL(change)"
-                  >
-                    <i :class="getChangeIcon(change)"></i>
-                    <div class="change-detail">
-                      <span class="change-original">{{ change.original }}</span>
+                  <!-- Table replacements first -->
+                  <template v-for="(group, idx) in getChangesByTable(editingSuggestion)" :key="'tg'+idx">
+                    <!-- Table header with mapping -->
+                    <div class="table-change-header">
+                      <i class="pi pi-database"></i>
+                      <Badge :value="group.patternTable" severity="secondary" class="table-badge-original" />
                       <i class="pi pi-arrow-right"></i>
-                      <span class="change-new">{{ change.new || change.replacement || '?' }}</span>
+                      <Badge :value="group.sourceTable" severity="success" class="table-badge-new" />
+                      <span class="alias-label">({{ group.alias }})</span>
                     </div>
-                  </div>
+                    <!-- Column changes for this table -->
+                    <div 
+                      v-for="(change, cidx) in group.changes" 
+                      :key="'c'+idx+'-'+cidx"
+                      class="change-item grouped-change"
+                      :class="{ 'is-problem': isProblemChange(change) }"
+                      @click="highlightInSQL(change)"
+                    >
+                      <i :class="getChangeIcon(change)"></i>
+                      <div class="change-detail">
+                        <span class="change-original">{{ change.originalColumn }}</span>
+                        <i class="pi pi-arrow-right"></i>
+                        <span class="change-new">{{ change.newColumn }}</span>
+                      </div>
+                    </div>
+                  </template>
+                  <!-- Warnings -->
                   <div 
                     v-for="(warning, idx) in getWarnings(editingSuggestion)" 
                     :key="'w'+idx"
@@ -597,18 +610,19 @@
           Shows what the AI selected from available options.
         </p>
         
-        <!-- Table Mappings Section -->
-        <div v-if="vsCandidatesData.table_to_selected && Object.keys(vsCandidatesData.table_to_selected).length > 0" class="table-mappings-section">
+        <!-- Table Mappings Section (grouped by alias) -->
+        <div v-if="vsCandidatesData.changes_by_table && Object.keys(vsCandidatesData.changes_by_table).length > 0" class="table-mappings-section">
           <h4><i class="pi pi-table"></i> Table Mappings</h4>
           <div class="table-mappings-list">
             <div 
-              v-for="(selectedTable, patternTable) in vsCandidatesData.table_to_selected" 
-              :key="patternTable"
+              v-for="(group, alias) in vsCandidatesData.changes_by_table" 
+              :key="alias"
               class="table-mapping-item"
             >
-              <span class="pattern-table">{{ patternTable }}</span>
+              <Badge :value="group.pattern_table || '?'" severity="secondary" class="pattern-table-badge" />
               <i class="pi pi-arrow-right"></i>
-              <Tag :value="selectedTable" severity="success" />
+              <Badge :value="group.source_table || '?'" severity="success" class="source-table-badge" />
+              <span class="alias-indicator">({{ alias }})</span>
             </div>
           </div>
         </div>
@@ -618,7 +632,7 @@
           <span>No vector search candidate data available for this suggestion. It may be an older suggestion or a special case.</span>
         </div>
         
-        <!-- Column Candidates Section -->
+        <!-- Column Candidates Section - Show usage count for multi-table columns -->
         <div v-else class="candidates-by-column">
           <h4><i class="pi pi-list"></i> Column Candidates</h4>
           <div 
@@ -627,8 +641,26 @@
             class="column-candidates"
           >
             <div class="column-candidates-header">
-              <strong>{{ columnName }}</strong>
-              <Badge :value="candidates.length" severity="secondary" />
+              <Badge :value="columnName" severity="secondary" class="original-column-badge" />
+              <!-- Show usage count if used in multiple tables -->
+              <span v-if="getColumnUsageCount(columnName) > 1" class="usage-count">
+                Used in {{ getColumnUsageCount(columnName) }} tables
+              </span>
+              <Badge :value="candidates.length" severity="info" class="count-badge" />
+            </div>
+            
+            <!-- Show per-table usage if column is used in multiple tables -->
+            <div v-if="getColumnUsageCount(columnName) > 1" class="column-usages">
+              <div 
+                v-for="(usage, uidx) in getColumnUsages(columnName)" 
+                :key="uidx"
+                class="column-usage-item"
+              >
+                <span class="usage-table">In {{ usage.alias }} ({{ getTableNameForAlias(usage.alias) }}):</span>
+                <Badge :value="usage.original" severity="secondary" class="original-badge" />
+                <i class="pi pi-arrow-right"></i>
+                <Badge :value="usage.new_column" severity="success" class="selected-badge" />
+              </div>
             </div>
             
             <div class="candidates-list">
@@ -1072,6 +1104,89 @@ function getChanges(suggestion: MappingSuggestion): any[] {
   }
 }
 
+interface TableChangeGroup {
+  alias: string
+  patternTable: string
+  sourceTable: string
+  changes: Array<{
+    original: string
+    originalColumn: string
+    new: string
+    newColumn: string
+    newTable: string
+  }>
+}
+
+function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
+  const changes = getChanges(suggestion)
+  if (!changes.length) return []
+  
+  // Group changes by table alias
+  const groups: Record<string, TableChangeGroup> = {}
+  const tableReplacements: Record<string, { pattern: string, source: string }> = {}
+  
+  // First pass: collect table replacements
+  for (const change of changes) {
+    if (change.type === 'table_replace' && change.original && change.new) {
+      const patternTable = change.original.split('.').pop() || change.original
+      const sourceTable = change.new.split('.').pop() || change.new
+      tableReplacements[sourceTable.toUpperCase()] = {
+        pattern: patternTable,
+        source: sourceTable
+      }
+    }
+  }
+  
+  // Second pass: group column changes by alias
+  for (const change of changes) {
+    if (change.type === 'column_replace' || (change.original && change.new && change.type !== 'table_replace')) {
+      const orig = change.original || ''
+      const newVal = change.new || ''
+      
+      // Parse "b.ADR_STREET_1" -> alias=b, col=ADR_STREET_1
+      let alias = '?'
+      let origCol = orig
+      if (orig.includes('.')) {
+        const parts = orig.split('.')
+        alias = parts[0].toLowerCase()
+        origCol = parts[parts.length - 1]
+      }
+      
+      // Parse "RECIP_BASE.STREET_ADDR_1" or "r.STREET_ADDR_1"
+      let newTable = '?'
+      let newCol = newVal
+      if (newVal.includes('.')) {
+        const parts = newVal.split('.')
+        newTable = parts[0].toUpperCase()
+        newCol = parts[parts.length - 1]
+      }
+      
+      // Initialize group if needed
+      if (!groups[alias]) {
+        // Try to find matching pattern table from table replacements
+        const patternInfo = tableReplacements[newTable] || { pattern: '?', source: newTable }
+        groups[alias] = {
+          alias,
+          patternTable: patternInfo.pattern,
+          sourceTable: patternInfo.source,
+          changes: []
+        }
+      }
+      
+      groups[alias].changes.push({
+        original: orig,
+        originalColumn: origCol,
+        new: newVal,
+        newColumn: newCol,
+        newTable: newTable
+      })
+    }
+  }
+  
+  // Convert to array and sort by alias
+  return Object.values(groups).sort((a, b) => a.alias.localeCompare(b.alias))
+}
+
 function formatChange(change: any): string {
   // Handle different change formats from LLM
   if (change.original && change.new) {
@@ -1340,6 +1455,29 @@ async function showVSCandidates(suggestion: MappingSuggestion) {
   } finally {
     loadingVSCandidates.value = false
   }
+}
+
+// Helper: Get how many tables use a particular pattern column
+function getColumnUsageCount(columnName: string): number {
+  if (!vsCandidatesData.value?.column_usage) return 1
+  const usages = vsCandidatesData.value.column_usage[columnName.toUpperCase()]
+  return usages ? usages.length : 1
+}
+
+// Helper: Get all usages of a pattern column (which tables/aliases use it)
+function getColumnUsages(columnName: string): any[] {
+  if (!vsCandidatesData.value?.column_usage) return []
+  return vsCandidatesData.value.column_usage[columnName.toUpperCase()] || []
+}
+
+// Helper: Get table name for an alias from changes_by_table
+function getTableNameForAlias(alias: string): string {
+  if (!vsCandidatesData.value?.changes_by_table) return '?'
+  const group = vsCandidatesData.value.changes_by_table[alias]
+  if (group) {
+    return group.pattern_table || group.source_table || '?'
+  }
+  return '?'
 }
 
 async function useAlternativePattern(variant: any) {
@@ -1932,6 +2070,54 @@ function formatDate(dateStr?: string): string {
   color: #2e7d32;
 }
 
+/* Table Change Header - groups changes by source table */
+.table-change-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.5rem;
+  background: var(--surface-100);
+  border-radius: 6px;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  border-left: 3px solid var(--primary-color);
+}
+
+.table-change-header:first-child {
+  margin-top: 0;
+}
+
+.table-change-header i.pi-database {
+  color: var(--primary-color);
+}
+
+.table-change-header i.pi-arrow-right {
+  font-size: 0.7rem;
+  color: var(--text-color-secondary);
+}
+
+.table-badge-original {
+  font-family: monospace;
+  font-size: 0.7rem;
+}
+
+.table-badge-new {
+  font-family: monospace;
+  font-size: 0.7rem;
+}
+
+.alias-label {
+  color: var(--text-color-secondary);
+  font-size: 0.7rem;
+  font-style: italic;
+}
+
+/* Grouped change items have left indent */
+.change-item.grouped-change {
+  margin-left: 1rem;
+  border-left: 2px solid var(--surface-200);
+}
+
 /* Source Section */
 .source-section {
   flex: 1;
@@ -2504,6 +2690,22 @@ function formatDate(dateStr?: string): string {
   border: 1px solid var(--surface-200);
 }
 
+.pattern-table-badge {
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+
+.source-table-badge {
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+
+.alias-indicator {
+  font-size: 0.75rem;
+  color: var(--text-color-secondary);
+  font-style: italic;
+}
+
 .pattern-table {
   font-family: monospace;
   font-size: 0.85rem;
@@ -2534,10 +2736,60 @@ function formatDate(dateStr?: string): string {
 .column-candidates-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.75rem;
   padding: 0.75rem 1rem;
   background: var(--surface-100);
   border-bottom: 1px solid var(--surface-border);
+}
+
+.column-candidates-header .original-column-badge {
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.column-candidates-header .usage-count {
+  font-size: 0.75rem;
+  color: var(--text-color-secondary);
+  font-style: italic;
+}
+
+.column-candidates-header .count-badge {
+  margin-left: auto;
+}
+
+/* Column Usage - shows per-table replacements */
+.column-usages {
+  background: var(--surface-50);
+  border-bottom: 1px solid var(--surface-border);
+  padding: 0.5rem 1rem;
+}
+
+.column-usage-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  font-size: 0.8rem;
+}
+
+.column-usage-item .usage-table {
+  color: var(--text-color-secondary);
+  min-width: 100px;
+}
+
+.column-usage-item .original-badge {
+  font-family: monospace;
+  font-size: 0.7rem;
+}
+
+.column-usage-item .selected-badge {
+  font-family: monospace;
+  font-size: 0.7rem;
+}
+
+.column-usage-item .pi-arrow-right {
+  font-size: 0.6rem;
+  color: var(--text-color-secondary);
 }
 
 .candidates-list {

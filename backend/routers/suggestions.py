@@ -633,52 +633,125 @@ async def get_suggestion_vs_candidates(suggestion_id: int):
             except:
                 pass
         
-        # Build map: pattern column (original) -> selected source column (new)
-        # e.g., {"ADR_STREET_1": "STREET_ADDR_1", "SAK_RECIP": "RECIP_KEY"}
-        pattern_to_selected = {}
+        # Build structured data:
+        # 1. changes_by_table: {alias: {table_name, changes: [{orig_col, new_col, new_table}]}}
+        # 2. table_mappings: [{alias, pattern_table, source_table}]
+        # 3. column_usage: {column_name: [{alias, pattern_table, new_col, new_table}]}
         
-        # Also build map: pattern table (original) -> selected source table (new)
-        # e.g., {"t_re_base": "RECIP_BASE", "t_re_multi_address": "MBR_ADDR"}
-        table_to_selected = {}
+        changes_by_table = {}  # alias -> {pattern_table, source_table, changes}
+        table_mappings = []    # [{alias, pattern_table, source_table}]
+        column_usage = {}      # pattern_col -> list of usages
+        
+        # First pass: extract table replacements
+        table_alias_to_pattern = {}  # alias -> pattern table name
+        table_alias_to_source = {}   # alias -> source table name
         
         for change in sql_changes:
             change_type = change.get("type", "")
             orig = str(change.get("original", ""))
             new = str(change.get("new", ""))
             
-            if change_type in ("column_replace", "replaced") and orig and new:
-                # Extract column name from qualified name (e.g., "b.ADR_STREET_1" -> "ADR_STREET_1")
-                orig_col = orig.split(".")[-1].upper()
-                new_col = new.split(".")[-1].upper()
-                if orig_col and new_col:
-                    pattern_to_selected[orig_col] = new_col
-            
-            elif change_type == "table_replace" and orig and new:
-                # Table replacement (e.g., "t_re_base" -> "RECIP_BASE")
-                table_to_selected[orig.upper()] = new.upper()
+            if change_type == "table_replace" and orig and new:
+                # Extract table name from full path (e.g., "oz_dev.bronze_dmes_de.t_re_base" -> "t_re_base")
+                pattern_table = orig.split(".")[-1].upper()
+                source_table = new.split(".")[-1].upper()
+                table_mappings.append({
+                    "pattern_table": orig,
+                    "source_table": new
+                })
         
-        # Mark which candidates were selected by matching:
-        # VS group key (pattern column) -> sql_changes original
-        # Candidate column -> sql_changes new
+        # Second pass: extract column replacements with table context
+        for change in sql_changes:
+            change_type = change.get("type", "")
+            orig = str(change.get("original", ""))
+            new = str(change.get("new", ""))
+            
+            if change_type in ("column_replace", "replaced") and orig and new:
+                # Parse original: "b.ADR_STREET_1" -> alias=b, col=ADR_STREET_1
+                if "." in orig:
+                    orig_parts = orig.split(".")
+                    alias = orig_parts[0].lower()
+                    orig_col = orig_parts[-1].upper()
+                else:
+                    alias = "?"
+                    orig_col = orig.upper()
+                
+                # Parse new: "RECIP_BASE.STREET_ADDR_1" or "r.STREET_ADDR_1"
+                if "." in new:
+                    new_parts = new.split(".")
+                    new_table = new_parts[0].upper()
+                    new_col = new_parts[-1].upper()
+                else:
+                    new_table = "?"
+                    new_col = new.upper()
+                
+                # Initialize table group if needed
+                if alias not in changes_by_table:
+                    changes_by_table[alias] = {
+                        "alias": alias,
+                        "pattern_table": "",  # Will be set from table_replace if available
+                        "source_table": new_table,
+                        "changes": []
+                    }
+                
+                # Add to changes for this table
+                changes_by_table[alias]["changes"].append({
+                    "original": orig,
+                    "original_column": orig_col,
+                    "new": new,
+                    "new_column": new_col,
+                    "new_table": new_table
+                })
+                
+                # Track column usage (same column may appear in multiple tables)
+                if orig_col not in column_usage:
+                    column_usage[orig_col] = []
+                column_usage[orig_col].append({
+                    "alias": alias,
+                    "original": orig,
+                    "new": new,
+                    "new_column": new_col,
+                    "new_table": new_table
+                })
+        
+        # Try to match aliases to table names from table_replace entries
+        for tm in table_mappings:
+            pattern_short = tm["pattern_table"].split(".")[-1].upper()
+            source_short = tm["source_table"].split(".")[-1].upper()
+            # Look for matching source table in changes_by_table
+            for alias, group in changes_by_table.items():
+                if group["source_table"].upper() == source_short:
+                    group["pattern_table"] = tm["pattern_table"]
+        
+        # Mark which candidates were selected, now with table context
+        # For each pattern column in VS candidates, check all usages
         for pattern_column, candidates in vs_candidates.items():
-            # Extract column name from group key
             pattern_col_upper = pattern_column.split(".")[-1].upper()
             
-            # What source column was selected for this pattern column?
-            selected_source_col = pattern_to_selected.get(pattern_col_upper)
+            # Get all usages of this column
+            usages = column_usage.get(pattern_col_upper, [])
             
             for candidate in candidates:
                 candidate_col = str(candidate.get("src_column_physical_name", "")).upper()
-                # Mark as selected only if this candidate matches what was chosen for this pattern column
-                candidate["was_selected"] = (selected_source_col == candidate_col)
+                candidate_table = str(candidate.get("src_table_physical_name", "")).upper()
+                
+                # Check if this candidate matches ANY usage
+                candidate["was_selected"] = False
+                candidate["selected_for_tables"] = []
+                
+                for usage in usages:
+                    if usage["new_column"] == candidate_col:
+                        candidate["was_selected"] = True
+                        candidate["selected_for_tables"].append(usage["alias"])
         
         return {
             "suggestion_id": suggestion_id,
             "tgt_column": suggestion.get("tgt_column_physical_name"),
             "tgt_table": suggestion.get("tgt_table_physical_name"),
             "candidates_by_column": vs_candidates,
-            "pattern_to_selected": pattern_to_selected,  # Column mappings: pattern -> selected
-            "table_to_selected": table_to_selected,  # Table mappings: pattern -> selected
+            "changes_by_table": changes_by_table,  # Grouped by table alias
+            "table_mappings": table_mappings,      # Table-level replacements
+            "column_usage": column_usage,          # Which tables use each column
             "has_candidates": bool(vs_candidates)
         }
         

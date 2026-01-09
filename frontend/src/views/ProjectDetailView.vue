@@ -751,6 +751,15 @@ const tableMenuItems = computed(() => [
     separator: true
   },
   {
+    label: 'Rerun All Fields',
+    icon: 'pi pi-refresh',
+    command: () => {
+      if (selectedTable.value) handleRerunDiscovery(selectedTable.value)
+    },
+    disabled: selectedTable.value?.mapping_status === 'NOT_STARTED' || 
+              selectedTable.value?.mapping_status === 'DISCOVERING'
+  },
+  {
     label: 'Skip Table',
     icon: 'pi pi-forward',
     command: () => {
@@ -973,6 +982,46 @@ async function handleStartDiscovery(table: TargetTableStatus) {
     toast.add({ 
       severity: 'error', 
       summary: 'Discovery Failed', 
+      detail: e.message,
+      life: 5000 
+    })
+  }
+}
+
+async function handleRerunDiscovery(table: TargetTableStatus) {
+  // Show confirmation dialog
+  const confirmed = confirm(
+    `Are you sure you want to rerun discovery for "${table.tgt_table_name}"?\n\n` +
+    `This will DELETE all existing suggestions and regenerate them from scratch.`
+  )
+  
+  if (!confirmed) return
+  
+  // Use the same discovery flow - backend already clears existing suggestions
+  startingDiscoveryTableId.value = table.target_table_status_id
+  
+  try {
+    await projectsStore.startDiscovery(
+      projectId.value,
+      table.target_table_status_id,
+      userStore.userEmail || 'unknown'
+    )
+    
+    toast.add({ 
+      severity: 'info', 
+      summary: 'Rerun Started', 
+      detail: `AI is regenerating all mappings for ${table.tgt_table_name}`,
+      life: 3000 
+    })
+    
+    // Poll for completion
+    pollForDiscovery(table.target_table_status_id)
+  } catch (e: any) {
+    startingDiscoveryTableId.value = null
+    
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Rerun Failed', 
       detail: e.message,
       life: 5000 
     })
