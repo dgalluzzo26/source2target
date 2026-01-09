@@ -45,7 +45,7 @@
         :key="suggestion.suggestion_id"
         class="suggestion-card"
         :class="{ 
-          'approved': suggestion.suggestion_status === 'APPROVED' || suggestion.suggestion_status === 'EDITED',
+          'approved': suggestion.suggestion_status === 'APPROVED' || suggestion.suggestion_status === 'EDITED' || suggestion.suggestion_status === 'AUTO_MAPPED',
           'rejected': suggestion.suggestion_status === 'REJECTED',
           'skipped': suggestion.suggestion_status === 'SKIPPED',
           'no-match': suggestion.suggestion_status === 'NO_MATCH' || suggestion.suggestion_status === 'NO_PATTERN'
@@ -734,6 +734,7 @@ const rejectingSuggestion = ref<MappingSuggestion | null>(null)
 const alternativesSuggestion = ref<MappingSuggestion | null>(null)
 const vsCandidatesSuggestion = ref<MappingSuggestion | null>(null)
 const vsCandidatesData = ref<any>(null)
+const editingAliasMap = ref<Record<string, string>>({})  // alias -> pattern table name for left panel
 const patternVariants = ref<any[]>([])
 const loadingAlternatives = ref(false)
 const loadingVSCandidates = ref(false)
@@ -770,7 +771,11 @@ const pendingCount = computed(() =>
   suggestions.value.filter(s => s.suggestion_status === 'PENDING').length
 )
 const approvedCount = computed(() => 
-  suggestions.value.filter(s => s.suggestion_status === 'APPROVED' || s.suggestion_status === 'EDITED').length
+  suggestions.value.filter(s => 
+    s.suggestion_status === 'APPROVED' || 
+    s.suggestion_status === 'EDITED' || 
+    s.suggestion_status === 'AUTO_MAPPED'
+  ).length
 )
 const noMatchCount = computed(() => 
   suggestions.value.filter(s => s.suggestion_status === 'NO_MATCH' || s.suggestion_status === 'NO_PATTERN').length
@@ -1040,16 +1045,31 @@ async function handleApprove(suggestion: MappingSuggestion) {
   }
 }
 
-function openEditDialog(suggestion: MappingSuggestion) {
+async function openEditDialog(suggestion: MappingSuggestion) {
   editingSuggestion.value = suggestion
   editedSQL.value = suggestion.suggested_sql || ''
   editNotes.value = ''
   sourceFilter.value = ''
   expandedTables.value = []
+  editingAliasMap.value = {}
   showEditDialog.value = true
   
   // Load source fields for the project
   loadSourceFields()
+  
+  // Also fetch VS candidates data to get alias-to-pattern-table mapping
+  try {
+    const response = await fetch(`/api/v4/suggestions/${suggestion.suggestion_id}/vs-candidates`)
+    if (response.ok) {
+      const data = await response.json()
+      if (data.alias_to_pattern_table) {
+        editingAliasMap.value = data.alias_to_pattern_table
+      }
+    }
+  } catch (e) {
+    // Non-critical - left panel will fall back to alias display
+    console.log('Could not fetch alias mapping:', e)
+  }
 }
 
 async function loadSourceFields() {
@@ -1163,12 +1183,19 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
       
       // Initialize group if needed
       if (!groups[alias]) {
-        // Try to find matching pattern table from table replacements
-        const patternInfo = tableReplacements[newTable] || { pattern: '?', source: newTable }
+        // First check editingAliasMap (from join_metadata via VS candidates API)
+        let patternTable = editingAliasMap.value[alias] || editingAliasMap.value[alias.toUpperCase()]
+        
+        // Fall back to table replacements from sql_changes
+        if (!patternTable) {
+          const patternInfo = tableReplacements[newTable] || { pattern: '?', source: newTable }
+          patternTable = patternInfo.pattern
+        }
+        
         groups[alias] = {
           alias,
-          patternTable: patternInfo.pattern,
-          sourceTable: patternInfo.source,
+          patternTable: patternTable || '?',
+          sourceTable: newTable,
           changes: []
         }
       }
@@ -1470,12 +1497,19 @@ function getColumnUsages(columnName: string): any[] {
   return vsCandidatesData.value.column_usage[columnName.toUpperCase()] || []
 }
 
-// Helper: Get table name for an alias from changes_by_table
+// Helper: Get table name for an alias from alias_to_pattern_table (from join_metadata)
 function getTableNameForAlias(alias: string): string {
-  if (!vsCandidatesData.value?.changes_by_table) return '?'
-  const group = vsCandidatesData.value.changes_by_table[alias]
-  if (group) {
-    return group.pattern_table || group.source_table || '?'
+  // First check alias_to_pattern_table (from join_metadata - most accurate)
+  if (vsCandidatesData.value?.alias_to_pattern_table) {
+    const tableName = vsCandidatesData.value.alias_to_pattern_table[alias.toLowerCase()]
+    if (tableName) return tableName
+  }
+  // Fallback to changes_by_table
+  if (vsCandidatesData.value?.changes_by_table) {
+    const group = vsCandidatesData.value.changes_by_table[alias]
+    if (group) {
+      return group.pattern_table || group.source_table || '?'
+    }
   }
   return '?'
 }
@@ -1525,7 +1559,8 @@ function formatStatus(status: string): string {
 function getStatusSeverity(status: string): 'success' | 'info' | 'warning' | 'danger' | 'secondary' {
   switch (status) {
     case 'APPROVED':
-    case 'EDITED': return 'success'
+    case 'EDITED':
+    case 'AUTO_MAPPED': return 'success'
     case 'PENDING': return 'warning'
     case 'REJECTED': return 'danger'
     case 'SKIPPED': return 'secondary'

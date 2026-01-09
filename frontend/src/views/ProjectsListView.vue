@@ -280,6 +280,155 @@
       </template>
     </Dialog>
 
+    <!-- Edit Project Dialog -->
+    <Dialog 
+      v-model:visible="showEditDialog" 
+      modal 
+      header="Edit Project" 
+      :style="{ width: '600px' }"
+    >
+      <div class="create-form">
+        <div class="field">
+          <label for="editProjectName">Project Name *</label>
+          <InputText 
+            id="editProjectName"
+            v-model="editProject.project_name" 
+            class="w-full"
+            placeholder="e.g., Q1 2024 Member Migration"
+          />
+        </div>
+
+        <div class="field">
+          <label for="editProjectDescription">Description</label>
+          <Textarea 
+            id="editProjectDescription"
+            v-model="editProject.project_description" 
+            :rows="2"
+            class="w-full"
+            placeholder="Describe the purpose of this project..."
+          />
+        </div>
+
+        <!-- Source Configuration -->
+        <div class="form-section">
+          <h4><i class="pi pi-upload"></i> Source Configuration</h4>
+          
+          <div class="field">
+            <label for="editSourceSystem">Source System Name</label>
+            <InputText 
+              id="editSourceSystem"
+              v-model="editProject.source_system_name" 
+              class="w-full"
+              placeholder="e.g., Legacy DW, DMES, ACME_MMIS"
+            />
+            <small class="field-hint">Friendly name for the source system</small>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="editSourceCatalogs">Source Catalog(s)</label>
+              <InputText 
+                id="editSourceCatalogs"
+                v-model="editProject.source_catalogs" 
+                class="w-full"
+                placeholder="e.g., bronze_dmes"
+              />
+              <small class="field-hint">Pipe-separated if multiple</small>
+            </div>
+
+            <div class="field">
+              <label for="editSourceSchemas">Source Schema(s)</label>
+              <InputText 
+                id="editSourceSchemas"
+                v-model="editProject.source_schemas" 
+                class="w-full"
+                placeholder="e.g., member|claims"
+              />
+              <small class="field-hint">Pipe-separated if multiple</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- Target Configuration -->
+        <div class="form-section">
+          <h4><i class="pi pi-download"></i> Target Configuration</h4>
+          
+          <div class="field-row">
+            <div class="field">
+              <label for="editTargetCatalogs">Target Catalog(s)</label>
+              <InputText 
+                id="editTargetCatalogs"
+                v-model="editProject.target_catalogs" 
+                class="w-full"
+                placeholder="e.g., silver_dmes"
+              />
+              <small class="field-hint">Pipe-separated if multiple</small>
+            </div>
+
+            <div class="field">
+              <label for="editTargetSchemas">Target Schema(s)</label>
+              <InputText 
+                id="editTargetSchemas"
+                v-model="editProject.target_schemas" 
+                class="w-full"
+                placeholder="e.g., member"
+              />
+              <small class="field-hint">Pipe-separated if multiple</small>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="editTargetDomains">Target Domains (Optional Filter)</label>
+            <InputText 
+              id="editTargetDomains"
+              v-model="editProject.target_domains" 
+              class="w-full"
+              placeholder="Leave blank for ALL domains"
+            />
+            <small class="field-hint">
+              <i class="pi pi-info-circle"></i>
+              Use pipe-separated values to filter (e.g., MEMBER|CLAIMS).
+            </small>
+          </div>
+        </div>
+
+        <!-- Team Access -->
+        <div class="form-section">
+          <h4><i class="pi pi-users"></i> Team Access</h4>
+          
+          <div class="field">
+            <label for="editTeamMembers">Team Member Emails</label>
+            <Textarea 
+              id="editTeamMembers"
+              v-model="editProject.team_members" 
+              :rows="2"
+              class="w-full"
+              placeholder="e.g., user1@company.com, user2@company.com"
+            />
+            <small class="field-hint">
+              Comma-separated list of emails who can access this project.
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button 
+          label="Cancel" 
+          icon="pi pi-times" 
+          @click="showEditDialog = false" 
+          severity="secondary"
+        />
+        <Button 
+          label="Save Changes" 
+          icon="pi pi-check" 
+          @click="handleUpdateProject"
+          :loading="updating"
+          :disabled="!editProject.project_name"
+        />
+      </template>
+    </Dialog>
+
     <!-- ConfirmDialog is global in App.vue - don't duplicate here -->
   </div>
 </template>
@@ -329,6 +478,22 @@ const newProject = ref({
   team_members: ''
 })
 
+// Edit project state
+const showEditDialog = ref(false)
+const updating = ref(false)
+const editProject = ref({
+  project_id: 0,
+  project_name: '',
+  project_description: '',
+  source_system_name: '',
+  source_catalogs: '',
+  source_schemas: '',
+  target_catalogs: '',
+  target_schemas: '',
+  target_domains: '',
+  team_members: ''
+})
+
 // Computed
 const projects = computed(() => projectsStore.projects)
 const loading = computed(() => projectsStore.loading)
@@ -359,9 +524,7 @@ const menuItems = computed(() => [
   {
     label: 'Edit',
     icon: 'pi pi-pencil',
-    command: () => {
-      toast.add({ severity: 'info', summary: 'Coming Soon', detail: 'Edit functionality', life: 2000 })
-    }
+    command: () => handleEditProject()
   },
   {
     separator: true
@@ -461,6 +624,76 @@ function resetNewProject() {
     target_schemas: '',
     target_domains: '',
     team_members: ''
+  }
+}
+
+function handleEditProject() {
+  if (!selectedProject.value) return
+  
+  // Populate edit form with current project values
+  const p = selectedProject.value
+  editProject.value = {
+    project_id: p.project_id,
+    project_name: p.project_name || '',
+    project_description: p.project_description || '',
+    source_system_name: p.source_system_name || '',
+    source_catalogs: p.source_catalogs || '',
+    source_schemas: p.source_schemas || '',
+    target_catalogs: p.target_catalogs || '',
+    target_schemas: p.target_schemas || '',
+    target_domains: p.target_domains || '',
+    team_members: p.team_members || ''
+  }
+  
+  showEditDialog.value = true
+}
+
+async function handleUpdateProject() {
+  if (!editProject.value.project_name) {
+    toast.add({ 
+      severity: 'warn', 
+      summary: 'Validation Error', 
+      detail: 'Project name is required',
+      life: 3000 
+    })
+    return
+  }
+
+  updating.value = true
+  try {
+    await projectsStore.updateProject(editProject.value.project_id, {
+      project_name: editProject.value.project_name,
+      project_description: editProject.value.project_description || undefined,
+      source_system_name: editProject.value.source_system_name || undefined,
+      source_catalogs: editProject.value.source_catalogs || undefined,
+      source_schemas: editProject.value.source_schemas || undefined,
+      target_catalogs: editProject.value.target_catalogs || undefined,
+      target_schemas: editProject.value.target_schemas || undefined,
+      target_domains: editProject.value.target_domains || undefined,
+      team_members: editProject.value.team_members || undefined,
+      updated_by: userStore.userEmail || 'unknown'
+    })
+
+    toast.add({ 
+      severity: 'success', 
+      summary: 'Project Updated', 
+      detail: `${editProject.value.project_name} updated successfully`,
+      life: 3000 
+    })
+
+    showEditDialog.value = false
+    
+    // Refresh projects list
+    await projectsStore.fetchProjects()
+  } catch (e: any) {
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Error', 
+      detail: e.message || 'Failed to update project',
+      life: 5000 
+    })
+  } finally {
+    updating.value = false
   }
 }
 

@@ -637,15 +637,62 @@ async def get_suggestion_vs_candidates(suggestion_id: int):
         # 1. changes_by_table: {alias: {table_name, changes: [{orig_col, new_col, new_table}]}}
         # 2. table_mappings: [{alias, pattern_table, source_table}]
         # 3. column_usage: {column_name: [{alias, pattern_table, new_col, new_table}]}
+        # 4. alias_to_pattern_table: {alias: pattern_table_name} from join_metadata
         
         changes_by_table = {}  # alias -> {pattern_table, source_table, changes}
         table_mappings = []    # [{alias, pattern_table, source_table}]
         column_usage = {}      # pattern_col -> list of usages
+        alias_to_pattern_table = {}  # alias -> pattern table physical name (from join_metadata)
         
-        # First pass: extract table replacements
-        table_alias_to_pattern = {}  # alias -> pattern table name
-        table_alias_to_source = {}   # alias -> source table name
+        # Extract alias-to-table mapping from join_metadata (the source of truth)
+        pattern_sql_raw = suggestion.get("pattern_sql", "")
+        join_metadata_raw = None
         
+        # Try to get join_metadata from pattern - it might be stored with the suggestion
+        # or we need to look it up. For now, check if suggestion has pattern info
+        # In the pattern, join_metadata contains unionBranches with bronzeTable alias mappings
+        
+        # The pattern might be stored in the suggestion or we need to fetch it
+        # Let's try to parse it from the suggestion's pattern data if available
+        try:
+            # Check if join_metadata is available (it should be stored during suggestion generation)
+            # For now, try to extract from pattern_service or the stored pattern
+            from backend.services.pattern_service import PatternService
+            pattern_service = PatternService()
+            
+            tgt_table = suggestion.get("tgt_table_physical_name", "")
+            tgt_column = suggestion.get("tgt_column_physical_name", "")
+            
+            if tgt_table and tgt_column:
+                pattern = pattern_service.get_pattern_for_target(tgt_table, tgt_column)
+                if pattern and pattern.get("join_metadata"):
+                    jm_str = pattern.get("join_metadata")
+                    jm = json.loads(jm_str) if isinstance(jm_str, str) else jm_str
+                    
+                    # Extract from unionBranches (UNION_JOIN patterns)
+                    for branch in jm.get("unionBranches", []):
+                        bronze_table = branch.get("bronzeTable", {})
+                        alias = bronze_table.get("alias", "").lower()
+                        physical_name = bronze_table.get("physicalName", "")
+                        if alias and physical_name:
+                            # Extract just the table name from full path
+                            table_name = physical_name.split(".")[-1]
+                            alias_to_pattern_table[alias] = table_name
+                    
+                    # Also check for simple join patterns with main table
+                    if "mainTable" in jm:
+                        main_table = jm.get("mainTable", {})
+                        alias = main_table.get("alias", "").lower()
+                        physical_name = main_table.get("physicalName", "")
+                        if alias and physical_name:
+                            table_name = physical_name.split(".")[-1]
+                            alias_to_pattern_table[alias] = table_name
+                    
+                    print(f"[VS Candidates] Extracted alias mapping from join_metadata: {alias_to_pattern_table}")
+        except Exception as e:
+            print(f"[VS Candidates] Could not extract alias mapping from join_metadata: {e}")
+        
+        # First pass: extract table replacements from sql_changes
         for change in sql_changes:
             change_type = change.get("type", "")
             orig = str(change.get("original", ""))
@@ -687,9 +734,11 @@ async def get_suggestion_vs_candidates(suggestion_id: int):
                 
                 # Initialize table group if needed
                 if alias not in changes_by_table:
+                    # Use alias_to_pattern_table if available (from join_metadata)
+                    pattern_table_name = alias_to_pattern_table.get(alias, "")
                     changes_by_table[alias] = {
                         "alias": alias,
-                        "pattern_table": "",  # Will be set from table_replace if available
+                        "pattern_table": pattern_table_name,  # From join_metadata
                         "source_table": new_table,
                         "changes": []
                     }
@@ -752,6 +801,7 @@ async def get_suggestion_vs_candidates(suggestion_id: int):
             "changes_by_table": changes_by_table,  # Grouped by table alias
             "table_mappings": table_mappings,      # Table-level replacements
             "column_usage": column_usage,          # Which tables use each column
+            "alias_to_pattern_table": alias_to_pattern_table,  # Alias -> original pattern table name
             "has_candidates": bool(vs_candidates)
         }
         
