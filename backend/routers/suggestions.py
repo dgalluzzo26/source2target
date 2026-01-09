@@ -648,23 +648,16 @@ async def get_suggestion_vs_candidates(suggestion_id: int):
         pattern_sql_raw = suggestion.get("pattern_sql", "")
         join_metadata_raw = None
         
-        # Try to get join_metadata from pattern - it might be stored with the suggestion
-        # or we need to look it up. For now, check if suggestion has pattern info
-        # In the pattern, join_metadata contains unionBranches with bronzeTable alias mappings
-        
-        # The pattern might be stored in the suggestion or we need to fetch it
-        # Let's try to parse it from the suggestion's pattern data if available
+        # Try to get join_metadata from pattern using pattern_mapped_field_id
+        # The pattern contains join_metadata with unionBranches and bronzeTable alias mappings
         try:
-            # Check if join_metadata is available (it should be stored during suggestion generation)
-            # For now, try to extract from pattern_service or the stored pattern
             from backend.services.pattern_service import PatternService
             pattern_service = PatternService()
             
-            tgt_table = suggestion.get("tgt_table_physical_name", "")
-            tgt_column = suggestion.get("tgt_column_physical_name", "")
+            pattern_id = suggestion.get("pattern_mapped_field_id")
             
-            if tgt_table and tgt_column:
-                pattern = pattern_service.get_pattern_for_target(tgt_table, tgt_column)
+            if pattern_id:
+                pattern = pattern_service.get_pattern_by_id(pattern_id)
                 if pattern and pattern.get("join_metadata"):
                     jm_str = pattern.get("join_metadata")
                     jm = json.loads(jm_str) if isinstance(jm_str, str) else jm_str
