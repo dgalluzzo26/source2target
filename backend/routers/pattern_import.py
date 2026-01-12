@@ -61,7 +61,7 @@ class ColumnMappingRequest(BaseModel):
 class SavePatternsRequest(BaseModel):
     """Request to save patterns."""
     pattern_indices: Optional[List[int]] = None  # Specific patterns to save, or all if None
-    project_type: str  # Required: Project type for pattern filtering
+    project_type: str = ""  # Project type for pattern filtering (required for new imports)
 
 
 # =============================================================================
@@ -296,6 +296,10 @@ async def save_patterns(
     print(f"[Pattern Import Save] Pattern indices: {body.pattern_indices}, project_type: {body.project_type}")
     
     await require_admin(request)
+    
+    # Validate project_type is provided
+    if not body.project_type:
+        raise HTTPException(status_code=400, detail="project_type is required for saving patterns")
     
     try:
         print(f"[Pattern Import Save] Calling save_patterns service...")
