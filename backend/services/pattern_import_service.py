@@ -528,6 +528,11 @@ RULES:
         
         print(f"[Pattern Import] Processing {total_rows} rows (out of {len(all_rows)} total)")
         
+        # Get database config for semantic_field_id lookup
+        db_config = self._get_db_config()
+        lookup_connection = self._get_sql_connection(db_config["server_hostname"], db_config["http_path"])
+        lookup_cursor = lookup_connection.cursor()
+        
         for i, row in enumerate(rows_to_process):
             try:
                 print(f"[Pattern Import] Processing row {i+1}/{total_rows}")
@@ -535,9 +540,53 @@ RULES:
                 # Map CSV columns to pattern fields
                 pattern = self._map_row_to_pattern(row, column_mapping)
                 
-                target_col = pattern.get("tgt_column_physical_name", "unknown")
-                target_table = pattern.get("tgt_table_physical_name", "unknown")
+                target_col = pattern.get("tgt_column_physical_name", "").strip() if pattern.get("tgt_column_physical_name") else ""
+                target_table = pattern.get("tgt_table_physical_name", "").strip() if pattern.get("tgt_table_physical_name") else ""
+                
+                # Fallback to logical names if physical not provided
+                if not target_table:
+                    target_table = pattern.get("tgt_table_name", "").strip() if pattern.get("tgt_table_name") else ""
+                if not target_col:
+                    target_col = pattern.get("tgt_column_name", "").strip() if pattern.get("tgt_column_name") else ""
+                
                 print(f"[Pattern Import] Row {i+1}: {target_table}.{target_col}")
+                
+                # Look up semantic_field_id NOW to warn user early
+                semantic_field_id = None
+                semantic_field_warning = None
+                
+                if target_table and target_col:
+                    safe_table = target_table.replace("'", "''")
+                    safe_column = target_col.replace("'", "''")
+                    
+                    lookup_query = f"""
+                        SELECT semantic_field_id 
+                        FROM {db_config['semantic_fields_table']}
+                        WHERE (UPPER(tgt_table_physical_name) = UPPER('{safe_table}')
+                               OR UPPER(tgt_table_name) = UPPER('{safe_table}'))
+                          AND (UPPER(tgt_column_physical_name) = UPPER('{safe_column}')
+                               OR UPPER(tgt_column_name) = UPPER('{safe_column}'))
+                        LIMIT 1
+                    """
+                    try:
+                        lookup_cursor.execute(lookup_query)
+                        result = lookup_cursor.fetchone()
+                        if result:
+                            semantic_field_id = result[0]
+                            print(f"[Pattern Import] Row {i+1}: Found semantic_field_id: {semantic_field_id}")
+                        else:
+                            semantic_field_warning = f"No matching semantic field found for {target_table}.{target_col}"
+                            print(f"[Pattern Import] Row {i+1}: WARNING - {semantic_field_warning}")
+                    except Exception as e:
+                        print(f"[Pattern Import] Row {i+1}: Lookup error: {e}")
+                        semantic_field_warning = f"Error looking up semantic field: {e}"
+                else:
+                    semantic_field_warning = "Missing target table or column name"
+                    print(f"[Pattern Import] Row {i+1}: WARNING - {semantic_field_warning}")
+                
+                # Store in pattern for later use and display to user
+                pattern["semantic_field_id"] = semantic_field_id
+                pattern["semantic_field_warning"] = semantic_field_warning
                 
                 # Generate join_metadata if SQL expression exists
                 sql_expr = pattern.get("source_expression", "")
@@ -680,12 +729,20 @@ RULES:
             # Update progress percentage
             session["processing_progress"] = int((i + 1) / total_rows * 100)
         
+        # Close the lookup connection
+        try:
+            lookup_cursor.close()
+            lookup_connection.close()
+        except:
+            pass
+        
         session["status"] = "READY_FOR_REVIEW"
         
         successful = len([p for p in session["processed_patterns"] if p.get("status") == "READY"])
         failed = len([p for p in session["processed_patterns"] if p.get("status") == "ERROR"])
+        missing_semantic = len([p for p in session["processed_patterns"] if p.get("semantic_field_warning")])
         
-        print(f"[Pattern Import] Complete: {successful} successful, {failed} failed")
+        print(f"[Pattern Import] Complete: {successful} successful, {failed} failed, {missing_semantic} missing semantic field")
         
         return {
             "status": "success",
@@ -816,19 +873,29 @@ RULES:
                         session["save_progress"] = int((i + 1) / len(patterns) * 100)
                         session["save_current_pattern"] = pattern.get('tgt_column_physical_name', 'unknown')
                     try:
-                        # Look up semantic_field_id if possible
-                        semantic_field_id = None
-                        if pattern.get("tgt_table_physical_name") and pattern.get("tgt_column_physical_name"):
-                            cursor.execute(f"""
-                                SELECT semantic_field_id 
-                                FROM {db_config['semantic_fields_table']}
-                                WHERE UPPER(tgt_table_physical_name) = UPPER('{pattern['tgt_table_physical_name']}')
-                                  AND UPPER(tgt_column_physical_name) = UPPER('{pattern['tgt_column_physical_name']}')
-                                LIMIT 1
-                            """)
-                            result = cursor.fetchone()
-                            if result:
-                                semantic_field_id = result[0]
+                        # Use cached semantic_field_id from processing phase, or look it up
+                        semantic_field_id = pattern.get("semantic_field_id")
+                        
+                        # Get values for logging
+                        tgt_table = pattern.get("tgt_table_physical_name", "").strip() if pattern.get("tgt_table_physical_name") else ""
+                        tgt_column = pattern.get("tgt_column_physical_name", "").strip() if pattern.get("tgt_column_physical_name") else ""
+                        
+                        # Fallback to logical names if physical not provided
+                        if not tgt_table:
+                            tgt_table = pattern.get("tgt_table_name", "").strip() if pattern.get("tgt_table_name") else ""
+                        if not tgt_column:
+                            tgt_column = pattern.get("tgt_column_name", "").strip() if pattern.get("tgt_column_name") else ""
+                        
+                        print(f"[Pattern Import Sync] Saving pattern for: table='{tgt_table}', column='{tgt_column}', semantic_field_id={semantic_field_id}")
+                        
+                        # Skip patterns without matching semantic field (required for FK constraint)
+                        if not semantic_field_id:
+                            print(f"[Pattern Import Sync] Skipping pattern - no semantic field found for {tgt_table}.{tgt_column}")
+                            errors.append({
+                                "pattern": f"{tgt_table}.{tgt_column}",
+                                "error": f"No matching semantic field found for {tgt_table}.{tgt_column}. Ensure target field exists in semantic_fields table."
+                            })
+                            continue
                         
                         # Escape function
                         def esc(val):

@@ -146,7 +146,10 @@
             </span>
             <span v-else>
               <i class="pi pi-check-circle text-green-500"></i>
-              Complete! {{ successfulPatterns.length }} successful, {{ failedPatterns.length }} failed
+              Complete! {{ successfulPatterns.length }} processed, 
+              {{ savablePatterns.length }} ready to save,
+              {{ missingSemanticFieldPatterns.length }} missing semantic field,
+              {{ failedPatterns.length }} failed
             </span>
           </div>
           <ProgressBar :value="processingProgress" class="mt-2" style="height: 8px" />
@@ -164,9 +167,17 @@
             
             <Column field="status" header="Status" sortable style="width: 100px">
               <template #body="{ data }">
-                <Tag v-if="data.status === 'READY'" value="Ready" severity="success" />
+                <Tag v-if="data.status === 'READY' && !data.semantic_field_warning" value="Ready" severity="success" />
+                <Tag v-else-if="data.status === 'READY' && data.semantic_field_warning" value="Warning" severity="warning" />
                 <Tag v-else-if="data.status === 'ERROR'" value="Error" severity="danger" />
-                <Tag v-else value="Processing" severity="warning" />
+                <Tag v-else value="Processing" severity="info" />
+              </template>
+            </Column>
+            
+            <Column field="semantic_field_id" header="Semantic Field" sortable style="width: 130px">
+              <template #body="{ data }">
+                <Tag v-if="data.semantic_field_id" :value="'ID: ' + data.semantic_field_id" severity="success" />
+                <Tag v-else value="Not Found" severity="danger" v-tooltip.top="data.semantic_field_warning || 'No matching target field in semantic_fields table'" />
               </template>
             </Column>
             
@@ -219,7 +230,7 @@
           <div class="step-actions">
             <Button label="Back" icon="pi pi-arrow-left" severity="secondary" @click="goToStep(1)" :disabled="!processingComplete || saving" />
             <span class="selection-info">
-              {{ selectedPatterns.length }} of {{ successfulPatterns.length }} ready patterns selected
+              {{ selectedPatterns.length }} selected ({{ savablePatterns.length }} savable, {{ missingSemanticFieldPatterns.length }} missing semantic field)
             </span>
             <div class="project-type-selector">
               <label>Project Type: </label>
@@ -425,6 +436,14 @@ const successfulPatterns = computed(() => {
 
 const failedPatterns = computed(() => {
   return processedPatterns.value.filter(p => p.status === 'ERROR')
+})
+
+const missingSemanticFieldPatterns = computed(() => {
+  return processedPatterns.value.filter(p => p.semantic_field_warning || !p.semantic_field_id)
+})
+
+const savablePatterns = computed(() => {
+  return processedPatterns.value.filter(p => p.status === 'READY' && p.semantic_field_id)
 })
 
 const isMappingValid = computed(() => {
