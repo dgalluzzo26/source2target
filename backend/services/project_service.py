@@ -138,6 +138,7 @@ class ProjectService:
                 INSERT INTO {projects_table} (
                     project_name,
                     project_description,
+                    project_type,
                     source_system_name,
                     source_catalogs,
                     source_schemas,
@@ -151,6 +152,7 @@ class ProjectService:
                 ) VALUES (
                     '{self._escape_sql(data.project_name)}',
                     {f"'{self._escape_sql(data.project_description)}'" if data.project_description else 'NULL'},
+                    '{self._escape_sql(data.project_type)}',
                     {f"'{self._escape_sql(data.source_system_name)}'" if data.source_system_name else 'NULL'},
                     {f"'{self._escape_sql(data.source_catalogs)}'" if data.source_catalogs else 'NULL'},
                     {f"'{self._escape_sql(data.source_schemas)}'" if data.source_schemas else 'NULL'},
@@ -499,6 +501,8 @@ class ProjectService:
                     set_parts.append(f"target_domains = '{self._escape_sql(data.target_domains)}'")
                 if data.team_members is not None:
                     set_parts.append(f"team_members = '{self._escape_sql(data.team_members)}'")
+                if data.project_type is not None:
+                    set_parts.append(f"project_type = '{self._escape_sql(data.project_type)}'")
                 if data.project_status is not None:
                     set_parts.append(f"project_status = '{data.project_status.value}'")
                 if data.updated_by is not None:

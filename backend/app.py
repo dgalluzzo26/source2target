@@ -275,6 +275,24 @@ async def update_config(config_data: dict):
             "message": f"Invalid configuration: {str(e)}"
         }, 400
 
+
+@app.get("/api/config/project-types")
+async def get_project_types():
+    """
+    Get the list of available project types.
+    
+    Returns the configured project types that can be assigned to projects.
+    Used for populating dropdowns in the UI.
+    
+    Returns:
+        dict: Dictionary with available_types and default_type
+    """
+    config = config_service.get_config()
+    return {
+        "available_types": config.project_types.available_types,
+        "default_type": config.project_types.default_type
+    }
+
 # Mount static files for production (built frontend)
 # The dist folder is now at the root level after vite build
 static_dir = os.path.join(os.path.dirname(__file__), "..", "dist")

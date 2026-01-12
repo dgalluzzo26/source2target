@@ -56,6 +56,12 @@
           <div class="project-title">
             <h3>{{ project.project_name }}</h3>
             <Tag 
+              v-if="(project as any).project_type"
+              :value="(project as any).project_type" 
+              severity="info"
+              style="margin-right: 0.5rem;"
+            />
+            <Tag 
               :value="project.project_status" 
               :severity="getStatusSeverity(project.project_status)"
             />
@@ -157,6 +163,18 @@
             class="w-full"
             placeholder="Describe the purpose of this project..."
           />
+        </div>
+
+        <div class="field">
+          <label for="projectType">Project Type *</label>
+          <Dropdown 
+            id="projectType"
+            v-model="newProject.project_type" 
+            :options="projectTypes"
+            class="w-full"
+            placeholder="Select project type"
+          />
+          <small class="field-hint">Determines which patterns are used for AI suggestions</small>
         </div>
 
         <!-- Source Configuration -->
@@ -275,7 +293,7 @@
           icon="pi pi-check" 
           @click="handleCreateProject"
           :loading="creating"
-          :disabled="!newProject.project_name"
+          :disabled="!newProject.project_name || !newProject.project_type"
         />
       </template>
     </Dialog>
@@ -307,6 +325,18 @@
             class="w-full"
             placeholder="Describe the purpose of this project..."
           />
+        </div>
+
+        <div class="field">
+          <label for="editProjectType">Project Type *</label>
+          <Dropdown 
+            id="editProjectType"
+            v-model="editProject.project_type" 
+            :options="projectTypes"
+            class="w-full"
+            placeholder="Select project type"
+          />
+          <small class="field-hint">Determines which patterns are used for AI suggestions</small>
         </div>
 
         <!-- Source Configuration -->
@@ -443,6 +473,7 @@ import { useUserStore } from '@/stores/user'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
+import Dropdown from 'primevue/dropdown'
 import Tag from 'primevue/tag'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
@@ -469,6 +500,7 @@ const selectedProject = ref<MappingProject | null>(null)
 const newProject = ref({
   project_name: '',
   project_description: '',
+  project_type: '',
   source_system_name: '',
   source_catalogs: '',
   source_schemas: '',
@@ -485,6 +517,7 @@ const editProject = ref({
   project_id: 0,
   project_name: '',
   project_description: '',
+  project_type: '',
   source_system_name: '',
   source_catalogs: '',
   source_schemas: '',
@@ -493,6 +526,10 @@ const editProject = ref({
   target_domains: '',
   team_members: ''
 })
+
+// Project types from config
+const projectTypes = ref<string[]>([])
+const defaultProjectType = ref('')
 
 // Computed
 const projects = computed(() => projectsStore.projects)
@@ -542,9 +579,33 @@ const menuItems = computed(() => [
   }
 ])
 
+// Fetch project types from config
+async function fetchProjectTypes() {
+  try {
+    const response = await fetch('/api/config/project-types')
+    if (response.ok) {
+      const data = await response.json()
+      projectTypes.value = data.available_types || []
+      defaultProjectType.value = data.default_type || ''
+      // Set default for new projects
+      if (!newProject.value.project_type && defaultProjectType.value) {
+        newProject.value.project_type = defaultProjectType.value
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch project types:', error)
+    // Fallback
+    projectTypes.value = ['DMES', 'MMIS', 'CLAIMS', 'ELIGIBILITY', 'PROVIDER', 'PHARMACY']
+    defaultProjectType.value = 'DMES'
+  }
+}
+
 // Lifecycle
 onMounted(async () => {
-  await projectsStore.fetchProjects()
+  await Promise.all([
+    projectsStore.fetchProjects(),
+    fetchProjectTypes()
+  ])
 })
 
 // Methods
@@ -577,6 +638,7 @@ async function handleCreateProject() {
     const result = await projectsStore.createProject({
       project_name: newProject.value.project_name,
       project_description: newProject.value.project_description || undefined,
+      project_type: newProject.value.project_type,
       source_system_name: newProject.value.source_system_name || undefined,
       source_catalogs: newProject.value.source_catalogs || undefined,
       source_schemas: newProject.value.source_schemas || undefined,
@@ -617,6 +679,7 @@ function resetNewProject() {
   newProject.value = {
     project_name: '',
     project_description: '',
+    project_type: defaultProjectType.value || '',
     source_system_name: '',
     source_catalogs: '',
     source_schemas: '',
@@ -636,6 +699,7 @@ function handleEditProject() {
     project_id: p.project_id,
     project_name: p.project_name || '',
     project_description: p.project_description || '',
+    project_type: (p as any).project_type || defaultProjectType.value || '',
     source_system_name: p.source_system_name || '',
     source_catalogs: p.source_catalogs || '',
     source_schemas: p.source_schemas || '',
@@ -664,6 +728,7 @@ async function handleUpdateProject() {
     await projectsStore.updateProject(editProject.value.project_id, {
       project_name: editProject.value.project_name,
       project_description: editProject.value.project_description || undefined,
+      project_type: editProject.value.project_type || undefined,
       source_system_name: editProject.value.source_system_name || undefined,
       source_catalogs: editProject.value.source_catalogs || undefined,
       source_schemas: editProject.value.source_schemas || undefined,

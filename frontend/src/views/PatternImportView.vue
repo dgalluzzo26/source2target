@@ -221,12 +221,21 @@
             <span class="selection-info">
               {{ selectedPatterns.length }} of {{ successfulPatterns.length }} ready patterns selected
             </span>
+            <div class="project-type-selector">
+              <label>Project Type: </label>
+              <Dropdown 
+                v-model="selectedProjectType" 
+                :options="projectTypes" 
+                placeholder="Select project type *"
+                style="min-width: 150px;"
+              />
+            </div>
             <Button 
               label="Save Selected Patterns" 
               icon="pi pi-check" 
               @click="savePatterns" 
               :loading="saving" 
-              :disabled="!processingComplete || !selectedPatterns.length || saving"
+              :disabled="!processingComplete || !selectedPatterns.length || saving || !selectedProjectType"
             />
           </div>
           
@@ -369,6 +378,8 @@ const processingErrors = ref<any[]>([])
 const selectedPatterns = ref<any[]>([])
 const saving = ref(false)
 const savedCount = ref(0)
+const projectTypes = ref<string[]>([])
+const selectedProjectType = ref('')
 const saveProgress = ref({
   percent: 0,
   current: 0,
@@ -580,10 +591,13 @@ async function savePatterns() {
         'Content-Type': 'application/json',
         ...getAuthHeaders()
       },
-      body: JSON.stringify({ pattern_indices: indices })
+      body: JSON.stringify({ 
+        pattern_indices: indices,
+        project_type: selectedProjectType.value
+      })
     })
     
-    console.log('Save response status:', response.status)
+    console.log('Save response status:', response.status, 'project_type:', selectedProjectType.value)
     
     if (response.ok) {
       const result = await response.json()
@@ -679,8 +693,28 @@ function formatJson(str: string): string {
   }
 }
 
-// Check admin on mount
-onMounted(() => {
+// Fetch project types from config
+async function fetchProjectTypes() {
+  try {
+    const response = await fetch('/api/config/project-types')
+    if (response.ok) {
+      const data = await response.json()
+      projectTypes.value = data.available_types || []
+      // Set default
+      if (data.default_type && !selectedProjectType.value) {
+        selectedProjectType.value = data.default_type
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch project types:', error)
+    // Fallback
+    projectTypes.value = ['DMES', 'MMIS', 'CLAIMS', 'ELIGIBILITY', 'PROVIDER', 'PHARMACY']
+    selectedProjectType.value = 'DMES'
+  }
+}
+
+// Check admin on mount and fetch project types
+onMounted(async () => {
   if (!userStore.isAdmin) {
     toast.add({
       severity: 'warn',
@@ -689,6 +723,7 @@ onMounted(() => {
       life: 5000
     })
   }
+  await fetchProjectTypes()
 })
 </script>
 

@@ -342,6 +342,44 @@
         </div>
       </TabPanel>
 
+      <!-- Project Types Tab -->
+      <TabPanel>
+        <template #header>
+          <i class="pi pi-folder"></i>
+          <span class="tab-label">Project Types</span>
+        </template>
+        <div class="config-section">
+          <h3>Project Types Configuration</h3>
+          <p>Configure the project types available for pattern filtering. Projects and patterns are tagged with a type, and pattern matching only uses patterns of the same type.</p>
+
+          <div class="config-form">
+            <div class="field">
+              <label for="project_types">Available Project Types</label>
+              <Textarea 
+                id="project_types"
+                v-model="projectTypesText"
+                placeholder="DMES&#10;MMIS&#10;CLAIMS"
+                class="w-full"
+                rows="6"
+              />
+              <small>One project type per line (e.g., DMES, MMIS, CLAIMS). Types will be uppercase.</small>
+            </div>
+
+            <div class="field">
+              <label for="default_type">Default Project Type</label>
+              <Dropdown 
+                id="default_type"
+                v-model="config.project_types.default_type"
+                :options="config.project_types.available_types"
+                placeholder="Select default type"
+                class="w-full"
+              />
+              <small>Default type for new projects</small>
+            </div>
+          </div>
+        </div>
+      </TabPanel>
+
       <!-- Actions Tab -->
       <TabPanel>
         <template #header>
@@ -435,6 +473,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
 import HelpButton from '@/components/HelpButton.vue'
 import Textarea from 'primevue/textarea'
+import Dropdown from 'primevue/dropdown'
 
 const userStore = useUserStore()
 
@@ -473,6 +512,10 @@ const config = ref({
     admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
     enable_password_auth: true,
     admin_password_hash: ''
+  },
+  project_types: {
+    available_types: ['DMES', 'MMIS', 'CLAIMS', 'ELIGIBILITY', 'PROVIDER', 'PHARMACY'],
+    default_type: 'DMES'
   }
 })
 
@@ -484,6 +527,17 @@ const adminUsersText = computed({
       .split('\n')
       .map(s => s.trim())
       .filter(s => s.length > 0 && s.includes('@'))
+  }
+})
+
+// Computed property for project types text (one per line)
+const projectTypesText = computed({
+  get: () => (config.value.project_types?.available_types || []).join('\n'),
+  set: (val: string) => {
+    config.value.project_types.available_types = val
+      .split('\n')
+      .map(s => s.trim().toUpperCase())
+      .filter(s => s.length > 0)
   }
 })
 
@@ -509,7 +563,8 @@ const loadConfiguration = async () => {
         ui: { ...config.value.ui, ...savedConfig.ui },
         support: { ...config.value.support, ...savedConfig.support },
         vector_search: { ...config.value.vector_search, ...savedConfig.vector_search },
-        security: { ...config.value.security, ...savedConfig.security }
+        security: { ...config.value.security, ...savedConfig.security },
+        project_types: { ...config.value.project_types, ...savedConfig.project_types }
       }
       console.log('Configuration loaded from backend')
     } else {
@@ -634,6 +689,10 @@ const resetConfiguration = async () => {
         admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
         enable_password_auth: true,
         admin_password_hash: ''
+      },
+      project_types: {
+        available_types: ['DMES', 'MMIS', 'CLAIMS', 'ELIGIBILITY', 'PROVIDER', 'PHARMACY'],
+        default_type: 'DMES'
       }
     }
     console.log('Configuration reset to defaults')

@@ -83,6 +83,7 @@ class MappingProject(BaseModel):
     project_id: Optional[int] = Field(None, description="Unique project identifier (auto-generated)")
     project_name: str = Field(..., description="Display name for the mapping project")
     project_description: Optional[str] = Field(None, description="Detailed description")
+    project_type: Optional[str] = Field(None, description="Project type for pattern filtering (e.g., DMES, MMIS)")
     
     # Source context (can have multiple)
     source_system_name: Optional[str] = Field(None, description="Name of source system (e.g., DMES)")
@@ -121,6 +122,7 @@ class MappingProjectCreate(BaseModel):
     """Create request for a new mapping project."""
     project_name: str = Field(..., description="Display name for the project")
     project_description: Optional[str] = None
+    project_type: str = Field(..., description="Project type for pattern filtering (required)")
     source_system_name: Optional[str] = None
     source_catalogs: Optional[str] = None
     source_schemas: Optional[str] = None
@@ -135,6 +137,7 @@ class MappingProjectUpdate(BaseModel):
     """Update request for an existing mapping project."""
     project_name: Optional[str] = None
     project_description: Optional[str] = None
+    project_type: Optional[str] = Field(None, description="Project type for pattern filtering")
     source_system_name: Optional[str] = None
     source_catalogs: Optional[str] = None
     source_schemas: Optional[str] = None

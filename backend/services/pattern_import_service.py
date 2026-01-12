@@ -769,7 +769,8 @@ RULES:
         db_config: Dict[str, str],
         patterns: List[Dict[str, Any]],
         created_by: str,
-        session: Optional[Dict[str, Any]] = None
+        session: Optional[Dict[str, Any]] = None,
+        project_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Save approved patterns to mapped_fields (synchronous).
@@ -779,6 +780,7 @@ RULES:
             patterns: List of pattern dictionaries to save
             created_by: User email
             session: Optional session dict for progress tracking
+            project_type: Project type for pattern filtering (required for new imports)
             
         Returns:
             Status dictionary with saved count
@@ -862,6 +864,7 @@ RULES:
                                 mapped_by,
                                 mapped_ts,
                                 project_id,
+                                project_type,
                                 is_approved_pattern,
                                 pattern_approved_by,
                                 pattern_approved_ts
@@ -891,6 +894,7 @@ RULES:
                                 {esc(created_by)},
                                 CURRENT_TIMESTAMP(),
                                 NULL,
+                                {esc(project_type) if project_type else 'NULL'},
                                 true,
                                 {esc(created_by)},
                                 CURRENT_TIMESTAMP()
@@ -939,7 +943,8 @@ RULES:
     async def save_patterns(
         self,
         session_id: str,
-        pattern_indices: Optional[List[int]] = None
+        pattern_indices: Optional[List[int]] = None,
+        project_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Save approved patterns from a session.
@@ -947,6 +952,7 @@ RULES:
         Args:
             session_id: Import session ID
             pattern_indices: Optional list of pattern indices to save (all if None)
+            project_type: Project type for pattern filtering (required for new imports)
             
         Returns:
             Status dictionary
@@ -982,7 +988,9 @@ RULES:
         
         db_config = self._get_db_config()
         created_by = session.get("created_by", "unknown")
-        print(f"[Pattern Import] Created by: {created_by}")
+        # Use project_type from parameter, or fall back to session
+        effective_project_type = project_type or session.get("project_type")
+        print(f"[Pattern Import] Created by: {created_by}, project_type: {effective_project_type}")
         
         try:
             loop = asyncio.get_event_loop()
@@ -993,7 +1001,8 @@ RULES:
                     db_config,
                     ready_patterns,
                     created_by,
-                    session  # Pass session for progress tracking
+                    session,  # Pass session for progress tracking
+                    effective_project_type  # Pass project_type
                 )
             )
             

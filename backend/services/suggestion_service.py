@@ -1150,6 +1150,15 @@ RULES:
         
         try:
             with connection.cursor() as cursor:
+                # Get project_type for pattern filtering
+                cursor.execute(f"""
+                    SELECT project_type FROM {db_config['mapping_projects_table']}
+                    WHERE project_id = {project_id}
+                """)
+                project_row = cursor.fetchone()
+                project_type = project_row[0] if project_row else None
+                print(f"[Suggestion Service] Using project_type: {project_type} for pattern filtering")
+                
                 # Clear existing suggestions for this table (allows re-discovery)
                 cursor.execute(f"""
                     DELETE FROM {db_config['mapping_suggestions_table']}
@@ -1198,10 +1207,11 @@ RULES:
                 no_match = 0
                 
                 # Fetch ALL patterns for this table in ONE query (much faster)
-                print(f"[Suggestion Service] Pre-fetching patterns for table: {tgt_table_physical_name}")
+                # Filter by project_type if set - only use patterns from same project type
+                print(f"[Suggestion Service] Pre-fetching patterns for table: {tgt_table_physical_name}, project_type: {project_type}")
                 import time
                 start_time = time.time()
-                patterns_cache = self.pattern_service.get_all_patterns_for_table(tgt_table_physical_name)
+                patterns_cache = self.pattern_service.get_all_patterns_for_table(tgt_table_physical_name, project_type)
                 print(f"[Suggestion Service] Pattern cache loaded in {time.time() - start_time:.2f}s, columns with patterns: {len(patterns_cache)}")
                 
                 col_idx = 0
@@ -1722,6 +1732,15 @@ RULES:
                 tgt_table_physical = suggestion["tgt_table_physical_name"]
                 tgt_comments = suggestion.get("tgt_comments", "")
                 
+                # Get project_type for pattern filtering
+                cursor.execute(f"""
+                    SELECT project_type FROM {db_config['mapping_projects_table']}
+                    WHERE project_id = {project_id}
+                """)
+                project_row = cursor.fetchone()
+                project_type = project_row[0] if project_row else None
+                print(f"[Suggestion Service] Using project_type: {project_type} for pattern filtering")
+                
                 print(f"[Suggestion Service] Regenerating for column: {tgt_column_physical}")
                 
                 # Step 1: Find pattern for this target column
@@ -1736,10 +1755,11 @@ RULES:
                     if pattern:
                         print(f"[Suggestion Service] Using specified pattern: {pattern_id}")
                 else:
-                    # Use best pattern from PatternService
+                    # Use best pattern from PatternService (filtered by project_type)
                     pattern_result = self.pattern_service.get_best_pattern_with_alternatives(
                         tgt_table_physical,
-                        tgt_column_physical
+                        tgt_column_physical,
+                        project_type
                     )
                     pattern = pattern_result.get("pattern")
                     alternatives_count = len(pattern_result.get("alternatives", []))

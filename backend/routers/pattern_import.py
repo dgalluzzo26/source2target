@@ -61,6 +61,7 @@ class ColumnMappingRequest(BaseModel):
 class SavePatternsRequest(BaseModel):
     """Request to save patterns."""
     pattern_indices: Optional[List[int]] = None  # Specific patterns to save, or all if None
+    project_type: str  # Required: Project type for pattern filtering
 
 
 # =============================================================================
@@ -292,7 +293,7 @@ async def save_patterns(
     Admin only.
     """
     print(f"[Pattern Import Save] Received save request for session: {session_id}")
-    print(f"[Pattern Import Save] Pattern indices: {body.pattern_indices}")
+    print(f"[Pattern Import Save] Pattern indices: {body.pattern_indices}, project_type: {body.project_type}")
     
     await require_admin(request)
     
@@ -300,7 +301,8 @@ async def save_patterns(
         print(f"[Pattern Import Save] Calling save_patterns service...")
         result = await pattern_import_service.save_patterns(
             session_id,
-            body.pattern_indices
+            body.pattern_indices,
+            body.project_type
         )
         print(f"[Pattern Import Save] Result: {result}")
         

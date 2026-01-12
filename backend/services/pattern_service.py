@@ -187,7 +187,8 @@ class PatternService:
     
     def get_all_patterns_for_table(
         self,
-        tgt_table: str
+        tgt_table: str,
+        project_type: Optional[str] = None
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Get all mapped_fields records for a target table, grouped by column.
@@ -197,6 +198,7 @@ class PatternService:
         
         Args:
             tgt_table: Target table physical name
+            project_type: Optional project type to filter patterns (only same-type patterns)
             
         Returns:
             Dictionary mapping column_name -> list of patterns
@@ -204,7 +206,7 @@ class PatternService:
         import time
         db_config = self._get_db_config()
         
-        print(f"[PatternService] Fetching all patterns for table: '{tgt_table}'")
+        print(f"[PatternService] Fetching all patterns for table: '{tgt_table}', project_type: '{project_type}'")
         start_time = time.time()
         
         try:
@@ -218,6 +220,11 @@ class PatternService:
                 query_start = time.time()
                 # Use UPPER() for case-insensitive matching
                 table_name = db_config['mapped_fields_table']
+                # Build project_type filter if provided
+                project_type_filter = ""
+                if project_type:
+                    project_type_filter = f"AND project_type = '{project_type}'"
+                
                 query = f"""
                     SELECT 
                         mapped_field_id,
@@ -234,10 +241,12 @@ class PatternService:
                         mapped_ts,
                         mapped_by,
                         project_id,
-                        is_approved_pattern
+                        is_approved_pattern,
+                        project_type
                     FROM {table_name}
                     WHERE UPPER(tgt_table_physical_name) = UPPER('{tgt_table}')
                       AND mapping_status = 'ACTIVE'
+                      {project_type_filter}
                     ORDER BY mapped_ts DESC
                 """
                 print(f"[PatternService] Query table: {table_name}")
@@ -370,7 +379,8 @@ class PatternService:
     def get_all_patterns_for_column(
         self,
         tgt_table: str,
-        tgt_column: str
+        tgt_column: str,
+        project_type: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Get all mapped_fields records for a target column.
@@ -381,12 +391,13 @@ class PatternService:
         Args:
             tgt_table: Target table physical name
             tgt_column: Target column physical name
+            project_type: Optional project type to filter patterns
             
         Returns:
             List of pattern dictionaries
         """
         # Use the table-level fetch and filter
-        all_patterns = self.get_all_patterns_for_table(tgt_table)
+        all_patterns = self.get_all_patterns_for_table(tgt_table, project_type)
         return all_patterns.get(tgt_column.upper(), [])
     
     def group_patterns_by_signature(
@@ -503,7 +514,8 @@ class PatternService:
     def get_best_pattern_with_alternatives(
         self,
         tgt_table: str,
-        tgt_column: str
+        tgt_column: str,
+        project_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Get the best pattern for a column along with alternative variants.
@@ -511,6 +523,7 @@ class PatternService:
         Args:
             tgt_table: Target table physical name
             tgt_column: Target column physical name
+            project_type: Optional project type to filter patterns
             
         Returns:
             Dictionary with:
@@ -518,7 +531,7 @@ class PatternService:
                 - alternatives: List of alternative variant summaries
                 - total_variants: Total number of unique pattern types
         """
-        patterns = self.get_all_patterns_for_column(tgt_table, tgt_column)
+        patterns = self.get_all_patterns_for_column(tgt_table, tgt_column, project_type)
         
         if not patterns:
             return {

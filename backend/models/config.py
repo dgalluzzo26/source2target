@@ -171,6 +171,25 @@ class SecurityConfig(BaseModel):
     admin_password_hash: str = Field(default="", description="Admin password hash (unused)")
 
 
+class ProjectTypesConfig(BaseModel):
+    """
+    Project type configuration for pattern filtering.
+    
+    Projects and patterns are tagged with a type. Pattern matching only
+    uses patterns of the same type, allowing different source systems
+    to have distinct mapping patterns.
+    
+    Attributes:
+        available_types: List of valid project type values
+        default_type: Default type for new projects
+    """
+    available_types: List[str] = Field(
+        default=["DMES", "MMIS", "CLAIMS", "ELIGIBILITY", "PROVIDER", "PHARMACY"],
+        description="List of valid project types"
+    )
+    default_type: str = Field(default="DMES", description="Default project type for new projects")
+
+
 class AppConfig(BaseModel):
     """
     Complete application configuration.
@@ -185,6 +204,7 @@ class AppConfig(BaseModel):
         ui: User interface preferences
         support: Support resource links
         security: Admin access control
+        project_types: Project type configuration for pattern filtering
     """
     database: DatabaseConfig = Field(default_factory=DatabaseConfig, description="Database configuration")
     ai_model: AIModelConfig = Field(default_factory=AIModelConfig, description="AI model configuration")
@@ -192,4 +212,5 @@ class AppConfig(BaseModel):
     ui: UIConfig = Field(default_factory=UIConfig, description="UI configuration")
     support: SupportConfig = Field(default_factory=SupportConfig, description="Support configuration")
     security: SecurityConfig = Field(default_factory=SecurityConfig, description="Security configuration")
+    project_types: ProjectTypesConfig = Field(default_factory=ProjectTypesConfig, description="Project type configuration")
 
