@@ -2286,20 +2286,10 @@ RULES:
                     if domain_row:
                         target_domain = domain_row[0]
                 
-                # Generate fresh join_metadata from the final SQL expression
-                # This handles cases where user edited the SQL
-                config = self.config_service.get_config()
-                generated_join_metadata = self._generate_join_metadata_sync(
-                    config.ai_model.foundation_model_endpoint,
-                    final_sql,
-                    suggestion.get('tgt_column_physical_name', ''),
-                    suggestion.get('tgt_table_physical_name', ''),
-                    source_tables_physical,
-                    source_columns_physical
-                )
-                
-                # Use generated metadata, fall back to pattern if generation failed
-                final_join_metadata = generated_join_metadata or pattern_join_metadata
+                # Use the original pattern's join_metadata directly
+                # No need to regenerate - this is faster and maintains consistency
+                # The pattern's join_metadata already captures the correct structure
+                final_join_metadata = pattern_join_metadata
                 
                 # Determine relationship type from the final SQL
                 relationship_type = self._determine_relationship_type(final_sql, source_columns_physical)
