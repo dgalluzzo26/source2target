@@ -11,7 +11,7 @@ Vue.js frontend (when built). It provides:
 
 The application is designed to run as a Databricks App or locally for development.
 """
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -264,16 +264,12 @@ async def update_config(config_data: dict):
                 "message": "Configuration updated successfully"
             }
         else:
-            return {
-                "status": "error",
-                "message": "Failed to save configuration"
-            }, 500
+            raise HTTPException(status_code=500, detail="Failed to save configuration")
             
+    except HTTPException:
+        raise
     except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Invalid configuration: {str(e)}"
-        }, 400
+        raise HTTPException(status_code=400, detail=f"Invalid configuration: {str(e)}")
 
 
 @app.get("/api/config/project-types")
