@@ -862,121 +862,130 @@ RULES:
         saved_count = 0
         errors = []
         
+        # Escape function for SQL values
+        def esc(val):
+            if val is None:
+                return "NULL"
+            return f"'{str(val).replace(chr(39), chr(39)+chr(39))}'"
+        
         try:
             with connection.cursor() as cursor:
+                # Build list of valid patterns and their VALUES tuples
+                values_list = []
+                
                 for i, pattern in enumerate(patterns):
-                    print(f"[Pattern Import Sync] Saving pattern {i+1}/{len(patterns)}: {pattern.get('tgt_column_physical_name')}")
+                    print(f"[Pattern Import Sync] Processing pattern {i+1}/{len(patterns)}: {pattern.get('tgt_column_physical_name')}")
                     
                     # Update progress in session for polling
                     if session:
                         session["save_current"] = i + 1
-                        session["save_progress"] = int((i + 1) / len(patterns) * 100)
+                        session["save_progress"] = int((i + 1) / len(patterns) * 50)  # 0-50% for building
                         session["save_current_pattern"] = pattern.get('tgt_column_physical_name', 'unknown')
-                    try:
-                        # Use cached semantic_field_id from processing phase, or look it up
-                        semantic_field_id = pattern.get("semantic_field_id")
-                        
-                        # Get values for logging
-                        tgt_table = pattern.get("tgt_table_physical_name", "").strip() if pattern.get("tgt_table_physical_name") else ""
-                        tgt_column = pattern.get("tgt_column_physical_name", "").strip() if pattern.get("tgt_column_physical_name") else ""
-                        
-                        # Fallback to logical names if physical not provided
-                        if not tgt_table:
-                            tgt_table = pattern.get("tgt_table_name", "").strip() if pattern.get("tgt_table_name") else ""
-                        if not tgt_column:
-                            tgt_column = pattern.get("tgt_column_name", "").strip() if pattern.get("tgt_column_name") else ""
-                        
-                        print(f"[Pattern Import Sync] Saving pattern for: table='{tgt_table}', column='{tgt_column}', semantic_field_id={semantic_field_id}")
-                        
-                        # Skip patterns without matching semantic field (required for FK constraint)
-                        if not semantic_field_id:
-                            print(f"[Pattern Import Sync] Skipping pattern - no semantic field found for {tgt_table}.{tgt_column}")
-                            errors.append({
-                                "pattern": f"{tgt_table}.{tgt_column}",
-                                "error": f"No matching semantic field found for {tgt_table}.{tgt_column}. Ensure target field exists in semantic_fields table."
-                            })
-                            continue
-                        
-                        # Escape function
-                        def esc(val):
-                            if val is None:
-                                return "NULL"
-                            return f"'{str(val).replace(chr(39), chr(39)+chr(39))}'"
-                        
-                        # Insert pattern
-                        cursor.execute(f"""
-                            INSERT INTO {db_config['mapped_fields_table']} (
-                                semantic_field_id,
-                                tgt_table_name,
-                                tgt_table_physical_name,
-                                tgt_column_name,
-                                tgt_column_physical_name,
-                                tgt_comments,
-                                source_expression,
-                                source_tables,
-                                source_tables_physical,
-                                source_columns,
-                                source_columns_physical,
-                                source_descriptions,
-                                source_datatypes,
-                                source_domain,
-                                target_domain,
-                                source_relationship_type,
-                                transformations_applied,
-                                join_metadata,
-                                confidence_score,
-                                mapping_source,
-                                ai_generated,
-                                mapping_status,
-                                mapped_by,
-                                mapped_ts,
-                                project_id,
-                                project_type,
-                                is_approved_pattern,
-                                pattern_approved_by,
-                                pattern_approved_ts
-                            ) VALUES (
-                                {semantic_field_id if semantic_field_id else 'NULL'},
-                                {esc(pattern.get('tgt_table_name'))},
-                                {esc(pattern.get('tgt_table_physical_name'))},
-                                {esc(pattern.get('tgt_column_name'))},
-                                {esc(pattern.get('tgt_column_physical_name'))},
-                                {esc(pattern.get('tgt_comments'))},
-                                {esc(pattern.get('source_expression'))},
-                                {esc(pattern.get('source_tables'))},
-                                {esc(pattern.get('source_tables_physical'))},
-                                {esc(pattern.get('source_columns'))},
-                                {esc(pattern.get('source_columns_physical'))},
-                                {esc(pattern.get('source_descriptions'))},
-                                {esc(pattern.get('source_datatypes'))},
-                                {esc(pattern.get('source_domain'))},
-                                {esc(pattern.get('target_domain'))},
-                                {esc(pattern.get('source_relationship_type', 'SINGLE'))},
-                                {esc(pattern.get('transformations_applied'))},
-                                {esc(pattern.get('join_metadata'))},
-                                {pattern.get('confidence_score', 0.9)},
-                                'BULK_UPLOAD',
-                                false,
-                                'ACTIVE',
-                                {esc(created_by)},
-                                CURRENT_TIMESTAMP(),
-                                NULL,
-                                {esc(project_type) if project_type else 'NULL'},
-                                true,
-                                {esc(created_by)},
-                                CURRENT_TIMESTAMP()
-                            )
-                        """)
-                        
-                        saved_count += 1
-                        print(f"[Pattern Import Sync] Saved successfully: {pattern.get('tgt_column_physical_name')}")
-                        
-                    except Exception as e:
-                        print(f"[Pattern Import Sync] Error saving {pattern.get('tgt_column_physical_name')}: {e}")
+                    
+                    # Use cached semantic_field_id from processing phase
+                    semantic_field_id = pattern.get("semantic_field_id")
+                    
+                    # Get values for logging
+                    tgt_table = pattern.get("tgt_table_physical_name", "").strip() if pattern.get("tgt_table_physical_name") else ""
+                    tgt_column = pattern.get("tgt_column_physical_name", "").strip() if pattern.get("tgt_column_physical_name") else ""
+                    
+                    # Fallback to logical names if physical not provided
+                    if not tgt_table:
+                        tgt_table = pattern.get("tgt_table_name", "").strip() if pattern.get("tgt_table_name") else ""
+                    if not tgt_column:
+                        tgt_column = pattern.get("tgt_column_name", "").strip() if pattern.get("tgt_column_name") else ""
+                    
+                    # Skip patterns without matching semantic field (required for FK constraint)
+                    if not semantic_field_id:
+                        print(f"[Pattern Import Sync] Skipping pattern - no semantic field found for {tgt_table}.{tgt_column}")
                         errors.append({
-                            "pattern": pattern.get("tgt_column_physical_name", "unknown"),
-                            "error": str(e)
+                            "pattern": f"{tgt_table}.{tgt_column}",
+                            "error": f"No matching semantic field found for {tgt_table}.{tgt_column}. Ensure target field exists in semantic_fields table."
                         })
+                        continue
+                    
+                    # Build VALUES tuple for this pattern
+                    values_tuple = f"""(
+                        {semantic_field_id},
+                        {esc(pattern.get('tgt_table_name'))},
+                        {esc(pattern.get('tgt_table_physical_name'))},
+                        {esc(pattern.get('tgt_column_name'))},
+                        {esc(pattern.get('tgt_column_physical_name'))},
+                        {esc(pattern.get('tgt_comments'))},
+                        {esc(pattern.get('source_expression'))},
+                        {esc(pattern.get('source_tables'))},
+                        {esc(pattern.get('source_tables_physical'))},
+                        {esc(pattern.get('source_columns'))},
+                        {esc(pattern.get('source_columns_physical'))},
+                        {esc(pattern.get('source_descriptions'))},
+                        {esc(pattern.get('source_datatypes'))},
+                        {esc(pattern.get('source_domain'))},
+                        {esc(pattern.get('target_domain'))},
+                        {esc(pattern.get('source_relationship_type', 'SINGLE'))},
+                        {esc(pattern.get('transformations_applied'))},
+                        {esc(pattern.get('join_metadata'))},
+                        {pattern.get('confidence_score', 0.9)},
+                        'BULK_UPLOAD',
+                        false,
+                        'ACTIVE',
+                        {esc(created_by)},
+                        CURRENT_TIMESTAMP(),
+                        NULL,
+                        {esc(project_type) if project_type else 'NULL'},
+                        true,
+                        {esc(created_by)},
+                        CURRENT_TIMESTAMP()
+                    )"""
+                    values_list.append(values_tuple)
+                
+                # Execute batch INSERT if we have valid patterns
+                if values_list:
+                    print(f"[Pattern Import Sync] Executing batch INSERT for {len(values_list)} patterns...")
+                    
+                    if session:
+                        session["save_progress"] = 60
+                        session["save_current_pattern"] = "Batch inserting..."
+                    
+                    # Join all VALUES tuples and execute single INSERT
+                    batch_sql = f"""
+                        INSERT INTO {db_config['mapped_fields_table']} (
+                            semantic_field_id,
+                            tgt_table_name,
+                            tgt_table_physical_name,
+                            tgt_column_name,
+                            tgt_column_physical_name,
+                            tgt_comments,
+                            source_expression,
+                            source_tables,
+                            source_tables_physical,
+                            source_columns,
+                            source_columns_physical,
+                            source_descriptions,
+                            source_datatypes,
+                            source_domain,
+                            target_domain,
+                            source_relationship_type,
+                            transformations_applied,
+                            join_metadata,
+                            confidence_score,
+                            mapping_source,
+                            ai_generated,
+                            mapping_status,
+                            mapped_by,
+                            mapped_ts,
+                            project_id,
+                            project_type,
+                            is_approved_pattern,
+                            pattern_approved_by,
+                            pattern_approved_ts
+                        ) VALUES {', '.join(values_list)}
+                    """
+                    
+                    cursor.execute(batch_sql)
+                    saved_count = len(values_list)
+                    print(f"[Pattern Import Sync] Batch INSERT successful: {saved_count} patterns saved")
+                else:
+                    print(f"[Pattern Import Sync] No valid patterns to insert")
                 
                 print(f"[Pattern Import Sync] Complete: {saved_count} saved, {len(errors)} errors")
                 

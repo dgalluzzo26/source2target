@@ -780,7 +780,7 @@ class UnmappedFieldsService:
         """
         Bulk upload source fields with project_id (synchronous).
         
-        Efficiently inserts multiple fields in a single transaction.
+        Efficiently inserts multiple fields in a single batch transaction.
         Skips duplicates within the same project.
         
         Args:
@@ -797,56 +797,87 @@ class UnmappedFieldsService:
         
         connection = self._get_sql_connection(server_hostname, http_path)
         
+        # Escape function for SQL values
+        def esc(val, default=""):
+            if val is None:
+                return f"'{default}'"
+            return f"'{str(val).replace(chr(39), chr(39)+chr(39))}'"
+        
+        def esc_or_null(val):
+            if val is None or val == "":
+                return "NULL"
+            return f"'{str(val).replace(chr(39), chr(39)+chr(39))}'"
+        
         try:
             with connection.cursor() as cursor:
-                inserted_count = 0
+                # Step 1: Get all existing table/column combinations for this project in ONE query
+                cursor.execute(f"""
+                    SELECT UPPER(src_table_physical_name), UPPER(src_column_physical_name)
+                    FROM {unmapped_fields_table}
+                    WHERE project_id = {project_id}
+                """)
+                existing_keys = set()
+                for row in cursor.fetchall():
+                    existing_keys.add((row[0], row[1]))
+                
+                print(f"[Unmapped Fields Service] Found {len(existing_keys)} existing fields in project")
+                
+                # Step 2: Build list of VALUES tuples for non-duplicate fields
+                values_list = []
                 skipped_count = 0
                 
                 for field in fields:
-                    # Check for duplicate within project
-                    src_table = field.get("src_table_physical_name", "").replace("'", "''")
-                    src_column = field.get("src_column_physical_name", "").replace("'", "''")
+                    src_table = (field.get("src_table_physical_name") or "").upper()
+                    src_column = (field.get("src_column_physical_name") or "").upper()
                     
-                    cursor.execute(f"""
-                        SELECT COUNT(*) FROM {unmapped_fields_table}
-                        WHERE src_table_physical_name = '{src_table}'
-                          AND src_column_physical_name = '{src_column}'
-                          AND project_id = {project_id}
-                    """)
-                    
-                    if cursor.fetchone()[0] > 0:
+                    # Check for duplicate
+                    if (src_table, src_column) in existing_keys:
                         skipped_count += 1
                         continue
                     
-                    # Insert field
-                    query = f"""
-                    INSERT INTO {unmapped_fields_table} (
-                        src_table_name,
-                        src_table_physical_name,
-                        src_column_name,
-                        src_column_physical_name,
-                        src_nullable,
-                        src_physical_datatype,
-                        src_comments,
-                        domain,
-                        project_id,
-                        mapping_status
-                    ) VALUES (
-                        '{field.get("src_table_name", "").replace("'", "''")}',
-                        '{field.get("src_table_physical_name", "").replace("'", "''")}',
-                        '{field.get("src_column_name", "").replace("'", "''")}',
-                        '{field.get("src_column_physical_name", "").replace("'", "''")}',
-                        '{field.get("src_nullable", "YES")}',
-                        '{field.get("src_physical_datatype", "STRING").replace("'", "''")}',
-                        {f"'{field.get('src_comments', '').replace(chr(39), chr(39)+chr(39))}'" if field.get("src_comments") else "NULL"},
-                        {f"'{field.get('domain', '').replace(chr(39), chr(39)+chr(39))}'" if field.get("domain") else "NULL"},
+                    # Add to existing keys to prevent duplicates within the upload batch
+                    existing_keys.add((src_table, src_column))
+                    
+                    # Build VALUES tuple
+                    values_tuple = f"""(
+                        {esc(field.get("src_table_name"), "")},
+                        {esc(field.get("src_table_physical_name"), "")},
+                        {esc(field.get("src_column_name"), "")},
+                        {esc(field.get("src_column_physical_name"), "")},
+                        {esc(field.get("src_nullable", "YES"))},
+                        {esc(field.get("src_physical_datatype", "STRING"))},
+                        {esc_or_null(field.get("src_comments"))},
+                        {esc_or_null(field.get("domain"))},
                         {project_id},
                         'PENDING'
-                    )
+                    )"""
+                    values_list.append(values_tuple)
+                
+                # Step 3: Execute batch INSERT if we have fields to insert
+                inserted_count = 0
+                if values_list:
+                    print(f"[Unmapped Fields Service] Executing batch INSERT for {len(values_list)} fields...")
+                    
+                    batch_sql = f"""
+                        INSERT INTO {unmapped_fields_table} (
+                            src_table_name,
+                            src_table_physical_name,
+                            src_column_name,
+                            src_column_physical_name,
+                            src_nullable,
+                            src_physical_datatype,
+                            src_comments,
+                            domain,
+                            project_id,
+                            mapping_status
+                        ) VALUES {', '.join(values_list)}
                     """
                     
-                    cursor.execute(query)
-                    inserted_count += 1
+                    cursor.execute(batch_sql)
+                    inserted_count = len(values_list)
+                    print(f"[Unmapped Fields Service] Batch INSERT successful: {inserted_count} fields inserted")
+                else:
+                    print(f"[Unmapped Fields Service] No new fields to insert")
                 
                 print(f"[Unmapped Fields Service] Uploaded {inserted_count} fields, skipped {skipped_count} duplicates")
                 
