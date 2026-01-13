@@ -685,6 +685,25 @@ async def get_suggestion_vs_candidates(suggestion_id: int):
         except Exception as e:
             print(f"[VS Candidates] Could not extract alias mapping from join_metadata: {e}")
         
+        # Also extract table aliases directly from pattern_sql using regex
+        # This catches actual SQL aliases like "FROM MEMBER m" or "JOIN ENTITY e ON"
+        # Always try this - join_metadata may have CTE names, but we need actual table aliases
+        pattern_sql = suggestion.get("pattern_sql", "")
+        if pattern_sql:
+            try:
+                import re
+                # Match patterns like: FROM schema.table alias, JOIN schema.table alias ON
+                # Pattern: (FROM|JOIN)\s+(\S+)\s+(\w+)\s+(ON|WHERE|JOIN|LEFT|RIGHT|INNER|,|$)
+                table_alias_pattern = r'(?:FROM|JOIN)\s+([\w.]+)\s+(\w{1,3})\s*(?:ON|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|,|\)|$)'
+                matches = re.findall(table_alias_pattern, pattern_sql, re.IGNORECASE)
+                for full_table, alias in matches:
+                    if alias.lower() not in ('on', 'where', 'and', 'or', 'as', 'join', 'left', 'right', 'inner'):
+                        table_name = full_table.split(".")[-1].upper()
+                        alias_to_pattern_table[alias.lower()] = table_name
+                        print(f"[VS Candidates] Extracted from SQL: alias '{alias}' -> table '{table_name}'")
+            except Exception as e:
+                print(f"[VS Candidates] Error parsing pattern_sql for aliases: {e}")
+        
         # First pass: extract table replacements from sql_changes
         for change in sql_changes:
             change_type = change.get("type", "")
