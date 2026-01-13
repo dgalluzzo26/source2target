@@ -250,6 +250,7 @@ class SuggestionService:
             "server_hostname": db.server_hostname,
             "http_path": db.http_path,
             "projects_table": db.mapping_projects_table,
+            "mapping_projects_table": db.mapping_projects_table,  # Alias for backwards compatibility
             "target_table_status_table": db.target_table_status_table,
             "semantic_fields_table": db.semantic_fields_table,
             "mapping_suggestions_table": db.mapping_suggestions_table,
