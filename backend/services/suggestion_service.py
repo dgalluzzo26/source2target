@@ -811,14 +811,19 @@ CRITICAL TABLE-COLUMN CONSISTENCY (VERY IMPORTANT):
 
 MATCHING STRATEGY:
 - First, identify which user source table best matches each pattern bronze table based on column similarity
+- Each pattern bronze table should map to a DIFFERENT user source table when possible
+- CRITICAL: Do NOT substitute two different pattern tables with the SAME user table (this creates invalid self-joins)
+- If a pattern table has no matching user table, keep the original table name and add a warning
 - Then substitute columns from that matched source table consistently
 - Match columns by semantic meaning using the descriptions provided
 - If a pattern column has no clear match, keep it unchanged and add a warning
 - Prefer exact name matches when descriptions are similar
 
 WARNINGS RULES (BE VERY STRICT):
-- ONLY warn about columns FROM THE ORIGINAL SQL TEMPLATE that you could not find a match for
-- The warning must reference the PATTERN column name (e.g., "ADR_STREET_1", "SAK_RECIP"), NOT a user source column
+- ONLY warn about columns/tables FROM THE ORIGINAL SQL TEMPLATE that you could not find a match for
+- The warning must reference the PATTERN column/table name (e.g., "ADR_STREET_1", "SAK_RECIP", "ENTITY"), NOT a user source
+- If a pattern TABLE has no matching user table, add warning: "No matching table for PATTERN_TABLE"
+- If a pattern COLUMN has no matching user column, add warning: "No match for COLUMN_NAME"
 - Do NOT warn about user source columns/tables that were provided but not used (e.g., CNTY_REF, MBR_FNDTN)
 - Do NOT warn about silver table columns (tables with "silver" in their path)
 - Do NOT warn about successful substitutions - only warn if you could NOT find ANY match
@@ -886,7 +891,7 @@ Return ONLY valid JSON with this structure:
                 messages=[
                     ChatMessage(role=ChatMessageRole.USER, content=prompt)
                 ],
-                max_tokens=2000
+                max_tokens=4000  # Increased for complex CTE patterns
             )
             
             response_text = response.choices[0].message.content
@@ -902,6 +907,10 @@ Return ONLY valid JSON with this structure:
             
             # Clean and extract JSON using helper
             json_str = clean_llm_json(response_text)
+            
+            if not json_str:
+                print(f"[Suggestion Service] clean_llm_json returned empty - response length: {len(response_text) if response_text else 0}")
+                print(f"[Suggestion Service] Response first 500 chars: {response_text[:500] if response_text else 'EMPTY'}")
             
             if json_str:
                 try:
@@ -1047,7 +1056,7 @@ RULES:
                 messages=[
                     ChatMessage(role=ChatMessageRole.USER, content=prompt)
                 ],
-                max_tokens=2000
+                max_tokens=4000
             )
             
             response_text = response.choices[0].message.content
@@ -2753,7 +2762,7 @@ Modify the SQL according to the user's request and return JSON with the result."
                     ChatMessage(role=ChatMessageRole.SYSTEM, content=system_prompt),
                     ChatMessage(role=ChatMessageRole.USER, content=user_prompt)
                 ],
-                max_tokens=2000
+                max_tokens=4000
             )
             
             response_text = response.choices[0].message.content

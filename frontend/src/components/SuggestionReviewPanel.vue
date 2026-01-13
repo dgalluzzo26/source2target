@@ -836,6 +836,14 @@ const problemFieldsInSQL = computed(() => {
     if (allCapsMatches) {
       problems.push(...allCapsMatches)
     }
+    
+    // Fallback: If the warning is JUST a column name (no sentence structure),
+    // treat the whole thing as a problem field
+    // This catches warnings like "entityid", "curr_rec_ind", etc.
+    const trimmed = warning.trim()
+    if (/^[a-zA-Z][a-zA-Z0-9_]*$/.test(trimmed) && trimmed.length < 50) {
+      problems.push(trimmed)
+    }
   }
   
   // Filter out SQL keywords
