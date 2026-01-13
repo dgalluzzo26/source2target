@@ -576,6 +576,7 @@ RULES:
         print(f"[Pattern Import] Phase 1: Pre-processing {total_rows} rows...")
         
         patterns_needing_llm = []  # List of (index, pattern) tuples that need LLM
+        completed_count = 0  # Track patterns that are fully done
         
         for i, row in enumerate(rows_to_process):
             try:
@@ -612,7 +613,7 @@ RULES:
                 special_case = self._detect_special_case(sql_expr)
                 
                 if special_case.get("special_case_type"):
-                    # Special case - no LLM needed
+                    # Special case - no LLM needed, fully complete
                     sc_type = special_case["special_case_type"]
                     pattern["special_case_type"] = sc_type
                     pattern["mapping_action"] = special_case.get("mapping_action")
@@ -652,24 +653,25 @@ RULES:
                         pattern["source_relationship_type"] = "NOT_APPLICABLE"
                         
                     session["processed_patterns"].append(pattern)
+                    completed_count += 1
+                    session["processed_count"] = completed_count
                     
                 elif sql_expr:
-                    # Needs LLM call - queue it for parallel processing
+                    # Needs LLM call - queue it for parallel processing (don't add to processed yet)
                     pattern["status"] = "PENDING_LLM"
-                    patterns_needing_llm.append((i, pattern))
-                    session["processed_patterns"].append(pattern)
-                else:
-                    pattern["status"] = "READY"
-                    pattern["join_metadata"] = None
-                    session["processed_patterns"].append(pattern)
-                
-                # Auto-detect relationship type and transformations
-                if sql_expr and not pattern.get("source_relationship_type"):
+                    # Auto-detect relationship type and transformations now
                     pattern["source_relationship_type"] = self._determine_relationship_type(
                         sql_expr, pattern.get("source_columns_physical", "")
                     )
-                if sql_expr and not pattern.get("transformations_applied"):
                     pattern["transformations_applied"] = self._extract_transformations(sql_expr)
+                    patterns_needing_llm.append((i, pattern))
+                else:
+                    # No SQL expression - complete
+                    pattern["status"] = "READY"
+                    pattern["join_metadata"] = None
+                    session["processed_patterns"].append(pattern)
+                    completed_count += 1
+                    session["processed_count"] = completed_count
                     
             except Exception as e:
                 print(f"[Pattern Import] Row {i+1}: Exception: {e}")
@@ -679,11 +681,13 @@ RULES:
                 error_pattern["error"] = str(e)
                 session["processed_patterns"].append(error_pattern)
                 session["errors"].append({"row_index": i, "error": str(e)})
+                completed_count += 1
+                session["processed_count"] = completed_count
+            
+            # Update progress based on phase 1 completion
+            session["processing_progress"] = int((i + 1) / total_rows * 50)  # 0-50% for phase 1
         
-        session["processed_count"] = total_rows
-        session["processing_progress"] = 50  # 50% done after phase 1
-        
-        print(f"[Pattern Import] Phase 1 complete. {len(patterns_needing_llm)} patterns need LLM calls.")
+        print(f"[Pattern Import] Phase 1 complete. {completed_count} done, {len(patterns_needing_llm)} need LLM calls.")
         
         # =====================================================================
         # PHASE 2: Parallel LLM calls (the slow part - now parallelized!)
@@ -693,7 +697,7 @@ RULES:
             
             # Create async tasks for all LLM calls
             async def call_llm_for_pattern(idx: int, pattern: dict) -> tuple:
-                """Wrapper to call LLM and return (index, result, error)"""
+                """Wrapper to call LLM and return (index, pattern, result, error)"""
                 sql_expr = pattern.get("source_expression", "")
                 try:
                     loop = asyncio.get_event_loop()
@@ -712,14 +716,16 @@ RULES:
                         ),
                         timeout=90.0  # 90 second timeout per LLM call
                     )
-                    return (idx, join_metadata, None)
+                    return (idx, pattern, join_metadata, None)
                 except asyncio.TimeoutError:
-                    return (idx, None, "LLM call timed out after 90 seconds")
+                    return (idx, pattern, None, "LLM call timed out after 90 seconds")
                 except Exception as e:
-                    return (idx, None, str(e))
+                    return (idx, pattern, None, str(e))
             
             # Run all LLM calls in parallel (batched to avoid overwhelming the API)
             BATCH_SIZE = 10  # Process 10 LLM calls at a time
+            llm_completed = 0
+            
             for batch_start in range(0, len(patterns_needing_llm), BATCH_SIZE):
                 batch = patterns_needing_llm[batch_start:batch_start + BATCH_SIZE]
                 batch_num = batch_start // BATCH_SIZE + 1
@@ -733,31 +739,35 @@ RULES:
                 # Run batch in parallel
                 results = await asyncio.gather(*tasks, return_exceptions=True)
                 
-                # Process results
+                # Process results - add completed patterns to session
                 for result in results:
                     if isinstance(result, Exception):
-                        continue  # Already handled in the task
+                        print(f"[Pattern Import] Unexpected exception: {result}")
+                        continue
                     
-                    idx, join_metadata, error = result
-                    # Find the pattern in session by row_index
-                    for pattern in session["processed_patterns"]:
-                        if pattern.get("row_index") == idx:
-                            if error:
-                                pattern["status"] = "ERROR"
-                                pattern["error"] = error
-                                pattern["join_metadata"] = None
-                                session["errors"].append({
-                                    "row_index": idx,
-                                    "column": pattern.get("tgt_column_physical_name", ""),
-                                    "error": error
-                                })
-                            else:
-                                pattern["status"] = "READY"
-                                pattern["join_metadata"] = join_metadata
-                            break
+                    idx, pattern, join_metadata, error = result
+                    
+                    if error:
+                        pattern["status"] = "ERROR"
+                        pattern["error"] = error
+                        pattern["join_metadata"] = None
+                        session["errors"].append({
+                            "row_index": idx,
+                            "column": pattern.get("tgt_column_physical_name", ""),
+                            "error": error
+                        })
+                    else:
+                        pattern["status"] = "READY"
+                        pattern["join_metadata"] = join_metadata
+                    
+                    # NOW add to processed patterns (after LLM is done)
+                    session["processed_patterns"].append(pattern)
+                    completed_count += 1
+                    llm_completed += 1
+                    session["processed_count"] = completed_count
                 
-                # Update progress
-                progress = 50 + int((batch_start + len(batch)) / len(patterns_needing_llm) * 50)
+                # Update progress (50-100% for phase 2)
+                progress = 50 + int(llm_completed / len(patterns_needing_llm) * 50)
                 session["processing_progress"] = min(progress, 100)
             
             print(f"[Pattern Import] Phase 2 complete. All LLM calls finished.")
