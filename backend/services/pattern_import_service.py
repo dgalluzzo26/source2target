@@ -141,13 +141,16 @@ class PatternImportService:
             )
             headers = reader.fieldnames or []
             
+            # Clean headers - strip whitespace
+            headers = [h.strip() if h else '' for h in headers]
+            
             # Get preview rows (first 10)
             preview_rows = []
             all_rows = []
             for i, row in enumerate(reader):
-                # Clean up values - strip whitespace and handle None
+                # Clean up both keys and values - strip whitespace and handle None
                 cleaned_row = {
-                    k: (v.strip() if v else '') for k, v in row.items()
+                    (k.strip() if k else ''): (v.strip() if v else '') for k, v in row.items()
                 }
                 all_rows.append(cleaned_row)
                 if i < 10:
@@ -530,13 +533,52 @@ RULES:
         
         # Get database config for semantic_field_id lookup
         db_config = self._get_db_config()
-        lookup_connection = self._get_sql_connection(db_config["server_hostname"], db_config["http_path"])
-        lookup_cursor = lookup_connection.cursor()
+        
+        # Debug: Log the column mapping being used
+        print(f"[Pattern Import] Column mapping: {column_mapping}")
+        
+        # BATCH LOOKUP: Get all semantic fields at once to avoid connection timeout issues
+        semantic_field_cache = {}
+        try:
+            print(f"[Pattern Import] Loading all semantic fields for batch lookup...")
+            lookup_connection = self._get_sql_connection(db_config["server_hostname"], db_config["http_path"])
+            with lookup_connection.cursor() as lookup_cursor:
+                lookup_cursor.execute(f"""
+                    SELECT 
+                        semantic_field_id,
+                        UPPER(TRIM(COALESCE(tgt_table_physical_name, ''))),
+                        UPPER(TRIM(COALESCE(tgt_column_physical_name, ''))),
+                        UPPER(TRIM(COALESCE(tgt_table_name, ''))),
+                        UPPER(TRIM(COALESCE(tgt_column_name, '')))
+                    FROM {db_config['semantic_fields_table']}
+                """)
+                for row in lookup_cursor.fetchall():
+                    sf_id, table_phys, col_phys, table_log, col_log = row
+                    # Index by both physical and logical names
+                    if table_phys and col_phys:
+                        semantic_field_cache[(table_phys, col_phys)] = sf_id
+                    if table_log and col_log:
+                        semantic_field_cache[(table_log, col_log)] = sf_id
+                    # Also cross-reference physical table with logical column and vice versa
+                    if table_phys and col_log:
+                        semantic_field_cache[(table_phys, col_log)] = sf_id
+                    if table_log and col_phys:
+                        semantic_field_cache[(table_log, col_phys)] = sf_id
+            lookup_connection.close()
+            print(f"[Pattern Import] Loaded {len(semantic_field_cache)} semantic field mappings into cache")
+        except Exception as e:
+            print(f"[Pattern Import] Error loading semantic fields: {e}")
+            semantic_field_cache = {}
+        
+        # =====================================================================
+        # PHASE 1: Fast pre-processing (no LLM calls)
+        # =====================================================================
+        print(f"[Pattern Import] Phase 1: Pre-processing {total_rows} rows...")
+        
+        patterns_needing_llm = []  # List of (index, pattern) tuples that need LLM
         
         for i, row in enumerate(rows_to_process):
             try:
-                print(f"[Pattern Import] Processing row {i+1}/{total_rows}")
-                
                 # Map CSV columns to pattern fields
                 pattern = self._map_row_to_pattern(row, column_mapping)
                 
@@ -549,192 +591,178 @@ RULES:
                 if not target_col:
                     target_col = pattern.get("tgt_column_name", "").strip() if pattern.get("tgt_column_name") else ""
                 
-                print(f"[Pattern Import] Row {i+1}: {target_table}.{target_col}")
-                
-                # Look up semantic_field_id NOW to warn user early
+                # Look up semantic_field_id from cache
                 semantic_field_id = None
                 semantic_field_warning = None
                 
                 if target_table and target_col:
-                    safe_table = target_table.replace("'", "''")
-                    safe_column = target_col.replace("'", "''")
-                    
-                    lookup_query = f"""
-                        SELECT semantic_field_id 
-                        FROM {db_config['semantic_fields_table']}
-                        WHERE (UPPER(tgt_table_physical_name) = UPPER('{safe_table}')
-                               OR UPPER(tgt_table_name) = UPPER('{safe_table}'))
-                          AND (UPPER(tgt_column_physical_name) = UPPER('{safe_column}')
-                               OR UPPER(tgt_column_name) = UPPER('{safe_column}'))
-                        LIMIT 1
-                    """
-                    try:
-                        lookup_cursor.execute(lookup_query)
-                        result = lookup_cursor.fetchone()
-                        if result:
-                            semantic_field_id = result[0]
-                            print(f"[Pattern Import] Row {i+1}: Found semantic_field_id: {semantic_field_id}")
-                        else:
-                            semantic_field_warning = f"No matching semantic field found for {target_table}.{target_col}"
-                            print(f"[Pattern Import] Row {i+1}: WARNING - {semantic_field_warning}")
-                    except Exception as e:
-                        print(f"[Pattern Import] Row {i+1}: Lookup error: {e}")
-                        semantic_field_warning = f"Error looking up semantic field: {e}"
+                    lookup_key = (target_table.upper().strip(), target_col.upper().strip())
+                    semantic_field_id = semantic_field_cache.get(lookup_key)
+                    if not semantic_field_id:
+                        semantic_field_warning = f"No matching semantic field found for {target_table}.{target_col}"
                 else:
                     semantic_field_warning = "Missing target table or column name"
-                    print(f"[Pattern Import] Row {i+1}: WARNING - {semantic_field_warning}")
                 
-                # Store in pattern for later use and display to user
                 pattern["semantic_field_id"] = semantic_field_id
                 pattern["semantic_field_warning"] = semantic_field_warning
+                pattern["row_index"] = i
                 
-                # Generate join_metadata if SQL expression exists
+                # Check for special cases (auto-generated, hardcoded, N/A)
                 sql_expr = pattern.get("source_expression", "")
-                
-                # First check for special cases (auto-generated, hardcoded, N/A)
                 special_case = self._detect_special_case(sql_expr)
                 
                 if special_case.get("special_case_type"):
-                    # Special case detected - no LLM call needed
+                    # Special case - no LLM needed
                     sc_type = special_case["special_case_type"]
-                    print(f"[Pattern Import] Row {i+1}: Special case detected: {sc_type}")
-                    
                     pattern["special_case_type"] = sc_type
                     pattern["mapping_action"] = special_case.get("mapping_action")
                     pattern["status"] = "READY"
                     
-                    # Generate join_metadata for special case
                     target_col_name = pattern.get("tgt_column_physical_name", "UNKNOWN")
                     
                     if sc_type == "AUTO_GENERATED":
                         pattern["join_metadata"] = json.dumps({
                             "patternType": "AUTO_GENERATED",
                             "outputColumn": target_col_name,
-                            "description": "Column is auto-generated on insert (identity/timestamp/sequence)",
+                            "description": "Column is auto-generated on insert",
                             "mappingAction": "AUTO_MAP",
-                            "silverTables": [],
-                            "unionBranches": [],
-                            "userColumnsToMap": [],
-                            "userTablesToMap": []
+                            "silverTables": [], "unionBranches": [], "userColumnsToMap": [], "userTablesToMap": []
                         })
                         pattern["source_relationship_type"] = "AUTO_GENERATED"
-                        
                     elif sc_type == "HARDCODED":
                         hardcode_val = special_case.get("generated_sql", "NULL")
                         pattern["join_metadata"] = json.dumps({
                             "patternType": "HARDCODED",
                             "outputColumn": target_col_name,
-                            "description": f"Column is hardcoded to constant value: {hardcode_val}",
+                            "description": f"Hardcoded to: {hardcode_val}",
                             "hardcodedValue": special_case.get("hardcoded_value"),
                             "generatedSql": f"SELECT {hardcode_val} AS {target_col_name}",
                             "mappingAction": "HARDCODE",
-                            "silverTables": [],
-                            "unionBranches": [],
-                            "userColumnsToMap": [],
-                            "userTablesToMap": []
+                            "silverTables": [], "unionBranches": [], "userColumnsToMap": [], "userTablesToMap": []
                         })
                         pattern["source_relationship_type"] = "HARDCODED"
-                        
                     elif sc_type == "NOT_APPLICABLE":
                         pattern["join_metadata"] = json.dumps({
                             "patternType": "NOT_APPLICABLE",
                             "outputColumn": target_col_name,
-                            "description": "Column is not applicable / not in use - suggest skip",
+                            "description": "Column is not applicable - suggest skip",
                             "mappingAction": "SKIP",
-                            "silverTables": [],
-                            "unionBranches": [],
-                            "userColumnsToMap": [],
-                            "userTablesToMap": []
+                            "silverTables": [], "unionBranches": [], "userColumnsToMap": [], "userTablesToMap": []
                         })
                         pattern["source_relationship_type"] = "NOT_APPLICABLE"
                         
+                    session["processed_patterns"].append(pattern)
+                    
                 elif sql_expr:
-                    print(f"[Pattern Import] Row {i+1}: Calling LLM for join_metadata...")
-                    try:
-                        # Generate metadata with timeout protection
-                        loop = asyncio.get_event_loop()
-                        join_metadata = await asyncio.wait_for(
-                            loop.run_in_executor(
-                                executor,
-                                functools.partial(
-                                    self._generate_join_metadata_sync,
-                                    llm_endpoint,
-                                    sql_expr,
-                                    pattern.get("tgt_column_physical_name", ""),
-                                    pattern.get("tgt_table_physical_name", ""),
-                                    pattern.get("source_tables_physical", ""),
-                                    pattern.get("source_columns_physical", "")
-                                )
-                            ),
-                            timeout=60.0  # 60 second timeout per LLM call
-                        )
-                        pattern["join_metadata"] = join_metadata
-                        pattern["status"] = "READY"
-                        print(f"[Pattern Import] Row {i+1}: LLM call successful")
-                    except asyncio.TimeoutError:
-                        print(f"[Pattern Import] Row {i+1}: LLM call timed out")
-                        pattern["join_metadata"] = None
-                        pattern["status"] = "ERROR"
-                        pattern["error"] = "LLM call timed out"
-                        session["errors"].append({
-                            "row_index": i,
-                            "column": target_col,
-                            "error": "LLM call timed out after 60 seconds"
-                        })
-                    except Exception as llm_error:
-                        print(f"[Pattern Import] Row {i+1}: LLM error: {llm_error}")
-                        pattern["join_metadata"] = None
-                        pattern["status"] = "ERROR"
-                        pattern["error"] = str(llm_error)
-                        session["errors"].append({
-                            "row_index": i,
-                            "column": target_col,
-                            "error": str(llm_error)
-                        })
+                    # Needs LLM call - queue it for parallel processing
+                    pattern["status"] = "PENDING_LLM"
+                    patterns_needing_llm.append((i, pattern))
+                    session["processed_patterns"].append(pattern)
                 else:
                     pattern["status"] = "READY"
                     pattern["join_metadata"] = None
+                    session["processed_patterns"].append(pattern)
                 
                 # Auto-detect relationship type and transformations
-                if sql_expr:
-                    if not pattern.get("source_relationship_type"):
-                        pattern["source_relationship_type"] = self._determine_relationship_type(
-                            sql_expr, 
-                            pattern.get("source_columns_physical", "")
-                        )
+                if sql_expr and not pattern.get("source_relationship_type"):
+                    pattern["source_relationship_type"] = self._determine_relationship_type(
+                        sql_expr, pattern.get("source_columns_physical", "")
+                    )
+                if sql_expr and not pattern.get("transformations_applied"):
+                    pattern["transformations_applied"] = self._extract_transformations(sql_expr)
                     
-                    if not pattern.get("transformations_applied"):
-                        pattern["transformations_applied"] = self._extract_transformations(sql_expr)
-                
-                pattern["row_index"] = i
-                
-                # Add pattern to list immediately (for progressive display)
-                session["processed_patterns"].append(pattern)
-                session["processed_count"] = i + 1
-                
             except Exception as e:
                 print(f"[Pattern Import] Row {i+1}: Exception: {e}")
-                # Still add a pattern entry so user can see it failed
                 error_pattern = self._map_row_to_pattern(row, column_mapping)
                 error_pattern["row_index"] = i
                 error_pattern["status"] = "ERROR"
                 error_pattern["error"] = str(e)
                 session["processed_patterns"].append(error_pattern)
-                session["errors"].append({
-                    "row_index": i,
-                    "error": str(e)
-                })
-                session["processed_count"] = i + 1
-            
-            # Update progress percentage
-            session["processing_progress"] = int((i + 1) / total_rows * 100)
+                session["errors"].append({"row_index": i, "error": str(e)})
         
-        # Close the lookup connection
-        try:
-            lookup_cursor.close()
-            lookup_connection.close()
-        except:
-            pass
+        session["processed_count"] = total_rows
+        session["processing_progress"] = 50  # 50% done after phase 1
+        
+        print(f"[Pattern Import] Phase 1 complete. {len(patterns_needing_llm)} patterns need LLM calls.")
+        
+        # =====================================================================
+        # PHASE 2: Parallel LLM calls (the slow part - now parallelized!)
+        # =====================================================================
+        if patterns_needing_llm:
+            print(f"[Pattern Import] Phase 2: Running {len(patterns_needing_llm)} LLM calls in parallel...")
+            
+            # Create async tasks for all LLM calls
+            async def call_llm_for_pattern(idx: int, pattern: dict) -> tuple:
+                """Wrapper to call LLM and return (index, result, error)"""
+                sql_expr = pattern.get("source_expression", "")
+                try:
+                    loop = asyncio.get_event_loop()
+                    join_metadata = await asyncio.wait_for(
+                        loop.run_in_executor(
+                            executor,
+                            functools.partial(
+                                self._generate_join_metadata_sync,
+                                llm_endpoint,
+                                sql_expr,
+                                pattern.get("tgt_column_physical_name", ""),
+                                pattern.get("tgt_table_physical_name", ""),
+                                pattern.get("source_tables_physical", ""),
+                                pattern.get("source_columns_physical", "")
+                            )
+                        ),
+                        timeout=90.0  # 90 second timeout per LLM call
+                    )
+                    return (idx, join_metadata, None)
+                except asyncio.TimeoutError:
+                    return (idx, None, "LLM call timed out after 90 seconds")
+                except Exception as e:
+                    return (idx, None, str(e))
+            
+            # Run all LLM calls in parallel (batched to avoid overwhelming the API)
+            BATCH_SIZE = 10  # Process 10 LLM calls at a time
+            for batch_start in range(0, len(patterns_needing_llm), BATCH_SIZE):
+                batch = patterns_needing_llm[batch_start:batch_start + BATCH_SIZE]
+                batch_num = batch_start // BATCH_SIZE + 1
+                total_batches = (len(patterns_needing_llm) + BATCH_SIZE - 1) // BATCH_SIZE
+                
+                print(f"[Pattern Import] LLM batch {batch_num}/{total_batches} ({len(batch)} calls)...")
+                
+                # Create tasks for this batch
+                tasks = [call_llm_for_pattern(idx, pattern) for idx, pattern in batch]
+                
+                # Run batch in parallel
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Process results
+                for result in results:
+                    if isinstance(result, Exception):
+                        continue  # Already handled in the task
+                    
+                    idx, join_metadata, error = result
+                    # Find the pattern in session by row_index
+                    for pattern in session["processed_patterns"]:
+                        if pattern.get("row_index") == idx:
+                            if error:
+                                pattern["status"] = "ERROR"
+                                pattern["error"] = error
+                                pattern["join_metadata"] = None
+                                session["errors"].append({
+                                    "row_index": idx,
+                                    "column": pattern.get("tgt_column_physical_name", ""),
+                                    "error": error
+                                })
+                            else:
+                                pattern["status"] = "READY"
+                                pattern["join_metadata"] = join_metadata
+                            break
+                
+                # Update progress
+                progress = 50 + int((batch_start + len(batch)) / len(patterns_needing_llm) * 50)
+                session["processing_progress"] = min(progress, 100)
+            
+            print(f"[Pattern Import] Phase 2 complete. All LLM calls finished.")
+        
+        session["processing_progress"] = 100
         
         session["status"] = "READY_FOR_REVIEW"
         
