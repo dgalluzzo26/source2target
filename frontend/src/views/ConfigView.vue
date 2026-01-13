@@ -358,11 +358,11 @@
               <Textarea 
                 id="project_types"
                 v-model="projectTypesText"
-                placeholder="DMES&#10;MMIS&#10;CLAIMS"
+                placeholder="Interchange&#10;Qnxt"
                 class="w-full"
                 rows="6"
               />
-              <small>One project type per line (e.g., DMES, MMIS, CLAIMS). Types will be uppercase.</small>
+              <small>One project type per line (e.g., Interchange, Qnxt).</small>
             </div>
 
             <div class="field">
@@ -514,8 +514,8 @@ const config = ref({
     admin_password_hash: ''
   },
   project_types: {
-    available_types: ['DMES', 'MMIS', 'CLAIMS', 'ELIGIBILITY', 'PROVIDER', 'PHARMACY'],
-    default_type: 'DMES'
+    available_types: ['Interchange', 'Qnxt'],
+    default_type: 'Interchange'
   }
 })
 
@@ -536,7 +536,7 @@ const projectTypesText = computed({
   set: (val: string) => {
     config.value.project_types.available_types = val
       .split('\n')
-      .map(s => s.trim().toUpperCase())
+      .map(s => s.trim())
       .filter(s => s.length > 0)
   }
 })
@@ -691,8 +691,8 @@ const resetConfiguration = async () => {
         admin_password_hash: ''
       },
       project_types: {
-        available_types: ['DMES', 'MMIS', 'CLAIMS', 'ELIGIBILITY', 'PROVIDER', 'PHARMACY'],
-        default_type: 'DMES'
+        available_types: ['Interchange', 'Qnxt'],
+        default_type: 'Interchange'
       }
     }
     console.log('Configuration reset to defaults')
