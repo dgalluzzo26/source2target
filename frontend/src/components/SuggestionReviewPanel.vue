@@ -51,15 +51,24 @@
           'no-match': suggestion.suggestion_status === 'NO_MATCH' || suggestion.suggestion_status === 'NO_PATTERN'
         }"
       >
-        <div class="suggestion-header">
-          <div class="column-info">
+        <!-- Clean Header: Column name + Status + Score + View Alternatives -->
+        <div class="suggestion-header-clean">
+          <div class="column-info-clean">
             <i class="pi pi-arrow-circle-right"></i>
-            <div class="column-names">
-              <strong>{{ suggestion.tgt_column_name }}</strong>
-              <span class="physical">{{ suggestion.tgt_column_physical_name }}</span>
-            </div>
+            <strong>{{ suggestion.tgt_column_physical_name }}</strong>
+            <Tag v-if="suggestion.pattern_type" :value="suggestion.pattern_type" severity="secondary" size="small" />
           </div>
-          <div class="suggestion-meta">
+          <div class="header-actions">
+            <Button
+              v-if="getMatchedFields(suggestion).length > 0"
+              label="View Alternatives"
+              icon="pi pi-list"
+              size="small"
+              text
+              severity="info"
+              @click="showVSCandidates(suggestion)"
+              v-tooltip.top="'See all source field candidates'"
+            />
             <Tag 
               :value="formatStatus(suggestion.suggestion_status)" 
               :severity="getStatusSeverity(suggestion.suggestion_status)"
@@ -71,77 +80,29 @@
           </div>
         </div>
 
-        <div class="suggestion-description" v-if="suggestion.tgt_comments">
+        <!-- Description (if different from column name) -->
+        <div class="suggestion-description-clean" v-if="suggestion.tgt_comments && suggestion.tgt_comments !== suggestion.tgt_column_name">
           {{ suggestion.tgt_comments }}
         </div>
 
-        <!-- Pattern Info -->
-        <div v-if="suggestion.pattern_type" class="pattern-info">
-          <Tag :value="suggestion.pattern_type" severity="secondary" size="small" />
-          <span class="pattern-label">{{ suggestion.pattern_description || 'Pattern from historical mapping' }}</span>
-          <Button 
-            v-if="suggestion.alternative_patterns_count > 0"
-            :label="`${suggestion.alternative_patterns_count} alternative${suggestion.alternative_patterns_count > 1 ? 's' : ''}`"
-            icon="pi pi-clone"
-            size="small"
-            text
-            severity="info"
-            @click="showAlternatives(suggestion)"
-            v-tooltip.top="'View alternative pattern types'"
-          />
+        <!-- AI Reasoning (compact) -->
+        <div v-if="suggestion.ai_reasoning" class="ai-reasoning-compact">
+          <i class="pi pi-lightbulb"></i>
+          <span class="reasoning-text-compact">{{ suggestion.ai_reasoning }}</span>
         </div>
 
-        <!-- AI Reasoning (if available) -->
-        <div v-if="suggestion.ai_reasoning" class="ai-reasoning">
-          <div class="reasoning-header">
-            <i class="pi pi-lightbulb"></i>
-            <span>AI Reasoning:</span>
-          </div>
-          <p class="reasoning-text">{{ suggestion.ai_reasoning }}</p>
-        </div>
-
-        <!-- Matched Source Fields with Scores -->
-        <div v-if="getMatchedFields(suggestion).length > 0" class="matched-sources">
-          <div class="matched-sources-header">
-            <h4>Matched Source Fields:</h4>
-            <Button
-              label="View Alternatives"
-              icon="pi pi-list"
-              size="small"
-              text
-              severity="info"
-              @click="showVSCandidates(suggestion)"
-              v-tooltip.top="'See all source field candidates from vector search'"
-            />
-          </div>
-          <div class="source-tags">
-            <div 
-              v-for="(field, idx) in getMatchedFields(suggestion).slice(0, 5)" 
-              :key="idx"
-              class="source-field-with-score"
-              v-tooltip.top="getScoreTooltip(field)"
-            >
-              <Tag 
-                :value="`${field.src_table_physical_name}.${field.src_column_physical_name}`"
-                :severity="getScoreSeverity(field.match_score)"
-                size="small"
-              />
-              <span class="match-score" :class="getScoreClass(field.match_score)">
-                {{ formatScore(field.match_score) }}
-              </span>
-            </div>
-            <Badge 
-              v-if="getMatchedFields(suggestion).length > 5"
-              :value="`+${getMatchedFields(suggestion).length - 5}`"
-              severity="secondary"
-            />
+        <!-- Warnings (right after reasoning) -->
+        <div v-if="getWarnings(suggestion).length > 0" class="warnings-compact">
+          <div v-for="(warning, idx) in getWarnings(suggestion)" :key="idx" class="warning-item-compact">
+            <i class="pi pi-exclamation-triangle"></i>
+            <span>{{ warning }}</span>
           </div>
         </div>
 
-        <!-- SQL Preview -->
-        <div v-if="suggestion.suggested_sql" class="sql-preview">
-          <div class="sql-header">
-            <h4>SQL Expression:</h4>
+        <!-- SQL Preview (compact) -->
+        <div v-if="suggestion.suggested_sql" class="sql-preview-compact">
+          <div class="sql-header-compact">
+            <span class="sql-label">SQL:</span>
             <Button 
               icon="pi pi-copy"
               text
@@ -150,33 +111,17 @@
               v-tooltip.top="'Copy SQL'"
             />
           </div>
-          <pre class="sql-code">{{ suggestion.suggested_sql }}</pre>
+          <pre class="sql-code-compact">{{ suggestion.suggested_sql }}</pre>
         </div>
 
-        <!-- No Match Message -->
-        <div v-if="suggestion.suggestion_status === 'NO_MATCH'" class="no-match-message">
+        <!-- Status Messages -->
+        <div v-if="suggestion.suggestion_status === 'NO_MATCH'" class="status-message warning">
           <i class="pi pi-exclamation-triangle"></i>
           <span>No matching source fields found. Manual mapping may be required.</span>
         </div>
-
-        <!-- No Pattern Message -->
-        <div v-if="suggestion.suggestion_status === 'NO_PATTERN'" class="no-pattern-message">
+        <div v-if="suggestion.suggestion_status === 'NO_PATTERN'" class="status-message info">
           <i class="pi pi-info-circle"></i>
-          <span>No historical pattern found for this column. This will be the first mapping.</span>
-        </div>
-
-        <!-- Warnings Panel (Enhanced) -->
-        <div v-if="getWarnings(suggestion).length > 0" class="warnings-panel">
-          <div class="warnings-header">
-            <i class="pi pi-exclamation-triangle"></i>
-            <span>{{ getWarnings(suggestion).length }} Warning{{ getWarnings(suggestion).length > 1 ? 's' : '' }} - Review Required</span>
-          </div>
-          <div class="warnings-list">
-            <div v-for="(warning, idx) in getWarnings(suggestion)" :key="idx" class="warning-item-enhanced">
-              <i class="pi pi-exclamation-circle"></i>
-              <span class="warning-text">{{ warning }}</span>
-            </div>
-          </div>
+          <span>No historical pattern found. This will be the first mapping.</span>
         </div>
 
         <!-- Actions -->
@@ -1723,8 +1668,8 @@ function formatDate(dateStr?: string): string {
 
 .suggestion-card {
   border: 1px solid var(--surface-border);
-  border-radius: 10px;
-  padding: 1.25rem;
+  border-radius: 8px;
+  padding: 1rem;
   background: white;
   transition: all 0.2s;
 }
@@ -1753,7 +1698,153 @@ function formatDate(dateStr?: string): string {
   background: #fff8e1;
 }
 
-/* Card Header */
+/* Clean Card Header */
+.suggestion-header-clean {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.column-info-clean {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.column-info-clean i {
+  color: var(--gainwell-secondary);
+  font-size: 1.1rem;
+}
+
+.column-info-clean strong {
+  font-size: 1rem;
+  color: var(--text-color);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.suggestion-description-clean {
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+/* Compact AI Reasoning */
+.ai-reasoning-compact {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: #f3e5f5;
+  border-left: 3px solid #7c4dff;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 0.5rem;
+}
+
+.ai-reasoning-compact i {
+  color: #ffc107;
+  margin-top: 0.1rem;
+}
+
+.reasoning-text-compact {
+  font-size: 0.8rem;
+  color: #37474f;
+  line-height: 1.4;
+}
+
+/* Compact Warnings */
+.warnings-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.warning-item-compact {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  background: #fff3e0;
+  border-left: 3px solid #ff9800;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0 4px 4px 0;
+  font-size: 0.8rem;
+  color: #e65100;
+}
+
+.warning-item-compact i {
+  color: #ff9800;
+  font-size: 0.85rem;
+  margin-top: 0.05rem;
+}
+
+/* Compact SQL Preview */
+.sql-preview-compact {
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+}
+
+.sql-header-compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.3rem 0.5rem;
+  background: #f5f5f5;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.sql-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #616161;
+  text-transform: uppercase;
+}
+
+.sql-code-compact {
+  margin: 0;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: #263238;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 80px;
+  overflow-y: auto;
+}
+
+/* Status Messages */
+.status-message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.status-message.warning {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.status-message.info {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+/* Legacy Card Header (keep for compatibility) */
 .suggestion-header {
   display: flex;
   justify-content: space-between;
@@ -2051,10 +2142,11 @@ function formatDate(dateStr?: string): string {
 /* Actions */
 .suggestion-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
   flex-wrap: wrap;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--surface-border);
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid #eeeeee;
 }
 
 /* Reviewed Info */
