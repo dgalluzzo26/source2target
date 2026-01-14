@@ -381,37 +381,48 @@
               </div>
             </div>
 
-            <!-- SQL Preview with Syntax Highlighting - Collapsible -->
-            <div class="sql-preview-highlighted" :class="{ 'has-problems': problemFieldsInSQL.length > 0, 'collapsed': sqlPreviewCollapsed }">
+            <!-- ORIGINAL Pattern SQL with Change Highlights -->
+            <div class="original-sql-section" :class="{ 'has-problems': problemFieldsInSQL.length > 0, 'collapsed': sqlPreviewCollapsed }">
               <div 
-                class="preview-label clickable" 
-                :class="{ 'warning': problemFieldsInSQL.length > 0, 'info': problemFieldsInSQL.length === 0 }"
+                class="original-sql-header clickable" 
                 @click="sqlPreviewCollapsed = !sqlPreviewCollapsed"
               >
-                <i :class="sqlPreviewCollapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-down'" class="toggle-icon"></i>
-                <i :class="problemFieldsInSQL.length > 0 ? 'pi pi-exclamation-circle' : 'pi pi-eye'"></i>
-                <span v-if="problemFieldsInSQL.length > 0">
-                  {{ problemFieldsInSQL.length }} field(s) need attention
-                </span>
-                <span v-else-if="getChanges(editingSuggestion).length > 0">
-                  Preview ({{ getChanges(editingSuggestion).length }} AI changes)
-                </span>
-                <span v-else>SQL Preview</span>
+                <div class="header-left">
+                  <i :class="sqlPreviewCollapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-down'" class="toggle-icon"></i>
+                  <span class="section-title">Original Pattern SQL</span>
+                </div>
+                <div class="change-legend">
+                  <span class="legend-item success"><span class="dot"></span> Changed</span>
+                  <span class="legend-item warning"><span class="dot"></span> No Match</span>
+                </div>
               </div>
-              <pre v-if="!sqlPreviewCollapsed" class="sql-highlighted" v-html="highlightedSQL"></pre>
+              <pre v-if="!sqlPreviewCollapsed" class="sql-original-highlighted" v-html="highlightedOriginalSQL"></pre>
             </div>
 
-            <!-- Editable SQL -->
-            <div class="sql-editor-container">
-          <Textarea 
-                ref="sqlTextarea"
-            v-model="editedSQL" 
-                :rows="18"
-                class="sql-editor-v2 w-full"
-            placeholder="Enter the SQL expression..."
-                spellcheck="false"
-          />
-        </div>
+            <!-- NEW SQL (Editable) -->
+            <div class="new-sql-section">
+              <div class="new-sql-header">
+                <span class="section-title">New SQL (Editable)</span>
+                <Button 
+                  icon="pi pi-copy"
+                  size="small"
+                  severity="secondary"
+                  text
+                  @click="copySQL(editedSQL)"
+                  v-tooltip.top="'Copy SQL'"
+                />
+              </div>
+              <div class="sql-editor-container">
+                <Textarea 
+                  ref="sqlTextarea"
+                  v-model="editedSQL" 
+                  :rows="12"
+                  class="sql-editor-v2 w-full"
+                  placeholder="Enter the SQL expression..."
+                  spellcheck="false"
+                />
+              </div>
+            </div>
 
             <!-- Matched Source Summary (compact) -->
             <div class="matched-summary-compact" v-if="getMatchedFields(editingSuggestion).length > 0">
@@ -874,7 +885,66 @@ const problemFieldsInSQL = computed(() => {
   return [...new Set(filtered)] // unique values
 })
 
-// Highlighted SQL with syntax highlighting and problem fields marked
+// Highlighted ORIGINAL SQL showing what was changed (blue) and what wasn't (yellow/red)
+const highlightedOriginalSQL = computed(() => {
+  if (!editingSuggestion.value?.pattern_sql) {
+    return ''
+  }
+  
+  const originalSQL = editingSuggestion.value.pattern_sql
+  let html = escapeHtml(originalSQL)
+  
+  // Get successfully changed fields (from AI changes)
+  const changes = getChanges(editingSuggestion.value)
+  const changedOriginals = new Set<string>()
+  
+  for (const change of changes) {
+    if (change.original) {
+      // Extract just the column/table name (remove alias prefix like "b." or "a.")
+      const parts = change.original.split('.')
+      const name = parts[parts.length - 1]
+      changedOriginals.add(name.toUpperCase())
+      // Also add the full reference
+      changedOriginals.add(change.original.toUpperCase())
+    }
+  }
+  
+  // Get warning fields (couldn't be changed)
+  const warnings = problemFieldsInSQL.value
+  const warningSet = new Set(warnings.map(w => w.toUpperCase()))
+  
+  // First, highlight WARNING fields (couldn't match) in yellow/red - longest first
+  const sortedWarnings = [...warningSet].sort((a, b) => b.length - a.length)
+  for (const field of sortedWarnings) {
+    const regex = new RegExp(`\\b(${escapeRegExp(field)})\\b`, 'gi')
+    html = html.replace(regex, '<mark class="original-no-match">$1</mark>')
+  }
+  
+  // Then highlight CHANGED fields in blue - longest first
+  const sortedChanged = [...changedOriginals].sort((a, b) => b.length - a.length)
+  for (const field of sortedChanged) {
+    // Skip if already marked as warning
+    if (warningSet.has(field.toUpperCase())) continue
+    const regex = new RegExp(`\\b(${escapeRegExp(field)})\\b`, 'gi')
+    html = html.replace(regex, '<mark class="original-changed">$1</mark>')
+  }
+  
+  // Highlight SQL keywords
+  const keywords = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 
+                    'ON', 'AND', 'OR', 'AS', 'UNION', 'ALL', 'CASE', 'WHEN', 'THEN', 
+                    'ELSE', 'END', 'TRIM', 'CONCAT', 'COALESCE', 'NULL', 'IS', 'NOT',
+                    'DISTINCT', 'INITCAP', 'IN', 'LIKE', 'BETWEEN', 'GROUP', 'BY', 
+                    'ORDER', 'HAVING', 'LIMIT', 'OFFSET', 'WITH', 'CTE']
+  
+  for (const kw of keywords) {
+    const regex = new RegExp(`\\b(${kw})\\b`, 'gi')
+    html = html.replace(regex, '<span class="sql-keyword">$1</span>')
+  }
+  
+  return html
+})
+
+// Highlighted SQL with syntax highlighting and problem fields marked (for NEW SQL preview)
 const highlightedSQL = computed(() => {
   if (!editedSQL.value) {
     return ''
@@ -2586,7 +2656,147 @@ function formatDate(dateStr?: string): string {
   background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
 }
 
-/* Highlighted SQL Preview */
+/* Original SQL Section (Pattern with highlights) */
+.original-sql-section {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fafafa;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.original-sql-section.has-problems {
+  border: 2px solid #ff9800;
+}
+
+.original-sql-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: #f5f5f5;
+  border-bottom: 1px solid #e0e0e0;
+  cursor: pointer;
+}
+
+.original-sql-header:hover {
+  background: #eeeeee;
+}
+
+.original-sql-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.original-sql-header .section-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #616161;
+  text-transform: uppercase;
+}
+
+.original-sql-header .toggle-icon {
+  font-size: 0.75rem;
+  color: #9e9e9e;
+}
+
+.change-legend {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.7rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.legend-item .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legend-item.success .dot {
+  background: #2196f3;
+}
+
+.legend-item.warning .dot {
+  background: #ff9800;
+}
+
+.sql-original-highlighted {
+  padding: 0.75rem;
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: white;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Highlights for original SQL */
+.sql-original-highlighted :deep(.original-changed) {
+  background: #bbdefb;
+  color: #0d47a1;
+  padding: 0.1rem 0.2rem;
+  border-radius: 3px;
+  font-weight: 600;
+  border: 1px solid #64b5f6;
+}
+
+.sql-original-highlighted :deep(.original-no-match) {
+  background: #ffe0b2;
+  color: #e65100;
+  padding: 0.1rem 0.2rem;
+  border-radius: 3px;
+  font-weight: 600;
+  border: 1px solid #ff9800;
+}
+
+/* New SQL Section */
+.new-sql-section {
+  border: 1px solid #424242;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #263238;
+}
+
+.new-sql-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+  background: #37474f;
+  border-bottom: 1px solid #546e7a;
+}
+
+.new-sql-header .section-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #b0bec5;
+  text-transform: uppercase;
+}
+
+.new-sql-section .sql-editor-container {
+  padding: 0;
+}
+
+.new-sql-section .sql-editor-v2 {
+  background: #263238 !important;
+  color: #eceff1 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.8rem;
+}
+
+/* Legacy: Highlighted SQL Preview (keep for compatibility) */
 .sql-preview-highlighted {
   border: 1px solid var(--surface-300);
   border-radius: 8px;
