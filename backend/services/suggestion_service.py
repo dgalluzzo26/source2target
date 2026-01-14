@@ -733,10 +733,16 @@ LIMIT {num_results};
         join_metadata: Optional[str],
         pattern_descriptions: str,
         matched_sources: List[Dict[str, Any]],
-        target_column: str
+        target_column: str,
+        vs_candidates_by_column: Dict[str, List[Dict[str, Any]]] = None,
+        min_match_score: float = 0.004
     ) -> Dict[str, Any]:
         """
         Use LLM to rewrite pattern SQL with user's source columns.
+        
+        Args:
+            vs_candidates_by_column: Grouped vector search results by pattern column
+            min_match_score: Minimum vector search score to include (default 0.004)
         
         Returns rewritten SQL, changes made, and confidence.
         """
@@ -750,16 +756,47 @@ LIMIT {num_results};
             except:
                 pass
         
-        # Build matched sources description
-        source_info = []
-        for src in matched_sources:
-            source_info.append(
-                f"- {src.get('src_table_physical_name', 'UNKNOWN')}.{src.get('src_column_physical_name', 'UNKNOWN')}"
-                f"\n  Description: {src.get('src_comments', 'N/A')}"
-                f"\n  Type: {src.get('src_physical_datatype', 'STRING')}"
-            )
+        # Build matched sources description - GROUPED BY PATTERN COLUMN with scores
+        sources_text = ""
         
-        sources_text = "\n".join(source_info) if source_info else "No matching sources found"
+        if vs_candidates_by_column and len(vs_candidates_by_column) > 0:
+            # Use grouped results with scores
+            grouped_info = []
+            for pattern_col, candidates in vs_candidates_by_column.items():
+                # Filter by minimum score
+                filtered = [c for c in candidates if c.get('score', 0) >= min_match_score]
+                
+                if filtered:
+                    col_section = f"\n=== Pattern Column: {pattern_col} ===\n"
+                    col_section += "Best matching source columns (in order of match score):\n"
+                    for i, src in enumerate(filtered[:5], 1):  # Top 5 per pattern column
+                        score = src.get('score', 0)
+                        col_section += (
+                            f"  {i}. {src.get('src_table_physical_name', 'UNKNOWN')}.{src.get('src_column_physical_name', 'UNKNOWN')} "
+                            f"[Score: {score:.4f}]\n"
+                            f"     Description: {src.get('src_comments', 'N/A')}\n"
+                            f"     Type: {src.get('src_physical_datatype', 'STRING')}\n"
+                        )
+                    grouped_info.append(col_section)
+                else:
+                    grouped_info.append(f"\n=== Pattern Column: {pattern_col} ===\nNO GOOD MATCHES FOUND (all scores below {min_match_score})\n")
+            
+            sources_text = "\n".join(grouped_info) if grouped_info else "No matching sources found"
+            print(f"[LLM] Using grouped sources for {len(vs_candidates_by_column)} pattern columns")
+        else:
+            # Fallback to flat list (legacy)
+            source_info = []
+            for src in matched_sources:
+                score = src.get('score', src.get('match_score', 0))
+                # Filter by minimum score
+                if score >= min_match_score:
+                    source_info.append(
+                        f"- {src.get('src_table_physical_name', 'UNKNOWN')}.{src.get('src_column_physical_name', 'UNKNOWN')} "
+                        f"[Score: {score:.4f}]\n"
+                        f"  Description: {src.get('src_comments', 'N/A')}\n"
+                        f"  Type: {src.get('src_physical_datatype', 'STRING')}"
+                    )
+            sources_text = "\n".join(source_info) if source_info else "No matching sources found (all scores too low)"
         
         # Identify silver tables (constant) from metadata or SQL
         silver_tables = metadata.get("silverTables", [])
@@ -783,8 +820,15 @@ ORIGINAL SQL TEMPLATE:
 ORIGINAL COLUMN DESCRIPTIONS FROM PATTERN:
 {pattern_descriptions}
 
-USER'S MATCHING SOURCE COLUMNS (use these for substitutions):
+USER'S MATCHING SOURCE COLUMNS (grouped by pattern column with match scores):
 {sources_text}
+
+VECTOR SEARCH SCORING RULES:
+- Each pattern column above has its OWN list of matching source columns from vector search
+- Higher scores = better semantic match (scores range 0.0 to 1.0, typically 0.004-0.02 for good matches)
+- Only use columns listed under each pattern column section for that substitution
+- If a pattern column shows "NO GOOD MATCHES FOUND", you MUST keep the original and add a warning
+- Prefer the highest-scoring match unless a lower-scored one is semantically better
 
 SILVER TABLES (CONSTANT - DO NOT MODIFY):
 {silver_text}
@@ -1482,7 +1526,7 @@ RULES:
                                 ])
                                 suggestion_data["matched_source_fields"] = matched_fields_json
                                 
-                                # Rewrite SQL with LLM
+                                # Rewrite SQL with LLM (pass grouped VS candidates for better matching)
                                 llm_start = time.time()
                                 rewrite_result = self._rewrite_sql_with_llm_sync(
                                     llm_config["endpoint_name"],
@@ -1490,7 +1534,8 @@ RULES:
                                     pattern.get("join_metadata"),
                                     pattern.get("source_descriptions", ""),
                                     matched_sources,
-                                    tgt_column_physical
+                                    tgt_column_physical,
+                                    vs_candidates_by_column=vs_candidates_by_column if vs_candidates_by_column else None
                                 )
                                 print(f"[Suggestion Service]   -> LLM rewrite: {time.time() - llm_start:.2f}s")
                                 
@@ -1951,14 +1996,15 @@ RULES:
                             ])
                             new_suggestion_data["matched_source_fields"] = matched_fields_json
                             
-                            # Step 3: Rewrite SQL with LLM
+                            # Step 3: Rewrite SQL with LLM (pass grouped VS candidates)
                             rewrite_result = self._rewrite_sql_with_llm_sync(
                                 llm_config["endpoint_name"],
                                 pattern["source_expression"],
                                 pattern.get("join_metadata"),
                                 pattern.get("source_descriptions", ""),
                                 matched_sources,
-                                tgt_column_physical
+                                tgt_column_physical,
+                                vs_candidates_by_column=vs_candidates_by_column if vs_candidates_by_column else None
                             )
                             
                             # Extract pattern columns/tables for warning filtering

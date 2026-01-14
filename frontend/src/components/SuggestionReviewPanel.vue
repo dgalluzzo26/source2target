@@ -91,7 +91,16 @@
           />
         </div>
 
-        <!-- Matched Source Fields -->
+        <!-- AI Reasoning (if available) -->
+        <div v-if="suggestion.ai_reasoning" class="ai-reasoning">
+          <div class="reasoning-header">
+            <i class="pi pi-lightbulb"></i>
+            <span>AI Reasoning:</span>
+          </div>
+          <p class="reasoning-text">{{ suggestion.ai_reasoning }}</p>
+        </div>
+
+        <!-- Matched Source Fields with Scores -->
         <div v-if="getMatchedFields(suggestion).length > 0" class="matched-sources">
           <div class="matched-sources-header">
             <h4>Matched Source Fields:</h4>
@@ -106,16 +115,24 @@
             />
           </div>
           <div class="source-tags">
-            <Tag 
-              v-for="(field, idx) in getMatchedFields(suggestion).slice(0, 3)" 
+            <div 
+              v-for="(field, idx) in getMatchedFields(suggestion).slice(0, 5)" 
               :key="idx"
-              :value="`${field.src_table_physical_name}.${field.src_column_physical_name}`"
-              severity="info"
-              size="small"
-            />
+              class="source-field-with-score"
+              v-tooltip.top="getScoreTooltip(field)"
+            >
+              <Tag 
+                :value="`${field.src_table_physical_name}.${field.src_column_physical_name}`"
+                :severity="getScoreSeverity(field.match_score)"
+                size="small"
+              />
+              <span class="match-score" :class="getScoreClass(field.match_score)">
+                {{ formatScore(field.match_score) }}
+              </span>
+            </div>
             <Badge 
-              v-if="getMatchedFields(suggestion).length > 3"
-              :value="`+${getMatchedFields(suggestion).length - 3}`"
+              v-if="getMatchedFields(suggestion).length > 5"
+              :value="`+${getMatchedFields(suggestion).length - 5}`"
               severity="secondary"
             />
           </div>
@@ -148,11 +165,17 @@
           <span>No historical pattern found for this column. This will be the first mapping.</span>
         </div>
 
-        <!-- Warnings -->
-        <div v-if="getWarnings(suggestion).length > 0" class="warnings">
-          <div v-for="(warning, idx) in getWarnings(suggestion)" :key="idx" class="warning-item">
-            <i class="pi pi-exclamation-circle"></i>
-            {{ warning }}
+        <!-- Warnings Panel (Enhanced) -->
+        <div v-if="getWarnings(suggestion).length > 0" class="warnings-panel">
+          <div class="warnings-header">
+            <i class="pi pi-exclamation-triangle"></i>
+            <span>{{ getWarnings(suggestion).length }} Warning{{ getWarnings(suggestion).length > 1 ? 's' : '' }} - Review Required</span>
+          </div>
+          <div class="warnings-list">
+            <div v-for="(warning, idx) in getWarnings(suggestion)" :key="idx" class="warning-item-enhanced">
+              <i class="pi pi-exclamation-circle"></i>
+              <span class="warning-text">{{ warning }}</span>
+            </div>
           </div>
         </div>
 
@@ -1584,6 +1607,42 @@ function getConfidenceClass(score: number): string {
   return 'low'
 }
 
+// Match score helper functions
+function formatScore(score: number | undefined): string {
+  if (score === undefined || score === null) return ''
+  // Convert to percentage-like format (scores are typically 0.004-0.02)
+  return (score * 100).toFixed(2) + '%'
+}
+
+function getScoreSeverity(score: number | undefined): string {
+  if (!score) return 'secondary'
+  if (score >= 0.01) return 'success'   // Good match
+  if (score >= 0.006) return 'info'      // Decent match
+  if (score >= 0.004) return 'warning'   // Weak match
+  return 'danger'                         // Very weak
+}
+
+function getScoreClass(score: number | undefined): string {
+  if (!score) return 'score-none'
+  if (score >= 0.01) return 'score-high'
+  if (score >= 0.006) return 'score-medium'
+  if (score >= 0.004) return 'score-low'
+  return 'score-poor'
+}
+
+function getScoreTooltip(field: { match_score?: number; src_comments?: string }): string {
+  const score = field.match_score
+  const desc = field.src_comments || 'No description'
+  let quality = 'Unknown'
+  if (score) {
+    if (score >= 0.01) quality = 'High confidence match'
+    else if (score >= 0.006) quality = 'Medium confidence match'
+    else if (score >= 0.004) quality = 'Low confidence match'
+    else quality = 'Very low confidence - review carefully'
+  }
+  return `${quality}\nScore: ${score ? (score * 100).toFixed(3) : 'N/A'}%\n${desc}`
+}
+
 function formatDate(dateStr?: string): string {
   if (!dateStr) return ''
   return new Date(dateStr).toLocaleDateString('en-US', {
@@ -1848,7 +1907,131 @@ function formatDate(dateStr?: string): string {
   color: #1565c0;
 }
 
-/* Warnings */
+/* AI Reasoning */
+.ai-reasoning {
+  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+  border: 1px solid #7c4dff;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.reasoning-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #5e35b1;
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.reasoning-header i {
+  color: #ffc107;
+}
+
+.reasoning-text {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #37474f;
+  line-height: 1.5;
+}
+
+/* Source field with score */
+.source-field-with-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-right: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.match-score {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.score-high {
+  background: #c8e6c9;
+  color: #2e7d32;
+}
+
+.score-medium {
+  background: #bbdefb;
+  color: #1565c0;
+}
+
+.score-low {
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+.score-poor {
+  background: #ffcdd2;
+  color: #c62828;
+}
+
+.score-none {
+  background: #f5f5f5;
+  color: #757575;
+}
+
+/* Enhanced Warnings Panel */
+.warnings-panel {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border: 2px solid #ff9800;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.warnings-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #e65100;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #ffcc80;
+}
+
+.warnings-header i {
+  font-size: 1.1rem;
+}
+
+.warnings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.warning-item-enhanced {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: white;
+  color: #bf360c;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  border-left: 3px solid #ff5722;
+}
+
+.warning-item-enhanced i {
+  color: #ff5722;
+  margin-top: 0.1rem;
+}
+
+.warning-text {
+  flex: 1;
+  line-height: 1.4;
+}
+
+/* Legacy warnings (keep for backwards compat) */
 .warnings {
   margin-bottom: 0.75rem;
 }
