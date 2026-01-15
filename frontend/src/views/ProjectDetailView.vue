@@ -1120,15 +1120,12 @@ async function handleRerunDiscovery(table: TargetTableStatus) {
     return
   }
   
-  // Show confirmation dialog
-  const confirmed = confirm(
-    `Are you sure you want to rerun discovery for "${table.tgt_table_name}"?\n\n` +
-    `This will DELETE all existing suggestions and regenerate them from scratch.`
-  )
+  // Skip confirmation and just run - for debugging
+  console.log('[Rerun Discovery] Starting discovery without confirmation (debugging)...')
   
-  console.log('[Rerun Discovery] User confirmed:', confirmed)
-  
-  if (!confirmed) return
+  // TODO: Restore confirmation dialog after debugging
+  // const confirmed = window.confirm(`...`)
+  // if (!confirmed) return
   
   // Use the same discovery flow - backend already clears existing suggestions
   startingDiscoveryTableId.value = table.target_table_status_id
@@ -1255,8 +1252,11 @@ function handleManualMapping(suggestion: any) {
 }
 
 function toggleTableMenu(event: Event, table: TargetTableStatus) {
+  console.log('[toggleTableMenu] Called with table:', table?.tgt_table_name)
   selectedTable.value = table
+  console.log('[toggleTableMenu] selectedTable set, toggling menu...')
   tableMenu.value.toggle(event)
+  console.log('[toggleTableMenu] Menu toggled')
 }
 
 function getStatusSeverity(status: string): 'success' | 'info' | 'warning' | 'danger' | 'secondary' {
