@@ -1310,6 +1310,13 @@ function getTableProgress(table: TargetTableStatus): number {
   return Math.round((table.columns_mapped / table.total_columns) * 100)
 }
 
+function getColumnsProcessed(table: TargetTableStatus): number {
+  // Total columns that have been processed (mapped + pending review + no match)
+  return (table.columns_mapped || 0) + 
+         (table.columns_pending_review || 0) + 
+         (table.columns_no_match || 0)
+}
+
 function getDiscoveryProgress(table: TargetTableStatus): string {
   if (table.mapping_status !== 'DISCOVERING') return ''
   const columnsProcessed = (table.columns_mapped || 0) + 
