@@ -44,6 +44,15 @@
             v-tooltip.top="'Refresh'"
           />
           <Button 
+            label="AI Enhance Descriptions" 
+            icon="pi pi-sparkles" 
+            @click="handleEnhanceDescriptions"
+            :loading="enhancingDescriptions"
+            severity="help"
+            v-tooltip.top="'Use AI to enhance field descriptions'"
+            :disabled="semanticFields.length === 0"
+          />
+          <Button 
             label="Download Template" 
             icon="pi pi-download" 
             @click="handleDownloadTemplate"
@@ -365,6 +374,101 @@
       </template>
     </Dialog>
 
+    <!-- AI Enhance Descriptions Dialog -->
+    <Dialog 
+      v-model:visible="showEnhanceDescriptionsDialog" 
+      modal 
+      header="Review AI Enhanced Descriptions"
+      :style="{ width: '900px', maxHeight: '80vh' }"
+      :closable="!savingEnhancedFields"
+    >
+      <div class="enhance-dialog-content">
+        <!-- Progress indicator while enhancing -->
+        <div v-if="enhancingDescriptions" class="enhance-progress">
+          <ProgressSpinner style="width: 50px; height: 50px;" />
+          <p>Enhancing descriptions... {{ enhancedFieldsProgress }} / {{ enhancedFieldsTotal }}</p>
+          <div class="enhance-progress-bar">
+            <div 
+              class="enhance-progress-fill" 
+              :style="{ width: (enhancedFieldsProgress / enhancedFieldsTotal * 100) + '%' }"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Results table -->
+        <div v-else-if="enhancedFields.length > 0">
+          <Message severity="info" :closable="false" class="mb-3">
+            Review the enhanced descriptions below. You can edit any description before saving.
+          </Message>
+          
+          <DataTable 
+            :value="enhancedFields" 
+            class="enhanced-fields-table"
+            :scrollable="true"
+            scrollHeight="400px"
+          >
+            <Column field="tgt_table_name" header="Table" style="width: 15%">
+              <template #body="{ data }">
+                <span class="table-name">{{ data.tgt_table_name }}</span>
+              </template>
+            </Column>
+            <Column field="tgt_column_name" header="Column" style="width: 15%">
+              <template #body="{ data }">
+                <strong>{{ data.tgt_column_name }}</strong>
+              </template>
+            </Column>
+            <Column field="original_description" header="Original" style="width: 25%">
+              <template #body="{ data }">
+                <span class="original-desc">{{ data.original_description || '(empty)' }}</span>
+              </template>
+            </Column>
+            <Column field="enhanced_description" header="Enhanced Description" style="width: 35%">
+              <template #body="{ data }">
+                <div class="enhanced-description-cell">
+                  <Textarea 
+                    v-model="data.enhanced_description" 
+                    rows="2" 
+                    class="enhanced-description-textarea"
+                    :disabled="savingEnhancedFields"
+                  />
+                </div>
+              </template>
+            </Column>
+            <Column header="Status" style="width: 10%">
+              <template #body="{ data }">
+                <Tag 
+                  :value="getEnhancedFieldStatus(data)"
+                  :severity="getEnhancedFieldStatus(data) === 'Enhanced' ? 'success' : 'secondary'"
+                />
+              </template>
+            </Column>
+          </DataTable>
+        </div>
+
+        <!-- No results -->
+        <div v-else class="no-enhanced-fields">
+          <p>No fields were enhanced. This may be because all fields already have good descriptions or an error occurred.</p>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button 
+          label="Cancel" 
+          icon="pi pi-times" 
+          @click="showEnhanceDescriptionsDialog = false" 
+          severity="secondary"
+          :disabled="savingEnhancedFields"
+        />
+        <Button 
+          label="Save Enhanced Descriptions" 
+          icon="pi pi-check" 
+          @click="saveEnhancedDescriptions"
+          :loading="savingEnhancedFields"
+          :disabled="enhancedFields.length === 0"
+        />
+      </template>
+    </Dialog>
+
     <!-- Upload Dialog -->
     <Dialog 
       v-model:visible="showUploadDialog" 
@@ -471,6 +575,14 @@ const showUploadDialog = ref(false)
 const editingField = ref<any | null>(null)
 const uploadPreview = ref<any[]>([])
 const selectedFile = ref<File | null>(null)
+
+// AI Enhance Descriptions state
+const showEnhanceDescriptionsDialog = ref(false)
+const enhancingDescriptions = ref(false)
+const enhancedFields = ref<any[]>([])
+const enhancedFieldsProgress = ref(0)
+const enhancedFieldsTotal = ref(0)
+const savingEnhancedFields = ref(false)
 
 const newField = ref({
   tgt_table_name: '',
@@ -854,6 +966,154 @@ function closeUploadDialog() {
   uploadPreview.value = []
   selectedFile.value = null
 }
+
+// AI Enhance Descriptions
+async function handleEnhanceDescriptions() {
+  if (semanticFields.value.length === 0) {
+    toast.add({
+      severity: 'warn',
+      summary: 'No Fields',
+      detail: 'No semantic fields to enhance',
+      life: 3000
+    })
+    return
+  }
+
+  // Open dialog and start enhancement
+  showEnhanceDescriptionsDialog.value = true
+  enhancingDescriptions.value = true
+  enhancedFields.value = []
+  enhancedFieldsProgress.value = 0
+  enhancedFieldsTotal.value = semanticFields.value.length
+
+  const BATCH_SIZE = 5
+  const results: any[] = []
+
+  try {
+    for (let i = 0; i < semanticFields.value.length; i += BATCH_SIZE) {
+      const batch = semanticFields.value.slice(i, i + BATCH_SIZE)
+      
+      // Process batch in parallel
+      const batchPromises = batch.map(async (field: any) => {
+        try {
+          const response = await fetch('/api/v4/ai/enhance-description', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              table_name: field.tgt_table_name,
+              column_name: field.tgt_column_name,
+              data_type: field.tgt_physical_datatype || 'STRING',
+              current_description: field.tgt_comments || ''
+            })
+          })
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`)
+          }
+          
+          const data = await response.json()
+          
+          return {
+            id: field.id,
+            tgt_table_name: field.tgt_table_name,
+            tgt_column_name: field.tgt_column_name,
+            original_description: field.tgt_comments || '',
+            enhanced_description: data.enhanced_description || field.tgt_comments || ''
+          }
+        } catch (err) {
+          console.error(`Error enhancing ${field.tgt_column_name}:`, err)
+          return {
+            id: field.id,
+            tgt_table_name: field.tgt_table_name,
+            tgt_column_name: field.tgt_column_name,
+            original_description: field.tgt_comments || '',
+            enhanced_description: field.tgt_comments || '' // Keep original on error
+          }
+        }
+      })
+      
+      const batchResults = await Promise.all(batchPromises)
+      results.push(...batchResults)
+      enhancedFieldsProgress.value = Math.min(i + BATCH_SIZE, semanticFields.value.length)
+    }
+    
+    enhancedFields.value = results
+    
+    toast.add({
+      severity: 'success',
+      summary: 'Enhancement Complete',
+      detail: `Enhanced ${results.length} field descriptions. Review and save.`,
+      life: 5000
+    })
+  } catch (err) {
+    console.error('Error during enhancement:', err)
+    toast.add({
+      severity: 'error',
+      summary: 'Enhancement Failed',
+      detail: 'An error occurred while enhancing descriptions',
+      life: 5000
+    })
+  } finally {
+    enhancingDescriptions.value = false
+  }
+}
+
+async function saveEnhancedDescriptions() {
+  savingEnhancedFields.value = true
+  let successCount = 0
+  let errorCount = 0
+
+  try {
+    for (const field of enhancedFields.value) {
+      // Only save if description changed
+      if (field.enhanced_description !== field.original_description) {
+        try {
+          const result = await SemanticAPI.updateRecord(field.id, {
+            tgt_comments: field.enhanced_description
+          })
+          if (result.data) {
+            successCount++
+            // Update local state
+            const idx = semanticFields.value.findIndex((f: any) => f.id === field.id)
+            if (idx > -1) {
+              semanticFields.value[idx].tgt_comments = field.enhanced_description
+            }
+          } else {
+            errorCount++
+          }
+        } catch (err) {
+          errorCount++
+          console.error(`Error saving ${field.tgt_column_name}:`, err)
+        }
+      }
+    }
+
+    toast.add({
+      severity: successCount > 0 ? 'success' : 'info',
+      summary: 'Save Complete',
+      detail: `Updated ${successCount} descriptions. ${errorCount} errors.`,
+      life: 5000
+    })
+
+    showEnhanceDescriptionsDialog.value = false
+  } catch (err) {
+    toast.add({
+      severity: 'error',
+      summary: 'Save Failed',
+      detail: 'An error occurred while saving descriptions',
+      life: 5000
+    })
+  } finally {
+    savingEnhancedFields.value = false
+  }
+}
+
+function getEnhancedFieldStatus(field: any): string {
+  if (field.enhanced_description !== field.original_description) {
+    return 'Enhanced'
+  }
+  return 'Unchanged'
+}
 </script>
 
 <style scoped>
@@ -1081,6 +1341,77 @@ function closeUploadDialog() {
   border-radius: 4px;
   color: var(--green-900);
   font-weight: 500;
+}
+
+/* AI Enhance Descriptions Dialog */
+.enhance-dialog-content {
+  min-height: 200px;
+}
+
+.enhance-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  gap: 1rem;
+}
+
+.enhance-progress p {
+  color: var(--text-color-secondary);
+  margin: 0;
+}
+
+.enhance-progress-bar {
+  width: 100%;
+  max-width: 400px;
+  height: 8px;
+  background: var(--surface-200);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.enhance-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gainwell-primary), var(--gainwell-secondary));
+  transition: width 0.3s ease;
+}
+
+.enhanced-fields-table {
+  font-size: 0.9rem;
+}
+
+.table-name {
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+}
+
+.original-desc {
+  color: var(--text-color-secondary);
+  font-style: italic;
+}
+
+.enhanced-description-cell {
+  width: 100%;
+}
+
+.enhanced-description-textarea {
+  width: 100%;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+.no-enhanced-fields {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+  color: var(--text-color-secondary);
+}
+
+.mb-3 {
+  margin-bottom: 1rem;
 }
 </style>
 

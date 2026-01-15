@@ -47,7 +47,8 @@ class PatternImportService:
         'target_domain',
         'source_relationship_type',
         'transformations_applied',
-        'confidence_score'
+        'confidence_score',
+        'join_column_description'  # NEW: Contains COLUMN:Description|... for join/filter columns
     ]
     
     def __init__(self):
@@ -231,10 +232,16 @@ class PatternImportService:
         target_column: str,
         target_table: str,
         source_tables: str,
-        source_columns: str
+        source_columns: str,
+        join_column_description: str = "",
+        source_descriptions: str = "",
+        tgt_comments: str = ""
     ) -> Optional[str]:
         """
         Use LLM to parse SQL and generate join_metadata JSON.
+        
+        Post-processes the result to replace LLM-generated descriptions with
+        actual descriptions from the CSV when available.
         
         Args:
             llm_endpoint: Name of the LLM serving endpoint
@@ -243,12 +250,18 @@ class PatternImportService:
             target_table: Target table name
             source_tables: Pipe-separated source table names
             source_columns: Pipe-separated source column names
+            join_column_description: Pipe-delimited COLUMN:Description pairs
+            source_descriptions: Pipe-separated source descriptions
+            tgt_comments: Target column comments
             
         Returns:
             JSON string of join_metadata, or None on failure
         """
         if not sql_expression or sql_expression.strip() == "":
             return None
+        
+        # Parse available descriptions for post-processing
+        join_desc_dict = self._parse_column_descriptions(join_column_description)
         
         prompt = f"""Parse this SQL expression and generate a JSON metadata object for a data mapping tool.
 
@@ -330,9 +343,31 @@ RULES:
                 # Clean control characters
                 json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', json_str)
                 
-                # Validate it's valid JSON
-                json.loads(json_str)
-                return json_str
+                # Parse and post-process to replace LLM descriptions with actual ones
+                metadata = json.loads(json_str)
+                
+                # Post-process userColumnsToMap descriptions
+                if "userColumnsToMap" in metadata:
+                    replaced_count = 0
+                    for col_entry in metadata["userColumnsToMap"]:
+                        col_name = col_entry.get("originalColumn", "")
+                        if col_name:
+                            # Try to find actual description
+                            actual_desc = self._find_column_description(
+                                col_name,
+                                join_desc_dict,
+                                source_descriptions,
+                                source_columns,
+                                tgt_comments
+                            )
+                            if actual_desc:
+                                col_entry["description"] = actual_desc
+                                replaced_count += 1
+                    
+                    if replaced_count > 0:
+                        print(f"[Pattern Import] Replaced {replaced_count} LLM descriptions with actual ones")
+                
+                return json.dumps(metadata)
             else:
                 return None
                 
@@ -381,6 +416,87 @@ RULES:
                 transforms.append(func)
         
         return ", ".join(transforms) if transforms else None
+    
+    def _parse_column_descriptions(self, description_str: str) -> Dict[str, str]:
+        """
+        Parse pipe-delimited column descriptions.
+        
+        Format: "COLUMN1:Description for column 1|COLUMN2:Description for column 2|..."
+        
+        Args:
+            description_str: Pipe-delimited string of COLUMN:Description pairs
+            
+        Returns:
+            Dictionary mapping column names (uppercase) to descriptions
+        """
+        result = {}
+        if not description_str or not description_str.strip():
+            return result
+        
+        # Split by pipe
+        parts = description_str.split('|')
+        
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            
+            # Find first colon (column name can't have colon, but description might)
+            colon_idx = part.find(':')
+            if colon_idx > 0:
+                column_name = part[:colon_idx].strip().upper()
+                description = part[colon_idx + 1:].strip()
+                if column_name and description:
+                    result[column_name] = description
+        
+        return result
+    
+    def _find_column_description(
+        self,
+        column_name: str,
+        join_col_desc: Dict[str, str],
+        source_descriptions: str,
+        source_columns: str,
+        tgt_comments: str
+    ) -> Optional[str]:
+        """
+        Find description for a column using priority lookup.
+        
+        Priority:
+        1. join_column_description (parsed dict)
+        2. source_descriptions (matched by position with source_columns)
+        3. tgt_comments (target column description)
+        
+        Args:
+            column_name: Column name to find description for
+            join_col_desc: Parsed join_column_description dict
+            source_descriptions: Pipe-separated source descriptions
+            source_columns: Pipe-separated source columns (for positional match)
+            tgt_comments: Target column comments
+            
+        Returns:
+            Description if found, None otherwise
+        """
+        col_upper = column_name.upper().strip()
+        
+        # Priority 1: join_column_description (exact match)
+        if col_upper in join_col_desc:
+            return join_col_desc[col_upper]
+        
+        # Priority 2: source_descriptions (positional match with source_columns)
+        if source_descriptions and source_columns:
+            src_cols = [c.strip().upper() for c in source_columns.split('|')]
+            src_descs = [d.strip() for d in source_descriptions.split('|')]
+            
+            for i, col in enumerate(src_cols):
+                if col == col_upper and i < len(src_descs) and src_descs[i]:
+                    return src_descs[i]
+        
+        # Priority 3: tgt_comments (only if it seems relevant - contains column name)
+        if tgt_comments and col_upper.lower() in tgt_comments.lower():
+            return tgt_comments
+        
+        return None
     
     def _detect_special_case(self, sql_expr: str) -> Dict[str, Any]:
         """
@@ -655,7 +771,7 @@ RULES:
                     session["processed_patterns"].append(pattern)
                     completed_count += 1
                     session["processed_count"] = completed_count
-                    
+                        
                 elif sql_expr:
                     # Needs LLM call - queue it for parallel processing (don't add to processed yet)
                     pattern["status"] = "PENDING_LLM"
@@ -711,7 +827,10 @@ RULES:
                                 pattern.get("tgt_column_physical_name", ""),
                                 pattern.get("tgt_table_physical_name", ""),
                                 pattern.get("source_tables_physical", ""),
-                                pattern.get("source_columns_physical", "")
+                                pattern.get("source_columns_physical", ""),
+                                pattern.get("join_column_description", ""),  # NEW
+                                pattern.get("source_descriptions", ""),      # NEW
+                                pattern.get("tgt_comments", "")              # NEW
                             )
                         ),
                         timeout=90.0  # 90 second timeout per LLM call
@@ -756,12 +875,12 @@ RULES:
                             "column": pattern.get("tgt_column_physical_name", ""),
                             "error": error
                         })
-                    else:
-                        pattern["status"] = "READY"
+                else:
+                    pattern["status"] = "READY"
                         pattern["join_metadata"] = join_metadata
                     
                     # NOW add to processed patterns (after LLM is done)
-                    session["processed_patterns"].append(pattern)
+                session["processed_patterns"].append(pattern)
                     completed_count += 1
                     llm_completed += 1
                     session["processed_count"] = completed_count
@@ -986,36 +1105,36 @@ RULES:
                     
                     # Join all VALUES tuples and execute single INSERT
                     batch_sql = f"""
-                        INSERT INTO {db_config['mapped_fields_table']} (
-                            semantic_field_id,
-                            tgt_table_name,
-                            tgt_table_physical_name,
-                            tgt_column_name,
-                            tgt_column_physical_name,
-                            tgt_comments,
-                            source_expression,
-                            source_tables,
-                            source_tables_physical,
-                            source_columns,
-                            source_columns_physical,
-                            source_descriptions,
-                            source_datatypes,
-                            source_domain,
-                            target_domain,
-                            source_relationship_type,
-                            transformations_applied,
-                            join_metadata,
-                            confidence_score,
-                            mapping_source,
-                            ai_generated,
-                            mapping_status,
-                            mapped_by,
-                            mapped_ts,
-                            project_id,
+                            INSERT INTO {db_config['mapped_fields_table']} (
+                                semantic_field_id,
+                                tgt_table_name,
+                                tgt_table_physical_name,
+                                tgt_column_name,
+                                tgt_column_physical_name,
+                                tgt_comments,
+                                source_expression,
+                                source_tables,
+                                source_tables_physical,
+                                source_columns,
+                                source_columns_physical,
+                                source_descriptions,
+                                source_datatypes,
+                                source_domain,
+                                target_domain,
+                                source_relationship_type,
+                                transformations_applied,
+                                join_metadata,
+                                confidence_score,
+                                mapping_source,
+                                ai_generated,
+                                mapping_status,
+                                mapped_by,
+                                mapped_ts,
+                                project_id,
                             project_type,
-                            is_approved_pattern,
-                            pattern_approved_by,
-                            pattern_approved_ts
+                                is_approved_pattern,
+                                pattern_approved_by,
+                                pattern_approved_ts
                         ) VALUES {', '.join(values_list)}
                     """
                     
