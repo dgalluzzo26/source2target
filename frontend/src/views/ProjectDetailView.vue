@@ -404,6 +404,16 @@
               style="width: 200px"
             />
             <Button 
+              label="AI Enhance Descriptions" 
+              icon="pi pi-sparkles" 
+              severity="info"
+              outlined
+              @click="startAIEnhance"
+              :disabled="!selectedSourceFields.length && !filteredSourceFields.length"
+              :loading="enhancingDescriptions"
+              v-tooltip.top="selectedSourceFields.length ? `Enhance ${selectedSourceFields.length} selected` : 'Enhance all visible'"
+            />
+            <Button 
               label="Delete All" 
               icon="pi pi-trash" 
               severity="danger"
@@ -566,6 +576,102 @@
       </template>
     </Dialog>
 
+    <!-- AI Enhance Descriptions Dialog -->
+    <Dialog 
+      v-model:visible="showEnhanceDialog" 
+      modal 
+      header="AI Enhanced Descriptions" 
+      :style="{ width: '90vw', maxWidth: '1200px' }"
+      maximizable
+      :closable="!enhancingDescriptions"
+    >
+      <div class="enhance-dialog-content">
+        <!-- Progress -->
+        <div v-if="enhancingDescriptions" class="enhance-progress">
+          <ProgressBar :value="enhanceProgress" :showValue="true" />
+          <span class="progress-label">Enhancing descriptions... {{ enhancedCount }}/{{ totalToEnhance }}</span>
+        </div>
+
+        <!-- Review Table -->
+        <DataTable 
+          v-else-if="enhancedFields.length > 0"
+          :value="enhancedFields" 
+          :paginator="true" 
+          :rows="10"
+          dataKey="unmapped_field_id"
+          responsiveLayout="scroll"
+          class="enhance-table"
+          stripedRows
+        >
+          <Column field="src_table_name" header="Table" style="width: 120px">
+            <template #body="{ data }">
+              <span class="table-name">{{ data.src_table_name }}</span>
+            </template>
+          </Column>
+          
+          <Column field="src_column_physical_name" header="Column" style="width: 150px">
+            <template #body="{ data }">
+              <code class="column-name">{{ data.src_column_physical_name }}</code>
+            </template>
+          </Column>
+          
+          <Column header="Original Description" style="width: 250px">
+            <template #body="{ data }">
+              <div class="original-desc">{{ data.original_comments || '-' }}</div>
+            </template>
+          </Column>
+          
+          <Column header="Enhanced Description" style="min-width: 300px">
+            <template #body="{ data }">
+              <Textarea 
+                v-model="data.enhanced_comments" 
+                rows="2" 
+                class="w-full enhanced-textarea"
+                :class="{ 'changed': data.enhanced_comments !== data.original_comments }"
+              />
+            </template>
+          </Column>
+
+          <Column header="Status" style="width: 80px">
+            <template #body="{ data }">
+              <Tag 
+                v-if="data.enhanced_comments !== data.original_comments" 
+                value="Changed" 
+                severity="success" 
+              />
+              <Tag v-else value="Same" severity="secondary" />
+            </template>
+          </Column>
+        </DataTable>
+
+        <!-- Summary -->
+        <div v-if="!enhancingDescriptions && enhancedFields.length > 0" class="enhance-summary">
+          <i class="pi pi-info-circle"></i>
+          <span>{{ changedDescriptionsCount }} of {{ enhancedFields.length }} descriptions were enhanced. Review and edit as needed before saving.</span>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="enhance-footer">
+          <Button 
+            label="Cancel" 
+            icon="pi pi-times" 
+            @click="cancelEnhance" 
+            severity="secondary" 
+            :disabled="enhancingDescriptions"
+          />
+          <Button 
+            label="Save All Changes" 
+            icon="pi pi-check" 
+            @click="saveEnhancedDescriptions" 
+            severity="success"
+            :loading="savingEnhanced"
+            :disabled="enhancingDescriptions || changedDescriptionsCount === 0"
+          />
+        </div>
+      </template>
+    </Dialog>
+
     <!-- Export Dialog -->
     <Dialog 
       v-model:visible="showExportDialog" 
@@ -714,6 +820,14 @@ const editingSourceField = ref<any>(null)
 const savingSourceField = ref(false)
 const startingDiscoveryTableId = ref<number | null>(null)  // Track which table is starting discovery
 const confirm = useConfirm()
+
+// AI Enhance Descriptions state
+const showEnhanceDialog = ref(false)
+const enhancingDescriptions = ref(false)
+const enhancedFields = ref<any[]>([])
+const enhancedCount = ref(0)
+const totalToEnhance = ref(0)
+const savingEnhanced = ref(false)
 
 // Computed
 const project = computed(() => projectsStore.currentProject)
@@ -1267,6 +1381,147 @@ async function saveSourceField() {
     toast.add({ severity: 'error', summary: 'Error', detail: e.message, life: 3000 })
   } finally {
     savingSourceField.value = false
+  }
+}
+
+// Computed for enhance dialog
+const enhanceProgress = computed(() => {
+  if (totalToEnhance.value === 0) return 0
+  return Math.round((enhancedCount.value / totalToEnhance.value) * 100)
+})
+
+const changedDescriptionsCount = computed(() => {
+  return enhancedFields.value.filter(f => f.enhanced_comments !== f.original_comments).length
+})
+
+// AI Enhance Description Functions
+async function startAIEnhance() {
+  // Use selected fields if any, otherwise all visible
+  const fieldsToEnhance = selectedSourceFields.value.length > 0 
+    ? selectedSourceFields.value 
+    : filteredSourceFields.value
+  
+  if (fieldsToEnhance.length === 0) {
+    toast.add({ severity: 'warn', summary: 'No fields', detail: 'No source fields to enhance', life: 3000 })
+    return
+  }
+  
+  // Initialize state
+  enhancedFields.value = fieldsToEnhance.map(f => ({
+    ...f,
+    original_comments: f.src_comments || '',
+    enhanced_comments: f.src_comments || ''
+  }))
+  totalToEnhance.value = fieldsToEnhance.length
+  enhancedCount.value = 0
+  enhancingDescriptions.value = true
+  showEnhanceDialog.value = true
+  
+  // Process in batches of 10 for parallel processing
+  const batchSize = 10
+  for (let i = 0; i < enhancedFields.value.length; i += batchSize) {
+    const batch = enhancedFields.value.slice(i, i + batchSize)
+    
+    // Process batch in parallel
+    await Promise.all(batch.map(async (field) => {
+      try {
+        const response = await fetch('/api/v4/ai/enhance-description', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            table_name: field.src_table_name,
+            column_name: field.src_column_physical_name,
+            current_description: field.original_comments,
+            data_type: field.src_physical_datatype
+          })
+        })
+        
+        if (response.ok) {
+          const result = await response.json()
+          field.enhanced_comments = result.enhanced_description || field.original_comments
+        }
+      } catch (e) {
+        console.error('Enhancement failed for', field.src_column_physical_name, e)
+      }
+      enhancedCount.value++
+    }))
+  }
+  
+  enhancingDescriptions.value = false
+  toast.add({ 
+    severity: 'success', 
+    summary: 'Enhancement Complete', 
+    detail: `Enhanced ${changedDescriptionsCount.value} descriptions`, 
+    life: 3000 
+  })
+}
+
+function cancelEnhance() {
+  showEnhanceDialog.value = false
+  enhancedFields.value = []
+  enhancedCount.value = 0
+  totalToEnhance.value = 0
+}
+
+async function saveEnhancedDescriptions() {
+  const changedFields = enhancedFields.value.filter(f => f.enhanced_comments !== f.original_comments)
+  
+  if (changedFields.length === 0) {
+    toast.add({ severity: 'info', summary: 'No changes', detail: 'No descriptions were changed', life: 2000 })
+    return
+  }
+  
+  savingEnhanced.value = true
+  let successCount = 0
+  let errorCount = 0
+  
+  // Save in parallel batches
+  const batchSize = 10
+  for (let i = 0; i < changedFields.length; i += batchSize) {
+    const batch = changedFields.slice(i, i + batchSize)
+    
+    await Promise.all(batch.map(async (field) => {
+      try {
+        const response = await fetch(
+          `/api/v4/projects/${projectId.value}/source-fields/${field.unmapped_field_id}`,
+          {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              src_table_name: field.src_table_name,
+              src_column_name: field.src_column_name,
+              src_column_physical_name: field.src_column_physical_name,
+              src_physical_datatype: field.src_physical_datatype,
+              src_comments: field.enhanced_comments
+            })
+          }
+        )
+        
+        if (response.ok) {
+          successCount++
+        } else {
+          errorCount++
+        }
+      } catch (e) {
+        errorCount++
+      }
+    }))
+  }
+  
+  savingEnhanced.value = false
+  
+  if (successCount > 0) {
+    toast.add({ 
+      severity: 'success', 
+      summary: 'Saved', 
+      detail: `Updated ${successCount} descriptions${errorCount > 0 ? `, ${errorCount} failed` : ''}`, 
+      life: 3000 
+    })
+    showEnhanceDialog.value = false
+    await loadSourceFields()
+    await projectsStore.fetchProject(projectId.value)
+  } else {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to save changes', life: 3000 })
   }
 }
 
@@ -1942,6 +2197,80 @@ async function handleExport() {
   display: block;
   color: var(--text-color-secondary);
   font-size: 0.8rem;
+}
+
+/* AI Enhance Dialog */
+.enhance-dialog-content {
+  min-height: 300px;
+}
+
+.enhance-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 3rem;
+}
+
+.enhance-progress .p-progressbar {
+  width: 100%;
+  max-width: 400px;
+}
+
+.progress-label {
+  color: var(--text-color-secondary);
+  font-size: 0.9rem;
+}
+
+.enhance-table .table-name {
+  font-weight: 500;
+  color: var(--primary-color);
+}
+
+.enhance-table .column-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  background: var(--surface-100);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+
+.original-desc {
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  background: var(--surface-50);
+  padding: 0.5rem;
+  border-radius: 4px;
+  max-height: 60px;
+  overflow-y: auto;
+}
+
+.enhanced-textarea {
+  font-size: 0.85rem;
+  transition: border-color 0.2s;
+}
+
+.enhanced-textarea.changed {
+  border-color: var(--green-500);
+  background: #f1f8e9;
+}
+
+.enhance-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--blue-50);
+  color: var(--blue-700);
+  border-radius: 6px;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+.enhance-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 /* Responsive */

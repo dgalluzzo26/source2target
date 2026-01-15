@@ -289,6 +289,80 @@ async def get_project_types():
         "default_type": config.project_types.default_type
     }
 
+
+# ============================================================================
+# AI Enhancement Endpoint
+# ============================================================================
+
+from pydantic import BaseModel
+
+class EnhanceDescriptionRequest(BaseModel):
+    table_name: str
+    column_name: str
+    current_description: str = ""
+    data_type: str = "STRING"
+
+@app.post("/api/v4/ai/enhance-description")
+async def enhance_description(request: EnhanceDescriptionRequest):
+    """
+    Use LLM to generate an enhanced description for a source field.
+    
+    Given the table name, column name, and current description,
+    generates a more detailed and useful description.
+    """
+    import json
+    from concurrent.futures import ThreadPoolExecutor
+    from databricks.sdk import WorkspaceClient
+    
+    try:
+        config = config_service.get_config()
+        llm_config = {
+            "endpoint_name": config.llm.endpoint_name
+        }
+        
+        # Build the prompt
+        prompt = f"""You are a data documentation expert. Given a database column, generate a clear, concise, and informative description.
+
+TABLE: {request.table_name}
+COLUMN: {request.column_name}
+DATA TYPE: {request.data_type}
+CURRENT DESCRIPTION: {request.current_description or "(none provided)"}
+
+Generate an improved description that:
+1. Explains what this column represents in plain English
+2. Mentions the data type context (e.g., if it's an ID, date, flag, code, etc.)
+3. Notes any common usage patterns if inferable from the name
+4. Is concise (1-2 sentences max)
+5. If the current description is already good, keep it or slightly enhance it
+
+Return ONLY the enhanced description text, nothing else. No JSON, no explanation, just the description."""
+
+        # Call LLM
+        def call_llm():
+            w = WorkspaceClient()
+            response = w.serving_endpoints.query(
+                name=llm_config["endpoint_name"],
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=150,
+                temperature=0.3
+            )
+            return response.choices[0].message.content.strip()
+        
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(call_llm)
+            enhanced = future.result(timeout=30)
+        
+        # Clean up the response
+        enhanced = enhanced.strip().strip('"').strip("'")
+        
+        return {"enhanced_description": enhanced}
+        
+    except Exception as e:
+        print(f"[AI Enhance] Error: {e}")
+        # Return original description on error
+        return {"enhanced_description": request.current_description or f"Column {request.column_name} from table {request.table_name}"}
+
+
 # Mount static files for production (built frontend)
 # The dist folder is now at the root level after vite build
 static_dir = os.path.join(os.path.dirname(__file__), "..", "dist")
