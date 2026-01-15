@@ -312,6 +312,7 @@ async def enhance_description(request: EnhanceDescriptionRequest):
     """
     from concurrent.futures import ThreadPoolExecutor
     from databricks.sdk import WorkspaceClient
+    from databricks.sdk.service.serving import ChatMessage, ChatMessageRole
     
     try:
         config = config_service.get_config()
@@ -337,14 +338,15 @@ Generate an improved description that:
 
 Return ONLY the enhanced description text, nothing else. No JSON, no explanation, just the description."""
 
-        # Call LLM
+        # Call LLM - matching the pattern from suggestion_service.py
         def call_llm():
             w = WorkspaceClient()
             response = w.serving_endpoints.query(
                 name=llm_endpoint,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=150,
-                temperature=0.3
+                messages=[
+                    ChatMessage(role=ChatMessageRole.USER, content=prompt)
+                ],
+                max_tokens=150
             )
             return response.choices[0].message.content.strip()
         
