@@ -1227,6 +1227,44 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
     // Non-critical - continue with other fallbacks
   }
   
+  // Fallback: Parse pattern_sql to extract table aliases
+  // Pattern: FROM/JOIN schema.table alias or FROM/JOIN table alias
+  const aliasFromPatternSQL: Record<string, string> = {}
+  if (suggestion.pattern_sql) {
+    // Match FROM or JOIN followed by table name and alias
+    // e.g., "FROM oz_dev.bronze_dmes_de.t_re_base b" -> alias 'b' = 't_re_base'
+    // e.g., "join oz_dev.silver_dmes_de.mbr_fndtn mf on" -> alias 'mf' = 'mbr_fndtn'
+    const tableAliasRegex = /(?:FROM|JOIN)\s+(?:\([^)]+\)|[\w.]+)\s+(\w+)(?:\s+(?:on|where|left|right|inner|outer|cross|,|\n|$))/gi
+    let match
+    while ((match = tableAliasRegex.exec(suggestion.pattern_sql)) !== null) {
+      const alias = match[1].toLowerCase()
+      // Now extract the table name - look backwards from the alias position
+      const beforeAlias = suggestion.pattern_sql.substring(0, match.index + match[0].length - match[1].length - 1)
+      const tableMatch = beforeAlias.match(/(?:FROM|JOIN)\s+(?:\([^)]*\)|(\S+))\s*$/i)
+      if (tableMatch) {
+        let tableName = tableMatch[1] || ''
+        // If it's a subquery (starts with parenthesis), skip
+        if (tableName.startsWith('(')) continue
+        // Extract just the table name from fully qualified name
+        tableName = tableName.split('.').pop() || tableName
+        if (tableName && alias && alias.length <= 3) { // Only short aliases
+          aliasFromPatternSQL[alias] = tableName.toUpperCase()
+        }
+      }
+    }
+    
+    // Simpler regex for common patterns
+    const simpleTableAliasRegex = /(?:FROM|JOIN)\s+([\w.]+)\s+(\w{1,3})(?:\s|$|,)/gi
+    while ((match = simpleTableAliasRegex.exec(suggestion.pattern_sql)) !== null) {
+      const tableFull = match[1]
+      const alias = match[2].toLowerCase()
+      const tableName = tableFull.split('.').pop() || tableFull
+      if (!aliasFromPatternSQL[alias]) {
+        aliasFromPatternSQL[alias] = tableName.toUpperCase()
+      }
+    }
+  }
+  
   // First pass: collect table replacements
   for (const change of changes) {
     if (change.type === 'table_replace' && change.original && change.new) {
@@ -1271,6 +1309,11 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
         // Then check metadata-extracted aliases
         if (!patternTable) {
           patternTable = aliasToPatternFromMetadata[alias] || aliasToPatternFromMetadata[alias.toUpperCase()]
+        }
+        
+        // Then check pattern SQL parsed aliases
+        if (!patternTable) {
+          patternTable = aliasFromPatternSQL[alias] || aliasFromPatternSQL[alias.toUpperCase()]
         }
         
         // Fall back to table replacements from sql_changes
