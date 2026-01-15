@@ -426,7 +426,13 @@ class SuggestionService:
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
-        print(f"[VS Parallel] Starting {len(columns_to_search)} parallel searches for project {project_id}")
+        # DIAGNOSTIC: Log exact parameters for debugging batch vs regeneration differences
+        print(f"[VS Parallel] ============ VECTOR SEARCH START ============")
+        print(f"[VS Parallel] index_name: {index_name}")
+        print(f"[VS Parallel] project_id: {project_id}")
+        print(f"[VS Parallel] num_columns: {len(columns_to_search)}")
+        for i, col in enumerate(columns_to_search):
+            print(f"[VS Parallel] col[{i}]: column_name={col.get('column_name')}, role={col.get('role')}, desc={col.get('description', '')[:80]}...")
         
         all_matches = []
         seen_ids = set()
@@ -496,9 +502,20 @@ class SuggestionService:
         # Sort by score descending
         all_matches.sort(key=lambda x: x.get('score', 0), reverse=True)
         
-        print(f"[VS Parallel] Completed: {len(all_matches)} unique matches from {len(columns_to_search)} searches")
+        print(f"[VS Parallel] ============ VECTOR SEARCH RESULTS ============")
+        print(f"[VS Parallel] Total unique matches: {len(all_matches)}")
         for search_result in self._last_parallel_searches:
             print(f"[VS Parallel]   {search_result['role']}: {search_result['count']} results - {search_result['columns']}")
+        
+        # Log top scores for each pattern column - KEY DIAGNOSTIC
+        for pattern_col, results in self._last_parallel_search.items():
+            if results:
+                top_score = results[0].get('score', 0) if results else 0
+                top_match = f"{results[0].get('src_table_physical_name')}.{results[0].get('src_column_physical_name')}" if results else "none"
+                print(f"[VS Parallel] SCORE: {pattern_col} -> top_score={top_score:.4f}, top_match={top_match}")
+            else:
+                print(f"[VS Parallel] SCORE: {pattern_col} -> NO RESULTS")
+        print(f"[VS Parallel] ============================================")
         
         return all_matches
     
@@ -527,13 +544,17 @@ class SuggestionService:
         """
         # If we have specific columns to search, use parallel search
         if columns_to_map and len(columns_to_map) > 0:
-            print(f"[VS] Using parallel search for {len(columns_to_map)} columns")
+            print(f"[VS] Using PARALLEL search for {len(columns_to_map)} columns (project_id={project_id})")
             return self._vector_search_parallel_sync(
                 index_name,
                 columns_to_map,
                 project_id,
                 num_results_per_column=5
             )
+        
+        # WARNING: This fallback can produce different results than parallel search!
+        print(f"[VS] WARNING: columns_to_map is EMPTY - falling back to COMBINED search (project_id={project_id})")
+        print(f"[VS] WARNING: This may explain different results between batch and regeneration!")
         
         # Fall back to single combined search
         # Build query with project context
@@ -1562,7 +1583,11 @@ RULES:
                             search_terms = [tgt_comments, pattern.get('source_descriptions', '')]
                             
                             join_metadata_str = pattern.get('join_metadata')
-                            print(f"[Suggestion Service] join_metadata type: {type(join_metadata_str)}, value: {str(join_metadata_str)[:200] if join_metadata_str else 'None'}")
+                            print(f"[Suggestion Service] BATCH: join_metadata exists: {bool(join_metadata_str)}, type: {type(join_metadata_str)}")
+                            if join_metadata_str:
+                                print(f"[Suggestion Service] BATCH: join_metadata preview: {str(join_metadata_str)[:300]}...")
+                            else:
+                                print(f"[Suggestion Service] BATCH: WARNING - join_metadata is EMPTY! This will cause combined search fallback.")
                             
                             if join_metadata_str:
                                 try:
@@ -2087,7 +2112,9 @@ RULES:
                         search_terms = [tgt_comments, pattern.get('source_descriptions', '')]
                         
                         # Extract column descriptions from join_metadata for parallel search
+                        print(f"[Suggestion Service] REGENERATE: join_metadata exists: {bool(join_metadata_str)}, type: {type(join_metadata_str)}")
                         if join_metadata_str:
+                            print(f"[Suggestion Service] REGENERATE: join_metadata preview: {str(join_metadata_str)[:300]}...")
                             try:
                                 jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
                                 for col in jm.get('userColumnsToMap', []):
@@ -2109,6 +2136,8 @@ RULES:
                                         search_terms.append(orig_col)
                             except Exception as e:
                                 print(f"[Suggestion Service] Could not parse join_metadata: {e}")
+                        else:
+                            print(f"[Suggestion Service] REGENERATE: WARNING - join_metadata is EMPTY! This will cause combined search fallback.")
                         
                         # NOTE: We no longer add the target column to VS search
                         # Only pattern columns (userColumnsToMap) should be searched
