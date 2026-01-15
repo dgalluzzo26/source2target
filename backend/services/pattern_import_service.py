@@ -875,12 +875,12 @@ RULES:
                             "column": pattern.get("tgt_column_physical_name", ""),
                             "error": error
                         })
-                else:
-                    pattern["status"] = "READY"
+                    else:
+                        pattern["status"] = "READY"
                         pattern["join_metadata"] = join_metadata
                     
                     # NOW add to processed patterns (after LLM is done)
-                session["processed_patterns"].append(pattern)
+                    session["processed_patterns"].append(pattern)
                     completed_count += 1
                     llm_completed += 1
                     session["processed_count"] = completed_count
