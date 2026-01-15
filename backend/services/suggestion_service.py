@@ -928,64 +928,86 @@ LIMIT {num_results};
         """
         Validate that columns are only used from the tables they belong to.
         If a column from table A is used but the pattern table is replaced with table B,
-        add a warning.
+        add a warning and attempt to fix.
         """
         changes = result.get("changes", [])
         warnings = result.get("warnings", [])
         if warnings is None:
             warnings = []
         
-        # Build map of pattern table alias -> source table it was replaced with
+        # Build map of pattern table (uppercased) -> source table it was replaced with
         table_replacements = {}  # pattern_table -> source_table
         for change in changes:
             if change.get("type") == "table_replace":
                 original = change.get("original", "").split(".")[-1].upper()
                 new = change.get("new", "").split(".")[-1].upper()
-                if original and new:
+                if original and new and original != new:
                     table_replacements[original] = new
+        
+        print(f"[Validation] Table replacements found: {table_replacements}")
+        
+        # Track which source tables are used by columns
+        source_tables_used = set()
+        column_to_source_table = {}  # Track which source table each column comes from
         
         # Check column replacements for consistency
         inconsistencies = []
         for change in changes:
-            if change.get("type") == "column_replace" or (change.get("new") and "." in str(change.get("new", ""))):
-                original = change.get("original", "")
-                new_val = change.get("new", "")
+            change_type = change.get("type", "")
+            new_val = str(change.get("new", ""))
+            
+            # Skip table_replace entries
+            if change_type == "table_replace":
+                continue
                 
-                # Extract source table from the new column (e.g., "RECIP_BASE.STREET_ADDR_2")
-                if "." in new_val:
-                    source_table = new_val.split(".")[0].upper()
-                    source_col = new_val.split(".")[-1]
+            # Check if this is a column change with TABLE.COLUMN format
+            if "." in new_val:
+                source_table = new_val.split(".")[0].upper()
+                source_col = new_val.split(".")[-1]
+                
+                source_tables_used.add(source_table)
+                column_to_source_table[source_col] = source_table
+                
+                # Check if the source table is in our replacement tables
+                if source_table not in table_replacements.values():
+                    # The column's source table is NOT being used as a replacement!
+                    # This means either:
+                    # 1. No table_replace was done for the pattern table (LLM kept original bronze table)
+                    # 2. A different table was used as replacement
                     
-                    # Extract alias from original (e.g., "a.ADR_STREET_2")
-                    if "." in original:
-                        alias = original.split(".")[0].lower()
-                        
-                        # Check if this alias's table was replaced with a DIFFERENT table
-                        # We need to find which pattern table this alias refers to
-                        # For now, we check if the source_table is in the table_replacements values
-                        if table_replacements:
-                            # Get all source tables that pattern tables were replaced with
-                            all_replacement_tables = set(table_replacements.values())
-                            
-                            # If the column's table is NOT one of the replacement tables, flag it
-                            if source_table not in all_replacement_tables:
-                                inconsistencies.append(
-                                    f"Column {source_col} from {source_table} used but {source_table} is not a replacement table in this query"
-                                )
+                    inconsistencies.append(
+                        f"INVALID: Column {source_col} is from {source_table}, but {source_table} is not used in FROM/JOIN. "
+                        f"Either replace the pattern table with {source_table}, or use a column that exists in the current tables."
+                    )
+                    print(f"[Validation] CRITICAL: {source_col} from {source_table} but replacements are: {list(table_replacements.values())}")
         
-        # Add inconsistency warnings
+        # Also check: if columns from a source table are used, that table should be in replacements
+        for source_table in source_tables_used:
+            if source_table not in table_replacements.values():
+                # Find which pattern tables could be replaced with this source table
+                missing_msg = f"Columns from {source_table} are used but no pattern table was replaced with {source_table}"
+                if missing_msg not in [i.split(".")[0] for i in inconsistencies]:
+                    print(f"[Validation] Missing table replacement for {source_table}")
+        
+        # Add inconsistency warnings (avoid duplicates)
         for inconsistency in inconsistencies:
-            if inconsistency not in warnings:
+            # Check if similar warning already exists
+            already_warned = False
+            for existing in warnings:
+                if source_col in existing.upper() or source_table in existing.upper():
+                    already_warned = True
+                    break
+            if not already_warned:
                 warnings.append(inconsistency)
-                print(f"[Validation] Table-column inconsistency: {inconsistency}")
+                print(f"[Validation] Added warning: {inconsistency}")
         
         result["warnings"] = warnings
         
         # Lower confidence if there are inconsistencies
         if inconsistencies:
             current_confidence = result.get("confidence", 0.5)
-            result["confidence"] = max(0.3, current_confidence - 0.2)
-            result["reasoning"] = result.get("reasoning", "") + f" WARNING: {len(inconsistencies)} table-column inconsistencies detected."
+            result["confidence"] = max(0.2, current_confidence - 0.3)
+            result["reasoning"] = result.get("reasoning", "") + f" CRITICAL: {len(inconsistencies)} table-column inconsistencies - columns used from tables not in the query."
         
         return result
     
@@ -1103,13 +1125,16 @@ SILVER TABLES (CONSTANT - DO NOT MODIFY):
 STRICT SUBSTITUTION RULES:
 1. PRESERVE SQL STRUCTURE EXACTLY - same number of SELECTs, same JOINs, same WHERE conditions
 2. Only perform 1-to-1 column substitutions - replace each pattern column with ONE matching source column
-3. Only perform 1-to-1 table substitutions - replace each pattern table with ONE matching source table  
+3. EVERY pattern bronze table MUST be replaced with a user source table (e.g., replace "t_re_base" with "RECIP_BASE")
 4. Tables containing "silver" in their path are CONSTANT - never modify silver table references
 5. Do NOT add new columns that weren't in the original SQL
 6. Do NOT remove columns that were in the original SQL
 7. Do NOT change join conditions (e.g., if original joins on SAK_RECIP, the new SQL must also join on the equivalent column)
 8. Keep all transformations (TRIM, INITCAP, CONCAT, CAST, etc.) exactly as they appear
 9. Keep all literals and constants unchanged (e.g., =1, ='Y', in ('R','M'))
+10. IF YOU USE A COLUMN FROM A SOURCE TABLE, YOU MUST REPLACE THE PATTERN TABLE WITH THAT SOURCE TABLE
+   - Example: If you use RECIP_BASE.STREET_ADDR_2, then "t_re_base" MUST become "RECIP_BASE" in FROM clause
+   - You cannot leave the original pattern table name (like t_re_base) and use a column from a different table
 
 CRITICAL TABLE-COLUMN CONSISTENCY (MUST FOLLOW - VALIDATION WILL FAIL IF NOT):
 - The user's source columns are formatted as TABLE.COLUMN (e.g., "RECIP_BASE.STREET_ADDR_1")
