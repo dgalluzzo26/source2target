@@ -30,6 +30,7 @@ class PatternImportService:
     """Service for importing historical mapping patterns."""
     
     # Standard mapped_fields columns that can be mapped from CSV
+    # Note: source_relationship_type, transformations_applied, confidence_score are auto-populated
     MAPPABLE_COLUMNS = [
         'tgt_table_name',
         'tgt_table_physical_name',
@@ -45,10 +46,7 @@ class PatternImportService:
         'source_datatypes',
         'source_domain',
         'target_domain',
-        'source_relationship_type',
-        'transformations_applied',
-        'confidence_score',
-        'join_column_description'  # NEW: Contains COLUMN:Description|... for join/filter columns
+        'join_column_description'  # Contains COLUMN:Description|... for join/filter columns
     ]
     
     def __init__(self):
