@@ -369,6 +369,108 @@ Return ONLY the enhanced description text, nothing else. No JSON, no explanation
         return {"enhanced_description": request.current_description or f"Column {request.column_name} from table {request.table_name}"}
 
 
+class EnhanceDescriptionBatchRequest(BaseModel):
+    fields: list  # List of {table_name, column_name, data_type, current_description}
+
+@app.post("/api/v4/ai/enhance-description-batch")
+async def enhance_description_batch(request: EnhanceDescriptionBatchRequest):
+    """
+    Batch endpoint to enhance multiple field descriptions in parallel.
+    Much more efficient for large datasets (5K+ fields).
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from databricks.sdk import WorkspaceClient
+    from databricks.sdk.service.serving import ChatMessage, ChatMessageRole
+    
+    results = []
+    
+    try:
+        config = config_service.get_config()
+        llm_endpoint = config.ai_model.foundation_model_endpoint
+        
+        print(f"[AI Enhance Batch] Processing {len(request.fields)} fields using {llm_endpoint}")
+        
+        def enhance_single_field(field_data: dict) -> dict:
+            """Process a single field - called in parallel"""
+            table_name = field_data.get('table_name', '')
+            column_name = field_data.get('column_name', '')
+            data_type = field_data.get('data_type', 'STRING')
+            current_desc = field_data.get('current_description', '')
+            field_id = field_data.get('id')
+            
+            try:
+                prompt = f"""You are a data documentation expert. Given a database column, generate a clear, concise description.
+
+TABLE: {table_name}
+COLUMN: {column_name}
+DATA TYPE: {data_type}
+CURRENT DESCRIPTION: {current_desc or "(none)"}
+
+Generate an improved 1-2 sentence description. Return ONLY the description text."""
+
+                w = WorkspaceClient()
+                response = w.serving_endpoints.query(
+                    name=llm_endpoint,
+                    messages=[ChatMessage(role=ChatMessageRole.USER, content=prompt)],
+                    max_tokens=150
+                )
+                enhanced = response.choices[0].message.content.strip().strip('"').strip("'")
+                
+                return {
+                    "id": field_id,
+                    "table_name": table_name,
+                    "column_name": column_name,
+                    "original_description": current_desc,
+                    "enhanced_description": enhanced,
+                    "success": True
+                }
+            except Exception as e:
+                print(f"[AI Enhance Batch] Error for {column_name}: {e}")
+                return {
+                    "id": field_id,
+                    "table_name": table_name,
+                    "column_name": column_name,
+                    "original_description": current_desc,
+                    "enhanced_description": current_desc,  # Keep original on error
+                    "success": False,
+                    "error": str(e)
+                }
+        
+        # Process all fields in parallel with ThreadPoolExecutor
+        # Use 20 workers for good parallelism without overwhelming the API
+        MAX_WORKERS = 20
+        
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {executor.submit(enhance_single_field, field): field for field in request.fields}
+            
+            for future in as_completed(futures):
+                try:
+                    result = future.result(timeout=60)
+                    results.append(result)
+                except Exception as e:
+                    field = futures[future]
+                    results.append({
+                        "id": field.get('id'),
+                        "table_name": field.get('table_name', ''),
+                        "column_name": field.get('column_name', ''),
+                        "original_description": field.get('current_description', ''),
+                        "enhanced_description": field.get('current_description', ''),
+                        "success": False,
+                        "error": str(e)
+                    })
+        
+        success_count = sum(1 for r in results if r.get('success'))
+        print(f"[AI Enhance Batch] Complete: {success_count}/{len(results)} successful")
+        
+        return {"results": results, "total": len(results), "success_count": success_count}
+        
+    except Exception as e:
+        print(f"[AI Enhance Batch] Fatal error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Mount static files for production (built frontend)
 # The dist folder is now at the root level after vite build
 static_dir = os.path.join(os.path.dirname(__file__), "..", "dist")

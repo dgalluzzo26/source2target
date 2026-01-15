@@ -453,7 +453,15 @@
 
       <template #footer>
         <Button 
-          label="Cancel" 
+          v-if="enhancingDescriptions"
+          label="Stop Processing" 
+          icon="pi pi-stop" 
+          @click="cancelEnhancement" 
+          severity="danger"
+        />
+        <Button 
+          v-else
+          label="Close" 
           icon="pi pi-times" 
           @click="showEnhanceDescriptionsDialog = false" 
           severity="secondary"
@@ -464,7 +472,7 @@
           icon="pi pi-check" 
           @click="saveEnhancedDescriptions"
           :loading="savingEnhancedFields"
-          :disabled="enhancedFields.length === 0"
+          :disabled="enhancedFields.length === 0 || enhancingDescriptions"
         />
       </template>
     </Dialog>
@@ -583,6 +591,8 @@ const enhancedFields = ref<any[]>([])
 const enhancedFieldsProgress = ref(0)
 const enhancedFieldsTotal = ref(0)
 const savingEnhancedFields = ref(false)
+const enhancementCancelled = ref(false)
+let enhancementAbortController: AbortController | null = null
 
 const newField = ref({
   tgt_table_name: '',
@@ -967,7 +977,7 @@ function closeUploadDialog() {
   selectedFile.value = null
 }
 
-// AI Enhance Descriptions
+// AI Enhance Descriptions - uses batch endpoint for efficiency with large datasets
 async function handleEnhanceDescriptions() {
   if (semanticFields.value.length === 0) {
     toast.add({
@@ -982,69 +992,104 @@ async function handleEnhanceDescriptions() {
   // Open dialog and start enhancement
   showEnhanceDescriptionsDialog.value = true
   enhancingDescriptions.value = true
+  enhancementCancelled.value = false
   enhancedFields.value = []
   enhancedFieldsProgress.value = 0
   enhancedFieldsTotal.value = semanticFields.value.length
+  
+  // Create abort controller for cancellation
+  enhancementAbortController = new AbortController()
 
-  const BATCH_SIZE = 5
-  const results: any[] = []
+  // Process in batches of 100, each batch is processed in parallel on the backend
+  const BATCH_SIZE = 100
+  const allResults: any[] = []
 
   try {
     for (let i = 0; i < semanticFields.value.length; i += BATCH_SIZE) {
+      // Check if cancelled before starting next batch
+      if (enhancementCancelled.value) {
+        console.log('[AI Enhance] Cancelled by user')
+        break
+      }
+      
       const batch = semanticFields.value.slice(i, i + BATCH_SIZE)
       
-      // Process batch in parallel
-      const batchPromises = batch.map(async (field: any) => {
-        try {
-          const response = await fetch('/api/v4/ai/enhance-description', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              table_name: field.tgt_table_name,
-              column_name: field.tgt_column_name,
-              data_type: field.tgt_physical_datatype || 'STRING',
-              current_description: field.tgt_comments || ''
-            })
-          })
-          
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`)
-          }
-          
-          const data = await response.json()
-          
-          return {
-            id: field.id,
-            tgt_table_name: field.tgt_table_name,
-            tgt_column_name: field.tgt_column_name,
-            original_description: field.tgt_comments || '',
-            enhanced_description: data.enhanced_description || field.tgt_comments || ''
-          }
-        } catch (err) {
-          console.error(`Error enhancing ${field.tgt_column_name}:`, err)
-          return {
-            id: field.id,
-            tgt_table_name: field.tgt_table_name,
-            tgt_column_name: field.tgt_column_name,
-            original_description: field.tgt_comments || '',
-            enhanced_description: field.tgt_comments || '' // Keep original on error
-          }
-        }
-      })
+      // Prepare batch payload
+      const batchPayload = batch.map((field: any) => ({
+        id: field.id,
+        table_name: field.tgt_table_name,
+        column_name: field.tgt_column_name,
+        data_type: field.tgt_physical_datatype || 'STRING',
+        current_description: field.tgt_comments || ''
+      }))
       
-      const batchResults = await Promise.all(batchPromises)
-      results.push(...batchResults)
+      try {
+        // Call batch endpoint - backend processes these in parallel
+        const response = await fetch('/api/v4/ai/enhance-description-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: batchPayload }),
+          signal: enhancementAbortController.signal
+        })
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+        
+        const data = await response.json()
+        
+        // Map results back to our format
+        const batchResults = (data.results || []).map((r: any) => ({
+          id: r.id,
+          tgt_table_name: r.table_name,
+          tgt_column_name: r.column_name,
+          original_description: r.original_description || '',
+          enhanced_description: r.enhanced_description || r.original_description || ''
+        }))
+        
+        allResults.push(...batchResults)
+        
+        console.log(`[AI Enhance] Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${data.success_count}/${data.total} successful`)
+        
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          console.log('[AI Enhance] Request aborted')
+          break
+        }
+        console.error(`Error in batch ${Math.floor(i / BATCH_SIZE) + 1}:`, err)
+        // On batch error, keep original descriptions
+        batch.forEach((field: any) => {
+          allResults.push({
+            id: field.id,
+            tgt_table_name: field.tgt_table_name,
+            tgt_column_name: field.tgt_column_name,
+            original_description: field.tgt_comments || '',
+            enhanced_description: field.tgt_comments || ''
+          })
+        })
+      }
+      
       enhancedFieldsProgress.value = Math.min(i + BATCH_SIZE, semanticFields.value.length)
     }
     
-    enhancedFields.value = results
+    enhancedFields.value = allResults
     
-    toast.add({
-      severity: 'success',
-      summary: 'Enhancement Complete',
-      detail: `Enhanced ${results.length} field descriptions. Review and save.`,
-      life: 5000
-    })
+    if (enhancementCancelled.value) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Enhancement Cancelled',
+        detail: `Processed ${allResults.length} of ${semanticFields.value.length} fields before cancellation.`,
+        life: 5000
+      })
+    } else {
+      const changedCount = allResults.filter(f => f.enhanced_description !== f.original_description).length
+      toast.add({
+        severity: 'success',
+        summary: 'Enhancement Complete',
+        detail: `Processed ${allResults.length} fields. ${changedCount} enhanced. Review and save.`,
+        life: 5000
+      })
+    }
   } catch (err) {
     console.error('Error during enhancement:', err)
     toast.add({
@@ -1055,6 +1100,14 @@ async function handleEnhanceDescriptions() {
     })
   } finally {
     enhancingDescriptions.value = false
+    enhancementAbortController = null
+  }
+}
+
+function cancelEnhancement() {
+  enhancementCancelled.value = true
+  if (enhancementAbortController) {
+    enhancementAbortController.abort()
   }
 }
 
