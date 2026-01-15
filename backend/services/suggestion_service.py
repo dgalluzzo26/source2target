@@ -927,8 +927,9 @@ LIMIT {num_results};
     def _validate_table_column_consistency(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """
         Validate that columns are only used from the tables they belong to.
-        If a column from table A is used but the pattern table is replaced with table B,
-        add a warning and attempt to fix.
+        Key checks:
+        1. All columns for the same alias must come from the same source table
+        2. If a column from table X is used, table X must be in the replacement tables
         """
         changes = result.get("changes", [])
         warnings = result.get("warnings", [])
@@ -946,68 +947,91 @@ LIMIT {num_results};
         
         print(f"[Validation] Table replacements found: {table_replacements}")
         
-        # Track which source tables are used by columns
-        source_tables_used = set()
-        column_to_source_table = {}  # Track which source table each column comes from
+        # Group columns by their alias (pattern table alias)
+        # alias -> list of (source_table, source_column) tuples
+        alias_to_columns = {}
         
-        # Check column replacements for consistency
+        # Track which source tables are used by columns overall
+        source_tables_used = set()
+        
         inconsistencies = []
+        
         for change in changes:
             change_type = change.get("type", "")
+            original_val = str(change.get("original", ""))
             new_val = str(change.get("new", ""))
             
             # Skip table_replace entries
             if change_type == "table_replace":
                 continue
-                
-            # Check if this is a column change with TABLE.COLUMN format
+            
+            # Extract alias from original (e.g., "a.ADR_STREET_2" -> alias "a")
+            alias = None
+            if "." in original_val:
+                alias = original_val.split(".")[0].lower()
+            
+            # Check if this is a column change with TABLE.COLUMN format in new value
             if "." in new_val:
                 source_table = new_val.split(".")[0].upper()
                 source_col = new_val.split(".")[-1]
                 
                 source_tables_used.add(source_table)
-                column_to_source_table[source_col] = source_table
                 
-                # Check if the source table is in our replacement tables
-                if source_table not in table_replacements.values():
-                    # The column's source table is NOT being used as a replacement!
-                    # This means either:
-                    # 1. No table_replace was done for the pattern table (LLM kept original bronze table)
-                    # 2. A different table was used as replacement
-                    
-                    inconsistencies.append(
-                        f"INVALID: Column {source_col} is from {source_table}, but {source_table} is not used in FROM/JOIN. "
-                        f"Either replace the pattern table with {source_table}, or use a column that exists in the current tables."
-                    )
-                    print(f"[Validation] CRITICAL: {source_col} from {source_table} but replacements are: {list(table_replacements.values())}")
+                # Track columns by alias
+                if alias:
+                    if alias not in alias_to_columns:
+                        alias_to_columns[alias] = []
+                    alias_to_columns[alias].append((source_table, source_col, original_val))
         
-        # Also check: if columns from a source table are used, that table should be in replacements
+        print(f"[Validation] Columns by alias: {alias_to_columns}")
+        
+        # CHECK 1: All columns for the same alias must come from the SAME source table
+        for alias, columns in alias_to_columns.items():
+            source_tables_for_alias = set(col[0] for col in columns)
+            if len(source_tables_for_alias) > 1:
+                # CRITICAL: Mixed source tables for the same alias!
+                tables_list = ", ".join(sorted(source_tables_for_alias))
+                columns_detail = "; ".join([f"{col[1]} from {col[0]}" for col in columns])
+                inconsistencies.append(
+                    f"INVALID: Alias '{alias}' has columns from MULTIPLE tables ({tables_list}). "
+                    f"All columns for alias '{alias}' must come from the SAME table. "
+                    f"Details: {columns_detail}"
+                )
+                print(f"[Validation] CRITICAL: Alias '{alias}' mixes tables: {source_tables_for_alias}")
+        
+        # CHECK 2: Each source table used must be a replacement table
         for source_table in source_tables_used:
             if source_table not in table_replacements.values():
-                # Find which pattern tables could be replaced with this source table
-                missing_msg = f"Columns from {source_table} are used but no pattern table was replaced with {source_table}"
-                if missing_msg not in [i.split(".")[0] for i in inconsistencies]:
-                    print(f"[Validation] Missing table replacement for {source_table}")
+                inconsistencies.append(
+                    f"INVALID: Columns from {source_table} are used, but {source_table} is not a replacement table in the query. "
+                    f"Replacement tables are: {list(table_replacements.values()) if table_replacements else 'NONE'}"
+                )
+                print(f"[Validation] CRITICAL: {source_table} used but not in replacements: {list(table_replacements.values())}")
+        
+        # CHECK 3: Verify alias-to-table consistency
+        # If alias 'a' columns come from MBR_ADDR, then there should be a table_replace that maps some pattern table to MBR_ADDR
+        for alias, columns in alias_to_columns.items():
+            if columns:
+                primary_source_table = columns[0][0]  # Take the first one (they should all be the same after CHECK 1)
+                if primary_source_table not in table_replacements.values():
+                    inconsistencies.append(
+                        f"INVALID: Alias '{alias}' uses columns from {primary_source_table}, "
+                        f"but no pattern table was replaced with {primary_source_table}"
+                    )
         
         # Add inconsistency warnings (avoid duplicates)
         for inconsistency in inconsistencies:
-            # Check if similar warning already exists
-            already_warned = False
-            for existing in warnings:
-                if source_col in existing.upper() or source_table in existing.upper():
-                    already_warned = True
-                    break
-            if not already_warned:
+            if inconsistency not in warnings:
                 warnings.append(inconsistency)
                 print(f"[Validation] Added warning: {inconsistency}")
         
         result["warnings"] = warnings
         
-        # Lower confidence if there are inconsistencies
+        # Lower confidence significantly if there are inconsistencies
         if inconsistencies:
             current_confidence = result.get("confidence", 0.5)
-            result["confidence"] = max(0.2, current_confidence - 0.3)
-            result["reasoning"] = result.get("reasoning", "") + f" CRITICAL: {len(inconsistencies)} table-column inconsistencies - columns used from tables not in the query."
+            result["confidence"] = max(0.1, current_confidence - 0.4)
+            result["reasoning"] = result.get("reasoning", "") + f" CRITICAL: {len(inconsistencies)} table-column inconsistencies detected - SQL is likely INVALID."
         
         return result
     
@@ -1146,15 +1170,24 @@ CRITICAL TABLE-COLUMN CONSISTENCY (MUST FOLLOW - VALIDATION WILL FAIL IF NOT):
 - CORRECT: Replace t_re_multi_address with MBR_ADDR and use MBR_ADDR.ADDR_LN_2
 - CORRECT: Replace t_re_multi_address with RECIP_BASE and use RECIP_BASE.STREET_ADDR_2
 
-MATCHING STRATEGY (FOLLOW THIS ORDER):
+MATCHING STRATEGY (FOLLOW THIS ORDER - VALIDATION WILL FAIL IF YOU DON'T):
 1. FIRST: Decide which user source TABLE best matches each pattern bronze TABLE
-   - Consider which table has columns matching the pattern table's columns
+   - Consider which table has the most columns matching the pattern table's columns
    - Each pattern bronze table should map to a DIFFERENT user source table
-2. THEN: For each pattern table, ONLY use columns from the matched source table
-   - If pattern table T_RE_BASE maps to RECIP_BASE, ALL columns for that table must come from RECIP_BASE
-   - If pattern table T_RE_MULTI_ADDRESS maps to MBR_ADDR, ALL columns for that table must come from MBR_ADDR
-3. NEVER mix columns from different source tables for the same pattern table
-4. If a column has no match in the assigned source table, keep original and add warning
+   - Record this mapping: T_RE_BASE -> RECIP_BASE, T_RE_MULTI_ADDRESS -> MBR_ADDR, etc.
+
+2. THEN: For each pattern table alias, ONLY use columns from the matched source table
+   - If alias 'b' (T_RE_BASE) maps to RECIP_BASE, ALL columns with 'b.' prefix must come from RECIP_BASE
+   - If alias 'a' (T_RE_MULTI_ADDRESS) maps to MBR_ADDR, ALL columns with 'a.' prefix must come from MBR_ADDR
+   - THIS IS NON-NEGOTIABLE - mixing columns from different source tables for the same alias = INVALID SQL
+
+3. ABSOLUTELY NEVER mix columns from different source tables for the same alias/pattern table
+   - WRONG: Using RECIP_BASE.STREET_ADDR_2 AND MBR_ADDR.ADDR_TYP_CD for alias 'a' - INVALID!
+   - RIGHT: Using ONLY MBR_ADDR columns for alias 'a' if 'a' maps to MBR_ADDR
+
+4. If a column has no match in the assigned source table, keep original column and add warning
+   - Do NOT use a column from a different table just because it matches semantically
+
 5. CRITICAL: Do NOT substitute two different pattern tables with the SAME user table (creates invalid self-joins)
 
 WARNINGS RULES (BE VERY STRICT):
