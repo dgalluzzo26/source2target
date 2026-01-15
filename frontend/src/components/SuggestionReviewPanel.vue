@@ -1277,6 +1277,19 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
     }
   }
   
+  // Helper function to find alias for a column from pattern SQL
+  const findAliasForColumn = (columnName: string): string | null => {
+    if (!suggestion.pattern_sql) return null
+    // Look for patterns like "b.COLUMN_NAME" or "alias.COLUMN_NAME" in the SQL
+    const escapedCol = columnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const aliasColRegex = new RegExp(`(\\w{1,3})\\.${escapedCol}\\b`, 'i')
+    const match = suggestion.pattern_sql.match(aliasColRegex)
+    if (match) {
+      return match[1].toLowerCase()
+    }
+    return null
+  }
+  
   // Second pass: group column changes by alias
   for (const change of changes) {
     if (change.type === 'column_replace' || (change.original && change.new && change.type !== 'table_replace')) {
@@ -1284,12 +1297,19 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
       const newVal = change.new || ''
       
       // Parse "b.ADR_STREET_1" -> alias=b, col=ADR_STREET_1
-      let alias = 'main'  // Default alias for columns without prefix
+      let alias = ''
       let origCol = orig
       if (orig.includes('.')) {
         const parts = orig.split('.')
         alias = parts[0].toLowerCase()
         origCol = parts[parts.length - 1]
+      } else {
+        // No alias in the change - try to find it in the pattern SQL
+        origCol = orig
+        const foundAlias = findAliasForColumn(origCol)
+        if (foundAlias) {
+          alias = foundAlias
+        }
       }
       
       // Parse "RECIP_BASE.STREET_ADDR_1" or "r.STREET_ADDR_1"
@@ -1299,6 +1319,29 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
         const parts = newVal.split('.')
         newTable = parts[0].toUpperCase()
         newCol = parts[parts.length - 1]
+      }
+      
+      // If we still don't have an alias, try to infer from the new table
+      if (!alias && newTable) {
+        // Check if this new table appears in any table replacement
+        for (const [sourceTable, info] of Object.entries(tableReplacements)) {
+          if (sourceTable === newTable) {
+            // Find the alias that maps to this pattern table
+            for (const [a, t] of Object.entries(aliasFromPatternSQL)) {
+              if (t.toUpperCase() === info.pattern.toUpperCase()) {
+                alias = a
+                break
+              }
+            }
+            break
+          }
+        }
+      }
+      
+      // Still no alias - use first available alias from pattern SQL, or default
+      if (!alias) {
+        const availableAliases = Object.keys(aliasFromPatternSQL)
+        alias = availableAliases.length > 0 ? availableAliases[0] : 'main'
       }
       
       // Initialize group if needed

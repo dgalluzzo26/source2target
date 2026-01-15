@@ -921,6 +921,75 @@ LIMIT {num_results};
         return result
     
     # =========================================================================
+    # VALIDATION: Check table-column consistency in LLM output
+    # =========================================================================
+    
+    def _validate_table_column_consistency(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate that columns are only used from the tables they belong to.
+        If a column from table A is used but the pattern table is replaced with table B,
+        add a warning.
+        """
+        changes = result.get("changes", [])
+        warnings = result.get("warnings", [])
+        if warnings is None:
+            warnings = []
+        
+        # Build map of pattern table alias -> source table it was replaced with
+        table_replacements = {}  # pattern_table -> source_table
+        for change in changes:
+            if change.get("type") == "table_replace":
+                original = change.get("original", "").split(".")[-1].upper()
+                new = change.get("new", "").split(".")[-1].upper()
+                if original and new:
+                    table_replacements[original] = new
+        
+        # Check column replacements for consistency
+        inconsistencies = []
+        for change in changes:
+            if change.get("type") == "column_replace" or (change.get("new") and "." in str(change.get("new", ""))):
+                original = change.get("original", "")
+                new_val = change.get("new", "")
+                
+                # Extract source table from the new column (e.g., "RECIP_BASE.STREET_ADDR_2")
+                if "." in new_val:
+                    source_table = new_val.split(".")[0].upper()
+                    source_col = new_val.split(".")[-1]
+                    
+                    # Extract alias from original (e.g., "a.ADR_STREET_2")
+                    if "." in original:
+                        alias = original.split(".")[0].lower()
+                        
+                        # Check if this alias's table was replaced with a DIFFERENT table
+                        # We need to find which pattern table this alias refers to
+                        # For now, we check if the source_table is in the table_replacements values
+                        if table_replacements:
+                            # Get all source tables that pattern tables were replaced with
+                            all_replacement_tables = set(table_replacements.values())
+                            
+                            # If the column's table is NOT one of the replacement tables, flag it
+                            if source_table not in all_replacement_tables:
+                                inconsistencies.append(
+                                    f"Column {source_col} from {source_table} used but {source_table} is not a replacement table in this query"
+                                )
+        
+        # Add inconsistency warnings
+        for inconsistency in inconsistencies:
+            if inconsistency not in warnings:
+                warnings.append(inconsistency)
+                print(f"[Validation] Table-column inconsistency: {inconsistency}")
+        
+        result["warnings"] = warnings
+        
+        # Lower confidence if there are inconsistencies
+        if inconsistencies:
+            current_confidence = result.get("confidence", 0.5)
+            result["confidence"] = max(0.3, current_confidence - 0.2)
+            result["reasoning"] = result.get("reasoning", "") + f" WARNING: {len(inconsistencies)} table-column inconsistencies detected."
+        
+        return result
+    
+    # =========================================================================
     # LLM: Rewrite SQL with user's source columns
     # =========================================================================
     
@@ -1042,24 +1111,26 @@ STRICT SUBSTITUTION RULES:
 8. Keep all transformations (TRIM, INITCAP, CONCAT, CAST, etc.) exactly as they appear
 9. Keep all literals and constants unchanged (e.g., =1, ='Y', in ('R','M'))
 
-CRITICAL TABLE-COLUMN CONSISTENCY (VERY IMPORTANT):
-- When you substitute a column, you MUST also substitute the table it comes from
+CRITICAL TABLE-COLUMN CONSISTENCY (MUST FOLLOW - VALIDATION WILL FAIL IF NOT):
 - The user's source columns are formatted as TABLE.COLUMN (e.g., "RECIP_BASE.STREET_ADDR_1")
-- If you use RECIP_BASE.STREET_ADDR_1, you MUST replace the pattern table (e.g., "t_re_base") with "RECIP_BASE"
-- If you use MBR_ADDR.ADDR_LN_1, you MUST replace the pattern table (e.g., "t_re_multi_address") with "MBR_ADDR"
-- The resulting SQL must be VALID - columns must exist in the tables they reference
-- Pattern bronze tables (non-silver) should be replaced with the user's source table names
-- Example: If original is "FROM t_re_base b" and you use columns from RECIP_BASE, change to "FROM RECIP_BASE b"
+- THE TABLE IN THE COLUMN NAME TELLS YOU WHICH TABLE THAT COLUMN EXISTS IN
+- Example: "RECIP_BASE.STREET_ADDR_2" means STREET_ADDR_2 is ONLY in RECIP_BASE, NOT in MBR_ADDR
+- Example: "MBR_ADDR.ADDR_LN_2" means ADDR_LN_2 is ONLY in MBR_ADDR, NOT in RECIP_BASE
+- YOU CANNOT USE A COLUMN FROM TABLE A WHILE REPLACING THE TABLE WITH TABLE B
+- WRONG: Replace t_re_multi_address with MBR_ADDR but use RECIP_BASE.STREET_ADDR_2 - THIS IS INVALID!
+- CORRECT: Replace t_re_multi_address with MBR_ADDR and use MBR_ADDR.ADDR_LN_2
+- CORRECT: Replace t_re_multi_address with RECIP_BASE and use RECIP_BASE.STREET_ADDR_2
 
-MATCHING STRATEGY:
-- First, identify which user source table best matches each pattern bronze table based on column similarity
-- Each pattern bronze table should map to a DIFFERENT user source table when possible
-- CRITICAL: Do NOT substitute two different pattern tables with the SAME user table (this creates invalid self-joins)
-- If a pattern table has no matching user table, keep the original table name and add a warning
-- Then substitute columns from that matched source table consistently
-- Match columns by semantic meaning using the descriptions provided
-- If a pattern column has no clear match, keep it unchanged and add a warning
-- Prefer exact name matches when descriptions are similar
+MATCHING STRATEGY (FOLLOW THIS ORDER):
+1. FIRST: Decide which user source TABLE best matches each pattern bronze TABLE
+   - Consider which table has columns matching the pattern table's columns
+   - Each pattern bronze table should map to a DIFFERENT user source table
+2. THEN: For each pattern table, ONLY use columns from the matched source table
+   - If pattern table T_RE_BASE maps to RECIP_BASE, ALL columns for that table must come from RECIP_BASE
+   - If pattern table T_RE_MULTI_ADDRESS maps to MBR_ADDR, ALL columns for that table must come from MBR_ADDR
+3. NEVER mix columns from different source tables for the same pattern table
+4. If a column has no match in the assigned source table, keep original and add warning
+5. CRITICAL: Do NOT substitute two different pattern tables with the SAME user table (creates invalid self-joins)
 
 WARNINGS RULES (BE VERY STRICT):
 - ONLY warn about columns/tables FROM THE ORIGINAL SQL TEMPLATE that you could not find a match for
@@ -1158,6 +1229,10 @@ Return ONLY valid JSON with this structure:
                 try:
                     result = json.loads(json_str)
                     print(f"[Suggestion Service] SQL rewritten with confidence: {result.get('confidence', 0)}")
+                    
+                    # Validate table-column consistency
+                    result = self._validate_table_column_consistency(result)
+                    
                     return result
                 except json.JSONDecodeError as je:
                     print(f"[Suggestion Service] JSON parse error: {str(je)}")
@@ -1170,6 +1245,10 @@ Return ONLY valid JSON with this structure:
                     try:
                         result = json.loads(json_str_clean)
                         print(f"[Suggestion Service] SQL rewritten after aggressive cleanup with confidence: {result.get('confidence', 0)}")
+                        
+                        # Validate table-column consistency
+                        result = self._validate_table_column_consistency(result)
+                        
                         return result
                     except json.JSONDecodeError as je2:
                         print(f"[Suggestion Service] JSON parse still failed after cleanup: {str(je2)}")
