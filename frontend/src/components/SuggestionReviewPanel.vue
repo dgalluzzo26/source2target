@@ -1191,6 +1191,42 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
   const groups: Record<string, TableChangeGroup> = {}
   const tableReplacements: Record<string, { pattern: string, source: string }> = {}
   
+  // Try to extract alias-to-table mapping from join_metadata_raw
+  const aliasToPatternFromMetadata: Record<string, string> = {}
+  try {
+    if (suggestion.join_metadata_raw) {
+      const metadata = typeof suggestion.join_metadata_raw === 'string' 
+        ? JSON.parse(suggestion.join_metadata_raw) 
+        : suggestion.join_metadata_raw
+      
+      // Extract from unionBranches
+      if (metadata.unionBranches) {
+        for (const branch of metadata.unionBranches) {
+          if (branch.bronzeTable?.alias && branch.bronzeTable?.physicalName) {
+            const tableName = branch.bronzeTable.physicalName.split('.').pop() || branch.bronzeTable.physicalName
+            aliasToPatternFromMetadata[branch.bronzeTable.alias.toLowerCase()] = tableName.toUpperCase()
+          }
+        }
+      }
+      // Extract from silverTables
+      if (metadata.silverTables) {
+        for (const silver of metadata.silverTables) {
+          if (silver.alias && silver.physicalName) {
+            const tableName = silver.physicalName.split('.').pop() || silver.physicalName
+            aliasToPatternFromMetadata[silver.alias.toLowerCase()] = tableName.toUpperCase()
+          }
+        }
+      }
+      // Extract from single bronzeTable
+      if (metadata.bronzeTable?.alias && metadata.bronzeTable?.physicalName) {
+        const tableName = metadata.bronzeTable.physicalName.split('.').pop() || metadata.bronzeTable.physicalName
+        aliasToPatternFromMetadata[metadata.bronzeTable.alias.toLowerCase()] = tableName.toUpperCase()
+      }
+    }
+  } catch (e) {
+    // Non-critical - continue with other fallbacks
+  }
+  
   // First pass: collect table replacements
   for (const change of changes) {
     if (change.type === 'table_replace' && change.original && change.new) {
@@ -1210,7 +1246,7 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
       const newVal = change.new || ''
       
       // Parse "b.ADR_STREET_1" -> alias=b, col=ADR_STREET_1
-      let alias = '?'
+      let alias = 'main'  // Default alias for columns without prefix
       let origCol = orig
       if (orig.includes('.')) {
         const parts = orig.split('.')
@@ -1219,7 +1255,7 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
       }
       
       // Parse "RECIP_BASE.STREET_ADDR_1" or "r.STREET_ADDR_1"
-      let newTable = '?'
+      let newTable = ''
       let newCol = newVal
       if (newVal.includes('.')) {
         const parts = newVal.split('.')
@@ -1232,16 +1268,28 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
         // First check editingAliasMap (from join_metadata via VS candidates API)
         let patternTable = editingAliasMap.value[alias] || editingAliasMap.value[alias.toUpperCase()]
         
-        // Fall back to table replacements from sql_changes
+        // Then check metadata-extracted aliases
         if (!patternTable) {
-          const patternInfo = tableReplacements[newTable] || { pattern: '?', source: newTable }
-          patternTable = patternInfo.pattern
+          patternTable = aliasToPatternFromMetadata[alias] || aliasToPatternFromMetadata[alias.toUpperCase()]
+        }
+        
+        // Fall back to table replacements from sql_changes
+        if (!patternTable && newTable) {
+          const patternInfo = tableReplacements[newTable]
+          if (patternInfo) {
+            patternTable = patternInfo.pattern
+          }
+        }
+        
+        // Final fallback - use the original column prefix if it looks like a table name
+        if (!patternTable && origCol !== orig) {
+          patternTable = orig.split('.')[0].toUpperCase()
         }
         
         groups[alias] = {
           alias,
-          patternTable: patternTable || '?',
-          sourceTable: newTable,
+          patternTable: patternTable || alias.toUpperCase(),
+          sourceTable: newTable || 'Unknown',
           changes: []
         }
       }
@@ -1251,7 +1299,7 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
         originalColumn: origCol,
         new: newVal,
         newColumn: newCol,
-        newTable: newTable
+        newTable: newTable || groups[alias].sourceTable
       })
     }
   }
