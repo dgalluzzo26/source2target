@@ -868,10 +868,13 @@ const tableMenuItems = computed(() => [
     label: 'Rerun All Fields',
     icon: 'pi pi-refresh',
     command: () => {
-      if (selectedTable.value) handleRerunDiscovery(selectedTable.value)
-    },
-    disabled: selectedTable.value?.mapping_status === 'NOT_STARTED' || 
-              selectedTable.value?.mapping_status === 'DISCOVERING'
+      console.log('[Menu] Rerun All Fields clicked, selectedTable:', selectedTable.value)
+      if (selectedTable.value) {
+        handleRerunDiscovery(selectedTable.value)
+      } else {
+        console.error('[Menu] selectedTable is null!')
+      }
+    }
   },
   {
     label: 'Skip Table',
@@ -1103,11 +1106,27 @@ async function handleStartDiscovery(table: TargetTableStatus) {
 }
 
 async function handleRerunDiscovery(table: TargetTableStatus) {
+  console.log('[Rerun Discovery] Called with table:', table)
+  console.log('[Rerun Discovery] Table status:', table?.mapping_status)
+  
+  if (!table) {
+    console.error('[Rerun Discovery] No table provided!')
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Error', 
+      detail: 'No table selected',
+      life: 3000 
+    })
+    return
+  }
+  
   // Show confirmation dialog
   const confirmed = confirm(
     `Are you sure you want to rerun discovery for "${table.tgt_table_name}"?\n\n` +
     `This will DELETE all existing suggestions and regenerate them from scratch.`
   )
+  
+  console.log('[Rerun Discovery] User confirmed:', confirmed)
   
   if (!confirmed) return
   
@@ -1115,11 +1134,14 @@ async function handleRerunDiscovery(table: TargetTableStatus) {
   startingDiscoveryTableId.value = table.target_table_status_id
   
   try {
+    console.log('[Rerun Discovery] Calling startDiscovery...')
     await projectsStore.startDiscovery(
       projectId.value,
       table.target_table_status_id,
       userStore.userEmail || 'unknown'
     )
+    
+    console.log('[Rerun Discovery] startDiscovery completed, starting poll...')
     
     toast.add({ 
       severity: 'info', 
@@ -1131,6 +1153,7 @@ async function handleRerunDiscovery(table: TargetTableStatus) {
     // Poll for completion
     pollForDiscovery(table.target_table_status_id)
   } catch (e: any) {
+    console.error('[Rerun Discovery] Error:', e)
     startingDiscoveryTableId.value = null
     
     toast.add({ 
