@@ -310,15 +310,15 @@ async def enhance_description(request: EnhanceDescriptionRequest):
     Given the table name, column name, and current description,
     generates a more detailed and useful description.
     """
-    import json
     from concurrent.futures import ThreadPoolExecutor
     from databricks.sdk import WorkspaceClient
     
     try:
         config = config_service.get_config()
-        llm_config = {
-            "endpoint_name": config.llm.endpoint_name
-        }
+        # Use ai_model.foundation_model_endpoint from config
+        llm_endpoint = config.ai_model.foundation_model_endpoint
+        
+        print(f"[AI Enhance] Processing {request.table_name}.{request.column_name} using {llm_endpoint}")
         
         # Build the prompt
         prompt = f"""You are a data documentation expert. Given a database column, generate a clear, concise, and informative description.
@@ -341,7 +341,7 @@ Return ONLY the enhanced description text, nothing else. No JSON, no explanation
         def call_llm():
             w = WorkspaceClient()
             response = w.serving_endpoints.query(
-                name=llm_config["endpoint_name"],
+                name=llm_endpoint,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=150,
                 temperature=0.3
@@ -355,10 +355,14 @@ Return ONLY the enhanced description text, nothing else. No JSON, no explanation
         # Clean up the response
         enhanced = enhanced.strip().strip('"').strip("'")
         
+        print(f"[AI Enhance] Success: {request.column_name} -> {enhanced[:50]}...")
+        
         return {"enhanced_description": enhanced}
         
     except Exception as e:
-        print(f"[AI Enhance] Error: {e}")
+        print(f"[AI Enhance] Error for {request.table_name}.{request.column_name}: {e}")
+        import traceback
+        traceback.print_exc()
         # Return original description on error
         return {"enhanced_description": request.current_description or f"Column {request.column_name} from table {request.table_name}"}
 
