@@ -48,7 +48,7 @@
             icon="pi pi-sparkles" 
             @click="handleEnhanceDescriptions"
             :loading="enhancingDescriptions"
-            severity="help"
+            class="ai-enhance-btn"
             v-tooltip.top="'Use AI to enhance field descriptions'"
             :disabled="semanticFields.length === 0"
           />
@@ -1412,6 +1412,23 @@ function getEnhancedFieldStatus(field: any): string {
 
 .mb-3 {
   margin-bottom: 1rem;
+}
+
+/* AI Enhance Button */
+.ai-enhance-btn {
+  background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%) !important;
+  border: none !important;
+  color: white !important;
+}
+
+.ai-enhance-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%) !important;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+}
+
+.ai-enhance-btn:disabled {
+  background: var(--surface-300) !important;
+  color: var(--text-color-secondary) !important;
 }
 </style>
 
