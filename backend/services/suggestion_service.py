@@ -1283,48 +1283,91 @@ Return ONLY valid JSON with this structure:
                 print(f"[Suggestion Service] clean_llm_json returned empty - response length: {len(response_text) if response_text else 0}")
                 print(f"[Suggestion Service] Response first 500 chars: {response_text[:500] if response_text else 'EMPTY'}")
             
+            # Try multiple parsing strategies
+            parse_errors = []
+            
             if json_str:
+                # Strategy 1: Direct parse
                 try:
                     result = json.loads(json_str)
                     print(f"[Suggestion Service] SQL rewritten with confidence: {result.get('confidence', 0)}")
-                    
-                    # Validate table-column consistency
                     result = self._validate_table_column_consistency(result)
-                    
                     return result
                 except json.JSONDecodeError as je:
-                    print(f"[Suggestion Service] JSON parse error: {str(je)}")
-                    print(f"[Suggestion Service] Raw JSON (first 500 chars): {json_str[:500]}")
-                    
-                    # Try even more aggressive cleanup - replace all control chars with spaces
+                    parse_errors.append(f"Strategy 1 (direct): {str(je)}")
+                    print(f"[Suggestion Service] JSON parse error (direct): {str(je)}")
+                
+                # Strategy 2: Replace all control chars with spaces
+                try:
                     json_str_clean = re.sub(r'[\x00-\x1f\x7f]', ' ', json_str)
-                    # Also try to fix unescaped newlines in string values
                     json_str_clean = re.sub(r'(?<!\\)\n', ' ', json_str_clean)
-                    try:
-                        result = json.loads(json_str_clean)
-                        print(f"[Suggestion Service] SQL rewritten after aggressive cleanup with confidence: {result.get('confidence', 0)}")
+                    result = json.loads(json_str_clean)
+                    print(f"[Suggestion Service] SQL rewritten after control char cleanup with confidence: {result.get('confidence', 0)}")
+                    result = self._validate_table_column_consistency(result)
+                    return result
+                except json.JSONDecodeError as je2:
+                    parse_errors.append(f"Strategy 2 (control chars): {str(je2)}")
+                
+                # Strategy 3: Try to extract just the rewritten_sql if JSON is malformed
+                try:
+                    # Look for rewritten_sql pattern
+                    sql_match = re.search(r'"rewritten_sql"\s*:\s*"((?:[^"\\]|\\.)*)"|"rewritten_sql"\s*:\s*`([^`]*)`', response_text, re.DOTALL)
+                    if sql_match:
+                        extracted_sql = sql_match.group(1) or sql_match.group(2)
+                        # Unescape the SQL
+                        extracted_sql = extracted_sql.replace('\\n', '\n').replace('\\t', '\t').replace('\\"', '"')
+                        print(f"[Suggestion Service] Extracted SQL from malformed JSON (length: {len(extracted_sql)})")
                         
-                        # Validate table-column consistency
-                        result = self._validate_table_column_consistency(result)
+                        # Try to extract warnings
+                        warnings_match = re.search(r'"warnings"\s*:\s*\[(.*?)\]', response_text, re.DOTALL)
+                        warnings_list = []
+                        if warnings_match:
+                            # Extract warning strings
+                            warning_strs = re.findall(r'"([^"]*)"', warnings_match.group(1))
+                            warnings_list = warning_strs
                         
-                        return result
-                    except json.JSONDecodeError as je2:
-                        print(f"[Suggestion Service] JSON parse still failed after cleanup: {str(je2)}")
-                        return {
-                            "rewritten_sql": pattern_sql,
-                            "changes": [],
-                            "warnings": [f"JSON parse error: {str(je)}"],
-                            "confidence": 0.3,
-                            "reasoning": "LLM response contained invalid JSON"
+                        # Try to extract reasoning
+                        reasoning_match = re.search(r'"reasoning"\s*:\s*"([^"]*)"', response_text)
+                        reasoning = reasoning_match.group(1) if reasoning_match else "Extracted from malformed JSON"
+                        
+                        result = {
+                            "rewritten_sql": extracted_sql,
+                            "changes": [],  # Can't extract reliably
+                            "warnings": warnings_list + ["JSON was malformed - changes not extracted"],
+                            "confidence": 0.5,
+                            "reasoning": reasoning
                         }
-            else:
-                return {
-                    "rewritten_sql": pattern_sql,
-                    "changes": [],
-                    "warnings": ["Failed to parse LLM response - no JSON found"],
-                    "confidence": 0.3,
-                    "reasoning": "LLM response could not be parsed"
-                }
+                        result = self._validate_table_column_consistency(result)
+                        return result
+                except Exception as e3:
+                    parse_errors.append(f"Strategy 3 (regex extract): {str(e3)}")
+                
+                # Strategy 4: Try to fix common JSON issues
+                try:
+                    # Fix single quotes to double quotes (common LLM mistake)
+                    json_str_fixed = re.sub(r"(?<!\\)'", '"', json_str)
+                    # Remove any trailing content after the last }
+                    json_str_fixed = re.sub(r'\}[^}]*$', '}', json_str_fixed)
+                    result = json.loads(json_str_fixed)
+                    print(f"[Suggestion Service] SQL rewritten after quote fix with confidence: {result.get('confidence', 0)}")
+                    result = self._validate_table_column_consistency(result)
+                    return result
+                except json.JSONDecodeError as je4:
+                    parse_errors.append(f"Strategy 4 (quote fix): {str(je4)}")
+            
+            # All strategies failed
+            print(f"[Suggestion Service] All JSON parse strategies failed:")
+            for err in parse_errors:
+                print(f"  - {err}")
+            print(f"[Suggestion Service] Raw response (first 1000 chars): {response_text[:1000] if response_text else 'EMPTY'}")
+            
+            return {
+                "rewritten_sql": pattern_sql,
+                "changes": [],
+                "warnings": [f"Failed to parse LLM response after {len(parse_errors)} attempts. Errors: {'; '.join(parse_errors[:2])}"],
+                "confidence": 0.2,
+                "reasoning": "LLM response could not be parsed - keeping original SQL"
+            }
                 
         except Exception as e:
             print(f"[Suggestion Service] LLM error: {str(e)}")
