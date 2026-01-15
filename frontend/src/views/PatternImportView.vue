@@ -401,7 +401,7 @@ const savePollingInterval = ref<number | null>(null)
 const showDetailDialog = ref(false)
 const detailPattern = ref<any>(null)
 
-// Mappable columns
+// Mappable columns (source_relationship_type, transformations_applied, confidence_score are auto-populated)
 const mappableColumns = computed(() => [
   { name: 'tgt_table_name', required: false },
   { name: 'tgt_table_physical_name', required: true },
@@ -417,9 +417,7 @@ const mappableColumns = computed(() => [
   { name: 'source_datatypes', required: false },
   { name: 'source_domain', required: false },
   { name: 'target_domain', required: false },
-  { name: 'source_relationship_type', required: false },
-  { name: 'transformations_applied', required: false },
-  { name: 'confidence_score', required: false }
+  { name: 'join_column_description', required: false }  // COLUMN:Description|... for join/filter columns
 ])
 
 const csvColumnOptions = computed(() => {
