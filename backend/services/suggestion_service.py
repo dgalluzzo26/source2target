@@ -2440,7 +2440,7 @@ RULES:
                                 
                                 # Assign source tables to pattern tables
                                 table_assignments = assign_source_tables_to_pattern_tables(
-                                    bronze_tables, vs_candidates_by_column or {}
+                                    bronze_tables, vs_candidates_by_column or {}, columns_to_map
                                 )
                                 print(f"[Batch Discovery] Table assignments: {table_assignments}")
                                 
@@ -2976,7 +2976,7 @@ RULES:
                             
                             # Step 3b: Assign source tables to pattern tables
                             table_assignments = assign_source_tables_to_pattern_tables(
-                                bronze_tables, vs_candidates_by_column or {}
+                                bronze_tables, vs_candidates_by_column or {}, columns_to_map
                             )
                             print(f"[Regenerate] Table assignments: {table_assignments}")
                             
