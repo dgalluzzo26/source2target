@@ -1218,240 +1218,204 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
   const changes = getChanges(suggestion)
   if (!changes.length) return []
   
-  // Group changes by table alias
+  // Group changes by PATTERN TABLE (not alias) to handle multiple tables → same source
   const groups: Record<string, TableChangeGroup> = {}
-  const tableReplacements: Record<string, { pattern: string, source: string }> = {}
   
-  // Try to extract alias-to-table mapping from join_metadata_raw
-  const aliasToPatternFromMetadata: Record<string, string> = {}
+  // Key by PATTERN table name (not source) to avoid overwrites when multiple patterns → same source
+  const tableReplacements: Record<string, { pattern: string, source: string, alias: string }> = {}
+  
+  // Parse pattern_sql to extract table aliases FIRST
+  const aliasFromPatternSQL: Record<string, string> = {}  // alias -> pattern table
+  const patternTableToAlias: Record<string, string> = {}  // pattern table -> alias
+  
+  if (suggestion.pattern_sql) {
+    // Simpler regex for common patterns
+    const simpleTableAliasRegex = /(?:FROM|JOIN)\s+([\w.]+)\s+(\w{1,3})(?:\s|$|,|ON)/gi
+    let match
+    while ((match = simpleTableAliasRegex.exec(suggestion.pattern_sql)) !== null) {
+      const tableFull = match[1]
+      const alias = match[2].toLowerCase()
+      // Skip keywords
+      if (['on', 'and', 'or', 'where', 'left', 'right', 'as'].includes(alias)) continue
+      const tableName = (tableFull.split('.').pop() || tableFull).toUpperCase()
+      aliasFromPatternSQL[alias] = tableName
+      patternTableToAlias[tableName] = alias
+    }
+    
+    // Also look for subquery patterns: (select * from table where ...)alias
+    const subqueryRegex = /\(select[^)]+from\s+([\w.]+)[^)]*\)\s*(\w{1,3})/gi
+    while ((match = subqueryRegex.exec(suggestion.pattern_sql)) !== null) {
+      const tableFull = match[1]
+      const alias = match[2].toLowerCase()
+      if (['on', 'and', 'or', 'where', 'left', 'right'].includes(alias)) continue
+      const tableName = (tableFull.split('.').pop() || tableFull).toUpperCase()
+      if (!aliasFromPatternSQL[alias]) {
+        aliasFromPatternSQL[alias] = tableName
+        patternTableToAlias[tableName] = alias
+      }
+    }
+  }
+  
+  // Also try metadata
   try {
     if (suggestion.join_metadata_raw) {
       const metadata = typeof suggestion.join_metadata_raw === 'string' 
         ? JSON.parse(suggestion.join_metadata_raw) 
         : suggestion.join_metadata_raw
       
-      // Extract from unionBranches
       if (metadata.unionBranches) {
         for (const branch of metadata.unionBranches) {
           if (branch.bronzeTable?.alias && branch.bronzeTable?.physicalName) {
-            const tableName = branch.bronzeTable.physicalName.split('.').pop() || branch.bronzeTable.physicalName
-            aliasToPatternFromMetadata[branch.bronzeTable.alias.toLowerCase()] = tableName.toUpperCase()
+            const tableName = (branch.bronzeTable.physicalName.split('.').pop() || branch.bronzeTable.physicalName).toUpperCase()
+            const alias = branch.bronzeTable.alias.toLowerCase()
+            aliasFromPatternSQL[alias] = tableName
+            patternTableToAlias[tableName] = alias
           }
         }
       }
-      // Extract from silverTables
-      if (metadata.silverTables) {
-        for (const silver of metadata.silverTables) {
-          if (silver.alias && silver.physicalName) {
-            const tableName = silver.physicalName.split('.').pop() || silver.physicalName
-            aliasToPatternFromMetadata[silver.alias.toLowerCase()] = tableName.toUpperCase()
-          }
-        }
-      }
-      // Extract from single bronzeTable
       if (metadata.bronzeTable?.alias && metadata.bronzeTable?.physicalName) {
-        const tableName = metadata.bronzeTable.physicalName.split('.').pop() || metadata.bronzeTable.physicalName
-        aliasToPatternFromMetadata[metadata.bronzeTable.alias.toLowerCase()] = tableName.toUpperCase()
+        const tableName = (metadata.bronzeTable.physicalName.split('.').pop() || metadata.bronzeTable.physicalName).toUpperCase()
+        const alias = metadata.bronzeTable.alias.toLowerCase()
+        aliasFromPatternSQL[alias] = tableName
+        patternTableToAlias[tableName] = alias
       }
     }
   } catch (e) {
-    // Non-critical - continue with other fallbacks
+    // Non-critical
   }
   
-  // Fallback: Parse pattern_sql to extract table aliases
-  // Pattern: FROM/JOIN schema.table alias or FROM/JOIN table alias
-  const aliasFromPatternSQL: Record<string, string> = {}
-  if (suggestion.pattern_sql) {
-    // Match FROM or JOIN followed by table name and alias
-    // e.g., "FROM oz_dev.bronze_dmes_de.t_re_base b" -> alias 'b' = 't_re_base'
-    // e.g., "join oz_dev.silver_dmes_de.mbr_fndtn mf on" -> alias 'mf' = 'mbr_fndtn'
-    const tableAliasRegex = /(?:FROM|JOIN)\s+(?:\([^)]+\)|[\w.]+)\s+(\w+)(?:\s+(?:on|where|left|right|inner|outer|cross|,|\n|$))/gi
-    let match
-    while ((match = tableAliasRegex.exec(suggestion.pattern_sql)) !== null) {
-      const alias = match[1].toLowerCase()
-      // Now extract the table name - look backwards from the alias position
-      const beforeAlias = suggestion.pattern_sql.substring(0, match.index + match[0].length - match[1].length - 1)
-      const tableMatch = beforeAlias.match(/(?:FROM|JOIN)\s+(?:\([^)]*\)|(\S+))\s*$/i)
-      if (tableMatch) {
-        let tableName = tableMatch[1] || ''
-        // If it's a subquery (starts with parenthesis), skip
-        if (tableName.startsWith('(')) continue
-        // Extract just the table name from fully qualified name
-        tableName = tableName.split('.').pop() || tableName
-        if (tableName && alias && alias.length <= 3) { // Only short aliases
-          aliasFromPatternSQL[alias] = tableName.toUpperCase()
-        }
-      }
-    }
-    
-    // Simpler regex for common patterns
-    const simpleTableAliasRegex = /(?:FROM|JOIN)\s+([\w.]+)\s+(\w{1,3})(?:\s|$|,)/gi
-    while ((match = simpleTableAliasRegex.exec(suggestion.pattern_sql)) !== null) {
-      const tableFull = match[1]
-      const alias = match[2].toLowerCase()
-      const tableName = tableFull.split('.').pop() || tableFull
-      if (!aliasFromPatternSQL[alias]) {
-        aliasFromPatternSQL[alias] = tableName.toUpperCase()
-      }
-    }
-  }
+  console.log('[getChangesByTable] Aliases:', aliasFromPatternSQL, 'PatternToAlias:', patternTableToAlias)
   
-  // First pass: collect table replacements
+  // First pass: Create groups from table_replace changes
+  // Key by PATTERN table to avoid overwrites
   for (const change of changes) {
     if (change.type === 'table_replace' && change.original && change.new) {
-      const patternTable = change.original.split('.').pop() || change.original
-      const sourceTable = change.new.split('.').pop() || change.new
-      tableReplacements[sourceTable.toUpperCase()] = {
+      const patternTable = (change.original.split('.').pop() || change.original).toUpperCase()
+      const sourceTable = (change.new.split('.').pop() || change.new).toUpperCase()
+      const alias = patternTableToAlias[patternTable] || patternTable.substring(0, 1).toLowerCase()
+      
+      tableReplacements[patternTable] = {
         pattern: patternTable,
-        source: sourceTable
+        source: sourceTable,
+        alias: alias
       }
+      
+      // Create group for each pattern table
+      groups[patternTable] = {
+        alias: alias,
+        patternTable: patternTable,
+        sourceTable: sourceTable,
+        changes: []
+      }
+      
+      console.log(`[getChangesByTable] Table: ${patternTable} -> ${sourceTable} (alias: ${alias})`)
     }
   }
   
-  // Helper function to find alias for a column from pattern SQL
-  const findAliasForColumn = (columnName: string): string | null => {
+  // Helper function to find PATTERN TABLE for a column from pattern SQL
+  const findPatternTableForColumn = (columnName: string): string | null => {
     if (!suggestion.pattern_sql) return null
-    // Look for patterns like "b.COLUMN_NAME" or "alias.COLUMN_NAME" in the SQL
+    // Look for patterns like "b.COLUMN_NAME" in the pattern SQL
     const escapedCol = columnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const aliasColRegex = new RegExp(`(\\w{1,3})\\.${escapedCol}\\b`, 'i')
-    const match = suggestion.pattern_sql.match(aliasColRegex)
-    if (match) {
-      return match[1].toLowerCase()
+    const aliasColRegex = new RegExp(`(\\w{1,3})\\.${escapedCol}\\b`, 'gi')
+    let match
+    while ((match = aliasColRegex.exec(suggestion.pattern_sql)) !== null) {
+      const alias = match[1].toLowerCase()
+      const patternTable = aliasFromPatternSQL[alias]
+      if (patternTable) {
+        return patternTable
+      }
     }
     return null
   }
   
-  // Second pass: group column changes by alias
+  // Second pass: assign column changes to pattern table groups
   for (const change of changes) {
     if (change.type === 'column_replace' || (change.original && change.new && change.type !== 'table_replace')) {
       const orig = change.original || ''
       const newVal = change.new || ''
       
-      // Parse "b.ADR_STREET_1" -> alias=b, col=ADR_STREET_1
-      let alias = ''
-      let origCol = orig
-      if (orig.includes('.')) {
-        const parts = orig.split('.')
-        alias = parts[0].toLowerCase()
-        origCol = parts[parts.length - 1]
-      } else {
-        // No alias in the change - try to find it in the pattern SQL
-        origCol = orig
-        const foundAlias = findAliasForColumn(origCol)
-        if (foundAlias) {
-          alias = foundAlias
-        }
+      // Parse column names
+      let origCol = orig.includes('.') ? orig.split('.').pop() || orig : orig
+      let newCol = newVal.includes('.') ? newVal.split('.').pop() || newVal : newVal
+      let newTable = newVal.includes('.') ? newVal.split('.')[0].toUpperCase() : ''
+      
+      // Find which pattern table this column belongs to
+      let targetPatternTable: string | null = null
+      
+      // Option 1: Find in pattern SQL
+      targetPatternTable = findPatternTableForColumn(origCol)
+      
+      // Option 2: If column has alias prefix in original
+      if (!targetPatternTable && orig.includes('.')) {
+        const alias = orig.split('.')[0].toLowerCase()
+        targetPatternTable = aliasFromPatternSQL[alias] || null
       }
       
-      // Parse "RECIP_BASE.STREET_ADDR_1" or "r.STREET_ADDR_1"
-      let newTable = ''
-      let newCol = newVal
-      if (newVal.includes('.')) {
-        const parts = newVal.split('.')
-        newTable = parts[0].toUpperCase()
-        newCol = parts[parts.length - 1]
-      }
-      
-      // If we still don't have an alias, try to infer from the new table
-      if (!alias && newTable) {
-        // Check if this new table appears in any table replacement
-        for (const [sourceTable, info] of Object.entries(tableReplacements)) {
-          if (sourceTable === newTable) {
-            // Find the alias that maps to this pattern table
-            for (const [a, t] of Object.entries(aliasFromPatternSQL)) {
-              if (t.toUpperCase() === info.pattern.toUpperCase()) {
-                alias = a
-                break
-              }
-            }
+      // Option 3: Infer from which pattern table maps to the source table in 'new'
+      if (!targetPatternTable && newTable) {
+        for (const [patternTable, info] of Object.entries(tableReplacements)) {
+          if (info.source === newTable) {
+            targetPatternTable = patternTable
             break
           }
         }
       }
       
-      // Still no alias - use first available alias from pattern SQL, or default
-      if (!alias) {
-        const availableAliases = Object.keys(aliasFromPatternSQL)
-        alias = availableAliases.length > 0 ? availableAliases[0] : 'main'
-      }
-      
-      // Initialize group if needed
-      if (!groups[alias]) {
-        // First check editingAliasMap (from join_metadata via VS candidates API)
-        let patternTable = editingAliasMap.value[alias] || editingAliasMap.value[alias.toUpperCase()]
-        
-        // Then check metadata-extracted aliases
-        if (!patternTable) {
-          patternTable = aliasToPatternFromMetadata[alias] || aliasToPatternFromMetadata[alias.toUpperCase()]
-        }
-        
-        // Then check pattern SQL parsed aliases
-        if (!patternTable) {
-          patternTable = aliasFromPatternSQL[alias] || aliasFromPatternSQL[alias.toUpperCase()]
-        }
-        
-        // Fall back to table replacements from sql_changes
-        if (!patternTable && newTable) {
-          const patternInfo = tableReplacements[newTable]
-          if (patternInfo) {
-            patternTable = patternInfo.pattern
-          }
-        }
-        
-        // Final fallback - use the original column prefix if it looks like a table name
-        if (!patternTable && origCol !== orig) {
-          patternTable = orig.split('.')[0].toUpperCase()
-        }
-        
-        // If we still don't have source table, try to find it in table_replace changes
-        let sourceTableForGroup = newTable
-        if (!sourceTableForGroup) {
-          // Look through table_replace changes for this pattern table
-          for (const [srcTable, info] of Object.entries(tableReplacements)) {
-            if (patternTable && info.pattern.toUpperCase() === patternTable.toUpperCase()) {
-              sourceTableForGroup = srcTable
-              break
-            }
-          }
-        }
-        
-        // If still no source table, try to find from the suggestion's SQL
-        if (!sourceTableForGroup && suggestion.suggested_source_expression) {
-          // Look for FROM TABLE or JOIN TABLE in the SQL
-          const sql = suggestion.suggested_source_expression.toUpperCase()
-          const tableMatches = sql.match(/(?:FROM|JOIN)\s+(\w+)\s+(?:\w+\s+)?(?:ON|WHERE|LEFT|JOIN)/gi)
-          if (tableMatches && tableMatches.length > 0) {
-            // Extract first non-silver table
-            for (const match of tableMatches) {
-              const tableMatch = match.match(/(?:FROM|JOIN)\s+(\w+)/i)
-              if (tableMatch && !tableMatch[1].toLowerCase().includes('silver')) {
-                sourceTableForGroup = tableMatch[1].toUpperCase()
-                break
-              }
-            }
-          }
-        }
-        
-        groups[alias] = {
-          alias,
-          patternTable: patternTable || alias.toUpperCase(),
-          sourceTable: sourceTableForGroup || 'Unknown',
-          changes: []
+      // Add to the correct group
+      if (targetPatternTable && groups[targetPatternTable]) {
+        groups[targetPatternTable].changes.push({
+          original: orig,
+          originalColumn: origCol,
+          new: newVal,
+          newColumn: newCol,
+          newTable: newTable || groups[targetPatternTable].sourceTable
+        })
+      } else {
+        // Fallback: add to first group
+        const firstGroup = Object.values(groups)[0]
+        if (firstGroup) {
+          firstGroup.changes.push({
+            original: orig,
+            originalColumn: origCol,
+            new: newVal,
+            newColumn: newCol,
+            newTable: newTable || firstGroup.sourceTable
+          })
         }
       }
-      
-      groups[alias].changes.push({
-        original: orig,
-        originalColumn: origCol,
-        new: newVal,
-        newColumn: newCol,
-        newTable: newTable || groups[alias].sourceTable
-      })
     }
   }
   
-  // Convert to array and sort by alias
-  return Object.values(groups).sort((a, b) => a.alias.localeCompare(b.alias))
+  // If no groups were created (no table_replace changes), create a default one
+  if (Object.keys(groups).length === 0) {
+    const firstSourceTable = suggestion.suggested_source_expression?.match(/FROM\s+(\w+)/i)?.[1]?.toUpperCase() || 'Unknown'
+    groups['default'] = {
+      alias: 'main',
+      patternTable: 'Source',
+      sourceTable: firstSourceTable,
+      changes: []
+    }
+    // Add all column changes to default group
+    for (const change of changes) {
+      if (change.type !== 'table_replace') {
+        const orig = change.original || ''
+        const newVal = change.new || ''
+        groups['default'].changes.push({
+          original: orig,
+          originalColumn: orig.includes('.') ? orig.split('.').pop() || orig : orig,
+          new: newVal,
+          newColumn: newVal.includes('.') ? newVal.split('.').pop() || newVal : newVal,
+          newTable: newVal.includes('.') ? newVal.split('.')[0].toUpperCase() : ''
+        })
+      }
+    }
+  }
+  
+  console.log('[getChangesByTable] Final groups:', Object.keys(groups), 'with changes:', Object.values(groups).map(g => g.changes.length))
+  
+  // Convert to array and sort by pattern table name
+  return Object.values(groups).sort((a, b) => a.patternTable.localeCompare(b.patternTable))
 }
 
 function formatChange(change: any): string {
