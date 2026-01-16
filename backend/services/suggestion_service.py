@@ -1256,13 +1256,16 @@ LIMIT {num_results};
         self, 
         result: Dict[str, Any], 
         table_assignments: Optional[Dict[str, str]], 
-        bronze_tables: Optional[Dict[str, str]]
+        bronze_tables: Optional[Dict[str, str]],
+        valid_columns_by_table: Optional[Dict[str, set]] = None
     ) -> Dict[str, Any]:
         """
-        Inject table_replace changes based on pre-determined table assignments.
+        Inject table_replace changes and validate column usage.
         
-        This ensures table replacements are always present even if the LLM forgot them.
-        Also ensures column changes have TABLE.COLUMN format.
+        This ensures:
+        1. Table replacements are always present even if LLM forgot them
+        2. Column changes have TABLE.COLUMN format
+        3. Columns actually exist in the specified source table (if valid_columns_by_table provided)
         """
         if not table_assignments or not bronze_tables:
             return result
@@ -1270,6 +1273,10 @@ LIMIT {num_results};
         changes = result.get("changes", [])
         if changes is None:
             changes = []
+        
+        warnings = result.get("warnings", [])
+        if warnings is None:
+            warnings = []
         
         # Find existing table_replace changes
         existing_table_replaces = set()
@@ -1280,6 +1287,9 @@ LIMIT {num_results};
         
         print(f"[Inject Tables] Existing table_replace changes: {existing_table_replaces}")
         print(f"[Inject Tables] Pre-determined assignments: {table_assignments}")
+        if valid_columns_by_table:
+            for table, cols in valid_columns_by_table.items():
+                print(f"[Inject Tables] Valid columns for {table}: {list(cols)[:10]}...")
         
         # Inject missing table_replace changes
         injected = []
@@ -1295,25 +1305,60 @@ LIMIT {num_results};
         # Add injected changes at the beginning (table changes first)
         result["changes"] = injected + changes
         
-        # Also ensure column changes have TABLE.COLUMN format
+        # Validate and fix column changes
         updated_changes = []
+        invalid_column_count = 0
+        
         for change in result["changes"]:
-            if change.get("type") == "column_replace" or (change.get("original") and change.get("new")):
+            if change.get("type") == "table_replace":
+                updated_changes.append(change)
+                continue
+                
+            if change.get("type") == "column_replace" or (change.get("original") and change.get("new") and change.get("type") != "table_replace"):
                 new_val = change.get("new", "")
-                # If new value doesn't have a table prefix, try to add one
-                if new_val and "." not in new_val:
-                    # Find which source table this column likely belongs to
-                    # Look at what table was assigned
-                    for source_table in table_assignments.values():
-                        # Assume column belongs to any assigned source table
-                        # (The validation step will catch inconsistencies)
-                        change = dict(change)  # Make a copy
+                original_val = change.get("original", "")
+                pattern_table = change.get("pattern_table", "").upper()
+                
+                # Parse the new value
+                if "." in new_val:
+                    source_table = new_val.split(".")[0].upper()
+                    source_col = new_val.split(".")[-1].upper()
+                else:
+                    # If no table prefix, infer from pattern_table assignment
+                    source_col = new_val.upper()
+                    source_table = table_assignments.get(pattern_table, "")
+                    if source_table:
+                        change = dict(change)
                         change["new"] = f"{source_table}.{new_val}"
-                        print(f"[Inject Tables] Added table prefix: {new_val} -> {change['new']}")
-                        break
-            updated_changes.append(change)
+                
+                # VALIDATE: Check if this column actually exists in the source table
+                if valid_columns_by_table and source_table:
+                    valid_cols = valid_columns_by_table.get(source_table, set())
+                    if source_col not in valid_cols:
+                        # INVALID: LLM hallucinated this column!
+                        print(f"[Inject Tables] INVALID COLUMN: {source_col} does NOT exist in {source_table}")
+                        print(f"[Inject Tables] Valid columns in {source_table}: {list(valid_cols)[:20]}")
+                        
+                        # Mark as no match - keep original column, add warning
+                        change = dict(change)
+                        change["new"] = f"NO_MATCH ({source_col} not in {source_table})"
+                        change["is_invalid"] = True
+                        warnings.append(f"No match for {original_val}: Column {source_col} does not exist in {source_table}")
+                        invalid_column_count += 1
+                
+                updated_changes.append(change)
+            else:
+                updated_changes.append(change)
         
         result["changes"] = updated_changes
+        result["warnings"] = warnings
+        
+        if invalid_column_count > 0:
+            print(f"[Inject Tables] Found {invalid_column_count} invalid column references (LLM hallucinations)")
+            # Lower confidence
+            current_confidence = result.get("confidence", 0.5)
+            result["confidence"] = max(0.2, current_confidence - 0.2 * invalid_column_count)
+        
         return result
     
     # =========================================================================
@@ -1721,6 +1766,23 @@ Return ONLY valid JSON:
                 print(f"[Suggestion Service] clean_llm_json returned empty - response length: {len(response_text) if response_text else 0}")
                 print(f"[Suggestion Service] Response first 500 chars: {response_text[:500] if response_text else 'EMPTY'}")
             
+            # Build valid columns by table from vector search candidates
+            # This is used to validate LLM doesn't hallucinate column names
+            valid_columns_by_table: Dict[str, set] = {}
+            if vs_candidates_by_column:
+                for pattern_col, candidates in vs_candidates_by_column.items():
+                    for c in candidates:
+                        src_table = c.get('src_table_physical_name', '').upper()
+                        src_col = c.get('src_column_physical_name', '').upper()
+                        if src_table and src_col:
+                            if src_table not in valid_columns_by_table:
+                                valid_columns_by_table[src_table] = set()
+                            valid_columns_by_table[src_table].add(src_col)
+            
+            print(f"[LLM] Valid columns built for {len(valid_columns_by_table)} tables")
+            for table, cols in valid_columns_by_table.items():
+                print(f"[LLM]   {table}: {len(cols)} columns")
+            
             # Try multiple parsing strategies
             parse_errors = []
             
@@ -1729,8 +1791,8 @@ Return ONLY valid JSON:
                 try:
                     result = json.loads(json_str)
                     print(f"[Suggestion Service] SQL rewritten with confidence: {result.get('confidence', 0)}")
-                    # Inject table_replace changes if we have pre-determined assignments but LLM didn't include them
-                    result = self._inject_table_replacements(result, table_assignments, bronze_tables)
+                    # Inject table_replace changes and validate columns
+                    result = self._inject_table_replacements(result, table_assignments, bronze_tables, valid_columns_by_table)
                     result = self._validate_table_column_consistency(result)
                     return result
                 except json.JSONDecodeError as je:
@@ -1743,7 +1805,7 @@ Return ONLY valid JSON:
                     json_str_clean = re.sub(r'(?<!\\)\n', ' ', json_str_clean)
                     result = json.loads(json_str_clean)
                     print(f"[Suggestion Service] SQL rewritten after control char cleanup with confidence: {result.get('confidence', 0)}")
-                    result = self._inject_table_replacements(result, table_assignments, bronze_tables)
+                    result = self._inject_table_replacements(result, table_assignments, bronze_tables, valid_columns_by_table)
                     result = self._validate_table_column_consistency(result)
                     return result
                 except json.JSONDecodeError as je2:
@@ -1778,7 +1840,7 @@ Return ONLY valid JSON:
                             "confidence": 0.5,
                             "reasoning": reasoning
                         }
-                        result = self._inject_table_replacements(result, table_assignments, bronze_tables)
+                        result = self._inject_table_replacements(result, table_assignments, bronze_tables, valid_columns_by_table)
                         result = self._validate_table_column_consistency(result)
                         return result
                 except Exception as e3:
@@ -1792,7 +1854,7 @@ Return ONLY valid JSON:
                     json_str_fixed = re.sub(r'\}[^}]*$', '}', json_str_fixed)
                     result = json.loads(json_str_fixed)
                     print(f"[Suggestion Service] SQL rewritten after quote fix with confidence: {result.get('confidence', 0)}")
-                    result = self._inject_table_replacements(result, table_assignments, bronze_tables)
+                    result = self._inject_table_replacements(result, table_assignments, bronze_tables, valid_columns_by_table)
                     result = self._validate_table_column_consistency(result)
                     return result
                 except json.JSONDecodeError as je4:
