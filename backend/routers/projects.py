@@ -29,6 +29,28 @@ from backend.models.project import (
 
 router = APIRouter(prefix="/api/v4/projects", tags=["V4 Projects"])
 
+
+def decode_csv_content(content: bytes) -> str:
+    """
+    Try multiple encodings to decode CSV content.
+    
+    Handles common encoding issues like:
+    - UTF-8 (standard)
+    - UTF-8 with BOM (Excel on Mac)
+    - CP1252/Windows-1252 (Excel on Windows) - includes 0x92 smart quotes
+    - Latin-1/ISO-8859-1 (fallback for Western European)
+    """
+    encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1', 'iso-8859-1']
+    
+    for encoding in encodings:
+        try:
+            return content.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    
+    # Last resort: decode with errors='replace' to not fail
+    return content.decode('utf-8', errors='replace')
+
 # Service instances
 project_service = ProjectService()
 unmapped_fields_service = UnmappedFieldsService()
@@ -407,9 +429,9 @@ async def upload_source_fields(
         if not user_can_access_project(project, user_email, is_admin):
             raise HTTPException(status_code=403, detail="You don't have access to this project")
         
-        # Read CSV
+        # Read CSV with multi-encoding support (handles Windows Excel files with smart quotes)
         contents = await file.read()
-        decoded = contents.decode('utf-8')
+        decoded = decode_csv_content(contents)
         reader = csv.DictReader(io.StringIO(decoded))
         
         # Validate headers
