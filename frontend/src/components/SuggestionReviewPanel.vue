@@ -1290,9 +1290,10 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
   // Key by PATTERN table to avoid overwrites
   for (const change of changes) {
     if (change.type === 'table_replace' && change.original && change.new) {
-      const patternTable = (change.original.split('.').pop() || change.original).toUpperCase()
+      const patternTable = (change.pattern_table || change.original.split('.').pop() || change.original).toUpperCase()
       const sourceTable = (change.new.split('.').pop() || change.new).toUpperCase()
-      const alias = patternTableToAlias[patternTable] || patternTable.substring(0, 1).toLowerCase()
+      // Use alias from LLM if provided, otherwise fall back to parsing
+      const alias = change.alias?.toLowerCase() || patternTableToAlias[patternTable] || patternTable.substring(0, 1).toLowerCase()
       
       tableReplacements[patternTable] = {
         pattern: patternTable,
@@ -1308,13 +1309,16 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
         changes: []
       }
       
-      console.log(`[getChangesByTable] Table: ${patternTable} -> ${sourceTable} (alias: ${alias})`)
+      console.log(`[getChangesByTable] Table: ${patternTable} -> ${sourceTable} (alias: ${alias}, from LLM: ${!!change.alias})`)
     }
   }
   
-  // Helper function to find PATTERN TABLE for a column from pattern SQL
-  const findPatternTableForColumn = (columnName: string): string | null => {
-    if (!suggestion.pattern_sql) return null
+  // Helper function to find ALL PATTERN TABLES for a column from pattern SQL
+  // Returns array since a column can appear in multiple tables (e.g., b.ADR_STREET_1 AND a.ADR_STREET_1)
+  const findAllPatternTablesForColumn = (columnName: string): string[] => {
+    const foundTables: Set<string> = new Set()
+    if (!suggestion.pattern_sql) return []
+    
     // Look for patterns like "b.COLUMN_NAME" in the pattern SQL
     const escapedCol = columnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const aliasColRegex = new RegExp(`(\\w{1,3})\\.${escapedCol}\\b`, 'gi')
@@ -1322,14 +1326,28 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
     while ((match = aliasColRegex.exec(suggestion.pattern_sql)) !== null) {
       const alias = match[1].toLowerCase()
       const patternTable = aliasFromPatternSQL[alias]
-      if (patternTable) {
-        return patternTable
+      if (patternTable && groups[patternTable]) {
+        foundTables.add(patternTable)
       }
     }
-    return null
+    
+    // Also check for unaliased column in WHERE/subquery (like CDE_ADDR_USAGE in subquery)
+    // If column appears without alias, check if it's inside a subquery for a specific table
+    if (foundTables.size === 0) {
+      // Check if column appears in a subquery for any table
+      for (const [patternTable, info] of Object.entries(tableReplacements)) {
+        const subqueryRegex = new RegExp(`\\(select[^)]*${escapedCol}[^)]*from\\s+[\\w.]*${patternTable.replace(/_/g, '[_]')}[^)]*\\)`, 'gi')
+        if (subqueryRegex.test(suggestion.pattern_sql || '')) {
+          foundTables.add(patternTable)
+        }
+      }
+    }
+    
+    return Array.from(foundTables)
   }
   
   // Second pass: assign column changes to pattern table groups
+  // Now using structured data from LLM (alias, pattern_table fields) if available
   for (const change of changes) {
     if (change.type === 'column_replace' || (change.original && change.new && change.type !== 'table_replace')) {
       const orig = change.original || ''
@@ -1340,47 +1358,57 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
       let newCol = newVal.includes('.') ? newVal.split('.').pop() || newVal : newVal
       let newTable = newVal.includes('.') ? newVal.split('.')[0].toUpperCase() : ''
       
-      // Find which pattern table this column belongs to
-      let targetPatternTable: string | null = null
+      // Find target pattern table(s) for this column
+      let targetPatternTables: string[] = []
       
-      // Option 1: Find in pattern SQL
-      targetPatternTable = findPatternTableForColumn(origCol)
-      
-      // Option 2: If column has alias prefix in original
-      if (!targetPatternTable && orig.includes('.')) {
-        const alias = orig.split('.')[0].toLowerCase()
-        targetPatternTable = aliasFromPatternSQL[alias] || null
+      // BEST: Use structured data from LLM if available
+      if (change.pattern_table) {
+        const pt = change.pattern_table.toUpperCase()
+        if (groups[pt]) {
+          targetPatternTables = [pt]
+          console.log(`[getChangesByTable] Column ${origCol}: Using LLM-provided pattern_table: ${pt}`)
+        }
       }
       
-      // Option 3: Infer from which pattern table maps to the source table in 'new'
-      if (!targetPatternTable && newTable) {
+      // Option 1: If column has explicit alias prefix in original
+      if (targetPatternTables.length === 0 && orig.includes('.')) {
+        const alias = orig.split('.')[0].toLowerCase()
+        const patternTable = aliasFromPatternSQL[alias]
+        if (patternTable && groups[patternTable]) {
+          targetPatternTables = [patternTable]
+        }
+      }
+      
+      // Option 2: Find ALL occurrences in pattern SQL
+      if (targetPatternTables.length === 0) {
+        targetPatternTables = findAllPatternTablesForColumn(origCol)
+      }
+      
+      // Option 3: Infer from which pattern tables map to the source table in 'new'
+      if (targetPatternTables.length === 0 && newTable) {
         for (const [patternTable, info] of Object.entries(tableReplacements)) {
-          if (info.source === newTable) {
-            targetPatternTable = patternTable
-            break
+          if (info.source === newTable && groups[patternTable]) {
+            targetPatternTables.push(patternTable)
           }
         }
       }
       
-      // Add to the correct group
-      if (targetPatternTable && groups[targetPatternTable]) {
-        groups[targetPatternTable].changes.push({
-          original: orig,
-          originalColumn: origCol,
-          new: newVal,
-          newColumn: newCol,
-          newTable: newTable || groups[targetPatternTable].sourceTable
-        })
-      } else {
-        // Fallback: add to first group
-        const firstGroup = Object.values(groups)[0]
-        if (firstGroup) {
-          firstGroup.changes.push({
+      // Option 4: If still nothing, add to ALL groups (this column affects all tables)
+      if (targetPatternTables.length === 0) {
+        targetPatternTables = Object.keys(groups)
+      }
+      
+      console.log(`[getChangesByTable] Column ${origCol} -> ${newCol} belongs to tables: ${targetPatternTables.join(', ')}`)
+      
+      // Add to ALL matching groups
+      for (const patternTable of targetPatternTables) {
+        if (groups[patternTable]) {
+          groups[patternTable].changes.push({
             original: orig,
             originalColumn: origCol,
             new: newVal,
             newColumn: newCol,
-            newTable: newTable || firstGroup.sourceTable
+            newTable: newTable || groups[patternTable].sourceTable
           })
         }
       }
@@ -3529,4 +3557,5 @@ function formatDate(dateStr?: string): string {
   padding-left: 0.25rem;
 }
 </style>
+
 

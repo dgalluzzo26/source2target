@@ -1553,16 +1553,28 @@ SIMPLE RULES (just 5):
 
 CRITICAL: Each alias maps to ONE source table. All columns for that alias MUST come from that table.
 
+IMPORTANT: For each change, include the alias and pattern_table to help the UI display correctly.
+
 Return ONLY valid JSON:
 {{
   "rewritten_sql": "<complete rewritten SQL>",
   "changes": [
-    {{"type": "table_replace", "original": "<pattern_table>", "new": "<source_table>"}},
-    {{"type": "column_replace", "original": "<pattern_column>", "new": "<source_column>"}}
+    {{"type": "table_replace", "alias": "<alias like 'b' or 'a'>", "pattern_table": "<pattern table name>", "original": "<full pattern table path>", "new": "<source_table>"}},
+    {{"type": "column_replace", "alias": "<alias like 'b' or 'a'>", "pattern_table": "<pattern table this column belongs to>", "original": "<pattern_column>", "new": "<source_table.source_column>"}}
   ],
   "warnings": ["<only for columns with no match>"],
   "confidence": 0.0-1.0,
   "reasoning": "<brief explanation>"
+}}
+
+EXAMPLE for a SQL with aliases 'b' (T_RE_BASE) and 'a' (T_RE_MULTI_ADDRESS):
+{{
+  "changes": [
+    {{"type": "table_replace", "alias": "b", "pattern_table": "T_RE_BASE", "original": "oz_dev.bronze.t_re_base", "new": "RECIP_BASE"}},
+    {{"type": "table_replace", "alias": "a", "pattern_table": "T_RE_MULTI_ADDRESS", "original": "oz_dev.bronze.t_re_multi_address", "new": "MBR_ADDR"}},
+    {{"type": "column_replace", "alias": "b", "pattern_table": "T_RE_BASE", "original": "ADR_STREET_1", "new": "RECIP_BASE.STREET_ADDR_1"}},
+    {{"type": "column_replace", "alias": "a", "pattern_table": "T_RE_MULTI_ADDRESS", "original": "CDE_ADDR_USAGE", "new": "MBR_ADDR.ADDR_TYPE_CD"}}
+  ]
 }}"""
         else:
             # LEGACY: Complex prompt when no table assignments provided
@@ -1629,12 +1641,14 @@ RULES:
 
 CRITICAL: You CANNOT mix columns from different source tables for the same alias.
 
+IMPORTANT: For each change, include the alias and pattern_table to help the UI display correctly.
+
 Return ONLY valid JSON:
 {{
   "rewritten_sql": "<complete rewritten SQL>",
   "changes": [
-    {{"type": "table_replace", "original": "<pattern_table>", "new": "<source_table>"}},
-    {{"type": "column_replace", "original": "<pattern_column>", "new": "<source_column>"}}
+    {{"type": "table_replace", "alias": "<alias>", "pattern_table": "<pattern table name>", "original": "<pattern_table>", "new": "<source_table>"}},
+    {{"type": "column_replace", "alias": "<alias>", "pattern_table": "<pattern table>", "original": "<pattern_column>", "new": "<source_table.source_column>"}}
   ],
   "warnings": ["<only for unmatched columns>"],
   "confidence": 0.0-1.0,
@@ -1722,7 +1736,7 @@ Return ONLY valid JSON:
                 except json.JSONDecodeError as je:
                     parse_errors.append(f"Strategy 1 (direct): {str(je)}")
                     print(f"[Suggestion Service] JSON parse error (direct): {str(je)}")
-                
+                    
                 # Strategy 2: Replace all control chars with spaces
                 try:
                     json_str_clean = re.sub(r'[\x00-\x1f\x7f]', ' ', json_str)
