@@ -14,7 +14,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import functools
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from datetime import datetime
 from databricks import sql
 from databricks.sdk import WorkspaceClient
@@ -160,6 +160,160 @@ def clean_llm_json(text: str) -> str:
         result.append(char)
     
     return ''.join(result)
+
+
+# =========================================================================
+# CONSTANT EXPRESSION DETECTION: Skip vector search for SQL functions
+# =========================================================================
+
+# SQL functions that don't need source mapping - they're computed values
+SQL_CONSTANT_FUNCTIONS = {
+    # Date/Time functions
+    'CURRENT_DATE', 'CURRENT_TIMESTAMP', 'CURRENT_TIME', 'NOW', 'GETDATE', 
+    'SYSDATE', 'SYSTIMESTAMP', 'LOCALTIMESTAMP', 'LOCALTIME',
+    'DATE', 'DATEADD', 'DATEDIFF', 'DATE_TRUNC', 'DATE_ADD', 'DATE_SUB',
+    'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND',
+    'TO_DATE', 'TO_TIMESTAMP', 'TIMESTAMP',
+    # Identity/UUID functions
+    'UUID', 'NEWID', 'GEN_RANDOM_UUID', 'UUID_STRING', 'RANDOM_UUID',
+    'NEXTVAL', 'CURRVAL', 'IDENTITY',
+    # User context functions
+    'CURRENT_USER', 'SESSION_USER', 'USER', 'SYSTEM_USER',
+    # Constant/literal markers
+    'NULL', 'TRUE', 'FALSE',
+    # Conversion functions often used for constants
+    'CAST', 'CONVERT', 'COALESCE',
+}
+
+def is_constant_expression(expression: str, column_name: str = None) -> bool:
+    """
+    Detect if an expression is a SQL function/constant that doesn't need source mapping.
+    
+    Examples that return True:
+    - CURRENT_DATE
+    - CURRENT_TIMESTAMP()
+    - GETDATE()
+    - UUID()
+    - 'literal string'
+    - 123 (numeric literal)
+    - NULL
+    
+    Examples that return False:
+    - b.COLUMN_NAME
+    - table.column
+    - INITCAP(b.NAME) -- this wraps a column, still needs mapping
+    """
+    if not expression:
+        return False
+    
+    expr_upper = expression.strip().upper()
+    
+    # Check for literal strings (quoted values)
+    if (expr_upper.startswith("'") and expr_upper.endswith("'")) or \
+       (expr_upper.startswith('"') and expr_upper.endswith('"')):
+        return True
+    
+    # Check for numeric literals
+    if re.match(r'^-?\d+\.?\d*$', expr_upper):
+        return True
+    
+    # Check for NULL
+    if expr_upper == 'NULL':
+        return True
+    
+    # Extract function name if it's a function call
+    func_match = re.match(r'^(\w+)\s*\(', expr_upper)
+    if func_match:
+        func_name = func_match.group(1)
+        # Check if this function is in our constant list AND doesn't contain table.column references
+        if func_name in SQL_CONSTANT_FUNCTIONS:
+            # Check if the function arguments contain table.column references
+            # e.g., COALESCE(b.COL, 'default') should NOT be constant
+            # but COALESCE(NULL, CURRENT_DATE) should be constant
+            if re.search(r'\w+\.\w+', expression):
+                return False  # Contains table.column reference
+            return True
+    
+    # Check for bare function names (without parentheses)
+    if expr_upper in SQL_CONSTANT_FUNCTIONS:
+        return True
+    
+    # Check for functions with () - e.g., CURRENT_DATE()
+    bare_name = re.sub(r'\(\)$', '', expr_upper)
+    if bare_name in SQL_CONSTANT_FUNCTIONS:
+        return True
+    
+    return False
+
+
+def extract_constant_columns_from_sql(pattern_sql: str) -> Set[str]:
+    """
+    Parse pattern SQL to find output columns that are constant expressions.
+    
+    Returns:
+        Set of column names (the AS alias) that are constant expressions.
+    """
+    if not pattern_sql:
+        return set()
+    
+    constant_columns = set()
+    
+    # Normalize SQL
+    sql_normalized = pattern_sql.replace('\n', ' ').replace('\t', ' ')
+    sql_normalized = re.sub(r'\s+', ' ', sql_normalized)
+    
+    # Find SELECT ... AS column patterns
+    # Pattern: expression AS column_name
+    # Need to handle: CURRENT_DATE AS DATE_COL, UUID() AS ID, 'constant' AS CONST_COL
+    
+    # Split by UNION to handle each SELECT
+    union_parts = re.split(r'\bUNION\s+(?:ALL\s+|DISTINCT\s+)?', sql_normalized, flags=re.IGNORECASE)
+    
+    for part in union_parts:
+        # Find the SELECT clause (between SELECT and FROM)
+        select_match = re.search(r'\bSELECT\s+(.*?)\s+FROM\b', part, re.IGNORECASE | re.DOTALL)
+        if not select_match:
+            continue
+        
+        select_clause = select_match.group(1)
+        
+        # Remove DISTINCT keyword if present
+        select_clause = re.sub(r'^\s*DISTINCT\s+', '', select_clause, flags=re.IGNORECASE)
+        
+        # Split by comma (but not commas inside parentheses)
+        # Simple approach: split and check parentheses balance
+        columns = []
+        current = ""
+        paren_depth = 0
+        
+        for char in select_clause:
+            if char == '(':
+                paren_depth += 1
+                current += char
+            elif char == ')':
+                paren_depth -= 1
+                current += char
+            elif char == ',' and paren_depth == 0:
+                columns.append(current.strip())
+                current = ""
+            else:
+                current += char
+        if current.strip():
+            columns.append(current.strip())
+        
+        # Check each column expression
+        for col_expr in columns:
+            # Find the AS alias
+            as_match = re.search(r'\s+AS\s+(\w+)\s*$', col_expr, re.IGNORECASE)
+            if as_match:
+                alias = as_match.group(1).upper()
+                expression = col_expr[:as_match.start()].strip()
+                
+                if is_constant_expression(expression, alias):
+                    constant_columns.add(alias)
+                    print(f"[Constant Detection] Column '{alias}' is constant: {expression}")
+    
+    return constant_columns
 
 
 # =========================================================================
@@ -722,8 +876,18 @@ class SuggestionService:
         print(f"[VS Parallel] index_name: {index_name}")
         print(f"[VS Parallel] project_id: {project_id}")
         print(f"[VS Parallel] num_columns: {len(columns_to_search)}")
+        
+        # Separate constant columns from searchable columns
+        searchable_columns = []
+        constant_columns_list = []
         for i, col in enumerate(columns_to_search):
-            print(f"[VS Parallel] col[{i}]: column_name={col.get('column_name')}, role={col.get('role')}, desc={col.get('description', '')[:80]}...")
+            is_constant = col.get('is_constant', False)
+            if is_constant:
+                print(f"[VS Parallel] col[{i}]: column_name={col.get('column_name')} - CONSTANT (skip VS, 100% match)")
+                constant_columns_list.append(col)
+            else:
+                print(f"[VS Parallel] col[{i}]: column_name={col.get('column_name')}, role={col.get('role')}, desc={col.get('description', '')[:80]}...")
+                searchable_columns.append(col)
         
         all_matches = []
         seen_ids = set()
@@ -732,6 +896,9 @@ class SuggestionService:
         self._last_parallel_searches = []
         # Store full results per column for VS candidates feature
         self._last_parallel_search = {}
+        
+        # Track constant columns with synthetic 100% match
+        self._constant_columns_in_search = constant_columns_list
         
         def search_column(col_info: Dict[str, str]) -> List[Dict[str, Any]]:
             """Search for a single column."""
@@ -749,9 +916,13 @@ class SuggestionService:
                 "results": results
             }
         
-        # Execute searches in parallel using ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=min(len(columns_to_search), 5)) as executor:
-            futures = {executor.submit(search_column, col): col for col in columns_to_search}
+        # Execute searches in parallel using ThreadPoolExecutor (only for non-constant columns)
+        if not searchable_columns:
+            print(f"[VS Parallel] All columns are constants - no vector search needed")
+            return all_matches
+        
+        with ThreadPoolExecutor(max_workers=min(len(searchable_columns), 5)) as executor:
+            futures = {executor.submit(search_column, col): col for col in searchable_columns}
             
             for future in as_completed(futures):
                 col_info = futures[future]
@@ -1068,7 +1239,15 @@ LIMIT {num_results};
         
         # Extract columns to map from join_metadata for PARALLEL vector search
         columns_to_map = []
+        constant_columns = set()  # Columns using SQL functions that don't need mapping
         search_terms = [tgt_comments, pattern.get('source_descriptions', '')]
+        
+        # Detect constant expressions in the pattern SQL (e.g., CURRENT_DATE AS CREATE_DT)
+        pattern_sql = pattern.get('pattern_sql', '') or pattern.get('sql_expression', '')
+        if pattern_sql:
+            constant_columns = extract_constant_columns_from_sql(pattern_sql)
+            if constant_columns:
+                print(f"[Suggestion Service] _process_pattern: Detected {len(constant_columns)} constant columns: {constant_columns}")
         
         join_metadata_str = pattern.get('join_metadata')
         print(f"[Suggestion Service] _process_pattern: join_metadata type: {type(join_metadata_str)}, value: {str(join_metadata_str)[:200] if join_metadata_str else 'None'}")
@@ -1086,16 +1265,30 @@ LIMIT {num_results};
                     desc = col.get('description', '')
                     orig_col = col.get('originalColumn', '')
                     role = col.get('role', '')
+                    
+                    # Constant columns (SQL functions) don't need vector search - they get 100% match
+                    if orig_col.upper() in constant_columns:
+                        print(f"[Suggestion Service] _process_pattern:   -> CONSTANT {role}: {orig_col} (SQL function - 100% match, no VS needed)")
+                        # Still add to columns_to_map but mark as constant for later handling
+                        columns_to_map.append({
+                            'description': desc if desc else orig_col,
+                            'column_name': orig_col,
+                            'role': role,
+                            'is_constant': True  # Flag for special handling
+                        })
+                        continue
+                    
                     print(f"[Suggestion Service] _process_pattern:   -> {role}: {orig_col} - {desc[:50] if desc else 'no desc'}...")
                     
                     # Build columns_to_map for parallel vector search
                     columns_to_map.append({
                         'description': desc if desc else orig_col,
                         'column_name': orig_col,
-                        'role': role
+                        'role': role,
+                        'is_constant': False
                     })
                     
-                    # Also build combined search_terms for fallback
+                    # Also build combined search_terms for fallback (only for non-constant columns)
                     if desc:
                         search_terms.append(desc)
                     if orig_col:
@@ -1237,7 +1430,8 @@ LIMIT {num_results};
                 tgt_column_physical,
                 vs_candidates_by_column=filtered_candidates if filtered_candidates else None,
                 table_assignments=table_assignments if table_assignments else None,
-                bronze_tables=bronze_tables if bronze_tables else None
+                bronze_tables=bronze_tables if bronze_tables else None,
+                constant_columns=constant_columns if constant_columns else None
             )
             print(f"[Suggestion Service] _process_pattern: LLM rewrite: {time.time() - llm_start:.2f}s")
             result["rewrite_result"] = rewrite_result
@@ -1245,6 +1439,7 @@ LIMIT {num_results};
             # Store table assignments in result for debugging
             result["table_assignments"] = table_assignments
             result["bronze_tables"] = bronze_tables
+            result["constant_columns"] = list(constant_columns) if constant_columns else []
         
         return result
     
@@ -1494,6 +1689,69 @@ LIMIT {num_results};
         
         return result
     
+    def _add_constant_column_changes(
+        self, 
+        result: Dict[str, Any], 
+        constant_columns: Set[str]
+    ) -> Dict[str, Any]:
+        """
+        Add change entries for constant columns (SQL functions like CURRENT_DATE).
+        
+        Constant columns:
+        - Get 100% match confidence for their portion
+        - Are marked as "constant_preserved" in changes
+        - Boost overall confidence when present
+        
+        Args:
+            result: The LLM rewrite result
+            constant_columns: Set of column names that are SQL functions
+            
+        Returns:
+            Updated result with constant column changes added
+        """
+        if not constant_columns:
+            return result
+        
+        changes = result.get("changes", [])
+        
+        # Add constant_preserved changes for each constant column
+        for col_name in constant_columns:
+            changes.append({
+                "type": "constant_preserved",
+                "original": col_name,
+                "new": f"(SQL function - preserved as-is)",
+                "confidence": 1.0,
+                "is_constant": True
+            })
+            print(f"[Constant Columns] Added preserved change for: {col_name}")
+        
+        result["changes"] = changes
+        
+        # Boost confidence if we have constant columns (they're guaranteed correct)
+        # If ALL columns are constant, set confidence to 1.0
+        non_constant_changes = [c for c in changes if c.get("type") not in ("constant_preserved",)]
+        total_changes = len(changes)
+        constant_count = len(constant_columns)
+        
+        if total_changes > 0 and constant_count > 0:
+            current_confidence = result.get("confidence", 0.5)
+            
+            # Calculate boost: constant columns are 100% confident
+            # Blend with LLM confidence for non-constant columns
+            if len(non_constant_changes) == 0:
+                # All columns are constant - 100% confidence
+                result["confidence"] = 1.0
+                result["reasoning"] = (result.get("reasoning", "") + 
+                    f" All {constant_count} columns are SQL functions (CURRENT_DATE, UUID, etc.) - auto-approved.").strip()
+            else:
+                # Blend: constant columns boost the overall confidence
+                constant_weight = constant_count / (constant_count + len(non_constant_changes))
+                blended_confidence = (1.0 * constant_weight) + (current_confidence * (1 - constant_weight))
+                result["confidence"] = min(1.0, blended_confidence)
+                print(f"[Constant Columns] Boosted confidence from {current_confidence:.2f} to {result['confidence']:.2f}")
+        
+        return result
+    
     # =========================================================================
     # LLM: Rewrite SQL with user's source columns
     # =========================================================================
@@ -1509,7 +1767,8 @@ LIMIT {num_results};
         vs_candidates_by_column: Dict[str, List[Dict[str, Any]]] = None,
         min_match_score: float = 0.004,
         table_assignments: Dict[str, str] = None,
-        bronze_tables: Dict[str, str] = None
+        bronze_tables: Dict[str, str] = None,
+        constant_columns: Set[str] = None
     ) -> Dict[str, Any]:
         """
         Use LLM to rewrite pattern SQL with user's source columns.
@@ -1519,6 +1778,7 @@ LIMIT {num_results};
             min_match_score: Minimum vector search score to include (default 0.004)
             table_assignments: PRE-DETERMINED map of pattern_table -> source_table
             bronze_tables: Map of alias -> pattern_table from SQL parsing
+            constant_columns: Set of column names that are SQL functions (preserve as-is)
         
         Returns rewritten SQL, changes made, and confidence.
         """
@@ -1591,6 +1851,13 @@ LIMIT {num_results};
                     columns_text += "  (No matching columns found in this table)\n"
                 columns_text += "\n"
             
+            # Build constant columns text if any
+            constant_text = ""
+            if constant_columns and len(constant_columns) > 0:
+                constant_text = "\nCONSTANT EXPRESSIONS (DO NOT MODIFY - these are SQL functions, not source columns):\n"
+                for col in sorted(constant_columns):
+                    constant_text += f"- {col} (preserve the original expression exactly)\n"
+            
             prompt = f"""You are performing column substitution on a SQL template. Table assignments are ALREADY DECIDED.
 
 TARGET COLUMN: {target_column}
@@ -1606,13 +1873,14 @@ ORIGINAL SQL:
 
 SILVER TABLES (CONSTANT - DO NOT MODIFY):
 {silver_text}
-
-SIMPLE RULES (just 5):
+{constant_text}
+SIMPLE RULES (just 6):
 1. Replace each pattern table with its assigned source table (as shown in TABLE ASSIGNMENTS above)
 2. For each alias, ONLY use columns from the assigned source table
 3. Keep silver tables unchanged (anything with "silver" in the path)
 4. Keep all SQL structure, JOINs, WHERE conditions, UNION, transformations exactly as-is
 5. If no column match exists in the assigned table, keep original and add warning
+6. PRESERVE constant expressions like CURRENT_DATE, UUID(), GETDATE() - do NOT try to map them to source columns
 
 CRITICAL: Each alias maps to ONE source table. All columns for that alias MUST come from that table.
 
@@ -1736,6 +2004,7 @@ Return ONLY valid JSON:
             "silver_tables": silver_text,
             "table_assignments": table_assignments,  # NEW: Pre-determined table mappings
             "bronze_tables": bronze_tables,          # NEW: Alias -> pattern table
+            "constant_columns": list(constant_columns) if constant_columns else [],  # SQL functions preserved as-is
             "prompt_type": "simplified" if (table_assignments and bronze_tables) else "legacy",
             "full_prompt": prompt
         }
@@ -1812,6 +2081,7 @@ Return ONLY valid JSON:
                     # Inject table_replace changes and validate columns
                     result = self._inject_table_replacements(result, table_assignments, bronze_tables, valid_columns_by_table)
                     result = self._validate_table_column_consistency(result)
+                    result = self._add_constant_column_changes(result, constant_columns)
                     return result
                 except json.JSONDecodeError as je:
                     parse_errors.append(f"Strategy 1 (direct): {str(je)}")
@@ -1825,6 +2095,7 @@ Return ONLY valid JSON:
                     print(f"[Suggestion Service] SQL rewritten after control char cleanup with confidence: {result.get('confidence', 0)}")
                     result = self._inject_table_replacements(result, table_assignments, bronze_tables, valid_columns_by_table)
                     result = self._validate_table_column_consistency(result)
+                    result = self._add_constant_column_changes(result, constant_columns)
                     return result
                 except json.JSONDecodeError as je2:
                     parse_errors.append(f"Strategy 2 (control chars): {str(je2)}")
@@ -1860,6 +2131,7 @@ Return ONLY valid JSON:
                         }
                         result = self._inject_table_replacements(result, table_assignments, bronze_tables, valid_columns_by_table)
                         result = self._validate_table_column_consistency(result)
+                        result = self._add_constant_column_changes(result, constant_columns)
                         return result
                 except Exception as e3:
                     parse_errors.append(f"Strategy 3 (regex extract): {str(e3)}")
@@ -1874,6 +2146,7 @@ Return ONLY valid JSON:
                     print(f"[Suggestion Service] SQL rewritten after quote fix with confidence: {result.get('confidence', 0)}")
                     result = self._inject_table_replacements(result, table_assignments, bronze_tables, valid_columns_by_table)
                     result = self._validate_table_column_consistency(result)
+                    result = self._add_constant_column_changes(result, constant_columns)
                     return result
                 except json.JSONDecodeError as je4:
                     parse_errors.append(f"Strategy 4 (quote fix): {str(je4)}")
@@ -2283,7 +2556,14 @@ RULES:
                         if not is_special_case:
                             # Extract columns to map from join_metadata for PARALLEL vector search
                             columns_to_map = []
+                            constant_columns = set()  # Columns using SQL functions that don't need mapping
                             search_terms = [tgt_comments, pattern.get('source_descriptions', '')]
+                            
+                            # Detect constant expressions in the pattern SQL (e.g., CURRENT_DATE AS CREATE_DT)
+                            if pattern_sql:
+                                constant_columns = extract_constant_columns_from_sql(pattern_sql)
+                                if constant_columns:
+                                    print(f"[Suggestion Service] BATCH: Detected {len(constant_columns)} constant columns: {constant_columns}")
                             
                             join_metadata_str = pattern.get('join_metadata')
                             print(f"[Suggestion Service] BATCH: join_metadata exists: {bool(join_metadata_str)}, type: {type(join_metadata_str)}")
@@ -2305,16 +2585,29 @@ RULES:
                                         desc = col.get('description', '')
                                         orig_col = col.get('originalColumn', '')
                                         role = col.get('role', '')
+                                        
+                                        # Constant columns (SQL functions) don't need vector search - they get 100% match
+                                        if orig_col.upper() in constant_columns:
+                                            print(f"[Suggestion Service]   -> CONSTANT {role}: {orig_col} (SQL function - 100% match, no VS needed)")
+                                            columns_to_map.append({
+                                                'description': desc if desc else orig_col,
+                                                'column_name': orig_col,
+                                                'role': role,
+                                                'is_constant': True
+                                            })
+                                            continue
+                                        
                                         print(f"[Suggestion Service]   -> {role}: {orig_col} - {desc}")
                                         
                                         # Build columns_to_map for parallel vector search
                                         columns_to_map.append({
                                             'description': desc if desc else orig_col,
                                             'column_name': orig_col,
-                                            'role': role
+                                            'role': role,
+                                            'is_constant': False
                                         })
                                         
-                                        # Also build combined search_terms for fallback
+                                        # Also build combined search_terms for fallback (only non-constant)
                                         if desc:
                                             search_terms.append(desc)
                                         if orig_col:
@@ -2470,7 +2763,8 @@ RULES:
                                     tgt_column_physical,
                                     vs_candidates_by_column=filtered_vs_candidates if filtered_vs_candidates else None,
                                     table_assignments=table_assignments,
-                                    bronze_tables=bronze_tables
+                                    bronze_tables=bronze_tables,
+                                    constant_columns=constant_columns if constant_columns else None
                                 )
                                 print(f"[Suggestion Service]   -> LLM rewrite: {time.time() - llm_start:.2f}s")
                                 
@@ -2840,7 +3134,15 @@ RULES:
                         # Step 2: Find matching source columns (only for regular patterns)
                         # Extract columns to map for PARALLEL vector search
                         columns_to_map = []
+                        constant_columns = set()  # Columns using SQL functions that don't need mapping
                         search_terms = [tgt_comments, pattern.get('source_descriptions', '')]
+                        
+                        # Detect constant expressions in the pattern SQL (e.g., CURRENT_DATE AS CREATE_DT)
+                        regen_pattern_sql = pattern.get('source_expression', '')
+                        if regen_pattern_sql:
+                            constant_columns = extract_constant_columns_from_sql(regen_pattern_sql)
+                            if constant_columns:
+                                print(f"[Suggestion Service] REGENERATE: Detected {len(constant_columns)} constant columns: {constant_columns}")
                         
                         # Extract column descriptions from join_metadata for parallel search
                         print(f"[Suggestion Service] REGENERATE: join_metadata exists: {bool(join_metadata_str)}, type: {type(join_metadata_str)}")
@@ -2853,14 +3155,26 @@ RULES:
                                     orig_col = col.get('originalColumn', '')
                                     role = col.get('role', '')
                                     
+                                    # Constant columns (SQL functions) don't need vector search - they get 100% match
+                                    if orig_col.upper() in constant_columns:
+                                        print(f"[Suggestion Service]   -> CONSTANT {role}: {orig_col} (SQL function - 100% match, no VS needed)")
+                                        columns_to_map.append({
+                                            'description': desc if desc else orig_col,
+                                            'column_name': orig_col,
+                                            'role': role,
+                                            'is_constant': True
+                                        })
+                                        continue
+                                    
                                     # Build columns_to_map for parallel vector search
                                     columns_to_map.append({
                                         'description': desc if desc else orig_col,
                                         'column_name': orig_col,
-                                        'role': role
+                                        'role': role,
+                                        'is_constant': False
                                     })
                                     
-                                    # Also build combined search_terms for fallback
+                                    # Also build combined search_terms for fallback (only non-constant)
                                     if desc:
                                         search_terms.append(desc)
                                     if orig_col:
@@ -3005,7 +3319,8 @@ RULES:
                                 tgt_column_physical,
                                 vs_candidates_by_column=filtered_vs_candidates if filtered_vs_candidates else None,
                                 table_assignments=table_assignments,
-                                bronze_tables=bronze_tables
+                                bronze_tables=bronze_tables,
+                                constant_columns=constant_columns if constant_columns else None
                             )
                             
                             # Extract pattern columns/tables for warning filtering
