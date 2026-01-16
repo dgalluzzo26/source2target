@@ -895,23 +895,36 @@ const highlightedOriginalSQL = computed(() => {
   let html = escapeHtml(originalSQL)
   
   // Get successfully changed fields (from AI changes)
+  // Only include changes that were actually successful (not NO_MATCH or is_invalid)
   const changes = getChanges(editingSuggestion.value)
   const changedOriginals = new Set<string>()
+  const failedOriginals = new Set<string>()
   
   for (const change of changes) {
     if (change.original) {
+      // Check if this change was successful or failed
+      const newValue = change.new || ''
+      const isInvalid = change.is_invalid === true || newValue.includes('NO_MATCH')
+      
       // Extract just the column/table name (remove alias prefix like "b." or "a.")
       const parts = change.original.split('.')
       const name = parts[parts.length - 1]
-      changedOriginals.add(name.toUpperCase())
-      // Also add the full reference
-      changedOriginals.add(change.original.toUpperCase())
+      
+      if (isInvalid) {
+        // Failed change - add to warning set
+        failedOriginals.add(name.toUpperCase())
+        failedOriginals.add(change.original.toUpperCase())
+      } else {
+        changedOriginals.add(name.toUpperCase())
+        // Also add the full reference
+        changedOriginals.add(change.original.toUpperCase())
+      }
     }
   }
   
   // Get warning fields (couldn't be changed)
   const warnings = problemFieldsInSQL.value
-  const warningSet = new Set(warnings.map(w => w.toUpperCase()))
+  const warningSet = new Set([...warnings.map(w => w.toUpperCase()), ...failedOriginals])
   
   // First, highlight WARNING fields (couldn't match) in yellow/red - longest first
   const sortedWarnings = [...warningSet].sort((a, b) => b.length - a.length)
