@@ -894,52 +894,84 @@ const highlightedOriginalSQL = computed(() => {
   const originalSQL = editingSuggestion.value.pattern_sql
   let html = escapeHtml(originalSQL)
   
-  // Get successfully changed fields (from AI changes)
-  // Only include changes that were actually successful (not NO_MATCH or is_invalid)
+  // Get changes with their alias context - we need to match alias.column patterns precisely
   const changes = getChanges(editingSuggestion.value)
-  const changedOriginals = new Set<string>()
-  const failedOriginals = new Set<string>()
+  
+  // Track alias-qualified patterns separately from bare column names
+  // Key: "alias.COLUMN" or just "COLUMN", Value: { success: boolean }
+  const changesByAliasColumn = new Map<string, boolean>()
+  const changesByBareColumn = new Map<string, boolean>()
   
   for (const change of changes) {
     if (change.original) {
-      // Check if this change was successful or failed
       const newValue = change.new || ''
-      const isInvalid = change.is_invalid === true || newValue.includes('NO_MATCH')
+      const isSuccess = change.is_invalid !== true && !newValue.includes('NO_MATCH')
       
-      // Extract just the column/table name (remove alias prefix like "b." or "a.")
+      // Check if the change has an alias (from the change object)
+      const alias = change.alias || ''
       const parts = change.original.split('.')
-      const name = parts[parts.length - 1]
+      const bareColumn = parts[parts.length - 1].toUpperCase()
       
-      if (isInvalid) {
-        // Failed change - add to warning set
-        failedOriginals.add(name.toUpperCase())
-        failedOriginals.add(change.original.toUpperCase())
-      } else {
-        changedOriginals.add(name.toUpperCase())
-        // Also add the full reference
-        changedOriginals.add(change.original.toUpperCase())
+      if (alias) {
+        // We have explicit alias info - use it
+        const key = `${alias.toLowerCase()}.${bareColumn}`
+        changesByAliasColumn.set(key, isSuccess)
+      } else if (parts.length > 1) {
+        // The original itself has alias prefix like "b.SAK_RECIP"
+        const aliasFromOriginal = parts[0].toLowerCase()
+        const key = `${aliasFromOriginal}.${bareColumn}`
+        changesByAliasColumn.set(key, isSuccess)
+      }
+      
+      // Also track bare column - but only set to true if ANY instance succeeded
+      // and false only if ALL instances failed
+      const existing = changesByBareColumn.get(bareColumn)
+      if (existing === undefined) {
+        changesByBareColumn.set(bareColumn, isSuccess)
+      } else if (isSuccess) {
+        changesByBareColumn.set(bareColumn, true) // At least one succeeded
       }
     }
   }
   
-  // Get warning fields (couldn't be changed)
+  // Get warning fields from problemFieldsInSQL
   const warnings = problemFieldsInSQL.value
-  const warningSet = new Set([...warnings.map(w => w.toUpperCase()), ...failedOriginals])
+  const warningSet = new Set(warnings.map(w => w.toUpperCase()))
   
-  // First, highlight WARNING fields (couldn't match) in yellow/red - longest first
-  const sortedWarnings = [...warningSet].sort((a, b) => b.length - a.length)
-  for (const field of sortedWarnings) {
-    const regex = new RegExp(`\\b(${escapeRegExp(field)})\\b`, 'gi')
-    html = html.replace(regex, '<mark class="original-no-match">$1</mark>')
+  // Strategy: Replace alias.column patterns FIRST (most specific), then bare columns
+  // This ensures b.SAK_RECIP and a.SAK_RECIP can have different highlighting
+  
+  // Step 1: Highlight alias.column patterns (e.g., b.SAK_RECIP, a.SAK_RECIP)
+  const aliasPatterns = [...changesByAliasColumn.entries()].sort((a, b) => b[0].length - a[0].length)
+  for (const [pattern, isSuccess] of aliasPatterns) {
+    const cssClass = isSuccess ? 'original-changed' : 'original-no-match'
+    // Match alias.column pattern (case insensitive for alias and column)
+    const regex = new RegExp(`\\b(${escapeRegExp(pattern)})\\b`, 'gi')
+    html = html.replace(regex, `<mark class="${cssClass}">$1</mark>`)
   }
   
-  // Then highlight CHANGED fields in blue - longest first
-  const sortedChanged = [...changedOriginals].sort((a, b) => b.length - a.length)
-  for (const field of sortedChanged) {
-    // Skip if already marked as warning
-    if (warningSet.has(field.toUpperCase())) continue
-    const regex = new RegExp(`\\b(${escapeRegExp(field)})\\b`, 'gi')
-    html = html.replace(regex, '<mark class="original-changed">$1</mark>')
+  // Step 2: Highlight remaining bare column references not yet marked
+  // Only for columns that don't have alias-qualified patterns in the SQL
+  const bareColumns = [...changesByBareColumn.entries()].sort((a, b) => b[0].length - a[0].length)
+  for (const [column, isSuccess] of bareColumns) {
+    // Skip if in warning set
+    if (warningSet.has(column)) continue
+    // Only match if not already inside a <mark> tag (avoid double-marking)
+    const cssClass = isSuccess ? 'original-changed' : 'original-no-match'
+    // Match bare column only if not preceded by a dot and letter (already part of alias.column)
+    const regex = new RegExp(`(?<![a-zA-Z]\\.)(\\b${escapeRegExp(column)}\\b)(?![^<]*<\\/mark>)`, 'gi')
+    html = html.replace(regex, `<mark class="${cssClass}">$1</mark>`)
+  }
+  
+  // Step 3: Highlight table names from table_replace changes
+  for (const change of changes) {
+    if (change.type === 'table_replace' && change.original) {
+      // Extract just the table name from fully qualified path
+      const parts = change.original.split('.')
+      const tableName = parts[parts.length - 1].toUpperCase()
+      const regex = new RegExp(`\\b(${escapeRegExp(tableName)})\\b`, 'gi')
+      html = html.replace(regex, '<mark class="original-changed">$1</mark>')
+    }
   }
   
   // Highlight SQL keywords
