@@ -178,26 +178,30 @@ def extract_bronze_tables_from_sql(pattern_sql: str) -> Dict[str, str]:
     
     bronze_tables = {}
     
-    # Patterns to match table references with aliases:
-    # 1. FROM schema.table alias (e.g., "FROM oz_dev.bronze_dmes_de.t_re_base b")
-    # 2. JOIN schema.table alias ON (e.g., "join oz_dev.silver_dmes_de.mbr_fndtn mf on")
-    # 3. (SELECT * FROM schema.table WHERE ...) alias (subquery)
-    
     # Normalize SQL for easier parsing
     sql_normalized = pattern_sql.replace('\n', ' ').replace('\t', ' ')
     sql_normalized = re.sub(r'\s+', ' ', sql_normalized)
     sql_upper = sql_normalized.upper()
     
+    print(f"[Table Extract] Parsing SQL: {sql_upper[:200]}...")
+    
     # Pattern 1: Direct table references - "FROM/JOIN schema.table alias"
-    # Match: FROM|JOIN schema.table alias (where alias is a word not a keyword)
-    table_pattern = r'(?:FROM|JOIN)\s+([\w\.]+)\s+(\w+)(?:\s+(?:ON|WHERE|LEFT|RIGHT|INNER|OUTER|JOIN|,|\)))'
+    # More flexible: FROM schema.table alias (anything after alias that's not alphanumeric)
+    # e.g., "FROM oz_dev.bronze_dmes_de.t_re_base b join" or "FROM table b LEFT JOIN"
+    table_pattern = r'(?:FROM|JOIN)\s+([\w\.]+)\s+(\w+)\b'
     
     for match in re.finditer(table_pattern, sql_upper):
         full_table = match.group(1)
         alias = match.group(2).lower()
         
         # Skip keywords that look like aliases
-        if alias in ('on', 'where', 'left', 'right', 'inner', 'outer', 'join', 'and', 'or', 'as', 'select'):
+        keywords = ('on', 'where', 'left', 'right', 'inner', 'outer', 'join', 'and', 'or', 
+                   'as', 'select', 'distinct', 'union', 'group', 'order', 'having', 'limit')
+        if alias in keywords:
+            continue
+        
+        # Skip if table looks like a subquery marker
+        if full_table.startswith('(') or full_table == 'SELECT':
             continue
         
         # Check if this is a bronze table (not silver)
@@ -207,14 +211,17 @@ def extract_bronze_tables_from_sql(pattern_sql: str) -> Dict[str, str]:
             bronze_tables[alias] = table_name
             print(f"[Table Extract] Found bronze table: {table_name} AS {alias}")
     
-    # Pattern 2: Subqueries - "(SELECT * FROM schema.table WHERE ...) alias"
-    subquery_pattern = r'\(\s*SELECT\s+.*?\s+FROM\s+([\w\.]+)\s+.*?\)\s*(\w+)'
+    # Pattern 2: Subqueries - "(SELECT ... FROM schema.table ...)alias" or "(...) alias"
+    # Handle: (select * from oz_dev.bronze_dmes_de.t_re_multi_address where ...)a
+    # The alias can be directly after ) or with a space
+    subquery_pattern = r'\(\s*SELECT\s+[^)]*FROM\s+([\w\.]+)[^)]*\)\s*(\w+)'
     
-    for match in re.finditer(subquery_pattern, sql_upper, re.IGNORECASE | re.DOTALL):
+    for match in re.finditer(subquery_pattern, sql_upper):
         full_table = match.group(1)
         alias = match.group(2).lower()
         
-        if alias in ('on', 'where', 'left', 'right', 'inner', 'outer', 'join', 'and', 'or', 'as'):
+        keywords = ('on', 'where', 'left', 'right', 'inner', 'outer', 'join', 'and', 'or', 'as')
+        if alias in keywords:
             continue
             
         if 'SILVER' not in full_table:
@@ -222,6 +229,36 @@ def extract_bronze_tables_from_sql(pattern_sql: str) -> Dict[str, str]:
             if alias not in bronze_tables:  # Don't overwrite
                 bronze_tables[alias] = table_name
                 print(f"[Table Extract] Found subquery bronze table: {table_name} AS {alias}")
+    
+    # Pattern 3: More aggressive subquery matching for edge cases
+    # Look for )alias pattern (alias directly after closing paren)
+    # e.g., "...CURR_REC_IND=1)a" 
+    paren_alias_pattern = r'\)\s*([a-z])\s*(?:JOIN|LEFT|ON|\s)'
+    for match in re.finditer(paren_alias_pattern, sql_upper, re.IGNORECASE):
+        alias = match.group(1).lower()
+        if alias not in bronze_tables:
+            # Try to find the FROM inside this subquery by walking back
+            end_pos = match.start()
+            # Find the matching opening paren
+            paren_depth = 1
+            start_pos = end_pos - 1
+            while start_pos >= 0 and paren_depth > 0:
+                if sql_upper[start_pos] == ')':
+                    paren_depth += 1
+                elif sql_upper[start_pos] == '(':
+                    paren_depth -= 1
+                start_pos -= 1
+            
+            if paren_depth == 0:
+                subquery = sql_upper[start_pos+1:end_pos+1]
+                # Find FROM table in subquery
+                from_match = re.search(r'FROM\s+([\w\.]+)', subquery)
+                if from_match:
+                    full_table = from_match.group(1)
+                    if 'SILVER' not in full_table:
+                        table_name = full_table.split('.')[-1].lower()
+                        bronze_tables[alias] = table_name
+                        print(f"[Table Extract] Found subquery (paren-alias): {table_name} AS {alias}")
     
     print(f"[Table Extract] Final bronze tables: {bronze_tables}")
     return bronze_tables
@@ -1212,6 +1249,74 @@ LIMIT {num_results};
         return result
     
     # =========================================================================
+    # INJECT: Add table_replace changes based on pre-determined assignments
+    # =========================================================================
+    
+    def _inject_table_replacements(
+        self, 
+        result: Dict[str, Any], 
+        table_assignments: Optional[Dict[str, str]], 
+        bronze_tables: Optional[Dict[str, str]]
+    ) -> Dict[str, Any]:
+        """
+        Inject table_replace changes based on pre-determined table assignments.
+        
+        This ensures table replacements are always present even if the LLM forgot them.
+        Also ensures column changes have TABLE.COLUMN format.
+        """
+        if not table_assignments or not bronze_tables:
+            return result
+        
+        changes = result.get("changes", [])
+        if changes is None:
+            changes = []
+        
+        # Find existing table_replace changes
+        existing_table_replaces = set()
+        for change in changes:
+            if change.get("type") == "table_replace":
+                original = change.get("original", "").split(".")[-1].upper()
+                existing_table_replaces.add(original)
+        
+        print(f"[Inject Tables] Existing table_replace changes: {existing_table_replaces}")
+        print(f"[Inject Tables] Pre-determined assignments: {table_assignments}")
+        
+        # Inject missing table_replace changes
+        injected = []
+        for pattern_table, source_table in table_assignments.items():
+            if pattern_table.upper() not in existing_table_replaces:
+                injected.append({
+                    "type": "table_replace",
+                    "original": pattern_table,
+                    "new": source_table
+                })
+                print(f"[Inject Tables] Injected: {pattern_table} -> {source_table}")
+        
+        # Add injected changes at the beginning (table changes first)
+        result["changes"] = injected + changes
+        
+        # Also ensure column changes have TABLE.COLUMN format
+        updated_changes = []
+        for change in result["changes"]:
+            if change.get("type") == "column_replace" or (change.get("original") and change.get("new")):
+                new_val = change.get("new", "")
+                # If new value doesn't have a table prefix, try to add one
+                if new_val and "." not in new_val:
+                    # Find which source table this column likely belongs to
+                    # Look at what table was assigned
+                    for source_table in table_assignments.values():
+                        # Assume column belongs to any assigned source table
+                        # (The validation step will catch inconsistencies)
+                        change = dict(change)  # Make a copy
+                        change["new"] = f"{source_table}.{new_val}"
+                        print(f"[Inject Tables] Added table prefix: {new_val} -> {change['new']}")
+                        break
+            updated_changes.append(change)
+        
+        result["changes"] = updated_changes
+        return result
+    
+    # =========================================================================
     # VALIDATION: Check table-column consistency in LLM output
     # =========================================================================
     
@@ -1610,6 +1715,8 @@ Return ONLY valid JSON:
                 try:
                     result = json.loads(json_str)
                     print(f"[Suggestion Service] SQL rewritten with confidence: {result.get('confidence', 0)}")
+                    # Inject table_replace changes if we have pre-determined assignments but LLM didn't include them
+                    result = self._inject_table_replacements(result, table_assignments, bronze_tables)
                     result = self._validate_table_column_consistency(result)
                     return result
                 except json.JSONDecodeError as je:
@@ -1622,6 +1729,7 @@ Return ONLY valid JSON:
                     json_str_clean = re.sub(r'(?<!\\)\n', ' ', json_str_clean)
                     result = json.loads(json_str_clean)
                     print(f"[Suggestion Service] SQL rewritten after control char cleanup with confidence: {result.get('confidence', 0)}")
+                    result = self._inject_table_replacements(result, table_assignments, bronze_tables)
                     result = self._validate_table_column_consistency(result)
                     return result
                 except json.JSONDecodeError as je2:
@@ -1656,6 +1764,7 @@ Return ONLY valid JSON:
                             "confidence": 0.5,
                             "reasoning": reasoning
                         }
+                        result = self._inject_table_replacements(result, table_assignments, bronze_tables)
                         result = self._validate_table_column_consistency(result)
                         return result
                 except Exception as e3:
@@ -1669,6 +1778,7 @@ Return ONLY valid JSON:
                     json_str_fixed = re.sub(r'\}[^}]*$', '}', json_str_fixed)
                     result = json.loads(json_str_fixed)
                     print(f"[Suggestion Service] SQL rewritten after quote fix with confidence: {result.get('confidence', 0)}")
+                    result = self._inject_table_replacements(result, table_assignments, bronze_tables)
                     result = self._validate_table_column_consistency(result)
                     return result
                 except json.JSONDecodeError as je4:

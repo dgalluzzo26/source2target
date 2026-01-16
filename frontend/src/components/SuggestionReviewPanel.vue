@@ -1152,8 +1152,39 @@ function filteredColumns(columns: any[]) {
 
 function isMatchedColumn(col: any): boolean {
   if (!editingSuggestion.value) return false
-  const matched = getMatchedFields(editingSuggestion.value)
-  return matched.some(m => m.unmapped_field_id === col.unmapped_field_id)
+  
+  // Check if this column is ACTUALLY USED in the changes (not just in vector search results)
+  const changes = getChanges(editingSuggestion.value)
+  const colName = (col.src_column_physical_name || '').toUpperCase()
+  const tableName = (col.src_table_physical_name || '').toUpperCase()
+  
+  // Check if any change references this column
+  for (const change of changes) {
+    const newVal = (change.new || '').toUpperCase()
+    // Check for TABLE.COLUMN or just COLUMN match
+    if (newVal.includes(colName)) {
+      // If it has table prefix, verify it matches
+      if (newVal.includes('.')) {
+        const parts = newVal.split('.')
+        const changeTable = parts[0]
+        const changeCol = parts[parts.length - 1]
+        if (changeCol === colName && changeTable === tableName) {
+          return true
+        }
+      } else if (newVal === colName) {
+        return true
+      }
+    }
+  }
+  
+  // Also check if column appears in the edited SQL (for manual additions)
+  const sql = (editedSQL.value || '').toUpperCase()
+  const fullRef = `${tableName}.${colName}`
+  if (sql.includes(fullRef)) {
+    return true
+  }
+  
+  return false
 }
 
 function insertColumnToSQL(col: any) {
@@ -1372,10 +1403,39 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
           patternTable = orig.split('.')[0].toUpperCase()
         }
         
+        // If we still don't have source table, try to find it in table_replace changes
+        let sourceTableForGroup = newTable
+        if (!sourceTableForGroup) {
+          // Look through table_replace changes for this pattern table
+          for (const [srcTable, info] of Object.entries(tableReplacements)) {
+            if (patternTable && info.pattern.toUpperCase() === patternTable.toUpperCase()) {
+              sourceTableForGroup = srcTable
+              break
+            }
+          }
+        }
+        
+        // If still no source table, try to find from the suggestion's SQL
+        if (!sourceTableForGroup && suggestion.suggested_source_expression) {
+          // Look for FROM TABLE or JOIN TABLE in the SQL
+          const sql = suggestion.suggested_source_expression.toUpperCase()
+          const tableMatches = sql.match(/(?:FROM|JOIN)\s+(\w+)\s+(?:\w+\s+)?(?:ON|WHERE|LEFT|JOIN)/gi)
+          if (tableMatches && tableMatches.length > 0) {
+            // Extract first non-silver table
+            for (const match of tableMatches) {
+              const tableMatch = match.match(/(?:FROM|JOIN)\s+(\w+)/i)
+              if (tableMatch && !tableMatch[1].toLowerCase().includes('silver')) {
+                sourceTableForGroup = tableMatch[1].toUpperCase()
+                break
+              }
+            }
+          }
+        }
+        
         groups[alias] = {
           alias,
           patternTable: patternTable || alias.toUpperCase(),
-          sourceTable: newTable || 'Unknown',
+          sourceTable: sourceTableForGroup || 'Unknown',
           changes: []
         }
       }
