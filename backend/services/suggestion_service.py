@@ -162,6 +162,221 @@ def clean_llm_json(text: str) -> str:
     return ''.join(result)
 
 
+# =========================================================================
+# TABLE ASSIGNMENT: Deterministic table-to-alias mapping (PRE-LLM)
+# =========================================================================
+
+def extract_bronze_tables_from_sql(pattern_sql: str) -> Dict[str, str]:
+    """
+    Extract bronze (non-silver) tables and their aliases from pattern SQL.
+    
+    Returns:
+        Dict mapping alias -> table_name (e.g., {"b": "t_re_base", "a": "t_re_multi_address"})
+    """
+    if not pattern_sql:
+        return {}
+    
+    bronze_tables = {}
+    
+    # Patterns to match table references with aliases:
+    # 1. FROM schema.table alias (e.g., "FROM oz_dev.bronze_dmes_de.t_re_base b")
+    # 2. JOIN schema.table alias ON (e.g., "join oz_dev.silver_dmes_de.mbr_fndtn mf on")
+    # 3. (SELECT * FROM schema.table WHERE ...) alias (subquery)
+    
+    # Normalize SQL for easier parsing
+    sql_normalized = pattern_sql.replace('\n', ' ').replace('\t', ' ')
+    sql_normalized = re.sub(r'\s+', ' ', sql_normalized)
+    sql_upper = sql_normalized.upper()
+    
+    # Pattern 1: Direct table references - "FROM/JOIN schema.table alias"
+    # Match: FROM|JOIN schema.table alias (where alias is a word not a keyword)
+    table_pattern = r'(?:FROM|JOIN)\s+([\w\.]+)\s+(\w+)(?:\s+(?:ON|WHERE|LEFT|RIGHT|INNER|OUTER|JOIN|,|\)))'
+    
+    for match in re.finditer(table_pattern, sql_upper):
+        full_table = match.group(1)
+        alias = match.group(2).lower()
+        
+        # Skip keywords that look like aliases
+        if alias in ('on', 'where', 'left', 'right', 'inner', 'outer', 'join', 'and', 'or', 'as', 'select'):
+            continue
+        
+        # Check if this is a bronze table (not silver)
+        if 'SILVER' not in full_table:
+            # Extract just the table name
+            table_name = full_table.split('.')[-1].lower()
+            bronze_tables[alias] = table_name
+            print(f"[Table Extract] Found bronze table: {table_name} AS {alias}")
+    
+    # Pattern 2: Subqueries - "(SELECT * FROM schema.table WHERE ...) alias"
+    subquery_pattern = r'\(\s*SELECT\s+.*?\s+FROM\s+([\w\.]+)\s+.*?\)\s*(\w+)'
+    
+    for match in re.finditer(subquery_pattern, sql_upper, re.IGNORECASE | re.DOTALL):
+        full_table = match.group(1)
+        alias = match.group(2).lower()
+        
+        if alias in ('on', 'where', 'left', 'right', 'inner', 'outer', 'join', 'and', 'or', 'as'):
+            continue
+            
+        if 'SILVER' not in full_table:
+            table_name = full_table.split('.')[-1].lower()
+            if alias not in bronze_tables:  # Don't overwrite
+                bronze_tables[alias] = table_name
+                print(f"[Table Extract] Found subquery bronze table: {table_name} AS {alias}")
+    
+    print(f"[Table Extract] Final bronze tables: {bronze_tables}")
+    return bronze_tables
+
+
+def assign_source_tables_to_pattern_tables(
+    bronze_tables: Dict[str, str],  # alias -> pattern_table_name
+    vs_candidates_by_column: Dict[str, List[Dict[str, Any]]],  # pattern_col -> list of candidates
+    columns_to_map: List[Dict[str, Any]]  # [{column_name, description, role}, ...]
+) -> Dict[str, str]:
+    """
+    Deterministically assign user source tables to pattern bronze tables.
+    
+    Strategy:
+    1. For each pattern bronze table, count how many of its columns have matches in each user source table
+    2. Assign the source table with the MOST matches
+    3. Don't assign the same source table to multiple pattern tables
+    
+    Returns:
+        Dict mapping pattern_table_name -> user_source_table (e.g., {"t_re_base": "RECIP_BASE"})
+    """
+    if not bronze_tables or not vs_candidates_by_column:
+        return {}
+    
+    print(f"[Table Assign] Starting assignment for {len(bronze_tables)} bronze tables")
+    print(f"[Table Assign] Pattern columns with candidates: {list(vs_candidates_by_column.keys())}")
+    
+    # Build a map of which user source tables have candidates for each pattern column
+    # pattern_col -> set of source tables with candidates
+    source_tables_per_column = {}
+    all_source_tables = set()
+    
+    for pattern_col, candidates in vs_candidates_by_column.items():
+        source_tables_for_col = set()
+        for candidate in candidates:
+            src_table = candidate.get('src_table_physical_name', '').upper()
+            if src_table:
+                source_tables_for_col.add(src_table)
+                all_source_tables.add(src_table)
+        source_tables_per_column[pattern_col.upper()] = source_tables_for_col
+    
+    print(f"[Table Assign] All source tables found in candidates: {all_source_tables}")
+    
+    # Now score each (pattern_table, source_table) pair
+    # Score = number of pattern columns that have candidates from that source table
+    table_scores = {}  # (pattern_table, source_table) -> score
+    
+    for alias, pattern_table in bronze_tables.items():
+        pattern_table_upper = pattern_table.upper()
+        
+        # Find all pattern columns that might belong to this alias
+        # This is tricky - we need to figure out which columns go with which alias
+        # For now, we'll consider ALL columns and score based on best matches
+        
+        for source_table in all_source_tables:
+            score = 0
+            for pattern_col, source_tables in source_tables_per_column.items():
+                if source_table in source_tables:
+                    # This source table has a candidate for this pattern column
+                    # Add the best score for this match
+                    candidates = vs_candidates_by_column.get(pattern_col, [])
+                    for c in candidates:
+                        if c.get('src_table_physical_name', '').upper() == source_table:
+                            score += c.get('score', 0.01)  # Weight by match quality
+                            break
+            
+            if score > 0:
+                table_scores[(pattern_table_upper, source_table)] = score
+    
+    print(f"[Table Assign] Table scores: {table_scores}")
+    
+    # Greedy assignment: Assign best matches first, avoiding duplicates
+    assignments = {}  # pattern_table -> source_table
+    used_source_tables = set()
+    
+    # Sort by score descending
+    sorted_pairs = sorted(table_scores.items(), key=lambda x: -x[1])
+    
+    for (pattern_table, source_table), score in sorted_pairs:
+        if pattern_table in assignments:
+            continue  # Already assigned this pattern table
+        if source_table in used_source_tables:
+            continue  # This source table is already used
+        
+        assignments[pattern_table] = source_table
+        used_source_tables.add(source_table)
+        print(f"[Table Assign] Assigned: {pattern_table} -> {source_table} (score: {score:.4f})")
+    
+    # Handle unassigned pattern tables (no candidates)
+    for alias, pattern_table in bronze_tables.items():
+        pattern_table_upper = pattern_table.upper()
+        if pattern_table_upper not in assignments:
+            # Find any unused source table
+            remaining = all_source_tables - used_source_tables
+            if remaining:
+                fallback = sorted(remaining)[0]  # Pick alphabetically first
+                assignments[pattern_table_upper] = fallback
+                used_source_tables.add(fallback)
+                print(f"[Table Assign] Fallback assigned: {pattern_table_upper} -> {fallback}")
+            else:
+                print(f"[Table Assign] WARNING: No source table available for {pattern_table_upper}")
+    
+    return assignments
+
+
+def filter_candidates_by_assigned_table(
+    vs_candidates_by_column: Dict[str, List[Dict[str, Any]]],
+    table_assignments: Dict[str, str],  # pattern_table -> source_table
+    bronze_tables: Dict[str, str]  # alias -> pattern_table
+) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Filter vector search candidates to only include columns from the assigned source table.
+    
+    This ensures the LLM can ONLY pick columns from the correct table for each alias.
+    
+    Args:
+        vs_candidates_by_column: Original candidates grouped by pattern column
+        table_assignments: Map of pattern_table -> assigned_source_table
+        bronze_tables: Map of alias -> pattern_table (to determine which columns go with which alias)
+        
+    Returns:
+        Filtered candidates with same structure
+    """
+    if not table_assignments:
+        print("[Filter Candidates] No table assignments - returning original candidates")
+        return vs_candidates_by_column
+    
+    filtered = {}
+    
+    # Build a set of all assigned source tables for quick lookup
+    assigned_source_tables = set(table_assignments.values())
+    
+    for pattern_col, candidates in vs_candidates_by_column.items():
+        # For each pattern column, we need to figure out which pattern table it belongs to
+        # This is complex since we don't have direct alias info here
+        # For now, we'll keep candidates that match ANY assigned source table
+        # This is still much more restrictive than showing ALL source tables
+        
+        filtered_candidates = []
+        for candidate in candidates:
+            src_table = candidate.get('src_table_physical_name', '').upper()
+            if src_table in assigned_source_tables:
+                filtered_candidates.append(candidate)
+        
+        if filtered_candidates:
+            filtered[pattern_col] = filtered_candidates
+            print(f"[Filter Candidates] {pattern_col}: {len(candidates)} -> {len(filtered_candidates)} candidates")
+        else:
+            # Keep at least some candidates for warning purposes
+            filtered[pattern_col] = candidates[:1] if candidates else []
+            print(f"[Filter Candidates] {pattern_col}: No matches in assigned tables, kept {len(filtered[pattern_col])}")
+    
+    return filtered
+
+
 def filter_false_positive_warnings(
     warnings: List[str], 
     changes: List[Dict[str, Any]],
@@ -944,18 +1159,55 @@ LIMIT {num_results};
         
         # LLM rewrite if we have matches
         if matched_sources:
+            # =========================================================
+            # NEW: DETERMINISTIC TABLE ASSIGNMENT (PRE-LLM)
+            # This prevents the LLM from mixing columns across tables
+            # =========================================================
+            pattern_sql = pattern["source_expression"]
+            
+            # Step 1: Extract bronze tables and their aliases from pattern SQL
+            bronze_tables = extract_bronze_tables_from_sql(pattern_sql)
+            print(f"[Suggestion Service] _process_pattern: Bronze tables extracted: {bronze_tables}")
+            
+            # Step 2: Deterministically assign source tables to pattern tables
+            table_assignments = {}
+            if bronze_tables and vs_candidates_by_column:
+                table_assignments = assign_source_tables_to_pattern_tables(
+                    bronze_tables,
+                    vs_candidates_by_column,
+                    columns_to_map
+                )
+                print(f"[Suggestion Service] _process_pattern: Table assignments: {table_assignments}")
+            
+            # Step 3: Filter candidates to only include columns from assigned tables
+            filtered_candidates = vs_candidates_by_column
+            if table_assignments:
+                filtered_candidates = filter_candidates_by_assigned_table(
+                    vs_candidates_by_column,
+                    table_assignments,
+                    bronze_tables
+                )
+                print(f"[Suggestion Service] _process_pattern: Filtered candidates to assigned tables")
+            
+            # Step 4: Call LLM with filtered candidates AND table assignments
             llm_start = time.time()
             rewrite_result = self._rewrite_sql_with_llm_sync(
                 llm_config["endpoint_name"],
-                pattern["source_expression"],
+                pattern_sql,
                 pattern.get("join_metadata"),
                 pattern.get("source_descriptions", ""),
                 matched_sources,
                 tgt_column_physical,
-                vs_candidates_by_column=vs_candidates_by_column if vs_candidates_by_column else None
+                vs_candidates_by_column=filtered_candidates if filtered_candidates else None,
+                table_assignments=table_assignments if table_assignments else None,
+                bronze_tables=bronze_tables if bronze_tables else None
             )
             print(f"[Suggestion Service] _process_pattern: LLM rewrite: {time.time() - llm_start:.2f}s")
             result["rewrite_result"] = rewrite_result
+            
+            # Store table assignments in result for debugging
+            result["table_assignments"] = table_assignments
+            result["bronze_tables"] = bronze_tables
         
         return result
     
@@ -1087,7 +1339,9 @@ LIMIT {num_results};
         matched_sources: List[Dict[str, Any]],
         target_column: str,
         vs_candidates_by_column: Dict[str, List[Dict[str, Any]]] = None,
-        min_match_score: float = 0.004
+        min_match_score: float = 0.004,
+        table_assignments: Dict[str, str] = None,
+        bronze_tables: Dict[str, str] = None
     ) -> Dict[str, Any]:
         """
         Use LLM to rewrite pattern SQL with user's source columns.
@@ -1095,6 +1349,8 @@ LIMIT {num_results};
         Args:
             vs_candidates_by_column: Grouped vector search results by pattern column
             min_match_score: Minimum vector search score to include (default 0.004)
+            table_assignments: PRE-DETERMINED map of pattern_table -> source_table
+            bronze_tables: Map of alias -> pattern_table from SQL parsing
         
         Returns rewritten SQL, changes made, and confidence.
         """
@@ -1108,48 +1364,6 @@ LIMIT {num_results};
             except:
                 pass
         
-        # Build matched sources description - GROUPED BY PATTERN COLUMN with scores
-        sources_text = ""
-        
-        if vs_candidates_by_column and len(vs_candidates_by_column) > 0:
-            # Use grouped results with scores
-            grouped_info = []
-            for pattern_col, candidates in vs_candidates_by_column.items():
-                # Filter by minimum score
-                filtered = [c for c in candidates if c.get('score', 0) >= min_match_score]
-                
-                if filtered:
-                    col_section = f"\n=== Pattern Column: {pattern_col} ===\n"
-                    col_section += "Best matching source columns (in order of match score):\n"
-                    for i, src in enumerate(filtered[:5], 1):  # Top 5 per pattern column
-                        score = src.get('score', 0)
-                        col_section += (
-                            f"  {i}. {src.get('src_table_physical_name', 'UNKNOWN')}.{src.get('src_column_physical_name', 'UNKNOWN')} "
-                            f"[Score: {score:.4f}]\n"
-                            f"     Description: {src.get('src_comments', 'N/A')}\n"
-                            f"     Type: {src.get('src_physical_datatype', 'STRING')}\n"
-                        )
-                    grouped_info.append(col_section)
-                else:
-                    grouped_info.append(f"\n=== Pattern Column: {pattern_col} ===\nNO GOOD MATCHES FOUND (all scores below {min_match_score})\n")
-            
-            sources_text = "\n".join(grouped_info) if grouped_info else "No matching sources found"
-            print(f"[LLM] Using grouped sources for {len(vs_candidates_by_column)} pattern columns")
-        else:
-            # Fallback to flat list (legacy)
-            source_info = []
-            for src in matched_sources:
-                score = src.get('score', src.get('match_score', 0))
-                # Filter by minimum score
-                if score >= min_match_score:
-                    source_info.append(
-                        f"- {src.get('src_table_physical_name', 'UNKNOWN')}.{src.get('src_column_physical_name', 'UNKNOWN')} "
-                        f"[Score: {score:.4f}]\n"
-                        f"  Description: {src.get('src_comments', 'N/A')}\n"
-                        f"  Type: {src.get('src_physical_datatype', 'STRING')}"
-                    )
-            sources_text = "\n".join(source_info) if source_info else "No matching sources found (all scores too low)"
-        
         # Identify silver tables (constant) from metadata or SQL
         silver_tables = metadata.get("silverTables", [])
         silver_text = "\n".join([
@@ -1157,10 +1371,133 @@ LIMIT {num_results};
             for t in silver_tables
         ]) if silver_tables else "Silver tables: Keep any tables from 'silver_*' schemas unchanged"
         
-        prompt = f"""You are performing a STRICT column substitution on a SQL mapping template.
+        # =========================================================
+        # NEW: SIMPLIFIED PROMPT when table assignments are pre-determined
+        # The LLM now only does column substitution - table decisions are FIXED
+        # =========================================================
+        if table_assignments and bronze_tables:
+            print(f"[LLM] Using SIMPLIFIED prompt with pre-determined table assignments: {table_assignments}")
+            
+            # Build table assignments text - these are FIXED, not decisions
+            table_assignments_text = "TABLE ASSIGNMENTS (ALREADY DECIDED - DO NOT CHANGE):\n"
+            for alias, pattern_table in bronze_tables.items():
+                source_table = table_assignments.get(pattern_table.upper(), "UNKNOWN")
+                table_assignments_text += f"- Pattern table '{pattern_table}' (alias '{alias}') → User table '{source_table}'\n"
+            
+            # Build columns text - grouped by the source table they MUST come from
+            columns_text = "\nAVAILABLE COLUMNS PER SOURCE TABLE:\n"
+            columns_text += "(You may ONLY use columns from the table assigned to each alias)\n\n"
+            
+            # Group candidates by source table
+            candidates_by_source_table = {}
+            if vs_candidates_by_column:
+                for pattern_col, candidates in vs_candidates_by_column.items():
+                    for c in candidates:
+                        src_table = c.get('src_table_physical_name', '').upper()
+                        if src_table not in candidates_by_source_table:
+                            candidates_by_source_table[src_table] = []
+                        candidates_by_source_table[src_table].append({
+                            'pattern_col': pattern_col,
+                            'src_col': c.get('src_column_physical_name', ''),
+                            'score': c.get('score', 0),
+                            'description': c.get('src_comments', '')
+                        })
+            
+            for source_table in sorted(set(table_assignments.values())):
+                columns_text += f"=== {source_table} (available columns) ===\n"
+                table_cols = candidates_by_source_table.get(source_table, [])
+                if table_cols:
+                    # Group by pattern column
+                    by_pattern = {}
+                    for tc in table_cols:
+                        pc = tc['pattern_col']
+                        if pc not in by_pattern:
+                            by_pattern[pc] = []
+                        by_pattern[pc].append(tc)
+                    
+                    for pattern_col, cols in by_pattern.items():
+                        columns_text += f"  For pattern column '{pattern_col}':\n"
+                        for c in sorted(cols, key=lambda x: -x['score'])[:3]:
+                            columns_text += f"    - {c['src_col']} [Score: {c['score']:.4f}] {c['description'][:50]}\n"
+                else:
+                    columns_text += "  (No matching columns found in this table)\n"
+                columns_text += "\n"
+            
+            prompt = f"""You are performing column substitution on a SQL template. Table assignments are ALREADY DECIDED.
 
-CRITICAL: You must PRESERVE THE EXACT STRUCTURE of the SQL. Do NOT add, remove, or reorganize anything.
-Only substitute column and table NAMES - the SQL logic, JOINs, WHERE clauses, and UNION structure must remain IDENTICAL.
+TARGET COLUMN: {target_column}
+
+ORIGINAL SQL:
+```sql
+{pattern_sql}
+```
+
+{table_assignments_text}
+
+{columns_text}
+
+SILVER TABLES (CONSTANT - DO NOT MODIFY):
+{silver_text}
+
+SIMPLE RULES (just 5):
+1. Replace each pattern table with its assigned source table (as shown in TABLE ASSIGNMENTS above)
+2. For each alias, ONLY use columns from the assigned source table
+3. Keep silver tables unchanged (anything with "silver" in the path)
+4. Keep all SQL structure, JOINs, WHERE conditions, UNION, transformations exactly as-is
+5. If no column match exists in the assigned table, keep original and add warning
+
+CRITICAL: Each alias maps to ONE source table. All columns for that alias MUST come from that table.
+
+Return ONLY valid JSON:
+{{
+  "rewritten_sql": "<complete rewritten SQL>",
+  "changes": [
+    {{"type": "table_replace", "original": "<pattern_table>", "new": "<source_table>"}},
+    {{"type": "column_replace", "original": "<pattern_column>", "new": "<source_column>"}}
+  ],
+  "warnings": ["<only for columns with no match>"],
+  "confidence": 0.0-1.0,
+  "reasoning": "<brief explanation>"
+}}"""
+        else:
+            # LEGACY: Complex prompt when no table assignments provided
+            print(f"[LLM] Using legacy complex prompt (no table assignments)")
+            
+            # Build matched sources description - GROUPED BY PATTERN COLUMN with scores
+            sources_text = ""
+            
+            if vs_candidates_by_column and len(vs_candidates_by_column) > 0:
+                grouped_info = []
+                for pattern_col, candidates in vs_candidates_by_column.items():
+                    filtered = [c for c in candidates if c.get('score', 0) >= min_match_score]
+                    
+                    if filtered:
+                        col_section = f"\n=== Pattern Column: {pattern_col} ===\n"
+                        col_section += "Best matching source columns (in order of match score):\n"
+                        for i, src in enumerate(filtered[:5], 1):
+                            score = src.get('score', 0)
+                            col_section += (
+                                f"  {i}. {src.get('src_table_physical_name', 'UNKNOWN')}.{src.get('src_column_physical_name', 'UNKNOWN')} "
+                                f"[Score: {score:.4f}]\n"
+                                f"     Description: {src.get('src_comments', 'N/A')}\n"
+                            )
+                        grouped_info.append(col_section)
+                    else:
+                        grouped_info.append(f"\n=== Pattern Column: {pattern_col} ===\nNO GOOD MATCHES FOUND\n")
+                
+                sources_text = "\n".join(grouped_info) if grouped_info else "No matching sources found"
+            else:
+                source_info = []
+                for src in matched_sources:
+                    score = src.get('score', src.get('match_score', 0))
+                    if score >= min_match_score:
+                        source_info.append(
+                            f"- {src.get('src_table_physical_name', 'UNKNOWN')}.{src.get('src_column_physical_name', 'UNKNOWN')} "
+                            f"[Score: {score:.4f}]"
+                        )
+                sources_text = "\n".join(source_info) if source_info else "No matching sources found"
+            
+            prompt = f"""You are performing a STRICT column substitution on a SQL mapping template.
 
 TARGET COLUMN: {target_column}
 
@@ -1172,91 +1509,31 @@ ORIGINAL SQL TEMPLATE:
 ORIGINAL COLUMN DESCRIPTIONS FROM PATTERN:
 {pattern_descriptions}
 
-USER'S MATCHING SOURCE COLUMNS (grouped by pattern column with match scores):
+USER'S MATCHING SOURCE COLUMNS:
 {sources_text}
-
-VECTOR SEARCH SCORING RULES:
-- Each pattern column above has its OWN list of matching source columns from vector search
-- Higher scores = better semantic match (scores range 0.0 to 1.0, typically 0.004-0.02 for good matches)
-- Only use columns listed under each pattern column section for that substitution
-- If a pattern column shows "NO GOOD MATCHES FOUND", you MUST keep the original and add a warning
-- Prefer the highest-scoring match unless a lower-scored one is semantically better
 
 SILVER TABLES (CONSTANT - DO NOT MODIFY):
 {silver_text}
 
-STRICT SUBSTITUTION RULES:
-1. PRESERVE SQL STRUCTURE EXACTLY - same number of SELECTs, same JOINs, same WHERE conditions
-2. Only perform 1-to-1 column substitutions - replace each pattern column with ONE matching source column
-3. EVERY pattern bronze table MUST be replaced with a user source table (e.g., replace "t_re_base" with "RECIP_BASE")
-4. Tables containing "silver" in their path are CONSTANT - never modify silver table references
-5. Do NOT add new columns that weren't in the original SQL
-6. Do NOT remove columns that were in the original SQL
-7. Do NOT change join conditions (e.g., if original joins on SAK_RECIP, the new SQL must also join on the equivalent column)
-8. Keep all transformations (TRIM, INITCAP, CONCAT, CAST, etc.) exactly as they appear
-9. Keep all literals and constants unchanged (e.g., =1, ='Y', in ('R','M'))
-10. IF YOU USE A COLUMN FROM A SOURCE TABLE, YOU MUST REPLACE THE PATTERN TABLE WITH THAT SOURCE TABLE
-   - Example: If you use RECIP_BASE.STREET_ADDR_2, then "t_re_base" MUST become "RECIP_BASE" in FROM clause
-   - You cannot leave the original pattern table name (like t_re_base) and use a column from a different table
+RULES:
+1. PRESERVE SQL STRUCTURE EXACTLY - same JOINs, WHERE conditions, UNION structure
+2. Replace each pattern bronze table with a user source table
+3. For each alias, ONLY use columns from the SAME source table
+4. If a column has no match, keep original and add warning
+5. Keep silver tables unchanged
 
-CRITICAL TABLE-COLUMN CONSISTENCY (MUST FOLLOW - VALIDATION WILL FAIL IF NOT):
-- The user's source columns are formatted as TABLE.COLUMN (e.g., "RECIP_BASE.STREET_ADDR_1")
-- THE TABLE IN THE COLUMN NAME TELLS YOU WHICH TABLE THAT COLUMN EXISTS IN
-- Example: "RECIP_BASE.STREET_ADDR_2" means STREET_ADDR_2 is ONLY in RECIP_BASE, NOT in MBR_ADDR
-- Example: "MBR_ADDR.ADDR_LN_2" means ADDR_LN_2 is ONLY in MBR_ADDR, NOT in RECIP_BASE
-- YOU CANNOT USE A COLUMN FROM TABLE A WHILE REPLACING THE TABLE WITH TABLE B
-- WRONG: Replace t_re_multi_address with MBR_ADDR but use RECIP_BASE.STREET_ADDR_2 - THIS IS INVALID!
-- CORRECT: Replace t_re_multi_address with MBR_ADDR and use MBR_ADDR.ADDR_LN_2
-- CORRECT: Replace t_re_multi_address with RECIP_BASE and use RECIP_BASE.STREET_ADDR_2
+CRITICAL: You CANNOT mix columns from different source tables for the same alias.
 
-MATCHING STRATEGY (FOLLOW THIS ORDER - VALIDATION WILL FAIL IF YOU DON'T):
-1. FIRST: Decide which user source TABLE best matches each pattern bronze TABLE
-   - Consider which table has the most columns matching the pattern table's columns
-   - Each pattern bronze table should map to a DIFFERENT user source table
-   - Record this mapping: T_RE_BASE -> RECIP_BASE, T_RE_MULTI_ADDRESS -> MBR_ADDR, etc.
-
-2. THEN: For each pattern table alias, ONLY use columns from the matched source table
-   - If alias 'b' (T_RE_BASE) maps to RECIP_BASE, ALL columns with 'b.' prefix must come from RECIP_BASE
-   - If alias 'a' (T_RE_MULTI_ADDRESS) maps to MBR_ADDR, ALL columns with 'a.' prefix must come from MBR_ADDR
-   - THIS IS NON-NEGOTIABLE - mixing columns from different source tables for the same alias = INVALID SQL
-
-3. ABSOLUTELY NEVER mix columns from different source tables for the same alias/pattern table
-   - WRONG: Using RECIP_BASE.STREET_ADDR_2 AND MBR_ADDR.ADDR_TYP_CD for alias 'a' - INVALID!
-   - RIGHT: Using ONLY MBR_ADDR columns for alias 'a' if 'a' maps to MBR_ADDR
-
-4. If a column has no match in the assigned source table, keep original column and add warning
-   - Do NOT use a column from a different table just because it matches semantically
-
-5. CRITICAL: Do NOT substitute two different pattern tables with the SAME user table (creates invalid self-joins)
-
-WARNINGS RULES (BE VERY STRICT):
-- ONLY warn about columns/tables FROM THE ORIGINAL SQL TEMPLATE that you could not find a match for
-- The warning must reference the PATTERN column/table name (e.g., "ADR_STREET_1", "SAK_RECIP", "ENTITY"), NOT a user source
-- If a pattern TABLE has no matching user table, add warning: "No matching table for PATTERN_TABLE"
-- If a pattern COLUMN has no matching user column, add warning: "No match for COLUMN_NAME"
-- Do NOT warn about user source columns/tables that were provided but not used (e.g., CNTY_REF, MBR_FNDTN)
-- Do NOT warn about silver table columns (tables with "silver" in their path)
-- Do NOT warn about successful substitutions - only warn if you could NOT find ANY match
-- If you found a match and made a substitution, that is NOT a warning - it's a successful change
-
-CRITICAL CHANGE REPORTING:
-- "original" = the EXACT column/table name FROM THE ORIGINAL SQL TEMPLATE (e.g., "a.CURR_REC_IND", "b.ADR_STREET_1", "t_re_base")
-- "new" = the column/table name you are substituting FROM THE USER'S SOURCE (e.g., "MBR_ADDR.ACTV_FLG", "RECIP_BASE.STREET_ADDR_1", "RECIP_BASE")
-- Do NOT use the source column name in "original" - that's what you're replacing TO, not FROM
-- For table_replace: "original" must be the PATTERN table name, "new" must be the USER SOURCE table name
-- If original equals new, that is NOT a valid change - do not include it
-- Every bronze pattern table should have a corresponding table_replace entry with a DIFFERENT new value
-
-Return ONLY valid JSON with this structure:
+Return ONLY valid JSON:
 {{
-  "rewritten_sql": "<the complete rewritten SQL - must have IDENTICAL structure to original>",
+  "rewritten_sql": "<complete rewritten SQL>",
   "changes": [
-    {{"type": "table_replace", "original": "<table_name_from_pattern>", "new": "<table_name_from_user_source>"}},
-    {{"type": "column_replace", "original": "<column_name_from_pattern>", "new": "<column_name_from_user_source>"}}
+    {{"type": "table_replace", "original": "<pattern_table>", "new": "<source_table>"}},
+    {{"type": "column_replace", "original": "<pattern_column>", "new": "<source_column>"}}
   ],
-  "warnings": ["<only unmatched pattern columns from bronze tables>"],
+  "warnings": ["<only for unmatched columns>"],
   "confidence": 0.0-1.0,
-  "reasoning": "<brief explanation of substitutions made>"
+  "reasoning": "<brief explanation>"
 }}"""
 
         # Store prompt for debugging (can be retrieved via API)
@@ -1275,6 +1552,9 @@ Return ONLY valid JSON with this structure:
                 for src in matched_sources
             ],
             "silver_tables": silver_text,
+            "table_assignments": table_assignments,  # NEW: Pre-determined table mappings
+            "bronze_tables": bronze_tables,          # NEW: Alias -> pattern table
+            "prompt_type": "simplified" if (table_assignments and bronze_tables) else "legacy",
             "full_prompt": prompt
         }
         
