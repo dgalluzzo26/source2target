@@ -1331,20 +1331,38 @@ LIMIT {num_results};
                         change = dict(change)
                         change["new"] = f"{source_table}.{new_val}"
                 
-                # VALIDATE: Check if this column actually exists in the source table
-                if valid_columns_by_table and source_table:
-                    valid_cols = valid_columns_by_table.get(source_table, set())
-                    if source_col not in valid_cols:
-                        # INVALID: LLM hallucinated this column!
-                        print(f"[Inject Tables] INVALID COLUMN: {source_col} does NOT exist in {source_table}")
-                        print(f"[Inject Tables] Valid columns in {source_table}: {list(valid_cols)[:20]}")
+                # VALIDATE: Check if this column actually exists
+                if valid_columns_by_table and source_col:
+                    if source_table:
+                        # Check if column exists in the specified source table
+                        valid_cols = valid_columns_by_table.get(source_table, set())
+                        if source_col not in valid_cols:
+                            # INVALID: LLM hallucinated this column!
+                            print(f"[Inject Tables] INVALID COLUMN: {source_col} does NOT exist in {source_table}")
+                            print(f"[Inject Tables] Valid columns in {source_table}: {list(valid_cols)[:20]}")
+                            
+                            # Mark as no match - keep original column, add warning
+                            change = dict(change)
+                            change["new"] = f"NO_MATCH ({source_col} not in {source_table})"
+                            change["is_invalid"] = True
+                            warnings.append(f"No match for {original_val}: Column {source_col} does not exist in {source_table}")
+                            invalid_column_count += 1
+                    else:
+                        # No source table specified - check if column exists in ANY valid table
+                        all_valid_columns = set()
+                        for table, cols in valid_columns_by_table.items():
+                            all_valid_columns.update(cols)
                         
-                        # Mark as no match - keep original column, add warning
-                        change = dict(change)
-                        change["new"] = f"NO_MATCH ({source_col} not in {source_table})"
-                        change["is_invalid"] = True
-                        warnings.append(f"No match for {original_val}: Column {source_col} does not exist in {source_table}")
-                        invalid_column_count += 1
+                        if source_col not in all_valid_columns:
+                            # COMPLETELY HALLUCINATED: Column doesn't exist anywhere
+                            print(f"[Inject Tables] HALLUCINATED COLUMN: {source_col} does NOT exist in ANY table!")
+                            print(f"[Inject Tables] All valid columns: {list(all_valid_columns)[:30]}...")
+                            
+                            change = dict(change)
+                            change["new"] = f"NO_MATCH (HALLUCINATED: {source_col})"
+                            change["is_invalid"] = True
+                            warnings.append(f"No match for {original_val}: Column {source_col} is HALLUCINATED - does not exist in any source table")
+                            invalid_column_count += 1
                 
                 updated_changes.append(change)
             else:
@@ -2415,16 +2433,44 @@ RULES:
                                 ])
                                 suggestion_data["matched_source_fields"] = matched_fields_json
                                 
-                                # Rewrite SQL with LLM (pass grouped VS candidates for better matching)
+                                # Step: Deterministic table assignment (SAME AS DISCOVERY)
+                                pattern_sql = pattern["source_expression"]
+                                bronze_tables = extract_bronze_tables_from_sql(pattern_sql)
+                                print(f"[Batch Discovery] Extracted bronze tables: {bronze_tables}")
+                                
+                                # Assign source tables to pattern tables
+                                table_assignments = assign_source_tables_to_pattern_tables(
+                                    bronze_tables, vs_candidates_by_column or {}
+                                )
+                                print(f"[Batch Discovery] Table assignments: {table_assignments}")
+                                
+                                # Filter candidates by assigned table
+                                if table_assignments and vs_candidates_by_column:
+                                    filtered_vs_candidates = filter_candidates_by_assigned_table(
+                                        vs_candidates_by_column, table_assignments, bronze_tables
+                                    )
+                                    # Update matched_sources to only include from assigned tables
+                                    assigned_tables = set(table_assignments.values())
+                                    matched_sources = [
+                                        m for m in matched_sources
+                                        if m.get('src_table_physical_name', '').upper() in assigned_tables
+                                    ]
+                                    print(f"[Batch Discovery] Filtered to {len(matched_sources)} sources from assigned tables")
+                                else:
+                                    filtered_vs_candidates = vs_candidates_by_column
+                                
+                                # Rewrite SQL with LLM (pass grouped VS candidates + table assignments)
                                 llm_start = time.time()
                                 rewrite_result = self._rewrite_sql_with_llm_sync(
                                     llm_config["endpoint_name"],
-                                    pattern["source_expression"],
+                                    pattern_sql,
                                     pattern.get("join_metadata"),
                                     pattern.get("source_descriptions", ""),
                                     matched_sources,
                                     tgt_column_physical,
-                                    vs_candidates_by_column=vs_candidates_by_column if vs_candidates_by_column else None
+                                    vs_candidates_by_column=filtered_vs_candidates if filtered_vs_candidates else None,
+                                    table_assignments=table_assignments,
+                                    bronze_tables=bronze_tables
                                 )
                                 print(f"[Suggestion Service]   -> LLM rewrite: {time.time() - llm_start:.2f}s")
                                 
@@ -2923,15 +2969,43 @@ RULES:
                             ])
                             new_suggestion_data["matched_source_fields"] = matched_fields_json
                             
-                            # Step 3: Rewrite SQL with LLM (pass grouped VS candidates)
+                            # Step 3a: Deterministic table assignment (SAME AS DISCOVERY)
+                            pattern_sql = pattern["source_expression"]
+                            bronze_tables = extract_bronze_tables_from_sql(pattern_sql)
+                            print(f"[Regenerate] Extracted bronze tables: {bronze_tables}")
+                            
+                            # Step 3b: Assign source tables to pattern tables
+                            table_assignments = assign_source_tables_to_pattern_tables(
+                                bronze_tables, vs_candidates_by_column or {}
+                            )
+                            print(f"[Regenerate] Table assignments: {table_assignments}")
+                            
+                            # Step 3c: Filter candidates by assigned table
+                            if table_assignments and vs_candidates_by_column:
+                                filtered_vs_candidates = filter_candidates_by_assigned_table(
+                                    vs_candidates_by_column, table_assignments, bronze_tables
+                                )
+                                # Update matched_sources to only include from assigned tables
+                                assigned_tables = set(table_assignments.values())
+                                matched_sources = [
+                                    m for m in matched_sources
+                                    if m.get('src_table_physical_name', '').upper() in assigned_tables
+                                ]
+                                print(f"[Regenerate] Filtered to {len(matched_sources)} sources from assigned tables")
+                            else:
+                                filtered_vs_candidates = vs_candidates_by_column
+                            
+                            # Step 3d: Rewrite SQL with LLM (pass grouped VS candidates + table assignments)
                             rewrite_result = self._rewrite_sql_with_llm_sync(
                                 llm_config["endpoint_name"],
-                                pattern["source_expression"],
+                                pattern_sql,
                                 pattern.get("join_metadata"),
                                 pattern.get("source_descriptions", ""),
                                 matched_sources,
                                 tgt_column_physical,
-                                vs_candidates_by_column=vs_candidates_by_column if vs_candidates_by_column else None
+                                vs_candidates_by_column=filtered_vs_candidates if filtered_vs_candidates else None,
+                                table_assignments=table_assignments,
+                                bronze_tables=bronze_tables
                             )
                             
                             # Extract pattern columns/tables for warning filtering
