@@ -48,32 +48,76 @@ def clean_llm_json(text: str) -> str:
     - Control characters (null bytes, form feeds, etc.)
     - Windows line endings
     - Trailing commas in JSON
-    - Markdown code blocks
+    - Markdown code blocks (prefers JSON code blocks over others)
     - Literal newlines inside JSON string values (must be escaped as \\n)
+    - Python-style comments in JSON (# comment)
     """
     if not text:
         return ""
     
-    # Extract JSON from markdown code blocks if present
-    code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
-    if code_block_match:
-        text = code_block_match.group(1).strip()
+    # First, try to find a JSON-specific code block (```json)
+    json_code_block = re.search(r'```json\s*([\s\S]*?)```', text, re.IGNORECASE)
+    if json_code_block:
+        text = json_code_block.group(1).strip()
+    else:
+        # If no JSON code block, try to find the last code block (often JSON is last)
+        all_code_blocks = re.findall(r'```(?:\w*)?\s*([\s\S]*?)```', text)
+        if all_code_blocks:
+            # Check each code block for JSON-like content (starts with {)
+            for block in reversed(all_code_blocks):
+                block_stripped = block.strip()
+                if block_stripped.startswith('{') and block_stripped.endswith('}'):
+                    text = block_stripped
+                    break
     
-    # Find the JSON object
-    json_start = text.find('{')
-    json_end = text.rfind('}') + 1
+    # Find the JSON object - look for the LAST complete JSON object
+    # This handles cases where there's explanation text with {} before the actual JSON
+    json_objects = []
+    brace_count = 0
+    start_idx = -1
     
-    if json_start < 0 or json_end <= json_start:
-        return ""
+    for i, char in enumerate(text):
+        if char == '{':
+            if brace_count == 0:
+                start_idx = i
+            brace_count += 1
+        elif char == '}':
+            brace_count -= 1
+            if brace_count == 0 and start_idx >= 0:
+                json_objects.append((start_idx, i + 1))
+                start_idx = -1
     
-    json_str = text[json_start:json_end]
+    # Use the last (and typically largest) JSON object
+    if json_objects:
+        # Prefer the largest JSON object (most likely the actual response)
+        largest = max(json_objects, key=lambda x: x[1] - x[0])
+        json_str = text[largest[0]:largest[1]]
+    else:
+        # Fallback to simple find
+        json_start = text.find('{')
+        json_end = text.rfind('}') + 1
+        if json_start < 0 or json_end <= json_start:
+            return ""
+        json_str = text[json_start:json_end]
+    
+    # Remove Python-style comments (# comment) - common LLM mistake
+    # Be careful not to remove # inside strings
+    lines = json_str.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        # Remove comments that appear after JSON content (not inside strings)
+        # Simple heuristic: if # appears and there's a " before it, check if it's balanced
+        if '#' in line:
+            # Count quotes before the #
+            hash_pos = line.find('#')
+            before_hash = line[:hash_pos]
+            # If even number of quotes, the # is outside a string
+            if before_hash.count('"') % 2 == 0:
+                line = before_hash.rstrip()
+        cleaned_lines.append(line)
+    json_str = '\n'.join(cleaned_lines)
     
     # Remove control characters (except newlines and tabs)
-    # \x00-\x08: null through backspace
-    # \x0b: vertical tab
-    # \x0c: form feed
-    # \x0e-\x1f: shift out through unit separator
-    # \x7f: DEL
     json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', json_str)
     
     # Normalize line endings
@@ -83,11 +127,6 @@ def clean_llm_json(text: str) -> str:
     json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
     
     # Fix literal newlines inside JSON string values
-    # This is the tricky part - LLMs often put actual newlines in SQL strings
-    # We need to escape them as \n for valid JSON
-    # Strategy: Replace newlines that appear to be inside string values
-    
-    # Approach: Process character by character to handle strings properly
     result = []
     in_string = False
     escape_next = False
