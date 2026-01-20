@@ -762,18 +762,26 @@ class SuggestionService:
     # VECTOR SEARCH: Find matching source fields
     # =========================================================================
     
-    def _build_vs_query(self, description: str, project_id: int, column_name: str = "") -> str:
+    def _build_vs_query(
+        self, 
+        description: str, 
+        project_id: int, 
+        datatype: str = "",
+        domain: str = ""
+    ) -> str:
         """
-        Build a vector search query string with project context.
+        Build a vector search query string matching the indexed format.
         
-        Format: PROJECT: {id} | DESCRIPTION: {desc} | COLUMN: {name}
-        This format matches the indexed source_semantic_field for better similarity.
+        Format: PROJECT: {id} | DESCRIPTION: {desc} | TYPE: {datatype} | DOMAIN: {domain}
+        This matches the indexed source_semantic_field for better similarity.
         """
         parts = [f"PROJECT: {project_id}"]
         if description:
             parts.append(f"DESCRIPTION: {description}")
-        if column_name:
-            parts.append(f"COLUMN: {column_name}")
+        if datatype:
+            parts.append(f"TYPE: {datatype}")
+        if domain:
+            parts.append(f"DOMAIN: {domain}")
         return " | ".join(parts)
     
     def _vector_search_single_query_sync(
@@ -913,7 +921,8 @@ class SuggestionService:
             query = self._build_vs_query(
                 col_info.get('description', ''),
                 project_id,
-                col_info.get('column_name', '')
+                col_info.get('datatype', ''),
+                col_info.get('domain', '')
             )
             results = self._vector_search_single_query_sync(
                 index_name, query, project_id, num_results_per_column
@@ -1027,8 +1036,8 @@ class SuggestionService:
         print(f"[VS] WARNING: This may explain different results between batch and regeneration!")
         
         # Fall back to single combined search
-        # Build query with project context
-        query_with_project = self._build_vs_query(query_text, project_id)
+        # Build query with project context (no datatype/domain in fallback - not available)
+        query_with_project = self._build_vs_query(query_text, project_id, "", "")
         
         # Store for debugging
         self._last_vector_search = {
@@ -1225,12 +1234,18 @@ LIMIT {num_results};
         llm_config: Dict[str, str],
         project_id: int,
         tgt_column_physical: str,
-        tgt_comments: str
+        tgt_comments: str,
+        tgt_datatype: str = "",
+        tgt_domain: str = ""
     ) -> Dict[str, Any]:
         """
         Shared method for processing a pattern with vector search and LLM rewrite.
         
         Used by BOTH batch discovery AND regeneration to ensure identical behavior.
+        
+        Args:
+            tgt_datatype: Target column physical datatype for better VS matching
+            tgt_domain: Target column domain for better VS matching
         
         Returns:
             Dictionary with matched_sources, vs_candidates_by_column, rewrite_result, etc.
@@ -1282,18 +1297,23 @@ LIMIT {num_results};
                             'description': desc if desc else orig_col,
                             'column_name': orig_col,
                             'role': role,
-                            'is_constant': True  # Flag for special handling
+                            'is_constant': True,  # Flag for special handling
+                            'datatype': tgt_datatype,
+                            'domain': tgt_domain
                         })
                         continue
                     
                     print(f"[Suggestion Service] _process_pattern:   -> {role}: {orig_col} - {desc[:50] if desc else 'no desc'}...")
                     
                     # Build columns_to_map for parallel vector search
+                    # Include datatype and domain for better matching
                     columns_to_map.append({
                         'description': desc if desc else orig_col,
                         'column_name': orig_col,
                         'role': role,
-                        'is_constant': False
+                        'is_constant': False,
+                        'datatype': tgt_datatype,
+                        'domain': tgt_domain
                     })
                     
                     # Also build combined search_terms for fallback (only for non-constant columns)
@@ -2590,6 +2610,10 @@ RULES:
                                     user_cols = jm.get('userColumnsToMap', [])
                                     print(f"[Suggestion Service] userColumnsToMap has {len(user_cols)} entries")
                                     
+                                    # Get target column datatype and domain for better VS matching
+                                    tgt_datatype = target_col.get('tgt_physical_datatype', '')
+                                    tgt_domain = target_col.get('domain', '')
+                                    
                                     for col in user_cols:
                                         desc = col.get('description', '')
                                         orig_col = col.get('originalColumn', '')
@@ -2602,18 +2626,23 @@ RULES:
                                                 'description': desc if desc else orig_col,
                                                 'column_name': orig_col,
                                                 'role': role,
-                                                'is_constant': True
+                                                'is_constant': True,
+                                                'datatype': tgt_datatype,
+                                                'domain': tgt_domain
                                             })
                                             continue
                                         
                                         print(f"[Suggestion Service]   -> {role}: {orig_col} - {desc}")
                                         
                                         # Build columns_to_map for parallel vector search
+                                        # Include datatype and domain for better matching
                                         columns_to_map.append({
                                             'description': desc if desc else orig_col,
                                             'column_name': orig_col,
                                             'role': role,
-                                            'is_constant': False
+                                            'is_constant': False,
+                                            'datatype': tgt_datatype,
+                                            'domain': tgt_domain
                                         })
                                         
                                         # Also build combined search_terms for fallback (only non-constant)
@@ -3155,6 +3184,11 @@ RULES:
                         
                         # Extract column descriptions from join_metadata for parallel search
                         print(f"[Suggestion Service] REGENERATE: join_metadata exists: {bool(join_metadata_str)}, type: {type(join_metadata_str)}")
+                        
+                        # Get target column datatype and domain for better VS matching
+                        regen_datatype = suggestion.get('tgt_physical_datatype', '')
+                        regen_domain = suggestion.get('domain', '')
+                        
                         if join_metadata_str:
                             print(f"[Suggestion Service] REGENERATE: join_metadata preview: {str(join_metadata_str)[:300]}...")
                             try:
@@ -3171,16 +3205,21 @@ RULES:
                                             'description': desc if desc else orig_col,
                                             'column_name': orig_col,
                                             'role': role,
-                                            'is_constant': True
+                                            'is_constant': True,
+                                            'datatype': regen_datatype,
+                                            'domain': regen_domain
                                         })
                                         continue
                                     
                                     # Build columns_to_map for parallel vector search
+                                    # Include datatype and domain for better matching
                                     columns_to_map.append({
                                         'description': desc if desc else orig_col,
                                         'column_name': orig_col,
                                         'role': role,
-                                        'is_constant': False
+                                        'is_constant': False,
+                                        'datatype': regen_datatype,
+                                        'domain': regen_domain
                                     })
                                     
                                     # Also build combined search_terms for fallback (only non-constant)
