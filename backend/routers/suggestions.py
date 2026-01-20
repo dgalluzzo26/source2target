@@ -233,7 +233,7 @@ async def skip_suggestion(suggestion_id: int, request: SuggestionSkipRequest):
     2. Update table and project counters
     
     Skipped columns can be revisited later.
-    Use this for columns that don't need mapping or need manual handling.
+    Use this for columns that do not need mapping or need manual handling.
     """
     try:
         result = await suggestion_service.skip_suggestion(suggestion_id, request)

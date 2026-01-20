@@ -745,10 +745,18 @@ class SuggestionService:
             )
     
     def _escape_sql(self, value: str) -> str:
-        """Escape single quotes for SQL strings."""
+        """Escape special characters for SQL strings."""
         if value is None:
             return ""
-        return value.replace("'", "''")
+        # Convert to string if not already
+        value = str(value)
+        # Escape backslashes first (before other escapes)
+        value = value.replace("\\", "\\\\")
+        # Escape single quotes
+        value = value.replace("'", "''")
+        # Remove null bytes (can cause issues)
+        value = value.replace("\x00", "")
+        return value
     
     # =========================================================================
     # VECTOR SEARCH: Find matching source fields
@@ -2498,7 +2506,8 @@ RULES:
                         
                         suggestion_data["pattern_mapped_field_id"] = pattern["mapped_field_id"]
                         suggestion_data["pattern_type"] = pattern.get("source_relationship_type")
-                        suggestion_data["pattern_sql"] = pattern.get("source_expression")
+                        pattern_sql = pattern.get("source_expression")  # Local variable for use below
+                        suggestion_data["pattern_sql"] = pattern_sql
                         suggestion_data["pattern_signature"] = pattern.get("_signature")
                         suggestion_data["pattern_description"] = pattern.get("_signature_description")
                         
@@ -3629,8 +3638,24 @@ RULES:
                 
                 suggestion = dict(zip(columns, row))
                 
+                # Validate required fields
+                required_fields = ['semantic_field_id', 'project_id', 'tgt_table_name', 
+                                   'tgt_table_physical_name', 'tgt_column_name', 'tgt_column_physical_name']
+                missing_fields = [f for f in required_fields if not suggestion.get(f)]
+                if missing_fields:
+                    error_msg = f"Missing required fields: {', '.join(missing_fields)}"
+                    print(f"[Suggestion Service] {error_msg}")
+                    return {"error": error_msg, "suggestion_id": suggestion_id}
+                
                 # Determine which SQL to use
                 final_sql = edited_sql if edited_sql else suggestion.get("suggested_sql", "")
+                
+                # Validate SQL is not empty
+                if not final_sql or not final_sql.strip():
+                    error_msg = "Cannot approve: No SQL expression available"
+                    print(f"[Suggestion Service] {error_msg}")
+                    return {"error": error_msg, "suggestion_id": suggestion_id}
+                
                 status = "EDITED" if edited_sql else "APPROVED"
                 
                 # Parse matched source fields for metadata
@@ -3796,8 +3821,17 @@ RULES:
                 }
                 
         except Exception as e:
-            print(f"[Suggestion Service] Error approving suggestion: {str(e)}")
-            raise
+            import traceback
+            error_details = str(e)
+            print(f"[Suggestion Service] Error approving suggestion {suggestion_id}: {error_details}")
+            print(f"[Suggestion Service] Full traceback:")
+            traceback.print_exc()
+            
+            # Return error instead of raising to give more useful error message
+            return {
+                "error": f"Database error: {error_details}",
+                "suggestion_id": suggestion_id
+            }
         finally:
             connection.close()
     
