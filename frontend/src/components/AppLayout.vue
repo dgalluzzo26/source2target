@@ -33,9 +33,21 @@
             </router-link>
           </li>
           
-          <!-- Main Workflow -->
+          <!-- V4 Target-First Workflow -->
           <li class="menu-section" v-if="!sidebarCollapsed">
-            <span class="menu-section-label">Mapping Workflow</span>
+            <span class="menu-section-label">Target-First Mapping</span>
+          </li>
+          <li>
+            <router-link to="/projects" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Projects' : ''">
+              <i class="layout-menuitem-icon pi pi-folder"></i>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Projects</span>
+            </router-link>
+          </li>
+          
+          <!-- V3 Source-First Workflow (Legacy) - Hidden, accessible via direct URL if needed -->
+          <!-- 
+          <li class="menu-section" v-if="!sidebarCollapsed">
+            <span class="menu-section-label">Source-First (Legacy)</span>
           </li>
           <li>
             <router-link to="/unmapped-fields" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Create Mappings' : ''">
@@ -49,13 +61,7 @@
               <span class="layout-menuitem-text" v-if="!sidebarCollapsed">View Mappings</span>
             </router-link>
           </li>
-          <li>
-            <a href="/help/auto-mapper-mockup.html" target="_blank" class="layout-menuitem-link mockup-link" v-tooltip.right="sidebarCollapsed ? 'Auto Mapper Mock-up' : ''">
-              <i class="layout-menuitem-icon pi pi-bolt"></i>
-              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Auto Mapper Mock-up</span>
-              <span class="mockup-badge" v-if="!sidebarCollapsed">NEW</span>
-            </a>
-          </li>
+          -->
           
           <!-- Admin Section -->
           <li class="menu-section" v-if="!sidebarCollapsed && userStore.isAdmin">
@@ -68,9 +74,9 @@
             </router-link>
           </li>
           <li v-if="userStore.isAdmin">
-            <router-link to="/admin" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Transformation Management' : ''">
-              <i class="layout-menuitem-icon pi pi-shield"></i>
-              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Transformation Management</span>
+            <router-link to="/admin/patterns" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'Import Patterns' : ''">
+              <i class="layout-menuitem-icon pi pi-upload"></i>
+              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Import Patterns</span>
             </router-link>
           </li>
           <li v-if="userStore.isAdmin">
@@ -78,13 +84,6 @@
               <i class="layout-menuitem-icon pi pi-cog"></i>
               <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Settings</span>
             </router-link>
-          </li>
-          <li v-if="userStore.isAdmin">
-            <a href="/help/code-generation-mockup.html" target="_blank" class="layout-menuitem-link mockup-link" v-tooltip.right="sidebarCollapsed ? 'Code Generation Mock-up' : ''">
-              <i class="layout-menuitem-icon pi pi-code"></i>
-              <span class="layout-menuitem-text" v-if="!sidebarCollapsed">Code Generation Mock-up</span>
-              <span class="mockup-badge" v-if="!sidebarCollapsed">NEW</span>
-            </a>
           </li>
           
           <!-- Help Section -->
@@ -360,23 +359,6 @@ onMounted(() => {
 
 .layout-menuitem-text {
   font-weight: 500;
-}
-
-/* Mockup Link Styling */
-.mockup-link {
-  position: relative;
-}
-
-.mockup-badge {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: white;
-  font-size: 0.6rem;
-  padding: 2px 6px;
-  border-radius: 8px;
-  font-weight: 700;
-  margin-left: auto;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 /* Help Button Wrapper in Sidebar */

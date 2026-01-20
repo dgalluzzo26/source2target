@@ -72,10 +72,10 @@
               <InputText 
                 id="warehouse_name"
                 v-model="config.database.warehouse_name"
-                placeholder="Name of the Databricks SQL warehouse to use"
+                placeholder="Name of the Databricks SQL warehouse"
                 class="w-full"
               />
-              <small>Name of the Databricks SQL warehouse to use</small>
+              <small>Display name of the SQL warehouse (for status messages)</small>
             </div>
 
             <div class="field-group">
@@ -129,97 +129,18 @@
               <InputText 
                 id="schema"
                 v-model="config.database.schema"
-                placeholder="e.g., source2target"
+                placeholder="e.g., smartmapper"
                 class="w-full"
               />
-              <small>Databricks schema name</small>
+              <small>Databricks schema name - all tables use standard names within this schema</small>
             </div>
 
-            <Divider />
-
-            <h4>V2 Table Configuration</h4>
             <Message severity="info" :closable="false" class="table-config-note">
-              <strong>Note:</strong> Enter table names only. The catalog and schema specified above will be automatically prepended.
+              <strong>Standard Tables:</strong> The following tables are used automatically within your catalog.schema:
               <br />
-              Example: Enter <code>semantic_fields</code> instead of <code>catalog.schema.semantic_fields</code>
+              <code>semantic_fields</code>, <code>unmapped_fields</code>, <code>mapped_fields</code>, 
+              <code>mapping_projects</code>, <code>target_table_status</code>, <code>mapping_suggestions</code>, <code>mapping_feedback</code>
             </Message>
-
-            <div class="field">
-              <label for="semantic_fields_table">Semantic Fields Table</label>
-              <InputText 
-                id="semantic_fields_table"
-                v-model="config.database.semantic_fields_table"
-                placeholder="semantic_fields"
-                class="w-full"
-              />
-              <small>Target field definitions for AI mapping (table name only)</small>
-            </div>
-
-            <div class="field">
-              <label for="unmapped_fields_table">Unmapped Fields Table</label>
-              <InputText 
-                id="unmapped_fields_table"
-                v-model="config.database.unmapped_fields_table"
-                placeholder="unmapped_fields"
-                class="w-full"
-              />
-              <small>Source fields awaiting mapping (table name only)</small>
-            </div>
-
-            <div class="field">
-              <label for="mapped_fields_table">Mapped Fields Table</label>
-              <InputText 
-                id="mapped_fields_table"
-                v-model="config.database.mapped_fields_table"
-                placeholder="mapped_fields"
-                class="w-full"
-              />
-              <small>Target fields with completed mappings (table name only)</small>
-            </div>
-
-            <div class="field">
-              <label for="mapping_details_table">Mapping Details Table</label>
-              <InputText 
-                id="mapping_details_table"
-                v-model="config.database.mapping_details_table"
-                placeholder="mapping_details"
-                class="w-full"
-              />
-              <small>Source field details for each mapping (table name only)</small>
-            </div>
-
-            <div class="field">
-              <label for="mapping_joins_table">Mapping Joins Table</label>
-              <InputText 
-                id="mapping_joins_table"
-                v-model="config.database.mapping_joins_table"
-                placeholder="mapping_joins"
-                class="w-full"
-              />
-              <small>Join definitions for multi-table mappings (table name only)</small>
-            </div>
-
-            <div class="field">
-              <label for="mapping_feedback_table">Mapping Feedback Table</label>
-              <InputText 
-                id="mapping_feedback_table"
-                v-model="config.database.mapping_feedback_table"
-                placeholder="mapping_feedback"
-                class="w-full"
-              />
-              <small>User feedback on AI suggestions (table name only)</small>
-            </div>
-
-            <div class="field">
-              <label for="transformation_library_table">Transformation Library Table</label>
-              <InputText 
-                id="transformation_library_table"
-                v-model="config.database.transformation_library_table"
-                placeholder="transformation_library"
-                class="w-full"
-              />
-              <small>Reusable transformation templates (table name only)</small>
-            </div>
           </div>
         </div>
       </TabPanel>
@@ -247,17 +168,6 @@
             </div>
 
             <div class="field">
-              <label for="previous_mappings_table">Previous Mappings Table</label>
-              <InputText 
-                id="previous_mappings_table"
-                v-model="config.ai_model.previous_mappings_table_name"
-                placeholder="mapped_fields"
-                class="w-full"
-              />
-              <small>Table containing historical mappings for training context (table name only)</small>
-            </div>
-
-            <div class="field">
               <label for="default_prompt">Default AI Prompt Template</label>
               <Textarea 
                 id="default_prompt"
@@ -280,18 +190,18 @@
         </template>
         <div class="config-section">
           <h3>Vector Search Configuration</h3>
-          <p>Configure vector search index for semantic field matching.</p>
+          <p>Configure vector search index for source field matching during AI discovery.</p>
 
           <div class="config-form">
             <div class="field">
-              <label for="vector_index_name">Vector Search Index Name</label>
+              <label for="unmapped_fields_index">Unmapped Fields VS Index</label>
               <InputText 
-                id="vector_index_name"
-                v-model="config.vector_search.index_name"
-                placeholder="catalog.schema.semantic_fields_vs"
+                id="unmapped_fields_index"
+                v-model="config.vector_search.unmapped_fields_index"
+                placeholder="catalog.schema.unmapped_fields_vs"
                 class="w-full"
               />
-              <small>Fully qualified name of the Vector Search index (catalog.schema.index_name required)</small>
+              <small>Vector search index for matching SOURCE fields to patterns (fully qualified: catalog.schema.index_name)</small>
             </div>
 
             <div class="field-group">
@@ -300,7 +210,7 @@
                 <InputText 
                   id="vector_endpoint_name"
                   v-model="config.vector_search.endpoint_name"
-                  placeholder="s2t_vsendpoint"
+                  placeholder="smartmapper_vs_endpoint"
                   class="w-full"
                 />
                 <small>Name of the Vector Search endpoint</small>
@@ -317,6 +227,7 @@
                 />
               </div>
             </div>
+
           </div>
         </div>
       </TabPanel>
@@ -405,25 +316,65 @@
 
           <div class="config-form">
             <div class="field">
-              <label for="admin_group_name">Admin Group Name</label>
+              <label for="admin_users">Admin Users</label>
+              <Textarea 
+                id="admin_users"
+                v-model="adminUsersText"
+                placeholder="david.galluzzo@gainwelltechnologies.com&#10;another.admin@company.com"
+                class="w-full"
+                rows="4"
+              />
+              <small>Email addresses of admin users (one per line). Admins can access Settings, Import Patterns, and Semantic Management.</small>
+            </div>
+
+            <div class="field">
+              <label for="admin_group_name">Admin Group Name (Legacy)</label>
               <InputText 
                 id="admin_group_name"
                 v-model="config.security.admin_group_name"
                 placeholder="gia-oztest-dev-ue1-data-engineers"
                 class="w-full"
+                disabled
               />
-              <small>Databricks group name for administrator access</small>
+              <small>Legacy: Databricks group membership check (not currently used)</small>
+            </div>
+          </div>
+        </div>
+      </TabPanel>
+
+      <!-- Project Types Tab -->
+      <TabPanel>
+        <template #header>
+          <i class="pi pi-folder"></i>
+          <span class="tab-label">Project Types</span>
+        </template>
+        <div class="config-section">
+          <h3>Project Types Configuration</h3>
+          <p>Configure the project types available for pattern filtering. Projects and patterns are tagged with a type, and pattern matching only uses patterns of the same type.</p>
+
+          <div class="config-form">
+            <div class="field">
+              <label for="project_types">Available Project Types</label>
+              <Textarea 
+                id="project_types"
+                v-model="projectTypesText"
+                placeholder="Interchange&#10;Qnxt"
+                class="w-full"
+                rows="6"
+              />
+              <small>One project type per line (e.g., Interchange, Qnxt).</small>
             </div>
 
             <div class="field">
-              <label class="checkbox-label">
-                <Checkbox 
-                  v-model="config.security.enable_password_auth"
-                  :binary="true"
-                />
-                <span>Enable Password Authentication</span>
-              </label>
-              <small>Allow password-based authentication as fallback</small>
+              <label for="default_type">Default Project Type</label>
+              <Dropdown 
+                id="default_type"
+                v-model="config.project_types.default_type"
+                :options="config.project_types.available_types"
+                placeholder="Select default type"
+                class="w-full"
+              />
+              <small>Default type for new projects</small>
             </div>
           </div>
         </div>
@@ -521,6 +472,8 @@
 import { ref, onMounted, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
 import HelpButton from '@/components/HelpButton.vue'
+import Textarea from 'primevue/textarea'
+import Dropdown from 'primevue/dropdown'
 
 const userStore = useUserStore()
 
@@ -529,30 +482,21 @@ const isAuthenticated = computed(() => true) // userStore.isAdmin
 
 // Configuration data structure based on original app
 // NOTE: Table names should be just the table name, catalog.schema is prepended automatically
+// V3 Schema: 5 core tables (semantic_fields, unmapped_fields, mapped_fields, mapping_feedback, transformation_library)
 const config = ref({
   database: {
     warehouse_name: 'gia-oztest-dev-data-warehouse',
     catalog: 'oztest_dev',
-    schema: 'source2target',
-    semantic_fields_table: 'semantic_fields',
-    unmapped_fields_table: 'unmapped_fields',
-    mapped_fields_table: 'mapped_fields',
-    mapping_details_table: 'mapping_details',
-    mapping_joins_table: 'mapping_joins',
-    mapping_feedback_table: 'mapping_feedback',
-    transformation_library_table: 'transformation_library',
+    schema: 'smartmapper',
     server_hostname: 'Acuity-oz-test-ue1.cloud.databricks.com',
-    http_path: '/sql/1.0/warehouses/173ea239ed13be7d',
-    mapping_table: undefined,
-    semantic_table: undefined
+    http_path: '/sql/1.0/warehouses/173ea239ed13be7d'
   },
   ai_model: {
-    previous_mappings_table_name: 'mapped_fields',
     foundation_model_endpoint: 'databricks-meta-llama-3-3-70b-instruct',
     default_prompt: ''
   },
   ui: {
-    app_title: 'Source-to-Target Mapping Platform',
+    app_title: 'Smart Mapper',
     theme_color: '#4a5568',
     sidebar_expanded: true
   },
@@ -560,13 +504,40 @@ const config = ref({
     support_url: 'https://mygainwell.sharepoint.com'
   },
   vector_search: {
-    index_name: 'oztest_dev.source2target.semantic_fields_vs',
+    unmapped_fields_index: 'oztest_dev.smartmapper.unmapped_fields_vs',
     endpoint_name: 's2t_vsendpoint'
   },
   security: {
+    admin_users: ['david.galluzzo@gainwelltechnologies.com', 'meenakshishankar.chandrasekharan@gainwelltechnologies.com', 'santhosh.ravindrabharathy@gainwelltechnologies.com'],
     admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
     enable_password_auth: true,
     admin_password_hash: ''
+  },
+  project_types: {
+    available_types: ['Interchange', 'Qnxt'],
+    default_type: 'Interchange'
+  }
+})
+
+// Computed property for admin users text (one per line)
+const adminUsersText = computed({
+  get: () => (config.value.security.admin_users || []).join('\n'),
+  set: (val: string) => {
+    config.value.security.admin_users = val
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && s.includes('@'))
+  }
+})
+
+// Computed property for project types text (one per line)
+const projectTypesText = computed({
+  get: () => (config.value.project_types?.available_types || []).join('\n'),
+  set: (val: string) => {
+    config.value.project_types.available_types = val
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
   }
 })
 
@@ -579,9 +550,29 @@ const loading = ref({
   reset: false
 })
 
-// Methods (Frontend-only mode with dummy data)
+// Methods
 const loadConfiguration = async () => {
-  console.log('Configuration loaded from dummy data')
+  try {
+    const response = await fetch('/api/config')
+    if (response.ok) {
+      const savedConfig = await response.json()
+      // Merge saved config with defaults to ensure all fields exist
+      config.value = {
+        database: { ...config.value.database, ...savedConfig.database },
+        ai_model: { ...config.value.ai_model, ...savedConfig.ai_model },
+        ui: { ...config.value.ui, ...savedConfig.ui },
+        support: { ...config.value.support, ...savedConfig.support },
+        vector_search: { ...config.value.vector_search, ...savedConfig.vector_search },
+        security: { ...config.value.security, ...savedConfig.security },
+        project_types: { ...config.value.project_types, ...savedConfig.project_types }
+      }
+      console.log('Configuration loaded from backend')
+    } else {
+      console.log('Failed to load config from backend, using defaults')
+    }
+  } catch (error) {
+    console.log('Config API not available, using defaults:', error)
+  }
 }
 
 const testDatabaseConnection = async () => {
@@ -602,10 +593,29 @@ const testVectorSearch = async () => {
 
 const saveConfiguration = async () => {
   loading.value.save = true
-  setTimeout(() => {
-    console.log('Configuration saved (simulated)')
+  try {
+    // Save configuration to backend using PUT
+    const response = await fetch('/api/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config.value)
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      console.log('Configuration saved successfully:', result)
+      alert('Configuration saved successfully!')
+    } else {
+      const errorText = await response.text()
+      console.error('Failed to save configuration:', errorText)
+      alert(`Failed to save configuration: ${errorText}`)
+    }
+  } catch (error) {
+    console.error('Config API error:', error)
+    alert('Failed to save configuration. Please check the console for details.')
+  } finally {
     loading.value.save = false
-  }, 1000)
+  }
 }
 
 const exportConfiguration = async () => {
@@ -649,31 +659,21 @@ const importConfiguration = (event: any) => {
 const resetConfiguration = async () => {
   loading.value.reset = true
   setTimeout(() => {
-    // Reset to default values (table names only, catalog.schema prepended automatically)
+    // Reset to V3 default values (table names only, catalog.schema prepended automatically)
     config.value = {
       database: {
         warehouse_name: 'gia-oztest-dev-data-warehouse',
         catalog: 'oztest_dev',
-        schema: 'source2target',
-        semantic_fields_table: 'semantic_fields',
-        unmapped_fields_table: 'unmapped_fields',
-        mapped_fields_table: 'mapped_fields',
-        mapping_details_table: 'mapping_details',
-        mapping_joins_table: 'mapping_joins',
-        mapping_feedback_table: 'mapping_feedback',
-        transformation_library_table: 'transformation_library',
+        schema: 'smartmapper',
         server_hostname: 'Acuity-oz-test-ue1.cloud.databricks.com',
-        http_path: '/sql/1.0/warehouses/173ea239ed13be7d',
-        mapping_table: undefined,
-        semantic_table: undefined
+        http_path: '/sql/1.0/warehouses/173ea239ed13be7d'
       },
       ai_model: {
-        previous_mappings_table_name: 'mapped_fields',
         foundation_model_endpoint: 'databricks-meta-llama-3-3-70b-instruct',
         default_prompt: ''
       },
       ui: {
-        app_title: 'Source-to-Target Mapping Platform',
+        app_title: 'Smart Mapper',
         theme_color: '#4a5568',
         sidebar_expanded: true
       },
@@ -681,13 +681,18 @@ const resetConfiguration = async () => {
         support_url: 'https://mygainwell.sharepoint.com'
       },
       vector_search: {
-        index_name: 'oztest_dev.source2target.semantic_fields_vs',
+        unmapped_fields_index: 'oztest_dev.smartmapper.unmapped_fields_vs',
         endpoint_name: 's2t_vsendpoint'
       },
       security: {
+        admin_users: ['david.galluzzo@gainwelltechnologies.com', 'meenakshishankar.chandrasekharan@gainwelltechnologies.com', 'santhosh.ravindrabharathy@gainwelltechnologies.com'],
         admin_group_name: 'gia-oztest-dev-ue1-data-engineers',
         enable_password_auth: true,
         admin_password_hash: ''
+      },
+      project_types: {
+        available_types: ['Interchange', 'Qnxt'],
+        default_type: 'Interchange'
       }
     }
     console.log('Configuration reset to defaults')
@@ -864,5 +869,69 @@ onMounted(() => {
   overflow-x: auto;
   max-height: 400px;
   overflow-y: auto;
+}
+
+/* Threshold sliders */
+.threshold-info {
+  margin-bottom: 1.5rem;
+}
+
+.threshold-field {
+  margin-bottom: 1.5rem;
+}
+
+.threshold-field label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.threshold-field label strong {
+  color: var(--gainwell-primary);
+  font-family: 'Courier New', monospace;
+  font-size: 1.1em;
+}
+
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  padding: 0 0.5rem;
+}
+
+.slider-label {
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+.slider-label:first-child {
+  text-align: right;
+}
+
+.slider-label:last-child {
+  text-align: left;
+}
+
+.threshold-slider {
+  flex: 1;
+}
+
+:deep(.threshold-slider .p-slider-range) {
+  background: linear-gradient(90deg, var(--green-500), var(--orange-500), var(--red-500));
+}
+
+:deep(.threshold-slider .p-slider-handle) {
+  border-color: var(--gainwell-primary);
+  background: white;
+}
+
+.threshold-actions {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--surface-border);
 }
 </style>

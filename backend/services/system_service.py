@@ -89,41 +89,6 @@ class SystemService:
                     "message": f"Warehouse '{warehouse_name}' configured (not connected)"
                 }
             
-            # First, check if warehouse is running using WorkspaceClient
-            if self.workspace_client:
-                try:
-                    print(f"[DB Check] Checking warehouse state for {warehouse_name}")
-                    warehouses = list(self.workspace_client.warehouses.list())
-                    
-                    for wh in warehouses:
-                        if wh.name == warehouse_name:
-                            print(f"[DB Check] Found warehouse, state: {wh.state}")
-                            
-                            if hasattr(wh, 'state'):
-                                if str(wh.state).upper() == 'STOPPED':
-                                    return {
-                                        "status": "Warning",
-                                        "message": f"Warehouse '{warehouse_name}' is stopped"
-                                    }
-                                elif str(wh.state).upper() == 'STARTING':
-                                    return {
-                                        "status": "Warning",
-                                        "message": f"Warehouse '{warehouse_name}' is starting..."
-                                    }
-                            
-                            # Warehouse is running, proceed with connection
-                            break
-                    else:
-                        print(f"[DB Check] Warehouse {warehouse_name} not found in list")
-                        return {
-                            "status": "Error",
-                            "message": f"Warehouse '{warehouse_name}' not found"
-                        }
-                        
-                except Exception as e:
-                    print(f"[DB Check] Could not check warehouse state: {e}")
-                    # Continue anyway, maybe warehouse check requires different permissions
-            
             print(f"[DB Check] Attempting connection to {hostname} with path {http_path}")
             
             # Try to get OAuth token from WorkspaceClient config
@@ -147,10 +112,11 @@ class SystemService:
                     access_token=access_token
                 )
             else:
-                print(f"[DB Check] Connecting without explicit token (using default auth)")
+                print(f"[DB Check] Connecting with databricks-oauth auth type")
                 conn = sql.connect(
                     server_hostname=hostname,
-                    http_path=http_path
+                    http_path=http_path,
+                    auth_type="databricks-oauth"
                 )
             
             print(f"[DB Check] Connection established, executing test query")

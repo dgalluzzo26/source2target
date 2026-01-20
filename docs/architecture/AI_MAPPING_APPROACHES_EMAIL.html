@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Mapper - AI Architecture Approaches</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; background-color: #f5f5f5;">
+    
+    <!-- Main Container -->
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f5f5f5;">
+        <tr>
+            <td align="center" style="padding: 20px 10px;">
+                
+                <!-- Content Container -->
+                <table role="presentation" width="700" cellspacing="0" cellpadding="0" border="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #10b981 0%, #6366f1 100%); padding: 30px; border-radius: 8px 8px 0 0; text-align: center;">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 28px;">🧠 Smart Mapper AI Architecture</h1>
+                            <p style="margin: 10px 0 0 0; color: rgba(255,255,255,0.9); font-size: 16px;">Alternative Design Approaches</p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Problem Statement -->
+                    <tr>
+                        <td style="padding: 30px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #fff8e6; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <h3 style="margin: 0 0 10px 0; color: #b45309;">📋 Problem Statement</h3>
+                                        <p style="margin: 0 0 15px 0; color: #555;">Source table/column <strong>names are completely different</strong> from target names, but column <strong>descriptions ARE similar</strong>. We need to:</p>
+                                        <ul style="margin: 0; padding-left: 20px; color: #555;">
+                                            <li style="margin-bottom: 5px;">Match source to target using description similarity</li>
+                                            <li style="margin-bottom: 5px;">Learn transformations (TRIM, UPPER) from historical patterns</li>
+                                            <li style="margin-bottom: 5px;">Detect single vs multi-field mappings</li>
+                                            <li style="margin-bottom: 5px;">Determine JOIN vs UNION for multi-table sources</li>
+                                            <li>Avoid previously rejected mappings</li>
+                                        </ul>
+                                        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 4px; margin-top: 15px; font-family: 'Courier New', monospace; font-size: 13px;">
+                                            <strong style="color: #b45309;">Example:</strong><br>
+                                            Source: <code style="background: #e5e5e5; padding: 2px 6px; border-radius: 3px;">patient_data.mbr_ssn_num</code> ("Social security number of the patient")<br>
+                                            Target: <code style="background: #e5e5e5; padding: 2px 6px; border-radius: 3px;">Member.SSN</code> ("Member social security number")<br><br>
+                                            <em style="color: #666;">Names don't match, but descriptions are semantically similar!</em>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Approach 1 -->
+                    <tr>
+                        <td style="padding: 0 30px 30px 30px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border: 1px solid #ddd; border-radius: 8px;">
+                                <tr>
+                                    <td style="background-color: #3b82f6; padding: 15px 20px; border-radius: 8px 8px 0 0;">
+                                        <h3 style="margin: 0; color: #ffffff;">🔵 Approach 1: Sequential (Target-First)</h3>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <p style="margin: 0 0 15px 0; color: #555;">Vector search targets first, then exact lookup history by target name.</p>
+                                        
+                                        <!-- Flow -->
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f8f9fa; border-radius: 4px; margin-bottom: 15px;">
+                                            <tr>
+                                                <td style="padding: 15px; font-family: 'Courier New', monospace; font-size: 12px; color: #333;">
+                                                    <strong>STEP 1:</strong> Vector Search Targets (by source description)<br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+                                                    <strong>STEP 2:</strong> Exact Lookup History (WHERE tgt_column = 'SSN')<br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+                                                    <strong>STEP 3:</strong> Exact Lookup Rejections (for those targets)<br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+                                                    <strong>STEP 4:</strong> LLM Analysis → Recommendations
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        
+                                        <!-- Pros/Cons -->
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                            <tr>
+                                                <td width="48%" valign="top" style="background-color: #ecfdf5; padding: 15px; border-radius: 4px;">
+                                                    <strong style="color: #059669;">✅ Pros</strong>
+                                                    <ul style="margin: 10px 0 0 0; padding-left: 18px; color: #555; font-size: 13px;">
+                                                        <li>Simpler to implement</li>
+                                                        <li>Only 1 vector index needed</li>
+                                                        <li>History is highly relevant</li>
+                                                        <li>Lower infrastructure cost</li>
+                                                    </ul>
+                                                </td>
+                                                <td width="4%"></td>
+                                                <td width="48%" valign="top" style="background-color: #fef2f2; padding: 15px; border-radius: 4px;">
+                                                    <strong style="color: #dc2626;">❌ Cons</strong>
+                                                    <ul style="margin: 10px 0 0 0; padding-left: 18px; color: #555; font-size: 13px;">
+                                                        <li>Sequential = slower</li>
+                                                        <li>History can't influence target selection</li>
+                                                        <li>Misses patterns if best target not in top N</li>
+                                                    </ul>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Approach 2 -->
+                    <tr>
+                        <td style="padding: 0 30px 30px 30px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border: 1px solid #ddd; border-radius: 8px;">
+                                <tr>
+                                    <td style="background-color: #8b5cf6; padding: 15px 20px; border-radius: 8px 8px 0 0;">
+                                        <h3 style="margin: 0; color: #ffffff;">🟣 Approach 2: Parallel (All Vector Search)</h3>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <p style="margin: 0 0 15px 0; color: #555;">Three parallel vector searches, all using source description.</p>
+                                        
+                                        <!-- Flow -->
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f8f9fa; border-radius: 4px; margin-bottom: 15px;">
+                                            <tr>
+                                                <td style="padding: 15px; font-family: 'Courier New', monospace; font-size: 12px; color: #333;">
+                                                    Source Field (with description)<br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│<br>
+                                                    ┌───────┼───────┐<br>
+                                                    ↓&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+                                                    <strong>Vector</strong>&nbsp;&nbsp;<strong>Vector</strong>&nbsp;&nbsp;<strong>Vector</strong><br>
+                                                    TARGETS&nbsp;PATTERNS&nbsp;REJECTIONS<br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│<br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+                                                    <strong>LLM Analysis</strong> → Recommendations
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        
+                                        <!-- Pros/Cons -->
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                            <tr>
+                                                <td width="48%" valign="top" style="background-color: #ecfdf5; padding: 15px; border-radius: 4px;">
+                                                    <strong style="color: #059669;">✅ Pros</strong>
+                                                    <ul style="margin: 10px 0 0 0; padding-left: 18px; color: #555; font-size: 13px;">
+                                                        <li>All searches run in parallel (fast)</li>
+                                                        <li>History influences target selection</li>
+                                                        <li>Cross-target learning possible</li>
+                                                        <li>More holistic view for LLM</li>
+                                                    </ul>
+                                                </td>
+                                                <td width="4%"></td>
+                                                <td width="48%" valign="top" style="background-color: #fef2f2; padding: 15px; border-radius: 4px;">
+                                                    <strong style="color: #dc2626;">❌ Cons</strong>
+                                                    <ul style="margin: 10px 0 0 0; padding-left: 18px; color: #555; font-size: 13px;">
+                                                        <li>3 vector indexes to maintain</li>
+                                                        <li>Results may be noisy</li>
+                                                        <li>Higher infrastructure cost</li>
+                                                        <li>More complex to implement</li>
+                                                    </ul>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Approach 3 (Recommended) -->
+                    <tr>
+                        <td style="padding: 0 30px 30px 30px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border: 2px solid #10b981; border-radius: 8px;">
+                                <tr>
+                                    <td style="background-color: #10b981; padding: 15px 20px; border-radius: 6px 6px 0 0;">
+                                        <h3 style="margin: 0; color: #ffffff;">🟢 Approach 3: Hybrid (Two-Stage) ⭐ RECOMMENDED</h3>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <p style="margin: 0 0 15px 0; color: #555;">Vector search targets + patterns in parallel, then exact lookup rejections for top candidates.</p>
+                                        
+                                        <!-- Flow -->
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f8f9fa; border-radius: 4px; margin-bottom: 15px;">
+                                            <tr>
+                                                <td style="padding: 15px; font-family: 'Courier New', monospace; font-size: 12px; color: #333;">
+                                                    <strong style="color: #10b981;">═══ STAGE 1: PARALLEL DISCOVERY ═══</strong><br><br>
+                                                    Source Field<br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;├────────────┐<br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;↓&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+                                                    Vector Search&nbsp;&nbsp;Vector Search<br>
+                                                    TARGETS&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PATTERNS<br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│<br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;└──────┬──────┘<br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+                                                    <strong>Merge & Rank Target Candidates</strong><br><br>
+                                                    <strong style="color: #10b981;">═══ STAGE 2: TARGETED LOOKUP ═══</strong><br><br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;├────────────┐<br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;↓&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+                                                    Exact Lookup&nbsp;&nbsp;&nbsp;Exact Lookup<br>
+                                                    PATTERNS&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;REJECTIONS<br>
+                                                    (for top targets)<br>
+                                                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+                                                    <strong>LLM Analysis</strong> → Recommendations
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        
+                                        <!-- Pros/Cons -->
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                            <tr>
+                                                <td width="48%" valign="top" style="background-color: #ecfdf5; padding: 15px; border-radius: 4px;">
+                                                    <strong style="color: #059669;">✅ Pros</strong>
+                                                    <ul style="margin: 10px 0 0 0; padding-left: 18px; color: #555; font-size: 13px;">
+                                                        <li>History influences target discovery</li>
+                                                        <li>Final context is targeted (less noise)</li>
+                                                        <li>Only 2 vector indexes needed</li>
+                                                        <li>Best of both worlds</li>
+                                                        <li>Balanced cost/accuracy</li>
+                                                    </ul>
+                                                </td>
+                                                <td width="4%"></td>
+                                                <td width="48%" valign="top" style="background-color: #fef2f2; padding: 15px; border-radius: 4px;">
+                                                    <strong style="color: #dc2626;">❌ Cons</strong>
+                                                    <ul style="margin: 10px 0 0 0; padding-left: 18px; color: #555; font-size: 13px;">
+                                                        <li>More complex than Approach 1</li>
+                                                        <li>Two stages = some sequential delay</li>
+                                                        <li>Need to tune candidate count</li>
+                                                    </ul>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Comparison Table -->
+                    <tr>
+                        <td style="padding: 0 30px 30px 30px;">
+                            <h3 style="margin: 0 0 15px 0; color: #333;">📊 Comparison Summary</h3>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border: 1px solid #ddd; border-radius: 8px; border-collapse: separate;">
+                                <tr style="background-color: #1e293b;">
+                                    <th style="padding: 12px; color: #fff; text-align: left; font-size: 13px; border-bottom: 1px solid #ddd;">Aspect</th>
+                                    <th style="padding: 12px; color: #fff; text-align: center; font-size: 13px; border-bottom: 1px solid #ddd;">1. Sequential</th>
+                                    <th style="padding: 12px; color: #fff; text-align: center; font-size: 13px; border-bottom: 1px solid #ddd;">2. Parallel</th>
+                                    <th style="padding: 12px; color: #fff; text-align: center; font-size: 13px; border-bottom: 1px solid #ddd; background-color: #10b981;">3. Hybrid ⭐</th>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; font-weight: bold; color: #333;">Vector Indexes</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #555;">1</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #555;">3</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #555; background-color: #f0fdf4;">2</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; font-weight: bold; color: #333;">Latency</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #555;">Medium</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #555;">Low</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #555; background-color: #f0fdf4;">Medium</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; font-weight: bold; color: #333;">Cost</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #555;">Low</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #555;">High</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #555; background-color: #f0fdf4;">Medium</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; font-weight: bold; color: #333;">History Influences Target?</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #dc2626;">❌ No</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #059669;">✅ Yes</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #059669; background-color: #f0fdf4;">✅ Yes</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; font-weight: bold; color: #333;">Cross-Target Learning</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #dc2626;">❌ No</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #059669;">✅ Yes</td>
+                                    <td style="padding: 10px 12px; border-bottom: 1px solid #eee; text-align: center; color: #555; background-color: #f0fdf4;">Partial</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 10px 12px; font-weight: bold; color: #333;">Best For</td>
+                                    <td style="padding: 10px 12px; text-align: center; color: #555;">Simple mappings</td>
+                                    <td style="padding: 10px 12px; text-align: center; color: #555;">Diverse sources</td>
+                                    <td style="padding: 10px 12px; text-align: center; color: #333; background-color: #f0fdf4;"><strong>General use</strong></td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Recommendation Box -->
+                    <tr>
+                        <td style="padding: 0 30px 30px 30px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: linear-gradient(135deg, #ecfdf5 0%, #ede9fe 100%); border: 2px solid #10b981; border-radius: 8px;">
+                                <tr>
+                                    <td style="padding: 25px;">
+                                        <h3 style="margin: 0 0 15px 0; color: #333;">💡 Recommendation: Approach 3 (Hybrid)</h3>
+                                        <p style="margin: 0 0 15px 0; color: #555;">The Hybrid approach provides the best balance of accuracy, performance, and cost:</p>
+                                        <ul style="margin: 0; padding-left: 20px; color: #555;">
+                                            <li style="margin-bottom: 8px;"><strong>History CAN influence target discovery</strong> (unlike Approach 1)</li>
+                                            <li style="margin-bottom: 8px;"><strong>Final context stays targeted</strong> (unlike Approach 2)</li>
+                                            <li style="margin-bottom: 8px;"><strong>Only 2 vector indexes needed</strong> (semantic_fields + mapping_patterns)</li>
+                                            <li><strong>Rejections use exact lookup</strong> (no extra vector index needed)</li>
+                                        </ul>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #1e293b; padding: 20px; border-radius: 0 0 8px 8px; text-align: center;">
+                            <p style="margin: 0; color: #94a3b8; font-size: 14px;">Smart Mapper - Intelligent Data Field Mapping</p>
+                            <p style="margin: 5px 0 0 0; color: #64748b; font-size: 12px;">Powered by Databricks AI</p>
+                        </td>
+                    </tr>
+                    
+                </table>
+                
+            </td>
+        </tr>
+    </table>
+    
+</body>
+</html>
+
+

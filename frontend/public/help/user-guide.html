@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Guide - Source-to-Target Mapping Platform</title>
+    <title>User Guide - Smart Mapper V4</title>
     <style>
         * {
             margin: 0;
@@ -118,17 +118,6 @@
             font-size: 0.9rem;
         }
 
-        .highlight {
-            background: #fff3cd;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-weight: 500;
-        }
-
-        strong {
-            color: #4a5568;
-        }
-
         table {
             width: 100%;
             border-collapse: collapse;
@@ -203,8 +192,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📖 User Guide</h1>
-            <p>Complete guide to field mapping workflows</p>
+            <h1>📖 Smart Mapper V4 User Guide</h1>
+            <p>Target-First Mapping Workflow</p>
         </div>
 
         <div class="toc">
@@ -212,621 +201,385 @@
             <ul>
                 <li><a href="#overview">1. Overview</a></li>
                 <li><a href="#getting-started">2. Getting Started</a></li>
-                <li><a href="#templates">3. Templates: Download & Upload</a></li>
-                <li><a href="#six-step-process">4. The 6-Step Mapping Process</a></li>
-                <li><a href="#view-mappings">5. Viewing and Managing Mappings</a></li>
-                <li><a href="#ai-workflow">6. AI Suggestion Workflow</a></li>
-                <li><a href="#best-practices">7. Best Practices</a></li>
-                <li><a href="#troubleshooting">8. Troubleshooting</a></li>
+                <li><a href="#create-project">3. Creating a Project</a></li>
+                <li><a href="#upload-sources">4. Uploading Source Fields</a></li>
+                <li><a href="#discovery">5. AI Discovery</a></li>
+                <li><a href="#review-suggestions">6. Reviewing Suggestions</a></li>
+                <li><a href="#actions">7. Suggestion Actions</a></li>
+                <li><a href="#best-practices">8. Best Practices</a></li>
+                <li><a href="#troubleshooting">9. Troubleshooting</a></li>
             </ul>
         </div>
 
         <div class="section" id="overview">
             <h2>1. Overview</h2>
-            <p>The Source-to-Target Mapping Platform helps you map source database fields to target database fields using AI-powered semantic matching. This guide focuses exclusively on creating, managing, and understanding field mappings.</p>
+            <p><strong>Smart Mapper V4</strong> uses a <strong>Target-First</strong> workflow for data mapping. Instead of mapping one source field at a time, you work through entire target tables with AI assistance.</p>
             
-            <h3>What You Can Do</h3>
-            <ul>
-                <li><strong>Download Templates:</strong> Export unmapped fields as CSV for offline work</li>
-                <li><strong>Upload Templates:</strong> Bulk import mappings from CSV files</li>
-                <li><strong>Create Multi-Field Mappings:</strong> Map 1-6 source fields to one target field</li>
-                <li><strong>Use AI Suggestions:</strong> Let AI recommend the best target matches</li>
-                <li><strong>Apply Transformations:</strong> Add SQL transformations to individual fields</li>
-                <li><strong>Configure Concatenation:</strong> Combine multiple fields with various strategies</li>
-                <li><strong>Define Join Conditions:</strong> Map fields from different tables with joins</li>
-                <li><strong>View & Edit Mappings:</strong> Review, edit, and export all mappings</li>
-            </ul>
+            <h3>Target-First vs Source-First</h3>
+            <table>
+                <tr>
+                    <th>Traditional (Source-First)</th>
+                    <th>V4 (Target-First)</th>
+                </tr>
+                <tr>
+                    <td>Select a source field</td>
+                    <td>Create a project</td>
+                </tr>
+                <tr>
+                    <td>Search for matching target</td>
+                    <td>Upload ALL source fields at once</td>
+                </tr>
+                <tr>
+                    <td>Configure the mapping</td>
+                    <td>Select a target table to map</td>
+                </tr>
+                <tr>
+                    <td>Repeat for each field</td>
+                    <td>AI suggests mappings for ALL columns</td>
+                </tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td>Review, approve, or edit each suggestion</td>
+                </tr>
+            </table>
 
-            <div class="tip-box">
-                <strong>💡 New in V2:</strong> Multi-field mapping allows you to combine multiple source fields (e.g., FIRST_NAME + LAST_NAME) into a single target field (e.g., full_name) with transformations and concatenation strategies.
-            </div>
+            <h3>Key Benefits</h3>
+            <ul>
+                <li>✅ <strong>Complete Coverage:</strong> See ALL target columns upfront, nothing missed</li>
+                <li>✅ <strong>AI-Powered:</strong> Suggestions for entire tables, not just one field</li>
+                <li>✅ <strong>Pattern Learning:</strong> AI uses historical mappings to suggest complex SQL</li>
+                <li>✅ <strong>Progress Tracking:</strong> Clear dashboard showing tables complete vs. remaining</li>
+                <li>✅ <strong>Team Collaboration:</strong> Multiple users can work on different tables</li>
+            </ul>
         </div>
 
         <div class="section" id="getting-started">
             <h2>2. Getting Started</h2>
             
-            <h3>Application Navigation</h3>
-            <p>The application has a collapsible sidebar on the left with the following sections:</p>
-
-            <h4>Main Navigation</h4>
-            <ul>
-                <li><strong>🏠 Introduction:</strong> System dashboard with health status and quick actions</li>
-                <li><strong>🗺️ Field Mapping:</strong> Main workspace with two tabs:
-                    <ul>
-                        <li><strong>📋 Unmapped Fields:</strong> Source fields that need mapping</li>
-                        <li><strong>✅ Mapped Fields:</strong> Completed mappings</li>
-                    </ul>
-                </li>
-            </ul>
-
-            <h4>Administration (Admin Only)</h4>
-            <p>If you have admin access, you'll see these additional menu items:</p>
-            <ul>
-                <li><strong>📊 Semantic Management:</strong> Manage target field definitions</li>
-                <li><strong>🛡️ Transformation Management:</strong> Manage SQL transformation templates</li>
-                <li><strong>⚙️ Settings:</strong> Configure database, vector search, and AI model</li>
-            </ul>
-
-            <h4>Help</h4>
-            <ul>
-                <li><strong>📖 User Guide:</strong> This guide (all users)</li>
-                <li><strong>🛡️ Admin Guide:</strong> Administration documentation (admin only)</li>
-            </ul>
-
-            <div class="tip-box">
-                <strong>💡 Tip:</strong> Click the hamburger menu (☰) at the top of the sidebar to collapse it and get more screen space for your work.
-            </div>
-
-            <h3>System Status Check</h3>
-            <p>Before starting, verify the system is ready:</p>
+            <h3>Accessing the Application</h3>
             <ol>
-                <li>Go to <strong>Introduction</strong> page from the sidebar</li>
-                <li>Check all four status indicators are green:
-                    <ul>
-                        <li>✅ Database Connection</li>
-                        <li>✅ Vector Search</li>
-                        <li>✅ AI Model</li>
-                        <li>✅ Configuration</li>
-                    </ul>
-                </li>
-                <li>If any show errors, contact your administrator</li>
+                <li>Navigate to your Databricks App URL</li>
+                <li>You will be automatically authenticated using your Databricks account</li>
+                <li>Your email is displayed in the header (top-right)</li>
             </ol>
 
-            <div class="warning-box">
-                <strong>⚠️ Important:</strong> All system components must be operational for AI suggestions to work correctly.
-            </div>
+            <h3>Navigation</h3>
+            <p>The sidebar has two main sections:</p>
 
-            <h3>Getting to Field Mapping</h3>
-            <p>To start creating mappings:</p>
-            <ol>
-                <li>Click <strong>Field Mapping</strong> in the sidebar</li>
-                <li>The <strong>Unmapped Fields</strong> tab opens by default</li>
-                <li>You're ready to start mapping!</li>
-            </ol>
+            <p><strong>📊 Mapping Workflow</strong></p>
+            <ul>
+                <li>🏠 <strong>Projects</strong> - Main dashboard, all your projects</li>
+            </ul>
+
+            <p><strong>🔧 Administration</strong> (Admins Only)</p>
+            <ul>
+                <li>💾 <strong>Semantic Fields</strong> - Manage target field definitions</li>
+                <li>📥 <strong>Pattern Import</strong> - Bulk load historical patterns</li>
+                <li>⚙️ <strong>Configuration</strong> - System settings</li>
+            </ul>
         </div>
 
-        <div class="section" id="templates">
-            <h2>3. Templates: Download & Upload</h2>
+        <div class="section" id="create-project">
+            <h2>3. Creating a Project</h2>
             
-            <h3>Downloading Templates</h3>
-            <p>Export unmapped fields to work offline or share with team members:</p>
+            <h3>Step 1: Click "New Project"</h3>
+            <p>From the Projects dashboard, click the <strong>"+ New Project"</strong> button.</p>
+
+            <h3>Step 2: Fill Project Details</h3>
+            <ul>
+                <li><strong>Project Name:</strong> Descriptive name (e.g., "DMES Member Migration Q1 2025")</li>
+                <li><strong>Description:</strong> Details about the migration project</li>
+                <li><strong>Source System:</strong> Name of the source system (e.g., "DMES", "MMIS")</li>
+                <li><strong>Target Domains:</strong> Filter target tables by domain (e.g., "Member", "Member|Claims")</li>
+            </ul>
+
+            <h3>Step 3: Add Team Members (Optional)</h3>
+            <p>Enter email addresses of colleagues who should have access to this project. Team members will see this project in their dashboard and can work on tables.</p>
+
+            <h3>Step 4: Save</h3>
+            <p>Click <strong>"Create Project"</strong>. You'll be taken to the project detail page.</p>
+        </div>
+
+        <div class="section" id="upload-sources">
+            <h2>4. Uploading Source Fields</h2>
+            
+            <h3>Why Upload All Sources First?</h3>
+            <p>The AI needs to know ALL your available source fields to make good suggestions. It matches target columns to the most semantically similar source columns.</p>
+
+            <h3>Step 1: Download the Template</h3>
             <ol>
-                <li>Go to <strong>Field Mapping → Unmapped Fields</strong> tab</li>
-                <li>Click <strong>📥 Download Template</strong> button</li>
-                <li>Save the CSV file (contains all unmapped source fields)</li>
-                <li>Open in Excel, Google Sheets, or any CSV editor</li>
+                <li>On the project detail page, click <strong>"Upload Sources"</strong></li>
+                <li>Click <strong>"Download Template"</strong> to get the CSV format</li>
             </ol>
 
-            <p><strong>Template Format:</strong></p>
+            <h3>Step 2: Fill the Template</h3>
             <table>
                 <tr>
                     <th>Column</th>
+                    <th>Required</th>
                     <th>Description</th>
-                    <th>Your Action</th>
                 </tr>
                 <tr>
                     <td><code>src_table_name</code></td>
-                    <td>Source table (read-only)</td>
-                    <td>Don't modify</td>
+                    <td>✅</td>
+                    <td>Logical table name</td>
+                </tr>
+                <tr>
+                    <td><code>src_table_physical_name</code></td>
+                    <td>✅</td>
+                    <td>Physical table name</td>
                 </tr>
                 <tr>
                     <td><code>src_column_name</code></td>
-                    <td>Source column (read-only)</td>
-                    <td>Don't modify</td>
+                    <td>✅</td>
+                    <td>Logical column name</td>
                 </tr>
                 <tr>
-                    <td><code>tgt_table_name</code></td>
-                    <td>Target table name</td>
-                    <td>Fill this in</td>
+                    <td><code>src_column_physical_name</code></td>
+                    <td>✅</td>
+                    <td>Physical column name</td>
                 </tr>
                 <tr>
-                    <td><code>tgt_column_name</code></td>
-                    <td>Target column name</td>
-                    <td>Fill this in</td>
+                    <td><code>src_physical_datatype</code></td>
+                    <td>✅</td>
+                    <td>Data type (STRING, INT, DATE)</td>
+                </tr>
+                <tr>
+                    <td><code>src_comments</code></td>
+                    <td>⚠️ CRITICAL</td>
+                    <td>Description - essential for AI matching</td>
+                </tr>
+                <tr>
+                    <td><code>domain</code></td>
+                    <td>Optional</td>
+                    <td>Domain category</td>
                 </tr>
             </table>
 
-            <h3>Uploading Templates</h3>
-            <p>Import completed mappings back into the system:</p>
-            <ol>
-                <li>Fill in <code>tgt_table_name</code> and <code>tgt_column_name</code> for each row</li>
-                <li>Save the CSV file</li>
-                <li>Go to <strong>Field Mapping → Unmapped Fields</strong> tab</li>
-                <li>Click <strong>📤 Upload Template</strong> button</li>
-                <li>Select your completed CSV file</li>
-                <li>Wait for processing (you'll see a success message)</li>
-                <li>Mapped fields automatically move to the <strong>Mapped Fields</strong> tab</li>
-            </ol>
-
             <div class="warning-box">
-                <strong>⚠️ Upload Requirements:</strong>
-                <ul>
-                    <li>Target table and column names must exist in the semantic table</li>
-                    <li>Duplicate mappings are automatically skipped</li>
-                    <li>Only 1-to-1 mappings supported via template (use UI for multi-field)</li>
-                    <li>No special characters or line breaks in data</li>
-                </ul>
+                <strong>⚠️ Important:</strong> The <code>src_comments</code> field is <strong>essential</strong> for AI matching. Without good descriptions, the AI cannot find the best source columns for your target fields.
             </div>
 
+            <h3>Step 3: Upload the CSV</h3>
+            <ol>
+                <li>Click <strong>"Select CSV File"</strong></li>
+                <li>Choose your completed template</li>
+                <li>Click <strong>"Upload"</strong></li>
+            </ol>
+        </div>
+
+        <div class="section" id="discovery">
+            <h2>5. AI Discovery</h2>
+            
+            <h3>What AI Discovery Does</h3>
+            <p>When you start discovery for a table, the AI:</p>
+            <ol>
+                <li>Looks at each target column in that table</li>
+                <li>Searches for past mapping patterns from historical mappings</li>
+                <li>Finds matching source columns from your uploaded fields using vector search</li>
+                <li>Uses an LLM to rewrite the SQL with your source columns</li>
+                <li>Creates suggestions with confidence scores</li>
+            </ol>
+
+            <h3>Starting Discovery</h3>
+            <ol>
+                <li>On the project detail page, find the target table you want to map</li>
+                <li>Click the <strong>"Discover"</strong> button</li>
+                <li>The button changes to <strong>"Discovering..."</strong> with a spinner</li>
+                <li>Watch progress update in real-time (e.g., "DISCOVERING 5/25")</li>
+                <li>When complete, status changes to <strong>"SUGGESTIONS_READY"</strong></li>
+            </ol>
+
+            <h3>Discovery Time</h3>
+            <ul>
+                <li><strong>Small tables (10-20 columns):</strong> 1-2 minutes</li>
+                <li><strong>Medium tables (20-50 columns):</strong> 2-5 minutes</li>
+                <li><strong>Large tables (50+ columns):</strong> 5-10 minutes</li>
+            </ul>
+
             <div class="tip-box">
-                <strong>💡 Best Use Case:</strong> Templates are ideal when you already know the target mappings and want to map many fields quickly without using AI suggestions.
+                <strong>💡 Tip:</strong> You can navigate to other tables or pages while discovery runs in the background.
             </div>
         </div>
 
-        <div class="section" id="six-step-process">
-            <h2>4. The 6-Step Mapping Process</h2>
-            <p>Create sophisticated multi-field mappings using this step-by-step workflow:</p>
-            <p style="margin: 1rem 0;"><a href="multi_field_mapping_mockup.html" style="color: #38a169; text-decoration: underline; font-weight: 600;">📸 View Interactive Demo →</a></p>
+        <div class="section" id="review-suggestions">
+            <h2>6. Reviewing Suggestions</h2>
+            
+            <h3>Suggestion Panel</h3>
+            <p>Click on a table with "SUGGESTIONS_READY" status to open the review panel. Suggestions are sorted alphabetically by column name.</p>
 
-            <h3>Step 1: Select Source Fields</h3>
-            <ol>
-                <li>Go to <strong>Unmapped Fields</strong> tab</li>
-                <li>Click on one or more source fields (up to 6)</li>
-                <li>Selected fields appear in the "Selected Fields" panel</li>
-                <li>Review field details (table, column, datatype, description)</li>
-            </ol>
+            <p>Each suggestion shows:</p>
+            <ul>
+                <li><strong>Target Column:</strong> Name and physical name</li>
+                <li><strong>Confidence Score:</strong> AI's confidence in the match (0-100%)</li>
+                <li><strong>Pattern Type:</strong> SINGLE, JOIN, UNION, UNION_JOIN</li>
+                <li><strong>Matched Sources:</strong> Source fields the AI found</li>
+                <li><strong>SQL Expression:</strong> The generated mapping SQL</li>
+                <li><strong>Warnings:</strong> Any issues that need attention</li>
+            </ul>
 
-            <div class="tip-box">
-                <strong>💡 Multi-Select:</strong> Hold Ctrl (Windows) or Cmd (Mac) to select multiple fields from the same or different tables.
-            </div>
-
-            <h3>Step 2: Generate AI Suggestions</h3>
-            <ol>
-                <li>With fields selected, scroll to the <strong>AI Configuration</strong> section</li>
-                <li>Adjust settings if needed:
-                    <ul>
-                        <li><code>Vector Results:</code> 25 (recommended, how many candidates to find)</li>
-                        <li><code>AI Results:</code> 10 (recommended, how many suggestions to show)</li>
-                        <li><code>User Feedback:</code> Optional context (e.g., "Healthcare claims data")</li>
-                    </ul>
-                </li>
-                <li>Click <strong>🤖 Generate AI Mapping Suggestions</strong></li>
-                <li>Wait 15-25 seconds for AI processing</li>
-                <li>Review suggestions table with match quality rankings</li>
-            </ol>
-
+            <h3>Confidence Scores</h3>
             <table>
                 <tr>
-                    <th>Result Column</th>
+                    <th>Score</th>
+                    <th>Indicator</th>
+                    <th>Meaning</th>
+                </tr>
+                <tr>
+                    <td>85-100%</td>
+                    <td>✅ Green</td>
+                    <td>High confidence - likely correct</td>
+                </tr>
+                <tr>
+                    <td>70-84%</td>
+                    <td>⚠️ Yellow</td>
+                    <td>Medium confidence - review carefully</td>
+                </tr>
+                <tr>
+                    <td>50-69%</td>
+                    <td>🟠 Orange</td>
+                    <td>Low confidence - needs attention</td>
+                </tr>
+                <tr>
+                    <td>0-49%</td>
+                    <td>❌ Red</td>
+                    <td>Very low - consider manual mapping</td>
+                </tr>
+            </table>
+
+            <h3>Special Case Suggestions</h3>
+            <p>Some patterns are auto-handled based on their source expression:</p>
+            <table>
+                <tr>
+                    <th>Pattern Type</th>
                     <th>What It Means</th>
+                    <th>Action</th>
                 </tr>
                 <tr>
-                    <td><strong>Rank</strong></td>
-                    <td>Order by confidence (1 = best match)</td>
+                    <td><strong>AUTO_MAPPED</strong></td>
+                    <td>Field is auto-generated (e.g., identity column)</td>
+                    <td>No SQL needed, just approve</td>
                 </tr>
                 <tr>
-                    <td><strong>Target Field</strong></td>
-                    <td>Suggested target table.column</td>
+                    <td><strong>HARDCODED</strong></td>
+                    <td>Fixed value like NULL or a constant</td>
+                    <td>Review the value, approve if correct</td>
                 </tr>
                 <tr>
-                    <td><strong>Match Quality</strong></td>
-                    <td>Excellent, Strong, Good, or Weak</td>
-                </tr>
-                <tr>
-                    <td><strong>Description</strong></td>
-                    <td>Target field description/comments</td>
-                </tr>
-                <tr>
-                    <td><strong>AI Reasoning</strong></td>
-                    <td>Why this match was suggested</td>
+                    <td><strong>N/A</strong></td>
+                    <td>Field not applicable for this migration</td>
+                    <td>Review and skip if not needed</td>
                 </tr>
             </table>
+        </div>
 
-            <p><strong>Match Quality Guide:</strong></p>
+        <div class="section" id="actions">
+            <h2>7. Suggestion Actions</h2>
+            
+            <h3>Approve</h3>
+            <p>Click <strong>"Approve"</strong> when the suggestion is correct as-is.</p>
             <ul>
-                <li><strong>Excellent:</strong> Very high confidence - semantic meanings strongly align ⭐⭐⭐</li>
-                <li><strong>Strong:</strong> High confidence - good semantic match ⭐⭐</li>
-                <li><strong>Good:</strong> Moderate confidence - plausible match ⭐</li>
-                <li><strong>Weak:</strong> Low confidence - consider manual search instead 🔍</li>
+                <li>Creates a row in <code>mapped_fields</code></li>
+                <li>Updates the source fields to MAPPED status</li>
+                <li>Increments the table's columns_mapped counter</li>
             </ul>
 
-            <div class="tip-box">
-                <strong>💡 Pro Tip:</strong> Always read the AI reasoning! It explains why a match was suggested and can reveal important considerations you might miss.
-            </div>
-
-            <h3>Step 3: Choose Target Field</h3>
-            <p>Select your target field:</p>
-            <ul>
-                <li><strong>From AI Suggestions:</strong> Click <strong>Select Target</strong> on a suggested match</li>
-                <li><strong>Manual Search Alternative:</strong> If AI suggestions aren't suitable, use the manual search below AI results to browse the semantic table directly</li>
-            </ul>
-
-            <p>Once you select a target, the <strong>Mapping Configuration</strong> dialog opens.</p>
-
-            <h3>Step 4: Apply Transformations</h3>
-            <p>Add SQL transformations to individual source fields:</p>
+            <h3>Edit (Review & Edit)</h3>
+            <p>Click <strong>"Edit"</strong> to modify the SQL before approving.</p>
             <ol>
-                <li>In the Mapping Configuration dialog, review each source field</li>
-                <li>Click the <strong>Transformation</strong> dropdown for each field</li>
-                <li>Choose from the transformation library:
-                    <ul>
-                        <li><code>NONE</code> - No transformation</li>
-                        <li><code>TRIM</code> - Remove whitespace</li>
-                        <li><code>TRIM + UPPER</code> - Convert to uppercase</li>
-                        <li><code>TRIM + LOWER</code> - Convert to lowercase</li>
-                        <li><code>TRIM + INITCAP</code> - Capitalize each word</li>
-                        <li><code>TO_DATE</code> - Convert string to date</li>
-                        <li><strong>Custom transformations</strong> - Added by admins</li>
-                    </ul>
-                </li>
-                <li>Preview shows transformation applied: <code>TRIM(table.column)</code></li>
+                <li>SQL editor opens with the suggested expression</li>
+                <li>Make your changes</li>
+                <li>Click <strong>"Save & Approve"</strong></li>
             </ol>
 
             <div class="tip-box">
-                <strong>💡 Example:</strong> Mapping FIRST_NAME + LAST_NAME to full_name? Apply TRIM+INITCAP to both fields to ensure proper capitalization.
-            </div>
-
-            <h3>Step 5: Choose Concatenation Strategy</h3>
-            <p>When mapping multiple source fields, define how to combine them:</p>
-
-            <table>
-                <tr>
-                    <th>Strategy</th>
-                    <th>Description</th>
-                    <th>Example Output</th>
-                </tr>
-                <tr>
-                    <td><code>SPACE</code></td>
-                    <td>Separate with space</td>
-                    <td>John Doe</td>
-                </tr>
-                <tr>
-                    <td><code>COMMA</code></td>
-                    <td>Separate with comma + space</td>
-                    <td>Doe, John</td>
-                </tr>
-                <tr>
-                    <td><code>PIPE</code></td>
-                    <td>Separate with pipe</td>
-                    <td>John|Doe</td>
-                </tr>
-                <tr>
-                    <td><code>CUSTOM</code></td>
-                    <td>Define your own separator</td>
-                    <td>John_Doe (if you use "_")</td>
-                </tr>
-                <tr>
-                    <td><code>NONE</code></td>
-                    <td>Direct concatenation</td>
-                    <td>JohnDoe</td>
-                </tr>
-            </table>
-
-            <p>The <strong>Generated SQL Preview</strong> shows the complete transformation expression that will be used.</p>
-
-            <h3>Step 6: Define Join Conditions (if needed)</h3>
-            <p>When mapping fields from <strong>different tables</strong>, define how to join them:</p>
-            <ol>
-                <li>Click <strong>+ Add Join Condition</strong></li>
-                <li>Configure each join:
-                    <ul>
-                        <li><strong>Left Table:</strong> First table name</li>
-                        <li><strong>Left Column:</strong> Join key in first table</li>
-                        <li><strong>Join Type:</strong> INNER, LEFT, RIGHT, or FULL OUTER</li>
-                        <li><strong>Right Table:</strong> Second table name</li>
-                        <li><strong>Right Column:</strong> Join key in second table</li>
-                    </ul>
-                </li>
-                <li>Add multiple joins if needed (joining 3+ tables)</li>
-                <li>Preview shows: <code>LEFT JOIN table2 ON table1.id = table2.id</code></li>
-            </ol>
-
-            <div class="warning-box">
-                <strong>⚠️ Join Requirements:</strong>
+                <strong>💡 When to Edit:</strong>
                 <ul>
-                    <li>Join conditions only needed when source fields are from different tables</li>
-                    <li>Must specify valid primary/foreign key columns</li>
-                    <li>Join order matters - define joins in logical sequence</li>
+                    <li>Fix incorrect column references</li>
+                    <li>Adjust transformations (TRIM, UPPER, etc.)</li>
+                    <li>Modify filter/WHERE conditions</li>
+                    <li>Change JOIN types</li>
                 </ul>
             </div>
 
-            <h3>Completing the Mapping</h3>
+            <h3>Reject</h3>
+            <p>Click <strong>"Reject"</strong> when the suggestion is fundamentally wrong.</p>
             <ol>
-                <li>Review all configuration:
-                    <ul>
-                        <li>Source fields and transformations</li>
-                        <li>Concatenation strategy</li>
-                        <li>Join conditions (if applicable)</li>
-                        <li>Generated SQL expression</li>
-                    </ul>
-                </li>
-                <li>Click <strong>Save Mapping</strong></li>
-                <li>Success! The mapping appears in <strong>Mapped Fields</strong> tab</li>
-                <li>Source fields are removed from <strong>Unmapped Fields</strong></li>
+                <li>A dialog asks for rejection reason</li>
+                <li>Provide feedback (helps improve AI)</li>
+                <li>Click <strong>"Confirm Reject"</strong></li>
             </ol>
 
-            <div class="tip-box">
-                <strong>💡 Generated SQL:</strong> The complete SQL transformation expression is automatically generated and stored. This can be exported later for use in your ETL processes.
-            </div>
-        </div>
-
-        <div class="section" id="view-mappings">
-            <h2>5. Viewing and Managing Mappings</h2>
-
-            <h3>Mapped Fields Tab</h3>
-            <p>View all completed mappings with full details:</p>
+            <h3>Skip</h3>
+            <p>Click <strong>"Skip"</strong> when:</p>
             <ul>
-                <li><strong>Search:</strong> Filter by source/target table or column name</li>
-                <li><strong>Sort:</strong> Click column headers to sort</li>
-                <li><strong>View Details:</strong> See source fields, transformations, concat strategy, joins</li>
-                <li><strong>Edit Mappings:</strong> Click edit icon to modify configuration</li>
-                <li><strong>Delete Mappings:</strong> Click delete icon to unmap (returns to unmapped)</li>
-                <li><strong>Export Mappings:</strong> Download all mappings as CSV with SQL expressions</li>
+                <li>Column is not needed in this migration</li>
+                <li>Will be mapped manually later</li>
+                <li>No source data exists for this field</li>
             </ul>
 
-            <h3>What You Can Edit</h3>
-            <p>Editing is restricted to maintain data integrity:</p>
-
-            <table>
-                <tr>
-                    <th>✅ Can Edit</th>
-                    <th>❌ Cannot Edit</th>
-                </tr>
-                <tr>
-                    <td>
-                        <ul>
-                            <li>Transformations on source fields</li>
-                            <li>Concatenation strategy</li>
-                            <li>Custom separator</li>
-                            <li>Join conditions</li>
-                        </ul>
-                    </td>
-                    <td>
-                        <ul>
-                            <li>Target field</li>
-                            <li>Source fields</li>
-                            <li>Number of source fields</li>
-                            <li>Field order</li>
-                        </ul>
-                    </td>
-                </tr>
-            </table>
-
-            <div class="tip-box">
-                <strong>💡 Need to Change Target?</strong> Delete the existing mapping and create a new one with the correct target field.
-            </div>
-
-            <h3>Exporting Mappings</h3>
-            <p>Generate a comprehensive CSV export of all mappings:</p>
-            <ol>
-                <li>Go to <strong>Mapped Fields</strong> tab</li>
-                <li>Click <strong>📤 Export Mappings</strong> button</li>
-                <li>CSV downloads with complete details:
-                    <ul>
-                        <li>Source and target table/column names</li>
-                        <li>All source field transformations</li>
-                        <li>Concatenation strategy and separator</li>
-                        <li>Complete SQL transformation expression</li>
-                        <li>Join conditions</li>
-                        <li>Metadata (who mapped, when, confidence score)</li>
-                    </ul>
-                </li>
-                <li>Use this CSV for ETL development and documentation</li>
-            </ol>
-
-            <div class="tip-box">
-                <strong>💡 Use Case:</strong> Export provides all the information needed to implement your mappings in production ETL pipelines.
-            </div>
-        </div>
-
-        <div class="section" id="ai-workflow">
-            <h2>6. AI Suggestion Workflow</h2>
-            <p>Understanding how the AI generates mapping suggestions:</p>
-
-            <div class="workflow-box">
-                <h4>🔍 Step 1: Vector Search</h4>
-                <p>When you click "Generate AI Mapping Suggestions":</p>
-                <ol>
-                    <li>Your source field information (table, column, description) is combined into a semantic query</li>
-                    <li>The query is sent to Databricks Vector Search</li>
-                    <li>Vector search finds the top 25 (default) target fields with similar semantic meaning</li>
-                    <li>Each result includes a search score indicating semantic similarity</li>
-                </ol>
-            </div>
-
-            <div class="workflow-box" style="border-color: #38a169; background: linear-gradient(135deg, #e8f5e9, #c8e6c9);">
-                <h4>📝 Step 2: Feedback Learning (NEW!)</h4>
-                <p>The system learns from your previous accept/reject decisions:</p>
-                <ol>
-                    <li><strong>Accepted feedback:</strong> Previous mappings you confirmed as correct are retrieved</li>
-                    <li><strong>Rejected feedback:</strong> Previous suggestions you rejected (with your reasons) are retrieved</li>
-                    <li>This creates a <strong>feedback loop</strong> - the more you use the system, the smarter it gets!</li>
-                </ol>
-                <div class="tip-box" style="margin-top: 1rem;">
-                    <strong>💡 Pro Tip:</strong> When rejecting suggestions, always provide a reason! This helps the AI learn what NOT to suggest in the future.
-                </div>
-            </div>
-
-            <div class="workflow-box">
-                <h4>🤖 Step 3: LLM Analysis</h4>
-                <p>All information is sent to the AI model (LLM):</p>
-                <ol>
-                    <li>The LLM reviews each candidate match</li>
-                    <li>It considers:
-                        <ul>
-                            <li>Semantic similarity between source and target</li>
-                            <li>Field names and descriptions</li>
-                            <li>Datatypes compatibility</li>
-                            <li><strong>Your previous accepted suggestions (positive examples)</strong></li>
-                            <li><strong>Your previous rejected suggestions (negative examples to avoid)</strong></li>
-                            <li>Historical mapping patterns from manual mappings</li>
-                        </ul>
-                    </li>
-                    <li>The LLM assigns a match quality (Excellent/Strong/Good/Weak)</li>
-                    <li>It generates reasoning explaining why each match was suggested, referencing your feedback when relevant</li>
-                </ol>
-            </div>
-
-            <div class="workflow-box">
-                <h4>📊 Step 4: Ranking & Presentation</h4>
-                <p>Results are ranked and presented:</p>
-                <ol>
-                    <li>Matches are sorted by match quality first, then by search score</li>
-                    <li>Top 10 (default) suggestions are displayed</li>
-                    <li>Each suggestion shows:
-                        <ul>
-                            <li>Rank (1 = best)</li>
-                            <li>Target field details</li>
-                            <li>Match quality indicator</li>
-                            <li>Target description</li>
-                            <li>AI reasoning (may reference your past feedback)</li>
-                        </ul>
-                    </li>
-                    <li>You review and select the most appropriate match</li>
-                </ol>
-            </div>
-
-            <div class="workflow-box" style="border-color: #ffc107; background: linear-gradient(135deg, #fff8e1, #ffecb3);">
-                <h4>🔄 The Feedback Loop</h4>
-                <p>Your actions improve future suggestions:</p>
-                <pre style="background: #f5f5f5; padding: 1rem; border-radius: 4px; font-family: monospace; font-size: 0.9rem; overflow-x: auto;">
-You select fields → AI suggests → You accept/reject → Feedback saved
-                                         ↓
-  Next search ← AI learns from feedback ← Feedback queried
-                </pre>
-                <p style="margin-top: 1rem;"><strong>Every time you accept or reject a suggestion, you're training the AI to be better!</strong></p>
-            </div>
-
-            <h3>Factors That Improve AI Accuracy</h3>
-            <ul>
-                <li><strong>Your Feedback:</strong> Accept good matches, reject bad ones with reasons - this trains the AI!</li>
-                <li><strong>Source Field Descriptions:</strong> Better descriptions = better matches</li>
-                <li><strong>Target Field Descriptions:</strong> Admin should maintain quality semantic table</li>
-                <li><strong>User Context:</strong> Add context like "healthcare claims" or "financial data"</li>
-                <li><strong>Historical Patterns:</strong> AI learns from previous mappings in your organization</li>
-                <li><strong>Consistent Naming:</strong> Tables/columns with clear, consistent names get better results</li>
-            </ul>
-
-            <h3>When AI Suggestions Don't Work</h3>
-            <p>If AI doesn't return good suggestions:</p>
-            <ul>
-                <li><strong>Reject with reason:</strong> If suggestions are wrong, reject them and explain why - this trains the AI!</li>
-                <li><strong>Check source field description:</strong> Is it missing or unclear?</li>
-                <li><strong>Try user context:</strong> Add domain context to guide the AI</li>
-                <li><strong>Use manual search:</strong> Browse the semantic table directly by keyword</li>
-                <li><strong>Contact admin:</strong> Target field may be missing from semantic table</li>
-            </ul>
-
-            <div class="tip-box">
-                <strong>💡 Remember:</strong> The AI learns from your feedback! Even when suggestions are wrong, rejecting them with a reason helps improve future suggestions for you and other users.
-            </div>
-
-            <div class="warning-box">
-                <strong>⚠️ Performance Note:</strong> AI suggestions typically take 15-25 seconds. First request after a cold start may take 30-60 seconds. This is normal - the AI model is initializing.
-            </div>
+            <h3>Regenerate</h3>
+            <p>Click the <strong>refresh icon</strong> to re-run AI discovery for a single column. Useful if you've added new source fields or patterns.</p>
         </div>
 
         <div class="section" id="best-practices">
-            <h2>7. Best Practices</h2>
-
-            <h3>Mapping Strategy</h3>
+            <h2>8. Best Practices</h2>
+            
+            <h3>For Efficient Mapping</h3>
             <ul>
-                <li>✅ <strong>Start with system status check:</strong> Ensure all components are operational</li>
-                <li>✅ <strong>Use AI suggestions first:</strong> They're usually accurate and save time</li>
-                <li>✅ <strong>Read the AI reasoning:</strong> Don't just trust match quality - understand why</li>
-                <li>✅ <strong>Verify datatype compatibility:</strong> String to String, Date to Date, etc.</li>
-                <li>✅ <strong>Check nullable constraints:</strong> Can't map nullable to NOT NULL without handling</li>
-                <li>✅ <strong>Work in logical groups:</strong> Map related fields together for consistency</li>
-                <li>✅ <strong>Use appropriate transformations:</strong> TRIM strings, format dates consistently</li>
-                <li>✅ <strong>Test complex mappings:</strong> Multi-field with joins should be validated</li>
+                <li>✅ <strong>Upload complete source data</strong> with good descriptions</li>
+                <li>✅ <strong>Start with high-priority tables</strong> (core entities first)</li>
+                <li>✅ <strong>Work table by table</strong> rather than jumping around</li>
+                <li>✅ <strong>Provide feedback on rejections</strong> to improve AI</li>
             </ul>
 
-            <h3>Quality Tips</h3>
+            <h3>For Quality Mappings</h3>
             <ul>
-                <li><strong>Add context with user feedback:</strong> "Healthcare eligibility data from vendor X"</li>
-                <li><strong>Review generated SQL:</strong> Ensure concatenation strategy produces desired format</li>
-                <li><strong>Validate join conditions:</strong> Use actual primary/foreign key relationships</li>
-                <li><strong>Export and review:</strong> Periodically export mappings for team review</li>
-                <li><strong>Document special cases:</strong> Note any unusual mappings in field descriptions</li>
+                <li>✅ <strong>Review SQL carefully</strong> - especially JOINs and filters</li>
+                <li>✅ <strong>Check data types match</strong> between source and target</li>
+                <li>✅ <strong>Verify transformations</strong> are appropriate (TRIM, UPPER, etc.)</li>
+                <li>✅ <strong>Test with sample data</strong> when possible</li>
             </ul>
 
-            <h3>Performance Tips</h3>
+            <h3>For Team Collaboration</h3>
             <ul>
-                <li><strong>Work in sessions:</strong> Map 10-30 fields per session, then take a break</li>
-                <li><strong>Use templates for bulk:</strong> When you know mappings, upload CSV template</li>
-                <li><strong>Let AI complete:</strong> Don't refresh page during 15-25 second processing</li>
-                <li><strong>Use search filters:</strong> Narrow down large unmapped field lists</li>
-                <li><strong>Monitor system status:</strong> If AI is slow, check vector search is available</li>
+                <li>✅ <strong>Assign table ownership</strong> to avoid conflicts</li>
+                <li>✅ <strong>Use project notes</strong> to communicate status</li>
+                <li>✅ <strong>Review each other's mappings</strong> before marking complete</li>
             </ul>
         </div>
 
         <div class="section" id="troubleshooting">
-            <h2>8. Troubleshooting</h2>
-
-            <h3>Common Issues</h3>
+            <h2>9. Troubleshooting</h2>
             
-            <p><strong>Q: AI suggestions take too long or timeout</strong></p>
-            <p>A: This can happen if:</p>
+            <h3>Discovery Fails or Takes Too Long</h3>
             <ul>
-                <li>Vector Search is under heavy load - wait and retry</li>
-                <li>LLM endpoint is cold-starting - first request is slowest</li>
-                <li>Try reducing "Vector Results" from 25 to 15</li>
-                <li>Check system status on Introduction page</li>
+                <li>Check system status on Home page</li>
+                <li>Verify source fields have been uploaded</li>
+                <li>LLM endpoint may need warmup on first request</li>
+                <li>Large tables take longer - be patient</li>
             </ul>
 
-            <p style="margin-top: 1rem;"><strong>Q: AI returns no suggestions or poor matches</strong></p>
-            <p>A: Check:</p>
+            <h3>No Suggestions or Poor Matches</h3>
             <ul>
-                <li>Vector Search status is green on Introduction page</li>
-                <li>Source field has description/comment (helps matching)</li>
-                <li>Add user feedback with domain context</li>
-                <li>Try manual search instead to browse all target fields</li>
-                <li>Contact admin - target field may be missing from semantic table</li>
+                <li>Check source field descriptions are complete</li>
+                <li>Verify historical patterns exist for this table</li>
+                <li>Add more source fields if some are missing</li>
+                <li>Use manual mapping for edge cases</li>
             </ul>
 
-            <p style="margin-top: 1rem;"><strong>Q: Upload template fails</strong></p>
-            <p>A: Verify:</p>
+            <h3>Button Seems Stuck</h3>
             <ul>
-                <li>CSV has required columns (src_table_name, src_column_name, tgt_table_name, tgt_column_name)</li>
-                <li>Target table/column names exist in semantic table (check with admin)</li>
-                <li>No special characters, line breaks, or extra commas in data</li>
-                <li>File is saved as proper CSV format (not Excel .xlsx)</li>
+                <li>Buttons show loading spinners when processing</li>
+                <li>All buttons disable during operations to prevent double-clicks</li>
+                <li>Wait for the operation to complete</li>
+                <li>Refresh the page if truly stuck</li>
             </ul>
 
-            <p style="margin-top: 1rem;"><strong>Q: Can't save multi-field mapping</strong></p>
-            <p>A: Check:</p>
+            <h3>Can't See a Project</h3>
             <ul>
-                <li>If using fields from different tables, join conditions are required</li>
-                <li>Join table/column names must match exactly</li>
-                <li>Custom separator can't be empty if strategy is CUSTOM</li>
-                <li>All required fields in mapping dialog are filled</li>
-            </ul>
-
-            <p style="margin-top: 1rem;"><strong>Q: Can't edit a mapped field</strong></p>
-            <p>A: Remember:</p>
-            <ul>
-                <li>You can only edit transformations, concat strategy, and joins</li>
-                <li>You cannot edit target field or source fields</li>
-                <li>To change target or source fields, delete and recreate mapping</li>
-            </ul>
-
-            <p style="margin-top: 1rem;"><strong>Q: Export fails or returns empty file</strong></p>
-            <p>A: Verify:</p>
-            <ul>
-                <li>You have at least one mapped field</li>
-                <li>Browser allows CSV downloads (check popup blockers)</li>
-                <li>Database connection is active (check Introduction page)</li>
-                <li>Contact admin if issue persists</li>
+                <li>Ask the project owner to add your email to team members</li>
+                <li>Verify you're using the correct email address</li>
             </ul>
 
             <div class="tip-box">
@@ -835,7 +588,6 @@ You select fields → AI suggests → You accept/reject → Feedback saved
                     <li>Screenshot of the issue</li>
                     <li>What you were trying to do</li>
                     <li>Any error messages you saw</li>
-                    <li>Your username and timestamp</li>
                 </ul>
             </div>
         </div>
@@ -849,51 +601,44 @@ You select fields → AI suggests → You accept/reject → Feedback saved
                     <th>Action</th>
                 </tr>
                 <tr>
-                    <td>Download unmapped fields</td>
-                    <td>Field Mapping → Unmapped Fields</td>
-                    <td>Click "Download Template"</td>
+                    <td>Create new project</td>
+                    <td>Projects page</td>
+                    <td>Click "+ New Project"</td>
                 </tr>
                 <tr>
-                    <td>Upload bulk mappings</td>
-                    <td>Field Mapping → Unmapped Fields</td>
-                    <td>Click "Upload Template"</td>
+                    <td>Upload source fields</td>
+                    <td>Project detail page</td>
+                    <td>Click "Upload Sources"</td>
                 </tr>
                 <tr>
-                    <td>Create single mapping</td>
-                    <td>Field Mapping → Unmapped Fields</td>
-                    <td>Select field → Generate AI or Manual Search</td>
+                    <td>Start AI discovery</td>
+                    <td>Project detail page</td>
+                    <td>Click "Discover" on a table</td>
                 </tr>
                 <tr>
-                    <td>Create multi-field mapping</td>
-                    <td>Field Mapping → Unmapped Fields</td>
-                    <td>Select 2-6 fields → Generate AI → Configure</td>
+                    <td>Review suggestions</td>
+                    <td>Project detail page</td>
+                    <td>Click on a table row</td>
                 </tr>
                 <tr>
-                    <td>View all mappings</td>
-                    <td>Field Mapping → Mapped Fields</td>
-                    <td>Browse table, use search</td>
+                    <td>Approve mapping</td>
+                    <td>Suggestion panel</td>
+                    <td>Click "Approve" or "Edit"</td>
                 </tr>
                 <tr>
-                    <td>Edit mapping</td>
-                    <td>Field Mapping → Mapped Fields</td>
-                    <td>Click edit icon on mapping row</td>
-                </tr>
-                <tr>
-                    <td>Delete mapping</td>
-                    <td>Field Mapping → Mapped Fields</td>
-                    <td>Click delete icon on mapping row</td>
-                </tr>
-                <tr>
-                    <td>Export all mappings</td>
-                    <td>Field Mapping → Mapped Fields</td>
+                    <td>Export mappings</td>
+                    <td>Project detail page</td>
                     <td>Click "Export Mappings"</td>
                 </tr>
                 <tr>
                     <td>Check system status</td>
-                    <td>Introduction page</td>
-                    <td>Review four status indicators</td>
+                    <td>Home page</td>
+                    <td>Review status indicators</td>
                 </tr>
             </table>
+            <p style="margin-top: 1rem; text-align: center; color: #666;">
+                <strong>Version:</strong> Smart Mapper V4 - Target-First Workflow | <strong>Updated:</strong> December 2025
+            </p>
         </div>
     </div>
 </body>

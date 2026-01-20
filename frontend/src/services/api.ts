@@ -14,6 +14,8 @@
  * @module services/api
  */
 
+import { useUserStore } from '../stores/user'
+
 /**
  * Base URL for all API requests.
  * 
@@ -21,6 +23,21 @@
  * For local development, can be overridden via VITE_API_URL environment variable.
  */
 const API_BASE_URL = import.meta.env.VITE_API_URL || ''
+
+/**
+ * Get headers with user email for authenticated requests.
+ * The X-User-Email header tells the backend who the current user is.
+ */
+export function getAuthHeaders(): Record<string, string> {
+  const userStore = useUserStore()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (userStore.userEmail) {
+    headers['X-User-Email'] = userStore.userEmail
+  }
+  return headers
+}
 
 /**
  * Standard API response wrapper
@@ -573,10 +590,13 @@ const api = {
   async get<T = any>(endpoint: string): Promise<{ data: T }> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
     })
+
+    // Handle 304 Not Modified - return empty array/object (cached response)
+    if (response.status === 304) {
+      return { data: [] as unknown as T }
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: response.statusText }))
@@ -599,9 +619,7 @@ const api = {
   async post<T = any>(endpoint: string, body: any): Promise<{ data: T }> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify(body),
     })
 
@@ -626,9 +644,7 @@ const api = {
   async put<T = any>(endpoint: string, body: any): Promise<{ data: T }> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify(body),
     })
 
@@ -653,9 +669,7 @@ const api = {
   async delete<T = any>(endpoint: string): Promise<{ data: T }> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
     })
 
     if (!response.ok) {

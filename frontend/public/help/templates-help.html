@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gainwell Source-to-Target Mapping - User Guide</title>
+    <title>Source Upload Help - Smart Mapper V4</title>
     <style>
         * {
             margin: 0;
@@ -12,622 +12,397 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.6;
             color: #333;
             background-color: #f8f9fa;
+            padding: 2rem;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1100px;
             margin: 0 auto;
-            padding: 2rem;
         }
 
         .header {
-            background: linear-gradient(135deg, #4a5568, #38a169);
+            background: linear-gradient(135deg, #059669, #10b981);
             color: white;
-            padding: 3rem 2rem;
+            padding: 2.5rem 2rem;
             border-radius: 12px;
             margin-bottom: 2rem;
             text-align: center;
-            box-shadow: 0 4px 20px rgba(0, 51, 102, 0.3);
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
         }
 
         .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-            font-weight: 700;
+            font-size: 2.2rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
         }
 
         .header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-            margin-bottom: 1rem;
-        }
-
-        .tagline {
-            font-size: 1rem;
-            font-weight: 500;
-            letter-spacing: 1px;
-            opacity: 0.8;
-        }
-
-        .nav-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin-bottom: 3rem;
-        }
-
-        .nav-card {
-            background: white;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0, 51, 102, 0.1);
-            border-left: 4px solid #38a169;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            color: inherit;
-        }
-
-        .nav-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0, 51, 102, 0.2);
-            text-decoration: none;
-            color: inherit;
-        }
-
-        .nav-card h3 {
-            color: #4a5568;
-            margin-bottom: 1rem;
-            font-size: 1.3rem;
-        }
-
-        .nav-card p {
-            color: #666;
-            margin-bottom: 1rem;
-        }
-
-        .nav-card .badge {
-            background: #e8f4fd;
-            color: #38a169;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
+            font-size: 1.15rem;
+            opacity: 0.95;
         }
 
         .section {
             background: white;
-            margin: 2rem 0;
-            padding: 2.5rem;
-            border-radius: 12px;
-            box-shadow: 0 2px 15px rgba(0, 51, 102, 0.08);
+            margin: 1.5rem 0;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            border-left: 5px solid #10b981;
         }
 
         .section h2 {
             color: #4a5568;
-            margin-bottom: 1.5rem;
-            font-size: 1.8rem;
-            border-bottom: 3px solid #38a169;
-            padding-bottom: 0.5rem;
-        }
-
-        .workflow-step {
-            display: flex;
-            align-items: flex-start;
-            margin: 2rem 0;
-            padding: 1.5rem;
-            background: #f8f9fa;
-            border-radius: 8px;
-            border-left: 4px solid #38a169;
-        }
-
-        .step-number {
-            background: #38a169;
-            color: white;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
             display: flex;
             align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            margin-right: 1.5rem;
-            flex-shrink: 0;
+            gap: 0.5rem;
         }
 
-        .step-content h4 {
+        .section h3 {
             color: #4a5568;
-            margin-bottom: 0.5rem;
+            margin: 1.25rem 0 0.75rem 0;
+            font-size: 1.15rem;
         }
 
-        .feature-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin: 2rem 0;
+        .section p {
+            margin-bottom: 0.75rem;
+            color: #555;
         }
 
-        .feature-item {
-            background: #f8f9fa;
-            padding: 1.5rem;
-            border-radius: 8px;
-            border: 1px solid #e9ecef;
-            text-align: center;
-        }
-
-        .feature-item h4 {
-            color: #4a5568;
+        .section ul, .section ol {
+            margin-left: 1.5rem;
             margin-bottom: 1rem;
         }
 
-        .feature-item ul {
-            text-align: left;
-            color: #666;
-        }
-
-        .feature-item ul li {
+        .section ul li, .section ol li {
             margin: 0.5rem 0;
+            color: #555;
         }
 
-        .tech-specs {
-            background: #e8f4fd;
-            padding: 2rem;
+        .tip-box {
+            background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+            padding: 1.25rem;
             border-radius: 8px;
-            margin: 2rem 0;
+            margin: 1rem 0;
+            border-left: 4px solid #10b981;
         }
 
-        .tech-specs h3 {
-            color: #4a5568;
-            margin-bottom: 1rem;
+        .tip-box strong {
+            color: #065f46;
+            font-size: 1.05rem;
         }
 
-        .tech-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-
-        .tech-item {
-            background: white;
-            padding: 1rem;
-            border-radius: 6px;
-            border-left: 3px solid #38a169;
-        }
-
-        .demo-buttons {
-            display: flex;
-            gap: 1rem;
-            margin: 2rem 0;
-            flex-wrap: wrap;
-        }
-
-        .demo-btn {
-            background: linear-gradient(135deg, #38a169, #4a5568);
-            color: white;
-            padding: 1rem 2rem;
-            border: none;
+        .warning-box {
+            background: linear-gradient(135deg, #fee2e2, #fecaca);
+            padding: 1.25rem;
             border-radius: 8px;
-            text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            display: inline-block;
+            margin: 1rem 0;
+            border-left: 4px solid #ef4444;
         }
 
-        .demo-btn:hover {
-            background: linear-gradient(135deg, #4a5568, #38a169);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 51, 102, 0.3);
-            text-decoration: none;
-            color: white;
+        .warning-box strong {
+            color: #991b1b;
+            font-size: 1.05rem;
         }
 
-        .compliance-badges {
-            display: flex;
-            gap: 1rem;
-            margin: 1.5rem 0;
-            flex-wrap: wrap;
+        .important-box {
+            background: linear-gradient(135deg, #fff3cd, #ffe8a1);
+            padding: 1.25rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #f59e0b;
         }
 
-        .compliance-badge {
-            background: #d4edda;
-            color: #155724;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            font-weight: 600;
+        .important-box strong {
+            color: #92400e;
+            font-size: 1.05rem;
+        }
+
+        code {
+            background: #f1f1f1;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #059669;
             font-size: 0.9rem;
         }
 
-        .alert {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            color: #856404;
-            padding: 1rem;
-            border-radius: 6px;
+        table {
+            width: 100%;
+            border-collapse: collapse;
             margin: 1rem 0;
         }
 
-        .alert-info {
-            background: #d1ecf1;
-            border: 1px solid #bee5eb;
-            color: #0c5460;
+        table th {
+            background: #059669;
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
         }
 
-        @media (max-width: 768px) {
-            .container {
-                padding: 1rem;
-            }
-            
-            .header h1 {
-                font-size: 2rem;
-            }
-            
-            .workflow-step {
-                flex-direction: column;
-                text-align: center;
-            }
-            
-            .step-number {
-                margin-right: 0;
-                margin-bottom: 1rem;
-            }
+        table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .example-row {
+            background: #f0fdf4;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+
+        .required {
+            color: #dc2626;
+            font-weight: bold;
+        }
+
+        .optional {
+            color: #6b7280;
+        }
+
+        .action-button {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 0.9rem;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
         <div class="header">
-            <h1>📊 Gainwell Source-to-Target Mapping Platform</h1>
-            <p>Comprehensive User Guide for Healthcare Data Integration</p>
-            <div class="tagline">Reliability. Innovation. Delivered.</div>
+            <h1>📤 Source Upload Guide</h1>
+            <p>How to prepare and upload your source fields for AI mapping</p>
         </div>
 
-        <!-- Quick Navigation -->
-        <div class="nav-grid">
-            <a href="#overview" class="nav-card">
-                <h3>🎯 Platform Overview</h3>
-                <p>Understanding the healthcare data mapping solution</p>
-                <span class="badge">Start Here</span>
-            </a>
-            
-            <a href="?static=app_mockup.html" class="nav-card" target="_blank">
-                <h3>🖥️ Introduction Demo</h3>
-                <p>Interactive mockup of the main landing page</p>
-                <span class="badge">Live Demo</span>
-            </a>
-            
-            <a href="?static=field_mapping_mockup.html" class="nav-card" target="_blank">
-                <h3>📋 Field Mapping Demo</h3>
-                <p>Explore the dual-tab interface with unmapped fields discovery and mapped fields management</p>
-                <span class="badge">Interactive</span>
-            </a>
-            
-            <a href="?static=config_mockup.html" class="nav-card" target="_blank">
-                <h3>⚙️ Configuration Demo</h3>
-                <p>Explore the enterprise configuration interface</p>
-                <span class="badge">Administration</span>
-            </a>
-
-            <a href="?static=readme.html" class="nav-card" target="_blank">
-                <h3>📚 Technical Documentation</h3>
-                <p>Detailed technical specifications and architecture</p>
-                <span class="badge">Developer Guide</span>
-            </a>
-
-            <a href="https://www.databricks.com/product/databricks-apps" class="nav-card" target="_blank">
-                <h3>📱 Databricks Apps Platform</h3>
-                <p>Learn about the platform powering this application</p>
-                <span class="badge">Platform Info</span>
-            </a>
-        </div>
-
-        <!-- Platform Overview -->
-        <div class="section" id="overview">
-            <h2>🎯 Platform Overview</h2>
-            <p>The Gainwell Source-to-Target Mapping Platform is an enterprise-grade healthcare data integration solution that leverages artificial intelligence to automate the complex process of mapping source database fields to target system schemas.</p>
-            
-            <div class="alert alert-info">
-                <strong>Healthcare Focus:</strong> Specifically designed for Medicaid agencies, healthcare providers, and public health organizations modernizing their data infrastructure.
-            </div>
-
-            <div class="feature-grid">
-                <div class="feature-item">
-                    <h4>🏥 Healthcare-Focused AI</h4>
-                    <ul>
-                        <li>Databricks Foundation Models optimized for healthcare data</li>
-                        <li>Understanding of medical terminology and healthcare standards</li>
-                        <li>HIPAA-compliant processing workflows</li>
-                        <li>Integration with Medicaid management systems</li>
-                    </ul>
-                </div>
-                
-                <div class="feature-item">
-                    <h4>🔍 Enterprise Search & Analytics</h4>
-                    <ul>
-                        <li>Semantic similarity matching for medical terms</li>
-                        <li>Historical mapping context and learning</li>
-                        <li>Configurable search parameters for healthcare domains</li>
-                        <li>Enterprise-grade performance and scalability</li>
-                    </ul>
-                </div>
-                
-                <div class="feature-item">
-                    <h4>📊 Modern Healthcare Interface</h4>
-                    <ul>
-                        <li>Intuitive data visualization for healthcare professionals</li>
-                        <li>Real-time AI recommendations with medical context</li>
-                        <li>Streamlined workflows for rapid implementation</li>
-                        <li>Progress analytics and audit trails</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- Getting Started Workflow -->
-        <div class="section" id="workflow">
-            <h2>🚀 Getting Started Workflow</h2>
-            
-            <div class="workflow-step">
-                <div class="step-number">1</div>
-                <div class="step-content">
-                    <h4>Enterprise Configuration Setup</h4>
-                    <p>Navigate to the Configuration section to establish connections to your healthcare data warehouse. Configure your Databricks workspace, set up AI model endpoints, and validate connections to your Medicaid or healthcare management systems.</p>
-                    <div class="demo-buttons">
-                        <a href="?static=config_mockup.html" class="demo-btn" target="_blank">🔧 View Configuration Demo</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="workflow-step">
-                <div class="step-number">2</div>
-                <div class="step-content">
-                    <h4>Field Mapping Analysis</h4>
-                    <p>Access the Field Mapping interface with dual-tab navigation: <strong>Unmapped Fields</strong> for source columns requiring mapping, and <strong>Mapped Fields</strong> for reviewing completed field relationships. Use search, filtering, and export capabilities to manage your mapping project efficiently.</p>
-                    <div class="demo-buttons">
-                        <a href="?static=field_mapping_mockup.html" class="demo-btn" target="_blank">📊 View Field Mapping Demo</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="workflow-step">
-                <div class="step-number">3</div>
-                <div class="step-content">
-                    <h4>AI-Powered Mapping Generation</h4>
-                    <p>In the <strong>Unmapped Fields</strong> tab, select any source field to receive AI-generated mapping suggestions. The system uses semantic similarity and healthcare-trained models to suggest appropriate target fields with detailed reasoning and confidence scores.</p>
-                </div>
-            </div>
-
-            <div class="workflow-step">
-                <div class="step-number">4</div>
-                <div class="step-content">
-                    <h4>Mapping Review and Approval</h4>
-                    <p>Review AI suggestions with detailed reasoning before approval. Select the most appropriate mapping and save it to your enterprise systems. Approved mappings immediately appear in the <strong>Mapped Fields</strong> tab for ongoing management.</p>
-                </div>
-            </div>
-
-            <div class="workflow-step">
-                <div class="step-number">5</div>
-                <div class="step-content">
-                    <h4>Mapping Management and Analytics</h4>
-                    <p>Use the <strong>Mapped Fields</strong> tab to view all completed mappings with statistics, search functionality, and export capabilities. Monitor progress with real-time metrics showing total mapped fields, source tables, and target tables covered.</p>
-                </div>
-            </div>
-
-            <div class="workflow-step">
-                <div class="step-number">6</div>
-                <div class="step-content">
-                    <h4>Data Export and Documentation</h4>
-                    <p>Export mapping data in CSV format with timestamps for documentation and audit purposes. Use search filters to create targeted exports for specific tables, columns, or mapping relationships.</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Field Mapping Interface Details -->
         <div class="section">
-            <h2>📊 Enhanced Field Mapping Interface</h2>
-            <p>The field mapping interface features a dual-tab navigation system designed for comprehensive mapping project management, from initial discovery through completion tracking.</p>
+            <h2>📋 Why Upload Source Fields?</h2>
+            <p>Smart Mapper V4 uses a <strong>Target-First</strong> workflow. Before AI can suggest mappings, it needs to know all your available source fields.</p>
             
-            <div class="feature-grid">
-                <div class="feature-item">
-                    <h4>🔍 Unmapped Fields Tab</h4>
-                    <ul>
-                        <li><strong>Source Field Discovery:</strong> Automatic identification of unmapped source database columns</li>
-                        <li><strong>Interactive Selection:</strong> Single-click field selection for detailed analysis</li>
-                        <li><strong>AI Suggestion Engine:</strong> Generate intelligent target field recommendations</li>
-                        <li><strong>Reasoning Display:</strong> Detailed explanations for each AI-generated suggestion</li>
-                        <li><strong>One-Click Approval:</strong> Save approved mappings directly to enterprise systems</li>
-                    </ul>
-                </div>
-                
-                <div class="feature-item">
-                    <h4>✅ Mapped Fields Tab</h4>
-                    <ul>
-                        <li><strong>Progress Tracking:</strong> Complete overview of mapping completion status</li>
-                        <li><strong>Relationship Overview:</strong> Complete source-to-target field relationships</li>
-                        <li><strong>Advanced Search:</strong> Multi-field search across tables, columns, and targets</li>
-                        <li><strong>Audit Trail:</strong> Historical mapping decisions with detailed metadata</li>
-                        <li><strong>Export Capabilities:</strong> CSV download with filtering and timestamp data</li>
-                    </ul>
-                </div>
-
-                <div class="feature-item">
-                    <h4>📈 Analytics Dashboard</h4>
-                    <ul>
-                        <li><strong>Data Overview:</strong> Complete visibility into mapped field relationships</li>
-                        <li><strong>Progress Visualization:</strong> Clear indicators of mapping project status</li>
-                        <li><strong>Data Quality Insights:</strong> Coverage analysis and gap identification</li>
-                        <li><strong>Performance Tracking:</strong> Mapping velocity and team productivity</li>
-                    </ul>
-                </div>
-
-                <div class="feature-item">
-                    <h4>🔄 Project Management</h4>
-                    <ul>
-                        <li><strong>Unified Refresh:</strong> Sync data across both tabs with single refresh</li>
-                        <li><strong>Session Persistence:</strong> Maintain work state across browser sessions</li>
-                        <li><strong>Collaborative Workflows:</strong> Multi-user support for enterprise teams</li>
-                        <li><strong>Documentation Export:</strong> Generate mapping documentation for compliance</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="alert alert-success">
-                <strong>Workflow Integration:</strong> The dual-tab system ensures seamless transition from discovery to completion, providing full visibility into your mapping project lifecycle.
-            </div>
-        </div>
-
-        <!-- Technical Specifications -->
-        <!-- System Health Monitoring -->
-        <div class="section">
-            <h2>🔧 Real-time System Health Monitoring</h2>
-            <p>The platform includes comprehensive health monitoring with real-time status checks for all critical components.</p>
-            
-            <div class="feature-grid">
-                <div class="feature-item">
-                    <h4>🗄️ Database Connection</h4>
-                    <p>Tests connection to your Databricks warehouse and verifies access to the mapping table by querying record counts.</p>
-                </div>
-                
-                <div class="feature-item">
-                    <h4>🤖 AI Model Endpoint</h4>
-                    <p>Validates that the configured foundation model endpoint is available and properly configured for healthcare data processing.</p>
-                </div>
-                
-                <div class="feature-item">
-                    <h4>🔍 Semantic Search</h4>
-                    <p>Checks access to the semantic similarity table and verifies that search capabilities are functioning with available data.</p>
-                </div>
-                
-                <div class="feature-item">
-                    <h4>⚙️ Configuration Status</h4>
-                    <p>Ensures all required configuration parameters are set for database, AI models, UI settings, and support portal.</p>
-                </div>
-            </div>
-
-            <div class="alert alert-info">
-                <strong>Automatic Monitoring:</strong> Health checks are cached for 1 minute to balance real-time accuracy with system performance. Use the refresh button for immediate updates.
-            </div>
-        </div>
-
-        <!-- Technical Architecture -->
-        <div class="section">
-            <h2>🏗️ Technical Architecture</h2>
-            
-            <div class="tech-specs">
-                <h3>Platform Components</h3>
-                <div class="tech-grid">
-                    <div class="tech-item">
-                        <strong>Frontend</strong><br>
-                        Streamlit web application with healthcare-focused UI
-                    </div>
-                    <div class="tech-item">
-                        <strong>AI/ML Engine</strong><br>
-                        Databricks Foundation Models (Meta Llama 3.3 70B)
-                    </div>
-                    <div class="tech-item">
-                        <strong>Data Platform</strong><br>
-                        Databricks SQL Warehouse with Unity Catalog
-                    </div>
-                    <div class="tech-item">
-                        <strong>Vector Search</strong><br>
-                        Semantic similarity for healthcare terminology
-                    </div>
-                </div>
-            </div>
-
-            <h3>Healthcare Data Processing Capabilities</h3>
+            <p><strong>The AI uses your source data to:</strong></p>
             <ul>
-                <li><strong>Member Data:</strong> Patient demographics, enrollment, eligibility</li>
-                <li><strong>Provider Data:</strong> Healthcare provider directories and credentials</li>
-                <li><strong>Claims Data:</strong> Medical, pharmacy, and dental claims processing</li>
-                <li><strong>Clinical Data:</strong> Lab results, medication history, care management</li>
-                <li><strong>Program Integrity:</strong> Fraud detection and payment accuracy</li>
+                <li>Find semantically similar columns for each target field</li>
+                <li>Match column descriptions to historical patterns</li>
+                <li>Identify join keys and filter columns</li>
+                <li>Generate accurate SQL expressions</li>
+            </ul>
+
+            <div class="important-box">
+                <strong>⚠️ Quality In = Quality Out</strong>
+                <p style="margin-top: 0.5rem;">The better your source field descriptions, the better the AI suggestions. Take time to write clear, meaningful descriptions in the <code>src_comments</code> column.</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📄 CSV Template Format</h2>
+            <p>Download the template from the project page, then fill it with your source field information.</p>
+            
+            <h3>Required Columns</h3>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                    <th>Example</th>
+                </tr>
+                <tr>
+                    <td><code>src_table_name</code></td>
+                    <td class="required">Required</td>
+                    <td>Logical table name</td>
+                    <td>Recipient Base</td>
+                </tr>
+                <tr>
+                    <td><code>src_table_physical_name</code></td>
+                    <td class="required">Required</td>
+                    <td>Physical table name in database</td>
+                    <td>RECIP_BASE</td>
+                </tr>
+                <tr>
+                    <td><code>src_column_name</code></td>
+                    <td class="required">Required</td>
+                    <td>Logical column name</td>
+                    <td>Recipient Key</td>
+                </tr>
+                <tr>
+                    <td><code>src_column_physical_name</code></td>
+                    <td class="required">Required</td>
+                    <td>Physical column name</td>
+                    <td>RECIP_KEY</td>
+                </tr>
+                <tr>
+                    <td><code>src_physical_datatype</code></td>
+                    <td class="required">Required</td>
+                    <td>Column data type</td>
+                    <td>BIGINT</td>
+                </tr>
+                <tr>
+                    <td><code>src_comments</code></td>
+                    <td class="required">⚠️ Critical</td>
+                    <td>Column description for AI matching</td>
+                    <td>Unique identifier for the recipient</td>
+                </tr>
+            </table>
+
+            <h3>Optional Columns</h3>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Description</th>
+                    <th>Example</th>
+                </tr>
+                <tr>
+                    <td><code>src_nullable</code></td>
+                    <td>Whether column allows NULL values</td>
+                    <td>YES / NO</td>
+                </tr>
+                <tr>
+                    <td><code>domain</code></td>
+                    <td>Business domain category</td>
+                    <td>member / claims / provider</td>
+                </tr>
+                <tr>
+                    <td><code>primary_key</code></td>
+                    <td>Whether column is a primary key</td>
+                    <td>true / false</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>📝 Example CSV</h2>
+            <p>Here's an example of a properly formatted source fields CSV:</p>
+            
+            <div style="overflow-x: auto; margin: 1rem 0;">
+                <table>
+                    <tr>
+                        <th>src_table_physical_name</th>
+                        <th>src_column_physical_name</th>
+                        <th>src_physical_datatype</th>
+                        <th>src_comments</th>
+                    </tr>
+                    <tr class="example-row">
+                        <td>RECIP_BASE</td>
+                        <td>RECIP_KEY</td>
+                        <td>BIGINT</td>
+                        <td>Unique identifier for the recipient in the base table</td>
+                    </tr>
+                    <tr class="example-row">
+                        <td>RECIP_BASE</td>
+                        <td>STREET_ADDR_1</td>
+                        <td>STRING</td>
+                        <td>The primary street address line for the recipient</td>
+                    </tr>
+                    <tr class="example-row">
+                        <td>RECIP_BASE</td>
+                        <td>CURRENT_IND</td>
+                        <td>STRING</td>
+                        <td>Y/N indicator for current active record</td>
+                    </tr>
+                    <tr class="example-row">
+                        <td>MBR_ADDR</td>
+                        <td>ZIP_5</td>
+                        <td>STRING</td>
+                        <td>5-digit postal code for the member address</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="tip-box">
+                <strong>💡 Pro Tip: Good Descriptions</strong>
+                <p style="margin-top: 0.5rem;">Instead of just "ID", write "Unique identifier for the recipient in the base table". The more context, the better the AI matching!</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📤 Upload Process</h2>
+            
+            <ol>
+                <li><strong>Open your project</strong> from the Projects page</li>
+                <li>Click <span class="action-button">📤 Upload Sources</span></li>
+                <li>Click <strong>"Download Template"</strong> to get the CSV format</li>
+                <li>Fill in your source tables and columns</li>
+                <li>Save the CSV file</li>
+                <li>Click <strong>"Select CSV File"</strong> and choose your file</li>
+                <li>Click <strong>"Upload"</strong></li>
+            </ol>
+
+            <h3>What Happens During Upload</h3>
+            <ul>
+                <li>File is validated for required columns</li>
+                <li>Rows are checked for completeness</li>
+                <li>Source fields are inserted into <code>unmapped_fields</code> table</li>
+                <li>Semantic fields are generated for vector search</li>
+                <li>Progress shows during upload (may take a minute for large files)</li>
+            </ul>
+
+            <div class="warning-box">
+                <strong>⚠️ Upload Size</strong>
+                <p style="margin-top: 0.5rem;">Large uploads (100+ fields) may take 1-2 minutes. The progress indicator shows status - don't close the page while uploading.</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔄 Adding More Fields Later</h2>
+            <p>You can upload additional source fields at any time:</p>
+            <ul>
+                <li>New fields are added to existing ones (not replaced)</li>
+                <li>Duplicates (same table + column) are detected and skipped</li>
+                <li>After upload, you may need to <strong>Regenerate</strong> suggestions for tables that need the new fields</li>
             </ul>
         </div>
 
-        <!-- Interactive Demos -->
         <div class="section">
-            <h2>🖥️ Interactive Demonstrations</h2>
-            <p>Explore the platform through our interactive mockups that demonstrate real-world data mapping scenarios with dual-tab navigation, search capabilities, and comprehensive field management.</p>
+            <h2>❓ Troubleshooting</h2>
             
-            <div class="demo-buttons">
-                <a href="?static=app_mockup.html" class="demo-btn" target="_blank">🏠 Main Application Demo</a>
-                <a href="?static=field_mapping_mockup.html" class="demo-btn" target="_blank">📊 Enhanced Field Mapping</a>
-                <a href="?static=config_mockup.html" class="demo-btn" target="_blank">⚙️ Configuration Demo</a>
-                <a href="?static=readme.html" class="demo-btn" target="_blank">📚 Technical Documentation</a>
-            </div>
-
-            <div class="alert alert-info">
-                <strong>Demo Data:</strong> All demonstrations use synthetic data that complies with privacy regulations. Experience the full dual-tab workflow including unmapped field discovery, AI-powered suggestions, mapped field management, and search filtering capabilities.
-            </div>
-        </div>
-
-        <!-- Databricks Apps Platform -->
-        <div class="section">
-            <h2>📱 Built on Databricks Apps</h2>
-            <p>This Gainwell Source-to-Target Mapping Platform is built using <a href="https://www.databricks.com/product/databricks-apps" target="_blank">Databricks Apps</a>, which provides the foundation for building secure, production-ready data and AI applications.</p>
-            
-            <div class="alert alert-info">
-                <strong>Platform Benefits:</strong> Databricks Apps enables rapid development with built-in governance, serverless deployment, and seamless integration with your data lakehouse.
-            </div>
-
-            <div class="feature-grid">
-                <div class="feature-item">
-                    <h4>🚀 Simple to Build</h4>
-                    <p>Built using familiar Python frameworks like Streamlit, with direct access to Databricks data and AI models. No complex infrastructure setup required.</p>
-                </div>
-                
-                <div class="feature-item">
-                    <h4>🔒 Production-Ready</h4>
-                    <p>Automatically provisioned serverless compute with Git integration and CI/CD pipeline support for enterprise deployment.</p>
-                </div>
-                
-                <div class="feature-item">
-                    <h4>🛡️ Built-in Governance</h4>
-                    <p>Enterprise security with granular access controls, automatic authentication, and Unity Catalog integration for data governance.</p>
-                </div>
-            </div>
-
-            <div class="demo-buttons">
-                <a href="https://www.databricks.com/product/databricks-apps" class="demo-btn" target="_blank">🔗 Learn More About Databricks Apps</a>
-            </div>
-        </div>
-
-        <!-- Support & Resources -->
-        <div class="section">
-            <h2>🤝 Support & Resources</h2>
-            
-            <div class="feature-grid">
-                <div class="feature-item">
-                    <h4>📖 Documentation</h4>
-                    <p>Comprehensive technical documentation, API references, and implementation guides specifically for healthcare data integration.</p>
-                </div>
-                
-                <div class="feature-item">
-                    <h4>🎓 Training</h4>
-                    <p>Healthcare data professional training programs covering HIPAA compliance, data mapping best practices, and platform administration.</p>
-                </div>
-                
-                <div class="feature-item">
-                    <h4>🔧 Professional Services</h4>
-                    <p>Gainwell's healthcare data experts provide implementation support, custom mappings, and ongoing optimization services.</p>
-                </div>
-            </div>
-
-            <h3>Getting Help</h3>
+            <h3>Upload Fails</h3>
             <ul>
-                <li><strong>Enterprise Support Portal:</strong> Configurable support portal link (default: Gainwell SharePoint) for production healthcare environments</li>
-                <li><strong>User Guide:</strong> Comprehensive documentation with interactive demos and step-by-step workflows</li>
-                <li><strong>Technical Documentation:</strong> API references and implementation guides for healthcare data integration</li>
-                <li><strong>Databricks Apps Platform:</strong> Learn about the underlying platform powering this application</li>
+                <li>Check that all required columns are present in your CSV</li>
+                <li>Ensure column headers match exactly (case-sensitive)</li>
+                <li>Verify CSV is properly formatted (no extra commas, quotes are escaped)</li>
+            </ul>
+
+            <h3>AI Suggestions Are Poor</h3>
+            <ul>
+                <li>Check that <code>src_comments</code> has meaningful descriptions</li>
+                <li>Ensure you've uploaded ALL relevant source tables</li>
+                <li>Try regenerating individual suggestions</li>
+            </ul>
+
+            <h3>Fields Not Showing in Suggestions</h3>
+            <ul>
+                <li>Verify the field was successfully uploaded (check project detail page)</li>
+                <li>Make sure the project_id matches</li>
+                <li>Regenerate suggestions for the target table</li>
+            </ul>
+        </div>
+
+        <div class="section" style="background: linear-gradient(135deg, #d1fae5, #f0fdf4); border-left-color: #10b981;">
+            <h2>✅ Checklist Before Upload</h2>
+            <ul style="list-style: none; margin-left: 0;">
+                <li>☑️ All required columns are present</li>
+                <li>☑️ Column headers match template exactly</li>
+                <li>☑️ <code>src_comments</code> has clear descriptions for every field</li>
+                <li>☑️ Data types are accurate (STRING, BIGINT, DATE, etc.)</li>
+                <li>☑️ Physical names match your actual database</li>
+                <li>☑️ File is saved as CSV (not Excel .xlsx)</li>
             </ul>
             
-            <div class="alert">
-                <strong>Support Configuration:</strong> Administrators can configure the support portal URL in the Configuration → Support tab to point to your organization's help desk or support system.
-            </div>
+            <p style="margin-top: 1.5rem; text-align: center; color: #666;">
+                <strong>Version:</strong> Smart Mapper V4 | <strong>Feature:</strong> Source Field Upload
+            </p>
         </div>
     </div>
 </body>

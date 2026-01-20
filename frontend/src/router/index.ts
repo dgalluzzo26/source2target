@@ -5,13 +5,14 @@
  * Uses nested routes with AppLayout as the parent wrapper component.
  * 
  * Route Structure:
+ * V4 Target-First Workflow:
  * - / (root) → Introduction/Dashboard page
- * - /unmapped-fields → Unmapped Fields page (multi-field mapping)
- * - /mapping-config → Mapping Configuration Wizard (configure mapping)
- * - /mappings → View Current Mappings (all users)
+ * - /projects → Projects list
+ * - /projects/:id → Project detail (target tables & suggestions)
+ * 
+ * Admin:
  * - /semantic-fields → Semantic Table Management (admin only)
  * - /config → Admin Configuration (admin only)
- * - /admin → Admin Tools - Transformations, User Management (admin only)
  * 
  * All routes use code-splitting (lazy loading) for better performance,
  * except AppLayout which is loaded immediately as it's always needed.
@@ -43,24 +44,26 @@ const router = createRouter({
           name: 'introduction',
           component: () => import('../views/IntroductionView.vue')
         },
+        
+        // ================================================================
+        // V4 TARGET-FIRST WORKFLOW
+        // ================================================================
         {
-          // V2 Unmapped fields page - main entry point for multi-field mapping
-          path: '/unmapped-fields',
-          name: 'unmapped-fields',
-          component: () => import('../views/UnmappedFieldsView.vue')
+          // Projects list - main entry point
+          path: '/projects',
+          name: 'projects',
+          component: () => import('../views/ProjectsListView.vue')
         },
         {
-          // V2 Mapping configuration page - configure multi-field mapping
-          path: '/mapping-config',
-          name: 'mapping-config',
-          component: () => import('../views/MappingConfigView.vue')
+          // Project detail - target tables and suggestions
+          path: '/projects/:id',
+          name: 'project-detail',
+          component: () => import('../views/ProjectDetailView.vue')
         },
-        {
-          // View current mappings - available to all users
-          path: '/mappings',
-          name: 'mappings',
-          component: () => import('../views/MappingsListView.vue')
-        },
+        
+        // ================================================================
+        // ADMIN
+        // ================================================================
         {
           // Semantic table management - admin only
           path: '/semantic-fields',
@@ -68,17 +71,17 @@ const router = createRouter({
           component: () => import('../views/SemanticFieldsView.vue')
         },
         {
+          // Pattern import - admin only
+          path: '/admin/patterns',
+          name: 'pattern-import',
+          component: () => import('../views/PatternImportView.vue')
+        },
+        {
           // Admin configuration page - general settings
           path: '/config',
           name: 'config',
           component: () => import('../views/ConfigView.vue')
         },
-        {
-          // Admin tools - transformations, user management, etc.
-          path: '/admin',
-          name: 'admin',
-          component: () => import('../views/AdminView.vue')
-        }
       ]
     }
   ],

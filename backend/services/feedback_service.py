@@ -9,8 +9,8 @@ import functools
 from typing import List, Dict, Any, Optional
 from databricks import sql
 from databricks.sdk import WorkspaceClient
-from backend.models.mapping_v2 import MappingFeedbackV2, MappingFeedbackCreateV2
-from backend.services.config_service import ConfigService
+from backend.models.shared import MappingFeedbackV2, MappingFeedbackCreateV2
+from backend.services.config_service import config_service
 
 # Thread pool for blocking database operations
 executor = ThreadPoolExecutor(max_workers=3)
@@ -21,7 +21,7 @@ class FeedbackService:
     
     def __init__(self):
         """Initialize the feedback service."""
-        self.config_service = ConfigService()
+        self.config_service = config_service  # Use global instance for shared config
         self._workspace_client = None
     
     @property
@@ -34,10 +34,11 @@ class FeedbackService:
     def _get_db_config(self) -> Dict[str, str]:
         """Get database configuration for feedback table."""
         config = self.config_service.get_config()
+        db = config.database
         return {
-            "server_hostname": config.database.server_hostname,
-            "http_path": config.database.http_path,
-            "mapping_feedback_table": self.config_service.get_fully_qualified_table_name(config.database.mapping_feedback_table)
+            "server_hostname": db.server_hostname,
+            "http_path": db.http_path,
+            "mapping_feedback_table": db.mapping_feedback_table
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):

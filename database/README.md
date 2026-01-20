@@ -1,158 +1,55 @@
-# Database Migration Scripts - V2
+# Smart Mapper V4 - Database Schema
 
-This directory contains SQL scripts and documentation for migrating the Source-to-Target Mapping Platform from V1 to V2.
+This folder contains the database schema scripts for Smart Mapper V4.
 
-## 📁 Files
+## Schema Files
 
-| File | Purpose |
-|------|---------|
-| `migration_v2_schema.sql` | Creates V2 schema (6 tables + indexes + seed data) |
-| `migration_v2_data.sql` | Migrates V1 data to V2 schema with validation |
-| `V2_MIGRATION_GUIDE.md` | Comprehensive migration guide with examples |
-| `V2_SCHEMA_DIAGRAM.md` | Visual schema diagrams and data flow |
+### 1. `V4_TARGET_FIRST_SCHEMA.sql` (Run First)
+Creates all core V4 tables:
+- `mapping_projects` - Project tracking and configuration
+- `target_table_status` - Progress tracking per target table
+- `mapping_suggestions` - AI-generated suggestions before approval
+- `semantic_fields` - Target field definitions (from catalog)
 
-## 🚀 Quick Start
-
-### 1. Review the Changes
-
-Read the migration guide to understand V2 enhancements:
-```bash
-cat V2_MIGRATION_GUIDE.md
-```
-
-### 2. Create V2 Schema
-
-Run in Databricks SQL Editor or notebook:
+**Usage:**
 ```sql
-%run /path/to/migration_v2_schema.sql
+-- Replace ${CATALOG_SCHEMA} with your catalog.schema
+-- e.g., oz_dev.silver_dmes_de
 ```
 
-### 3. Migrate Data
+### 2. `V4_UNMAPPED_FIELDS_WITH_PROJECT.sql`
+Creates/recreates the `unmapped_fields` table with:
+- `project_id` column for project association
+- `source_semantic_field` format includes PROJECT_ID for vector search
 
-Run in Databricks SQL Editor or notebook:
+**Usage:**
 ```sql
-%run /path/to/migration_v2_data.sql
+-- Run after V4_TARGET_FIRST_SCHEMA.sql
+-- Replace ${CATALOG_SCHEMA} with your catalog.schema
 ```
 
-### 4. Validate Migration
+### 3. `V4_MAPPED_FIELDS_RECREATE.sql`
+Adds V4 columns to `mapped_fields` table:
+- `project_id` - Links mapping to a project
+- `is_approved_pattern` - Whether mapping is approved as AI pattern
+- `pattern_approved_by`, `pattern_approved_ts` - Pattern approval tracking
+- `team_members` column on projects
 
-Check the summary report and data quality checks output from step 3.
-
-## 🎯 What's New in V2
-
-### Major Features
-
-- ✅ **Multi-Source Mapping**: Multiple source fields → Single target field
-- ✅ **Field Ordering**: Drag-and-drop ordering for concatenation
-- ✅ **Concatenation Strategies**: SPACE, COMMA, PIPE, CONCAT, CUSTOM
-- ✅ **Per-Field Transformations**: TRIM, UPPER, LOWER, and 20+ more
-- ✅ **Feedback Capture**: Track ACCEPTED/REJECTED/MODIFIED suggestions
-- ✅ **Domain Classification**: Domain-aware AI recommendations
-- ✅ **Transformation Library**: Reusable, standardized transformations
-
-### Schema Changes
-
-#### V1 (Old)
-```
-semantic_table (target definitions)
-combined_fields (source + mapping, 1:1 only)
+**Usage:**
+```sql
+-- Run after creating mapped_fields table
+-- Replace ${CATALOG_SCHEMA} with your catalog.schema
 ```
 
-#### V2 (New)
-```
-semantic_fields (target definitions)
-unmapped_fields (source fields awaiting mapping)
-mapped_fields (one record per target field)
-mapping_details (multiple source fields per target)
-mapping_feedback (audit trail for AI suggestions)
-transformation_library (reusable transformations)
-```
+## Installation Order
 
-## 📊 Use Cases
+1. Run `V4_TARGET_FIRST_SCHEMA.sql`
+2. Run `V4_UNMAPPED_FIELDS_WITH_PROJECT.sql`
+3. Run `V4_MAPPED_FIELDS_RECREATE.sql`
 
-### Simple 1:1 Mapping (V1 Compatible)
-```
-T_MEMBER.SSN → slv_member.ssn_number
-```
+## Configuration
 
-### Multi-Field Concatenation (New in V2)
-```
-T_MEMBER.FIRST_NAME + T_MEMBER.LAST_NAME → slv_member.full_name
-(with SPACE separator and TRIM+INITCAP transformations)
-```
+Replace `${CATALOG_SCHEMA}` with your Databricks catalog.schema in all files.
 
-### Multi-Table Join (New in V2)
-```
-T_ADDRESS.STREET + T_ADDRESS.CITY + T_STATE.STATE_NAME → slv_member.full_address
-(with CUSTOM ", " separator)
-```
-
-## 📋 Migration Checklist
-
-- [ ] Review `V2_MIGRATION_GUIDE.md`
-- [ ] Review `V2_SCHEMA_DIAGRAM.md`
-- [ ] Create project backup (tar.gz)
-- [ ] Run `migration_v2_schema.sql`
-- [ ] Verify 6 tables created
-- [ ] Run `migration_v2_data.sql`
-- [ ] Review data quality checks
-- [ ] Populate domain classification
-- [ ] Update vector search configuration
-- [ ] Update application config
-- [ ] Test in UI
-- [ ] Drop V1 tables (after validation)
-
-## 🔄 Rollback
-
-If needed, V1 backup tables are created automatically:
-- `semantic_table_v1_backup`
-- `combined_fields_v1_backup`
-
-See `V2_MIGRATION_GUIDE.md` → "Rollback Plan" for restore instructions.
-
-## 📞 Support
-
-Review the detailed documentation:
-- **Migration Guide**: `V2_MIGRATION_GUIDE.md` (comprehensive guide)
-- **Schema Diagrams**: `V2_SCHEMA_DIAGRAM.md` (visual reference)
-
-## 🎓 Key Concepts
-
-### Concatenation Strategy
-Defines how multiple source fields are combined:
-- **NONE**: Single field (like V1)
-- **SPACE**: Concatenate with space: `"John" + "Doe" = "John Doe"`
-- **COMMA**: Concatenate with comma: `"John" + "Doe" = "John,Doe"`
-- **PIPE**: Concatenate with pipe: `"John" + "Doe" = "John|Doe"`
-- **CONCAT**: Direct concatenation: `"John" + "Doe" = "JohnDoe"`
-- **CUSTOM**: User-defined separator
-
-### Transformations
-Per-field SQL transformations applied before concatenation:
-- **TEXT**: TRIM, UPPER, LOWER, INITCAP, etc.
-- **DATE**: DATE_TO_STR, STR_TO_DATE, YEAR, MONTH
-- **NUMERIC**: ROUND_2, TO_STRING, TO_INT, TO_DECIMAL
-- **CUSTOM**: User-defined SQL expressions
-
-### Feedback Actions
-User feedback on AI suggestions:
-- **ACCEPTED**: User accepted suggestion as-is
-- **REJECTED**: User rejected suggestion (with comments)
-- **MODIFIED**: User accepted but changed target/transformations
-
-## 📈 Benefits
-
-1. **Flexibility**: Handle complex real-world mapping scenarios
-2. **Standardization**: Reusable transformation patterns
-3. **Quality**: Confidence scoring and feedback loop
-4. **Transparency**: Full transformation expressions visible
-5. **Scalability**: Proper normalization for enterprise scale
-6. **Domain-Aware**: Better AI recommendations per domain
-7. **Auditability**: Complete trail of mapping decisions
-
----
-
-**Version**: 2.0  
-**Date**: November 20, 2024  
-**Status**: Ready for Migration
+Example: `oz_dev.silver_dmes_de`
 

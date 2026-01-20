@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional
 from databricks import sql
 from databricks.sdk import WorkspaceClient
 from backend.models.semantic import SemanticRecord, SemanticRecordCreate, SemanticRecordUpdate
-from backend.services.config_service import ConfigService
+from backend.services.config_service import config_service
 
 
 # Thread pool for blocking database operations
@@ -22,7 +22,7 @@ class SemanticService:
     
     def __init__(self):
         """Initialize the semantic service."""
-        self.config_service = ConfigService()
+        self.config_service = config_service  # Use global instance for shared config
         self._workspace_client = None
     
     @property
@@ -87,10 +87,11 @@ class SemanticService:
     def _get_db_config(self) -> Dict[str, str]:
         """Get database configuration."""
         config = self.config_service.get_config()
+        db = config.database
         return {
-            "server_hostname": config.database.server_hostname,
-            "http_path": config.database.http_path,
-            "semantic_fields_table": self.config_service.get_fully_qualified_table_name(config.database.semantic_fields_table)
+            "server_hostname": db.server_hostname,
+            "http_path": db.http_path,
+            "semantic_fields_table": db.semantic_fields_table
         }
     
     def _get_sql_connection(self, server_hostname: str, http_path: str):

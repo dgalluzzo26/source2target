@@ -1,0 +1,374 @@
+"""
+FastAPI router for pattern import endpoints.
+
+Admin-only endpoints for bulk importing historical mapping patterns.
+
+Workflow:
+1. POST /upload - Upload CSV file, get parsed data and headers
+2. POST /session - Create import session with column mapping
+3. POST /session/{id}/process - Process patterns (generate join_metadata)
+4. GET /session/{id}/preview - Get processed patterns for review
+5. POST /session/{id}/save - Save approved patterns to mapped_fields
+6. DELETE /session/{id} - Cancel and delete session
+"""
+from fastapi import APIRouter, HTTPException, UploadFile, File, Request, Body, Query, BackgroundTasks
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel
+import uuid
+from backend.services.pattern_import_service import PatternImportService
+from backend.services.auth_service import AuthService
+
+router = APIRouter(prefix="/api/v4/admin/patterns", tags=["Pattern Import (Admin)"])
+
+pattern_import_service = PatternImportService()
+auth_service = AuthService()
+
+
+async def get_current_user_email(request: Request) -> str:
+    """Extract user email from request headers."""
+    return request.headers.get("X-User-Email", "anonymous@example.com")
+
+
+async def require_admin(request: Request) -> str:
+    """Require admin access, return user email."""
+    user_email = await get_current_user_email(request)
+    try:
+        is_admin = await auth_service.is_user_admin(user_email)
+        print(f"[Pattern Import] Admin check for {user_email}: {is_admin}")
+        if not is_admin:
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Admin access required for pattern import. User {user_email} is not in admin list."
+            )
+        return user_email
+    except HTTPException:
+        raise
+    except Exception as e:
+        # In development, allow access
+        print(f"[Pattern Import] Admin check failed: {e}, allowing in dev mode")
+        return user_email
+
+
+# =============================================================================
+# REQUEST MODELS
+# =============================================================================
+
+class ColumnMappingRequest(BaseModel):
+    """Request to create an import session with column mapping."""
+    column_mapping: Dict[str, str]  # mapped_fields column -> CSV column
+
+
+class SavePatternsRequest(BaseModel):
+    """Request to save patterns."""
+    pattern_indices: Optional[List[int]] = None  # Specific patterns to save, or all if None
+    project_type: str = ""  # Project type for pattern filtering (required for new imports)
+
+
+# =============================================================================
+# ENDPOINTS
+# =============================================================================
+
+def decode_csv_content(content: bytes) -> str:
+    """Try multiple encodings to decode CSV content."""
+    encodings = ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252', 'iso-8859-1']
+    
+    for encoding in encodings:
+        try:
+            return content.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    
+    # Last resort: decode with errors='replace'
+    return content.decode('utf-8', errors='replace')
+
+
+@router.post("/upload")
+async def upload_csv(
+    request: Request,
+    file: UploadFile = File(..., description="CSV file with historical mappings")
+):
+    """
+    Upload and parse a CSV file with historical mapping patterns.
+    
+    Returns parsed headers and preview data for column mapping.
+    
+    Admin only.
+    """
+    await require_admin(request)
+    
+    try:
+        # Read file content
+        content = await file.read()
+        csv_content = decode_csv_content(content)
+        
+        # Parse CSV
+        result = pattern_import_service.parse_csv(csv_content)
+        
+        if result.get("status") == "error":
+            raise HTTPException(status_code=400, detail=result.get("error"))
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Pattern Import] Error uploading CSV: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/session")
+async def create_session(
+    request: Request,
+    file: UploadFile = File(..., description="CSV file"),
+    column_mapping: str = Body(..., description="JSON string of column mapping")
+):
+    """
+    Create an import session with column mapping.
+    
+    Args:
+        file: CSV file
+        column_mapping: JSON string mapping mapped_fields columns to CSV columns
+        
+    Returns:
+        Session ID and info
+        
+    Admin only.
+    """
+    user_email = await require_admin(request)
+    
+    try:
+        import json
+        
+        # Parse column mapping
+        mapping = json.loads(column_mapping)
+        
+        # Read and parse CSV
+        content = await file.read()
+        csv_content = decode_csv_content(content)
+        csv_data = pattern_import_service.parse_csv(csv_content)
+        
+        if csv_data.get("status") == "error":
+            raise HTTPException(status_code=400, detail=csv_data.get("error"))
+        
+        # Create session
+        session_id = str(uuid.uuid4())
+        result = pattern_import_service.create_session(
+            session_id,
+            csv_data,
+            mapping,
+            user_email
+        )
+        
+        return result
+        
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid column mapping JSON: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Pattern Import] Error creating session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/session/{session_id}/process")
+async def process_patterns(
+    session_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    limit: Optional[int] = Query(None, description="Limit number of patterns to process (None = all)")
+):
+    """
+    Process patterns in a session - generate join_metadata via LLM.
+    
+    This runs in the background and returns immediately. Poll /preview to get progress.
+    
+    Admin only.
+    """
+    await require_admin(request)
+    
+    print(f"[Pattern Import Router] Starting background processing for session {session_id}")
+    
+    try:
+        # Run processing in background so request doesn't timeout
+        async def run_processing():
+            try:
+                result = await pattern_import_service.process_patterns(session_id, limit=limit)
+                print(f"[Pattern Import Router] Background processing complete: {result.get('status')}")
+            except Exception as e:
+                print(f"[Pattern Import Router] Background processing error: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        background_tasks.add_task(run_processing)
+        
+        # Return immediately - client should poll /preview for progress
+        return {
+            "status": "processing",
+            "message": "Processing started in background. Poll /preview for progress.",
+            "session_id": session_id
+        }
+        
+    except Exception as e:
+        print(f"[Pattern Import Router] Error starting processing: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/session/{session_id}/preview")
+async def get_preview(
+    session_id: str,
+    request: Request
+):
+    """
+    Get preview of processed patterns for review.
+    
+    Returns all patterns with generated join_metadata for approval.
+    
+    Admin only.
+    """
+    await require_admin(request)
+    
+    try:
+        result = pattern_import_service.get_preview(session_id)
+        
+        if result.get("status") == "error":
+            raise HTTPException(status_code=404, detail=result.get("error"))
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Pattern Import] Error getting preview: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/session/{session_id}/progress")
+async def get_progress(
+    session_id: str,
+    request: Request
+):
+    """
+    Get processing progress for a session.
+    
+    Admin only.
+    """
+    await require_admin(request)
+    
+    try:
+        session = pattern_import_service.get_session(session_id)
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        return {
+            "session_id": session_id,
+            "status": session.get("status"),
+            "progress": session.get("processing_progress", 0),
+            "total_rows": session.get("total_rows", 0)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Pattern Import] Error getting progress: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/session/{session_id}/save")
+async def save_patterns(
+    session_id: str,
+    request: Request,
+    body: SavePatternsRequest = Body(default=SavePatternsRequest())
+):
+    """
+    Save approved patterns to mapped_fields.
+    
+    Optionally specify pattern_indices to save specific patterns,
+    or save all if not specified.
+    
+    Triggers vector search index sync after save.
+    
+    Admin only.
+    """
+    print(f"[Pattern Import Save] Received save request for session: {session_id}")
+    print(f"[Pattern Import Save] Pattern indices: {body.pattern_indices}, project_type: {body.project_type}")
+    
+    await require_admin(request)
+    
+    # Validate project_type is provided
+    if not body.project_type:
+        raise HTTPException(status_code=400, detail="project_type is required for saving patterns")
+    
+    try:
+        print(f"[Pattern Import Save] Calling save_patterns service...")
+        result = await pattern_import_service.save_patterns(
+            session_id,
+            body.pattern_indices,
+            body.project_type
+        )
+        print(f"[Pattern Import Save] Result: {result}")
+        
+        if result.get("status") == "error":
+            print(f"[Pattern Import Save] Error from service: {result.get('error')}")
+            raise HTTPException(status_code=400, detail=result.get("error"))
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Pattern Import Save] Exception: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/session/{session_id}")
+async def delete_session(
+    session_id: str,
+    request: Request
+):
+    """
+    Delete/cancel an import session.
+    
+    Admin only.
+    """
+    await require_admin(request)
+    
+    try:
+        deleted = pattern_import_service.delete_session(session_id)
+        
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        return {"status": "success", "message": "Session deleted"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Pattern Import] Error deleting session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/mappable-columns")
+async def get_mappable_columns(request: Request):
+    """
+    Get list of mapped_fields columns that can be mapped from CSV.
+    
+    Admin only.
+    """
+    await require_admin(request)
+    
+    return {
+        "columns": pattern_import_service.MAPPABLE_COLUMNS,
+        "required": [
+            "tgt_table_physical_name",
+            "tgt_column_physical_name",
+            "source_expression"
+        ]
+    }
+
+
+

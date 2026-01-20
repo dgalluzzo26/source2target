@@ -11,7 +11,7 @@ Vue.js frontend (when built). It provides:
 
 The application is designed to run as a Databricks App or locally for development.
 """
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -20,7 +20,8 @@ from typing import Optional, Dict, Any
 from backend.services.config_service import config_service
 from backend.services.system_service import system_service
 from backend.services.auth_service import auth_service
-from backend.routers import semantic, mapping, ai_mapping, unmapped_fields, ai_mapping_v2, mapping_v2, transformation, feedback
+from backend.routers import semantic, unmapped_fields, feedback
+from backend.routers import projects, target_tables, suggestions, export, pattern_import
 
 # Import Databricks SDK for authentication
 try:
@@ -32,9 +33,9 @@ except ImportError:
     print("Warning: Databricks SDK not available")
 
 app = FastAPI(
-    title="Source2Target API",
-    description="FastAPI backend for Source2Target Databricks app (V2 Multi-Field Mapping)",
-    version="2.0.0"
+    title="Smart Mapper API",
+    description="FastAPI backend for Smart Mapper Databricks app (V4 Target-First Workflow)",
+    version="4.0.0"
 )
 
 # Configure CORS for Vue frontend
@@ -46,17 +47,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include V2 routers
-app.include_router(unmapped_fields.router)
-app.include_router(mapping_v2.router)
-app.include_router(ai_mapping_v2.router)
-app.include_router(transformation.router)
-app.include_router(feedback.router)
+# Include V4 routers (target-first workflow)
+app.include_router(projects.router)
+app.include_router(target_tables.router)
+app.include_router(suggestions.router)
+app.include_router(export.router)
+app.include_router(pattern_import.router)
 
-# Include V1 routers (will be deprecated)
+# Include utility routers
+app.include_router(unmapped_fields.router)
+app.include_router(feedback.router)
 app.include_router(semantic.router)
-app.include_router(mapping.router)
-app.include_router(ai_mapping.router)
 
 @app.get("/api/health")
 async def health_check():
@@ -109,8 +110,8 @@ async def get_current_user(request: Request):
             user_info["email"] = forwarded_email
             user_info["display_name"] = forwarded_email.split('@')[0].replace('.', ' ').title()
             user_info["detection_method"] = "X-Forwarded-Email header"
-            # Check admin status
-            user_info["is_admin"] = auth_service.check_admin_group_membership(forwarded_email)
+            # Check admin status using config list
+            user_info["is_admin"] = await auth_service.is_user_admin(forwarded_email)
             return user_info
         
         # Method 2: Check other common headers
@@ -125,8 +126,8 @@ async def get_current_user(request: Request):
                 user_info["email"] = value
                 user_info["display_name"] = value.split('@')[0].replace('.', ' ').title()
                 user_info["detection_method"] = f"{header} header"
-                # Check admin status
-                user_info["is_admin"] = auth_service.check_admin_group_membership(value)
+                # Check admin status using config list
+                user_info["is_admin"] = await auth_service.is_user_admin(value)
                 return user_info
         
         # Method 3: Check environment variables
@@ -135,8 +136,8 @@ async def get_current_user(request: Request):
             user_info["email"] = databricks_user
             user_info["display_name"] = databricks_user.split('@')[0].replace('.', ' ').title()
             user_info["detection_method"] = "DATABRICKS_USER env"
-            # Check admin status
-            user_info["is_admin"] = auth_service.check_admin_group_membership(databricks_user)
+            # Check admin status using config list
+            user_info["is_admin"] = await auth_service.is_user_admin(databricks_user)
             return user_info
         
         # Method 4: Try Databricks WorkspaceClient (if available)
@@ -165,8 +166,8 @@ async def get_current_user(request: Request):
                         user_info["email"] = email
                         user_info["display_name"] = email.split('@')[0].replace('.', ' ').title()
                         user_info["detection_method"] = "WorkspaceClient API"
-                        # Check admin status
-                        user_info["is_admin"] = auth_service.check_admin_group_membership(email)
+                        # Check admin status using config list
+                        user_info["is_admin"] = await auth_service.is_user_admin(email)
                         return user_info
             except Exception as e:
                 print(f"WorkspaceClient error: {str(e)}")
@@ -263,16 +264,212 @@ async def update_config(config_data: dict):
                 "message": "Configuration updated successfully"
             }
         else:
-            return {
-                "status": "error",
-                "message": "Failed to save configuration"
-            }, 500
+            raise HTTPException(status_code=500, detail="Failed to save configuration")
             
+    except HTTPException:
+        raise
     except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Invalid configuration: {str(e)}"
-        }, 400
+        raise HTTPException(status_code=400, detail=f"Invalid configuration: {str(e)}")
+
+
+@app.get("/api/config/project-types")
+async def get_project_types():
+    """
+    Get the list of available project types.
+    
+    Returns the configured project types that can be assigned to projects.
+    Used for populating dropdowns in the UI.
+    
+    Returns:
+        dict: Dictionary with available_types and default_type
+    """
+    config = config_service.get_config()
+    return {
+        "available_types": config.project_types.available_types,
+        "default_type": config.project_types.default_type
+    }
+
+
+# ============================================================================
+# AI Enhancement Endpoint
+# ============================================================================
+
+from pydantic import BaseModel
+
+class EnhanceDescriptionRequest(BaseModel):
+    table_name: str
+    column_name: str
+    current_description: str = ""
+    data_type: str = "STRING"
+
+@app.post("/api/v4/ai/enhance-description")
+async def enhance_description(request: EnhanceDescriptionRequest):
+    """
+    Use LLM to generate an enhanced description for a source field.
+    
+    Given the table name, column name, and current description,
+    generates a more detailed and useful description.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from databricks.sdk import WorkspaceClient
+    from databricks.sdk.service.serving import ChatMessage, ChatMessageRole
+    
+    try:
+        config = config_service.get_config()
+        # Use ai_model.foundation_model_endpoint from config
+        llm_endpoint = config.ai_model.foundation_model_endpoint
+        
+        print(f"[AI Enhance] Processing {request.table_name}.{request.column_name} using {llm_endpoint}")
+        
+        # Build the prompt
+        prompt = f"""You are a data documentation expert. Given a database column, generate a clear, concise, and informative description.
+
+TABLE: {request.table_name}
+COLUMN: {request.column_name}
+DATA TYPE: {request.data_type}
+CURRENT DESCRIPTION: {request.current_description or "(none provided)"}
+
+Generate an improved description that:
+1. Explains what this column represents in plain English
+2. Mentions the data type context (e.g., if it's an ID, date, flag, code, etc.)
+3. Notes any common usage patterns if inferable from the name
+4. Is concise (1-2 sentences max)
+5. If the current description is already good, keep it or slightly enhance it
+
+Return ONLY the enhanced description text, nothing else. No JSON, no explanation, just the description."""
+
+        # Call LLM - matching the pattern from suggestion_service.py
+        def call_llm():
+            w = WorkspaceClient()
+            response = w.serving_endpoints.query(
+                name=llm_endpoint,
+                messages=[
+                    ChatMessage(role=ChatMessageRole.USER, content=prompt)
+                ],
+                max_tokens=150
+            )
+            return response.choices[0].message.content.strip()
+        
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(call_llm)
+            enhanced = future.result(timeout=30)
+        
+        # Clean up the response
+        enhanced = enhanced.strip().strip('"').strip("'")
+        
+        print(f"[AI Enhance] Success: {request.column_name} -> {enhanced[:50]}...")
+        
+        return {"enhanced_description": enhanced}
+        
+    except Exception as e:
+        print(f"[AI Enhance] Error for {request.table_name}.{request.column_name}: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return original description on error
+        return {"enhanced_description": request.current_description or f"Column {request.column_name} from table {request.table_name}"}
+
+
+class EnhanceDescriptionBatchRequest(BaseModel):
+    fields: list  # List of {table_name, column_name, data_type, current_description}
+
+@app.post("/api/v4/ai/enhance-description-batch")
+async def enhance_description_batch(request: EnhanceDescriptionBatchRequest):
+    """
+    Batch endpoint to enhance multiple field descriptions in parallel.
+    Much more efficient for large datasets (5K+ fields).
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from databricks.sdk import WorkspaceClient
+    from databricks.sdk.service.serving import ChatMessage, ChatMessageRole
+    
+    results = []
+    
+    try:
+        config = config_service.get_config()
+        llm_endpoint = config.ai_model.foundation_model_endpoint
+        
+        print(f"[AI Enhance Batch] Processing {len(request.fields)} fields using {llm_endpoint}")
+        
+        def enhance_single_field(field_data: dict) -> dict:
+            """Process a single field - called in parallel"""
+            table_name = field_data.get('table_name', '')
+            column_name = field_data.get('column_name', '')
+            data_type = field_data.get('data_type', 'STRING')
+            current_desc = field_data.get('current_description', '')
+            field_id = field_data.get('id')
+            
+            try:
+                prompt = f"""You are a data documentation expert. Given a database column, generate a clear, concise description.
+
+TABLE: {table_name}
+COLUMN: {column_name}
+DATA TYPE: {data_type}
+CURRENT DESCRIPTION: {current_desc or "(none)"}
+
+Generate an improved 1-2 sentence description. Return ONLY the description text."""
+
+                w = WorkspaceClient()
+                response = w.serving_endpoints.query(
+                    name=llm_endpoint,
+                    messages=[ChatMessage(role=ChatMessageRole.USER, content=prompt)],
+                    max_tokens=150
+                )
+                enhanced = response.choices[0].message.content.strip().strip('"').strip("'")
+                
+                return {
+                    "id": field_id,
+                    "table_name": table_name,
+                    "column_name": column_name,
+                    "original_description": current_desc,
+                    "enhanced_description": enhanced,
+                    "success": True
+                }
+            except Exception as e:
+                print(f"[AI Enhance Batch] Error for {column_name}: {e}")
+                return {
+                    "id": field_id,
+                    "table_name": table_name,
+                    "column_name": column_name,
+                    "original_description": current_desc,
+                    "enhanced_description": current_desc,  # Keep original on error
+                    "success": False,
+                    "error": str(e)
+                }
+        
+        # Process all fields in parallel with ThreadPoolExecutor
+        # Use 20 workers for good parallelism without overwhelming the API
+        MAX_WORKERS = 20
+        
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {executor.submit(enhance_single_field, field): field for field in request.fields}
+            
+            for future in as_completed(futures):
+                try:
+                    result = future.result(timeout=60)
+                    results.append(result)
+                except Exception as e:
+                    field = futures[future]
+                    results.append({
+                        "id": field.get('id'),
+                        "table_name": field.get('table_name', ''),
+                        "column_name": field.get('column_name', ''),
+                        "original_description": field.get('current_description', ''),
+                        "enhanced_description": field.get('current_description', ''),
+                        "success": False,
+                        "error": str(e)
+                    })
+        
+        success_count = sum(1 for r in results if r.get('success'))
+        print(f"[AI Enhance Batch] Complete: {success_count}/{len(results)} successful")
+        
+        return {"results": results, "total": len(results), "success_count": success_count}
+        
+    except Exception as e:
+        print(f"[AI Enhance Batch] Fatal error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # Mount static files for production (built frontend)
 # The dist folder is now at the root level after vite build

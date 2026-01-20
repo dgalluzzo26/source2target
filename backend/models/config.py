@@ -17,46 +17,65 @@ Models:
 - AppConfig: Root configuration containing all sections
 """
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
 
 class DatabaseConfig(BaseModel):
     """
-    Database connection configuration for Databricks SQL Warehouse (V2 Schema).
+    Database connection configuration for Databricks SQL Warehouse.
     
-    Defines the connection details for accessing the V2 multi-field mapping tables
-    in Databricks. All operations use the specified warehouse.
+    V4 uses standard table names derived from catalog.schema:
+    - semantic_fields: Target field definitions
+    - unmapped_fields: Source fields awaiting mapping  
+    - mapped_fields: Complete mappings with SQL expressions
+    - mapping_projects: User projects
+    - target_table_status: Table-level mapping status
+    - mapping_suggestions: AI-generated suggestions
+    - mapping_feedback: Rejected suggestions for AI learning
+    
+    Just configure catalog and schema - table names are standard.
     
     Attributes:
         warehouse_name: Display name of the SQL warehouse
         catalog: Databricks catalog name
-        schema: Databricks schema name
-        semantic_fields_table: Target field definitions (table name only, catalog.schema prepended automatically)
-        unmapped_fields_table: Source fields awaiting mapping (table name only)
-        mapped_fields_table: Target fields with mappings (table name only)
-        mapping_details_table: Source fields in each mapping (table name only)
-        mapping_joins_table: Join definitions for multi-table mappings (table name only)
-        mapping_feedback_table: User feedback on AI suggestions (table name only)
-        transformation_library_table: Reusable transformation templates (table name only)
+        schema: Databricks schema name  
         server_hostname: Databricks workspace hostname
         http_path: SQL warehouse HTTP path for connections
     """
     warehouse_name: str = Field(default="gia-oztest-dev-data-warehouse", description="SQL warehouse display name")
     catalog: str = Field(default="oztest_dev", description="Databricks catalog name")
-    schema: str = Field(default="source2target", description="Databricks schema name")
-    semantic_fields_table: str = Field(default="semantic_fields", description="Target field definitions (V2)")
-    unmapped_fields_table: str = Field(default="unmapped_fields", description="Source fields awaiting mapping (V2)")
-    mapped_fields_table: str = Field(default="mapped_fields", description="Target fields with mappings (V2)")
-    mapping_details_table: str = Field(default="mapping_details", description="Source fields in each mapping (V2)")
-    mapping_joins_table: str = Field(default="mapping_joins", description="Join definitions for multi-table mappings (V2)")
-    mapping_feedback_table: str = Field(default="mapping_feedback", description="User feedback on AI suggestions (V2)")
-    transformation_library_table: str = Field(default="transformation_library", description="Reusable transformations (V2)")
+    schema: str = Field(default="smartmapper", description="Databricks schema name")
     server_hostname: str = Field(default="Acuity-oz-test-ue1.cloud.databricks.com", description="Databricks workspace hostname")
     http_path: str = Field(default="/sql/1.0/warehouses/173ea239ed13be7d", description="SQL warehouse HTTP path")
     
-    # Legacy V1 fields for backward compatibility
-    mapping_table: Optional[str] = Field(default=None, description="[V1 Legacy] Old mappings table")
-    semantic_table: Optional[str] = Field(default=None, description="[V1 Legacy] Old semantic table")
+    # Computed table names - not configurable, derived from catalog.schema
+    @property
+    def semantic_fields_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.semantic_fields"
+    
+    @property
+    def unmapped_fields_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.unmapped_fields"
+    
+    @property
+    def mapped_fields_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.mapped_fields"
+    
+    @property
+    def mapping_projects_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.mapping_projects"
+    
+    @property
+    def target_table_status_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.target_table_status"
+    
+    @property
+    def mapping_suggestions_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.mapping_suggestions"
+    
+    @property
+    def mapping_feedback_table(self) -> str:
+        return f"{self.catalog}.{self.schema}.mapping_feedback"
 
 
 class AIModelConfig(BaseModel):
@@ -79,19 +98,21 @@ class AIModelConfig(BaseModel):
 
 class VectorSearchConfig(BaseModel):
     """
-    Vector search configuration for semantic similarity matching (V2).
+    Vector search configuration for semantic similarity matching (V3).
     
-    Defines the Databricks Vector Search index and endpoint used for finding
-    similar target fields based on semantic meaning. V2 uses semantic_fields_vs index.
+    Defines the Databricks Vector Search configuration for V4 AI mapping.
+    
+    V4 uses only the unmapped_fields index for source field matching during discovery.
+    Pattern lookup uses SQL exact match on table/column names.
     
     NOTE: Vector search index names must be fully qualified (catalog.schema.index_name)
     because they are managed separately from SQL tables.
     
     Attributes:
-        index_name: Fully qualified name of the vector search index (catalog.schema.index_name)
+        unmapped_fields_index: Vector search index for source field matching (catalog.schema.index_name)
         endpoint_name: Name of the vector search endpoint
     """
-    index_name: str = Field(default="oztest_dev.source2target.semantic_fields_vs", description="Vector search index (fully qualified)")
+    unmapped_fields_index: str = Field(default="oztest_dev.smartmapper.unmapped_fields_vs", description="Vector search index for source field matching (fully qualified)")
     endpoint_name: str = Field(default="s2t_vsendpoint", description="Vector search endpoint name")
 
 
@@ -127,17 +148,46 @@ class SecurityConfig(BaseModel):
     """
     Security and authorization configuration.
     
-    Defines admin access control through Databricks workspace groups.
-    Users in the admin_group_name have access to configuration management.
+    Defines admin access control through a list of admin user emails.
+    Users in the admin_users list have access to configuration management
+    and admin-only features like pattern import.
     
     Attributes:
-        admin_group_name: Databricks workspace group name for admin users
+        admin_users: List of admin user email addresses
+        admin_group_name: (Legacy) Databricks workspace group name for admin users
         enable_password_auth: Whether to enable password authentication (not currently used)
         admin_password_hash: Hashed admin password (not currently used)
     """
-    admin_group_name: str = Field(default="gia-oztest-dev-ue1-data-engineers", description="Admin group name in Databricks workspace")
+    admin_users: List[str] = Field(
+        default=[
+            "david.galluzzo@gainwelltechnologies.com",
+            "meenakshishankar.chandrasekharan@gainwelltechnologies.com",
+            "santhosh.ravindrabharathy@gainwelltechnologies.com"
+        ],
+        description="List of admin user email addresses"
+    )
+    admin_group_name: str = Field(default="gia-oztest-dev-ue1-data-engineers", description="(Legacy) Admin group name in Databricks workspace")
     enable_password_auth: bool = Field(default=True, description="Enable password auth (unused)")
     admin_password_hash: str = Field(default="", description="Admin password hash (unused)")
+
+
+class ProjectTypesConfig(BaseModel):
+    """
+    Project type configuration for pattern filtering.
+    
+    Projects and patterns are tagged with a type. Pattern matching only
+    uses patterns of the same type, allowing different source systems
+    to have distinct mapping patterns.
+    
+    Attributes:
+        available_types: List of valid project type values
+        default_type: Default type for new projects
+    """
+    available_types: List[str] = Field(
+        default=["Interchange", "Qnxt"],
+        description="List of valid project types"
+    )
+    default_type: str = Field(default="Interchange", description="Default project type for new projects")
 
 
 class AppConfig(BaseModel):
@@ -154,6 +204,7 @@ class AppConfig(BaseModel):
         ui: User interface preferences
         support: Support resource links
         security: Admin access control
+        project_types: Project type configuration for pattern filtering
     """
     database: DatabaseConfig = Field(default_factory=DatabaseConfig, description="Database configuration")
     ai_model: AIModelConfig = Field(default_factory=AIModelConfig, description="AI model configuration")
@@ -161,4 +212,5 @@ class AppConfig(BaseModel):
     ui: UIConfig = Field(default_factory=UIConfig, description="UI configuration")
     support: SupportConfig = Field(default_factory=SupportConfig, description="Support configuration")
     security: SecurityConfig = Field(default_factory=SecurityConfig, description="Security configuration")
+    project_types: ProjectTypesConfig = Field(default_factory=ProjectTypesConfig, description="Project type configuration")
 
