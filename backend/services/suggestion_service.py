@@ -608,14 +608,16 @@ def filter_false_positive_warnings(
     valid_pattern_columns = set()
     if pattern_columns:
         for col in pattern_columns:
-            valid_pattern_columns.add(col.upper())
+            if col:  # Skip None values
+                valid_pattern_columns.add(col.upper())
     
     valid_pattern_tables = set()
     if pattern_tables:
         for tbl in pattern_tables:
-            # Handle full paths like "oz_dev.bronze_dmes_de.t_re_base"
-            tbl_name = tbl.split(".")[-1] if "." in tbl else tbl
-            valid_pattern_tables.add(tbl_name.upper())
+            if tbl:  # Skip None values
+                # Handle full paths like "oz_dev.bronze_dmes_de.t_re_base"
+                tbl_name = tbl.split(".")[-1] if "." in tbl else tbl
+                valid_pattern_tables.add(tbl_name.upper())
     
     # Common user source table names that should NOT appear in warnings
     # (these are user's source tables, not pattern tables)
