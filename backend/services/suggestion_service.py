@@ -686,6 +686,9 @@ def filter_false_positive_warnings(
     # (these are user's source tables, not pattern tables)
     user_source_tables = {"CNTY_REF", "MBR_ADDR", "RECIP_BASE", "MBR_FNDTN", "MBR_CNTCT"}
     
+    # Build set of Gainwell system column names (these are expected in bronze tables)
+    system_columns = set(GAINWELL_SYSTEM_COLUMNS.keys())
+    
     filtered_warnings = []
     for warning in warnings:
         warning_upper = warning.upper()
@@ -710,7 +713,16 @@ def filter_false_positive_warnings(
                         print(f"[Warning Filter] Filtered (user source table): {warning[:80]}...")
                         break
         
-        # Check 3: If we have pattern columns, only keep warnings that reference them
+        # Check 3: Warning mentions a Gainwell system column (expected in bronze tables)
+        if not is_false_positive:
+            for sys_col in system_columns:
+                pattern = r'\b' + re.escape(sys_col) + r'\b'
+                if re.search(pattern, warning_upper):
+                    is_false_positive = True
+                    print(f"[Warning Filter] Filtered (system column): {warning[:80]}...")
+                    break
+        
+        # Check 4: If we have pattern columns, only keep warnings that reference them
         if not is_false_positive and valid_pattern_columns:
             mentions_pattern_col = False
             for pat_col in valid_pattern_columns:

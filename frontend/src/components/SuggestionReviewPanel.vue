@@ -395,6 +395,7 @@
                 <div class="change-legend">
                   <span class="legend-item success"><span class="dot"></span> Changed</span>
                   <span class="legend-item warning"><span class="dot"></span> No Match</span>
+                  <span class="legend-item system"><span class="dot"></span> System Column</span>
                 </div>
               </div>
               <pre v-if="!sqlPreviewCollapsed" class="sql-original-highlighted" v-html="highlightedOriginalSQL"></pre>
@@ -691,6 +692,18 @@ import Dialog from 'primevue/dialog'
 import Textarea from 'primevue/textarea'
 import InputText from 'primevue/inputtext'
 
+// Gainwell system columns - expected in bronze tables, not user-mapped
+// These should NOT appear as warnings and should be highlighted differently
+const GAINWELL_SYSTEM_COLUMNS = new Set([
+  'CRT_BY_USER_ID',
+  'CRT_DTTM', 
+  'UPD_BY_USER_ID',
+  'UPD_DTTM',
+  'CURR_REC_IND',
+  'SRC_SYS_CD',
+  'REC_HASH_KEY'
+])
+
 const props = defineProps<{
   projectId: number
   tableId: number
@@ -871,6 +884,9 @@ const problemFieldsInSQL = computed(() => {
     // Exclude SQL keywords
     if (sqlKeywords.includes(upper)) return false
     
+    // Exclude Gainwell system columns (expected in bronze tables, not user-mapped)
+    if (GAINWELL_SYSTEM_COLUMNS.has(upper)) return false
+    
     // Exclude if this looks like an alias.column from a silver table
     // Check if any warning mentions this column with a silver table alias
     for (const alias of silverAliases) {
@@ -885,6 +901,24 @@ const problemFieldsInSQL = computed(() => {
   })
   
   return [...new Set(filtered)] // unique values
+})
+
+// Detect system columns present in the SQL for special highlighting
+const systemColumnsInSQL = computed(() => {
+  if (!editingSuggestion.value) return []
+  
+  const sql = editedSQL.value || editingSuggestion.value?.suggested_sql || ''
+  const sqlUpper = sql.toUpperCase()
+  const found: string[] = []
+  
+  for (const sysCol of GAINWELL_SYSTEM_COLUMNS) {
+    const pattern = new RegExp(`\\b${sysCol}\\b`, 'i')
+    if (pattern.test(sqlUpper)) {
+      found.push(sysCol)
+    }
+  }
+  
+  return found
 })
 
 // Highlighted ORIGINAL SQL showing what was changed (blue) and what wasn't (yellow/red)
@@ -974,6 +1008,13 @@ const highlightedOriginalSQL = computed(() => {
       const regex = new RegExp(`\\b(${escapeRegExp(tableName)})\\b`, 'gi')
       html = html.replace(regex, '<mark class="original-changed">$1</mark>')
     }
+  }
+  
+  // Step 4: Highlight Gainwell system columns in a distinct color (teal/cyan)
+  // These are expected in bronze tables and don't need user mapping
+  for (const sysCol of GAINWELL_SYSTEM_COLUMNS) {
+    const regex = new RegExp(`(?![^<]*<\\/mark>)\\b(${escapeRegExp(sysCol)})\\b`, 'gi')
+    html = html.replace(regex, '<mark class="system-column">$1</mark>')
   }
   
   // Highlight SQL keywords
@@ -1108,9 +1149,11 @@ function getWarnings(suggestion: MappingSuggestion): string[] {
     
     if (replacedColumns.size === 0) return warnings
     
-    // Filter out warnings that mention successfully replaced columns
+    // Filter out warnings that mention successfully replaced columns or system columns
     return warnings.filter(warning => {
       const warningUpper = warning.toUpperCase()
+      
+      // Filter out warnings about successfully replaced columns
       for (const col of replacedColumns) {
         // Check if column is mentioned with word boundaries
         const regex = new RegExp(`\\b${col}\\b`, 'i')
@@ -1118,6 +1161,15 @@ function getWarnings(suggestion: MappingSuggestion): string[] {
           return false // This is a false positive, filter it out
         }
       }
+      
+      // Filter out warnings about Gainwell system columns (expected in bronze tables)
+      for (const sysCol of GAINWELL_SYSTEM_COLUMNS) {
+        const regex = new RegExp(`\\b${sysCol}\\b`, 'i')
+        if (regex.test(warningUpper)) {
+          return false // System column - not a real warning
+        }
+      }
+      
       return true
     })
   } catch {
@@ -2966,6 +3018,10 @@ function formatDate(dateStr?: string): string {
   background: #ff9800;
 }
 
+.legend-item.system .dot {
+  background: #26a69a;
+}
+
 .sql-original-highlighted {
   padding: 0.75rem;
   margin: 0;
@@ -2996,6 +3052,17 @@ function formatDate(dateStr?: string): string {
   border-radius: 3px;
   font-weight: 600;
   border: 1px solid #ff9800;
+}
+
+/* System columns - Gainwell ETL columns expected in bronze tables */
+.sql-original-highlighted :deep(.system-column),
+.sql-edited-highlighted :deep(.system-column) {
+  background: #e0f2f1;
+  color: #00695c;
+  padding: 0.1rem 0.2rem;
+  border-radius: 3px;
+  font-weight: 600;
+  border: 1px solid #26a69a;
 }
 
 /* New SQL Section */
