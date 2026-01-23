@@ -116,6 +116,19 @@
               />
             </div>
           </li>
+          <li v-if="userStore.isAdmin">
+            <div class="layout-menuitem-link help-button-wrapper" v-tooltip.right="sidebarCollapsed ? 'Developer Guide' : ''">
+              <HelpButton 
+                help-type="developer-guide" 
+                label="Developer Guide" 
+                severity="secondary"
+                icon="pi pi-code"
+                tooltip=""
+                :outlined="true"
+                custom-class="sidebar-help-button"
+              />
+            </div>
+          </li>
           <li>
             <a href="/help/ai-architecture.html" target="_blank" class="layout-menuitem-link" v-tooltip.right="sidebarCollapsed ? 'AI Architecture' : ''">
               <i class="layout-menuitem-icon pi pi-sitemap"></i>

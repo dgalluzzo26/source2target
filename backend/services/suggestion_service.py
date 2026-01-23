@@ -40,6 +40,69 @@ executor = ThreadPoolExecutor(max_workers=4)
 
 import re
 
+# =============================================================================
+# GAINWELL SYSTEM COLUMNS
+# =============================================================================
+# These are standard ETL columns added to all bronze tables by Gainwell.
+# They have predefined values and don't need source field matching.
+# During discovery, these are auto-mapped with their known SQL expressions.
+
+GAINWELL_SYSTEM_COLUMNS = {
+    "CRT_BY_USER_ID": {
+        "sql": "CAST('PDE_ETL' AS VARCHAR(10))",
+        "description": "User/process that created the record - ETL system column",
+        "pattern_type": "SYSTEM_COLUMN"
+    },
+    "CRT_DTTM": {
+        "sql": "CURRENT_TIMESTAMP()",
+        "description": "Record creation timestamp - ETL system column",
+        "pattern_type": "SYSTEM_COLUMN"
+    },
+    "UPD_BY_USER_ID": {
+        "sql": "CAST('PDE_ETL' AS VARCHAR(10))",
+        "description": "User/process that last updated the record - ETL system column",
+        "pattern_type": "SYSTEM_COLUMN"
+    },
+    "UPD_DTTM": {
+        "sql": "CURRENT_TIMESTAMP()",
+        "description": "Record last update timestamp - ETL system column",
+        "pattern_type": "SYSTEM_COLUMN"
+    },
+    "TENANT_CD": {
+        "sql": "'tx'",
+        "description": "Tenant short code - ETL system column",
+        "pattern_type": "SYSTEM_COLUMN"
+    },
+    "SUB_TENANT_CD": {
+        "sql": "'cef'",
+        "description": "Sub-tenant short code - ETL system column",
+        "pattern_type": "SYSTEM_COLUMN"
+    },
+    "CURR_REC_IND": {
+        "sql": "CAST('1' AS CHAR(1))",
+        "description": "Current active record indicator (1 = active) - ETL system column",
+        "pattern_type": "SYSTEM_COLUMN"
+    },
+    "SRC_SYS_CD": {
+        "sql": "'DMES'",
+        "description": "Source system code - ETL system column",
+        "pattern_type": "SYSTEM_COLUMN"
+    },
+    "REC_HASH_KEY": {
+        "sql": None,  # ETL-generated, no SQL needed
+        "description": "Hash of all business columns - ETL-generated at runtime",
+        "pattern_type": "SYSTEM_COLUMN"
+    }
+}
+
+def is_gainwell_system_column(column_name: str) -> bool:
+    """Check if a column is a known Gainwell system column."""
+    return column_name.upper() in GAINWELL_SYSTEM_COLUMNS
+
+def get_system_column_info(column_name: str) -> Optional[Dict[str, Any]]:
+    """Get the system column info if it's a known Gainwell system column."""
+    return GAINWELL_SYSTEM_COLUMNS.get(column_name.upper())
+
 def clean_llm_json(text: str) -> str:
     """
     Clean LLM response text to extract valid JSON.
@@ -2483,6 +2546,87 @@ RULES:
                     tgt_comments = target_col.get("tgt_comments", "")
                     
                     print(f"[Suggestion Service] Processing column {col_idx}/{total_cols}: {tgt_column_physical}")
+                    
+                    # Check if this is a Gainwell system column FIRST (before pattern lookup)
+                    system_col_info = get_system_column_info(tgt_column_physical)
+                    if system_col_info:
+                        print(f"[Suggestion Service]   -> SYSTEM COLUMN detected: {tgt_column_physical}")
+                        
+                        # Build suggestion for system column
+                        sys_sql = system_col_info.get("sql")
+                        if sys_sql:
+                            full_sql = f"SELECT {sys_sql} AS {tgt_column_physical}"
+                        else:
+                            full_sql = None  # ETL-generated at runtime
+                        
+                        suggestion_data = {
+                            "project_id": project_id,
+                            "target_table_status_id": target_table_status_id,
+                            "semantic_field_id": semantic_field_id,
+                            "tgt_table_name": target_col["tgt_table_name"],
+                            "tgt_table_physical_name": target_col["tgt_table_physical_name"],
+                            "tgt_column_name": target_col["tgt_column_name"],
+                            "tgt_column_physical_name": tgt_column_physical,
+                            "tgt_comments": tgt_comments,
+                            "tgt_physical_datatype": target_col.get("tgt_physical_datatype"),
+                            "pattern_mapped_field_id": None,
+                            "pattern_type": "SYSTEM_COLUMN",
+                            "pattern_sql": sys_sql,
+                            "pattern_signature": None,
+                            "pattern_description": system_col_info.get("description"),
+                            "alternative_patterns_count": 0,
+                            "matched_source_fields": "[]",
+                            "suggested_sql": full_sql,
+                            "sql_changes": json.dumps([{"type": "system_column", "description": system_col_info.get("description")}]),
+                            "confidence_score": 1.0,
+                            "ai_reasoning": f"SYSTEM COLUMN: {system_col_info.get('description')}. This is a standard Gainwell ETL column with a predefined value. No source field mapping required.",
+                            "warnings": "[]",
+                            "vector_search_candidates": "{}",
+                            "llm_debug_info": None,
+                            "suggestion_status": "SYSTEM_COLUMN"
+                        }
+                        
+                        # Insert and continue to next column
+                        cursor.execute(f"""
+                            INSERT INTO {db_config['mapping_suggestions_table']} (
+                                project_id, target_table_status_id, semantic_field_id,
+                                tgt_table_name, tgt_table_physical_name, tgt_column_name,
+                                tgt_column_physical_name, tgt_comments, tgt_physical_datatype,
+                                pattern_mapped_field_id, pattern_type, pattern_sql,
+                                matched_source_fields, suggested_sql, sql_changes,
+                                confidence_score, ai_reasoning, warnings,
+                                vector_search_candidates, llm_debug_info, suggestion_status,
+                                created_ts
+                            ) VALUES (
+                                {suggestion_data['project_id']},
+                                {suggestion_data['target_table_status_id']},
+                                {suggestion_data['semantic_field_id']},
+                                '{self._escape_sql(suggestion_data['tgt_table_name'])}',
+                                '{self._escape_sql(suggestion_data['tgt_table_physical_name'])}',
+                                '{self._escape_sql(suggestion_data['tgt_column_name'])}',
+                                '{self._escape_sql(suggestion_data['tgt_column_physical_name'])}',
+                                {f"'{self._escape_sql(suggestion_data['tgt_comments'])}'" if suggestion_data['tgt_comments'] else 'NULL'},
+                                {f"'{self._escape_sql(suggestion_data['tgt_physical_datatype'])}'" if suggestion_data['tgt_physical_datatype'] else 'NULL'},
+                                NULL,
+                                'SYSTEM_COLUMN',
+                                {f"'{self._escape_sql(suggestion_data['pattern_sql'])}'" if suggestion_data['pattern_sql'] else 'NULL'},
+                                '[]',
+                                {f"'{self._escape_sql(suggestion_data['suggested_sql'])}'" if suggestion_data['suggested_sql'] else 'NULL'},
+                                '{self._escape_sql(suggestion_data['sql_changes'])}',
+                                1.0,
+                                '{self._escape_sql(suggestion_data['ai_reasoning'])}',
+                                '[]',
+                                '{{}}',
+                                NULL,
+                                'SYSTEM_COLUMN',
+                                CURRENT_TIMESTAMP()
+                            )
+                        """)
+                        
+                        suggestions_created += 1
+                        patterns_found += 1  # Count system columns as "patterns found"
+                        print(f"[Suggestion Service]   -> System column processed in {time.time() - col_start:.2f}s")
+                        continue  # Skip to next column
                     
                     # Find best pattern from cache (no additional DB queries)
                     pattern_result = self.pattern_service.get_best_pattern_from_cache(

@@ -29,6 +29,7 @@ class SuggestionStatus(str, Enum):
     REJECTED = "REJECTED"           # User rejected
     SKIPPED = "SKIPPED"             # User skipped this column
     AUTO_MAPPED = "AUTO_MAPPED"     # Auto-generated column - no SQL needed
+    SYSTEM_COLUMN = "SYSTEM_COLUMN" # Gainwell ETL system column - predefined value
     NO_PATTERN = "NO_PATTERN"       # No past pattern found
     NO_MATCH = "NO_MATCH"           # Pattern found but no source match
     ERROR = "ERROR"                 # AI generation failed
@@ -429,7 +430,8 @@ class SuggestionSummary(BaseModel):
     edited: int = 0
     rejected: int = 0
     skipped: int = 0
-    auto_mapped: int = 0  # Auto-generated columns (no SQL needed)
+    auto_mapped: int = 0      # Auto-generated columns (no SQL needed)
+    system_column: int = 0    # Gainwell ETL system columns (predefined values)
     no_pattern: int = 0
     no_match: int = 0
     processing: int = 0

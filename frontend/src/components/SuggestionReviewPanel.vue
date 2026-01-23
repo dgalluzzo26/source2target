@@ -46,6 +46,7 @@
         class="suggestion-card"
         :class="{ 
           'approved': suggestion.suggestion_status === 'APPROVED' || suggestion.suggestion_status === 'EDITED' || suggestion.suggestion_status === 'AUTO_MAPPED',
+          'system-column': suggestion.suggestion_status === 'SYSTEM_COLUMN',
           'rejected': suggestion.suggestion_status === 'REJECTED',
           'skipped': suggestion.suggestion_status === 'SKIPPED',
           'no-match': suggestion.suggestion_status === 'NO_MATCH' || suggestion.suggestion_status === 'NO_PATTERN'
@@ -753,7 +754,8 @@ const approvedCount = computed(() =>
   suggestions.value.filter(s => 
     s.suggestion_status === 'APPROVED' || 
     s.suggestion_status === 'EDITED' || 
-    s.suggestion_status === 'AUTO_MAPPED'
+    s.suggestion_status === 'AUTO_MAPPED' ||
+    s.suggestion_status === 'SYSTEM_COLUMN'
   ).length
 )
 const noMatchCount = computed(() => 
@@ -1833,11 +1835,12 @@ function formatStatus(status: string): string {
   return status.replace(/_/g, ' ')
 }
 
-function getStatusSeverity(status: string): 'success' | 'info' | 'warning' | 'danger' | 'secondary' {
+function getStatusSeverity(status: string): 'success' | 'info' | 'warning' | 'danger' | 'secondary' | 'contrast' {
   switch (status) {
     case 'APPROVED':
     case 'EDITED':
     case 'AUTO_MAPPED': return 'success'
+    case 'SYSTEM_COLUMN': return 'contrast'  // Distinctive color for ETL system columns
     case 'PENDING': return 'warning'
     case 'REJECTED': return 'danger'
     case 'SKIPPED': return 'secondary'
@@ -1982,6 +1985,11 @@ function formatDate(dateStr?: string): string {
 .suggestion-card.approved {
   border-left: 4px solid var(--green-500);
   background: #f1f8e9;
+}
+
+.suggestion-card.system-column {
+  border-left: 4px solid var(--cyan-500);
+  background: #e0f7fa;
 }
 
 .suggestion-card.rejected {

@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Mapper V4 - Developer Guide</title>
+  <style>
+    :root {
+      --primary-color: #00205b;
+      --accent-color: #00ffa3;
+      --text-color: #333;
+      --bg-color: #f8f9fa;
+      --code-bg: #1e1e1e;
+      --code-text: #d4d4d4;
+      --border-color: #dee2e6;
+    }
+    
+    * { box-sizing: border-box; }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: var(--text-color);
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+      background: white;
+    }
+    
+    h1 {
+      color: var(--primary-color);
+      border-bottom: 3px solid var(--accent-color);
+      padding-bottom: 0.5rem;
+      font-size: 2rem;
+    }
+    
+    h2 {
+      color: var(--primary-color);
+      border-bottom: 2px solid var(--border-color);
+      padding-bottom: 0.5rem;
+      margin-top: 2rem;
+    }
+    
+    h3 {
+      color: var(--primary-color);
+      margin-top: 1.5rem;
+    }
+    
+    h4 {
+      color: #495057;
+      margin-top: 1rem;
+    }
+    
+    code {
+      background: #f1f3f4;
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.9em;
+    }
+    
+    pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    
+    pre code {
+      background: none;
+      padding: 0;
+      color: inherit;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+    }
+    
+    th, td {
+      border: 1px solid var(--border-color);
+      padding: 0.75rem;
+      text-align: left;
+    }
+    
+    th {
+      background: var(--primary-color);
+      color: white;
+    }
+    
+    tr:nth-child(even) {
+      background: var(--bg-color);
+    }
+    
+    .toc {
+      background: var(--bg-color);
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+    }
+    
+    .toc ul {
+      margin: 0;
+      padding-left: 1.5rem;
+    }
+    
+    .toc li {
+      margin: 0.5rem 0;
+    }
+    
+    .toc a {
+      color: var(--primary-color);
+      text-decoration: none;
+    }
+    
+    .toc a:hover {
+      text-decoration: underline;
+    }
+    
+    .note {
+      background: #e7f5ff;
+      border-left: 4px solid #1c7ed6;
+      padding: 1rem;
+      margin: 1rem 0;
+      border-radius: 0 8px 8px 0;
+    }
+    
+    .warning {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 1rem;
+      margin: 1rem 0;
+      border-radius: 0 8px 8px 0;
+    }
+    
+    .tip {
+      background: #d3f9d8;
+      border-left: 4px solid #40c057;
+      padding: 1rem;
+      margin: 1rem 0;
+      border-radius: 0 8px 8px 0;
+    }
+    
+    .file-path {
+      font-family: monospace;
+      background: #e9ecef;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    
+    .badge-frontend { background: #4dabf7; color: white; }
+    .badge-backend { background: #51cf66; color: white; }
+    .badge-model { background: #ffd43b; color: #333; }
+    .badge-service { background: #ff6b6b; color: white; }
+  </style>
+</head>
+<body>
+
+<h1>🛠️ Smart Mapper V4 - Developer Guide</h1>
+
+<p>This guide provides a code-focused overview of the Smart Mapper V4 codebase, explaining the frontend views/components and backend models/routes/services.</p>
+
+<div class="toc">
+  <h3>📑 Table of Contents</h3>
+  <ul>
+    <li><a href="#architecture">Architecture Overview</a></li>
+    <li><a href="#frontend-views">Frontend Views</a></li>
+    <li><a href="#frontend-components">Frontend Components</a></li>
+    <li><a href="#backend-models">Backend Models</a></li>
+    <li><a href="#backend-routers">Backend Routers (API Endpoints)</a></li>
+    <li><a href="#backend-services">Backend Services</a></li>
+    <li><a href="#data-flow">Data Flow Examples</a></li>
+    <li><a href="#adding-features">Adding New Features</a></li>
+  </ul>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="architecture">🏗️ Architecture Overview</h2>
+
+<pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                        FRONTEND (Vue 3 + TypeScript)                │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
+│  │    Views     │  │  Components  │  │    Stores    │              │
+│  │  (Pages)     │  │  (Reusable)  │  │   (Pinia)    │              │
+│  └──────────────┘  └──────────────┘  └──────────────┘              │
+│           │                │                 │                      │
+│           └────────────────┴─────────────────┘                      │
+│                            │                                        │
+│                    API Service (api.ts)                             │
+└────────────────────────────┼────────────────────────────────────────┘
+                             │ HTTP/REST
+┌────────────────────────────┼────────────────────────────────────────┐
+│                        BACKEND (FastAPI + Python)                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
+│  │   Routers    │  │   Services   │  │    Models    │              │
+│  │ (Endpoints)  │  │   (Logic)    │  │  (Pydantic)  │              │
+│  └──────────────┘  └──────────────┘  └──────────────┘              │
+└────────────────────────────┼────────────────────────────────────────┘
+                             │
+┌────────────────────────────┼────────────────────────────────────────┐
+│                        DATABRICKS                                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
+│  │  SQL Tables  │  │Vector Search │  │ Model Serving│              │
+│  └──────────────┘  └──────────────┘  └──────────────┘              │
+└─────────────────────────────────────────────────────────────────────┘
+</pre>
+
+<!-- ============================================================== -->
+<h2 id="frontend-views">📄 Frontend Views</h2>
+
+<p>Views are full-page components that represent different screens in the application.</p>
+
+<table>
+  <tr>
+    <th>File</th>
+    <th>Route</th>
+    <th>Purpose</th>
+  </tr>
+  <tr>
+    <td><span class="file-path">IntroductionView.vue</span></td>
+    <td><code>/</code></td>
+    <td>Home/landing page with getting started guide, links to create projects</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">ProjectsListView.vue</span></td>
+    <td><code>/projects</code></td>
+    <td>List all mapping projects, create new projects, upload source fields</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">ProjectDetailView.vue</span></td>
+    <td><code>/projects/:id</code></td>
+    <td>Target tables, AI discovery, suggestion review, mapping workflow</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">SemanticFieldsView.vue</span></td>
+    <td><code>/semantic</code></td>
+    <td>View/manage target field definitions (semantic_fields table)</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">PatternImportView.vue</span></td>
+    <td><code>/patterns</code></td>
+    <td>Import historical mapping patterns from CSV</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">ConfigView.vue</span></td>
+    <td><code>/config</code></td>
+    <td>Admin configuration (database, vector search, LLM settings)</td>
+  </tr>
+</table>
+
+<h3>View Structure Pattern</h3>
+<pre>
+&lt;script setup lang="ts"&gt;
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { YourAPI } from '@/services/api'
+
+// Reactive state
+const data = ref&lt;YourType[]&gt;([])
+const loading = ref(false)
+
+// Computed properties
+const filteredData = computed(() =&gt; { /* ... */ })
+
+// Methods
+const loadData = async () =&gt; {
+  loading.value = true
+  try {
+    const result = await YourAPI.getData()
+    if (result.data) data.value = result.data
+  } finally {
+    loading.value = false
+  }
+}
+
+// Lifecycle
+onMounted(() =&gt; loadData())
+&lt;/script&gt;
+
+&lt;template&gt;
+  &lt;div class="view-container"&gt;
+    &lt;!-- View content --&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+</pre>
+
+<!-- ============================================================== -->
+<h2 id="frontend-components">🧩 Frontend Components</h2>
+
+<p>Reusable components used across multiple views.</p>
+
+<table>
+  <tr>
+    <th>Component</th>
+    <th>Purpose</th>
+  </tr>
+  <tr>
+    <td><span class="file-path">AppLayout.vue</span></td>
+    <td>Main application layout wrapper (toolbar + content area)</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">AppToolbar.vue</span></td>
+    <td>Top navigation bar with logo, user info, help links</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">AppSidebar.vue</span></td>
+    <td>Left navigation sidebar (currently minimal)</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">SuggestionReviewPanel.vue</span></td>
+    <td>⭐ Main component for reviewing AI suggestions, approve/edit/reject</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">FeedbackDialog.vue</span></td>
+    <td>Dialog for providing feedback on AI suggestions</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">HelpButton.vue</span></td>
+    <td>Context-sensitive help button that opens help docs in modal</td>
+  </tr>
+</table>
+
+<h3>Key Component: SuggestionReviewPanel</h3>
+<p>This is the main component for the AI mapping workflow. It displays:</p>
+<ul>
+  <li>List of suggestions for a target table</li>
+  <li>Status badges (PENDING, APPROVED, SYSTEM_COLUMN, etc.)</li>
+  <li>Confidence scores with color coding</li>
+  <li>Pattern SQL and suggested SQL side-by-side</li>
+  <li>Approve, Edit, Reject, Skip actions</li>
+  <li>Vector search alternatives for debugging</li>
+</ul>
+
+<!-- ============================================================== -->
+<h2 id="backend-models">📊 Backend Models</h2>
+
+<p>Pydantic models define data structures for validation and serialization.</p>
+
+<table>
+  <tr>
+    <th>File</th>
+    <th>Key Models</th>
+    <th>Purpose</th>
+  </tr>
+  <tr>
+    <td><span class="file-path">models/config.py</span></td>
+    <td><code>DatabaseConfig</code>, <code>AIModelConfig</code>, <code>VectorSearchConfig</code></td>
+    <td>Application configuration (database connections, AI settings)</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">models/project.py</span></td>
+    <td><code>MappingProject</code>, <code>TargetTableStatus</code>, <code>TableMappingStatus</code></td>
+    <td>Project management, table progress tracking</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">models/suggestion.py</span></td>
+    <td><code>MappingSuggestion</code>, <code>SuggestionStatus</code>, <code>MatchedSourceField</code></td>
+    <td>AI suggestions, status enums, matched fields</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">models/shared.py</span></td>
+    <td><code>UnmappedField</code>, <code>MappingFeedback</code></td>
+    <td>Source fields awaiting mapping, user feedback</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">models/mapping.py</span></td>
+    <td><code>MappedField</code>, <code>MappingCreate</code></td>
+    <td>Approved mappings, source→target relationships</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">models/semantic.py</span></td>
+    <td><code>SemanticField</code></td>
+    <td>Target field definitions from semantic_fields table</td>
+  </tr>
+</table>
+
+<h3>Key Enums</h3>
+<pre>
+class SuggestionStatus(str, Enum):
+    PROCESSING = "PROCESSING"      # AI generating
+    PENDING = "PENDING"            # Ready for review
+    APPROVED = "APPROVED"          # User approved as-is
+    EDITED = "EDITED"              # User edited and approved
+    REJECTED = "REJECTED"          # User rejected
+    SKIPPED = "SKIPPED"            # User skipped
+    AUTO_MAPPED = "AUTO_MAPPED"    # Auto-generated column
+    SYSTEM_COLUMN = "SYSTEM_COLUMN" # Gainwell ETL system column
+    NO_PATTERN = "NO_PATTERN"      # No historical pattern found
+    NO_MATCH = "NO_MATCH"          # Pattern found but no source match
+    ERROR = "ERROR"                # AI generation failed
+
+class TableMappingStatus(str, Enum):
+    NOT_STARTED = "NOT_STARTED"
+    DISCOVERING = "DISCOVERING"    # AI running
+    SUGGESTIONS_READY = "SUGGESTIONS_READY"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETE = "COMPLETE"
+</pre>
+
+<!-- ============================================================== -->
+<h2 id="backend-routers">🔌 Backend Routers (API Endpoints)</h2>
+
+<p>Routers define REST API endpoints. Each router handles a specific domain.</p>
+
+<table>
+  <tr>
+    <th>File</th>
+    <th>Prefix</th>
+    <th>Purpose</th>
+  </tr>
+  <tr>
+    <td><span class="file-path">routers/projects.py</span></td>
+    <td><code>/api/v4/projects</code></td>
+    <td>CRUD for mapping projects, source field upload</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">routers/target_tables.py</span></td>
+    <td><code>/api/v4/projects/{id}/target-tables</code></td>
+    <td>Target tables, AI discovery trigger, get suggestions</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">routers/suggestions.py</span></td>
+    <td><code>/api/v4/suggestions</code></td>
+    <td>Approve, edit, reject, skip suggestions</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">routers/unmapped_fields.py</span></td>
+    <td><code>/api/v2/unmapped-fields</code></td>
+    <td>Source fields management</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">routers/semantic.py</span></td>
+    <td><code>/api/semantic</code></td>
+    <td>Target field definitions (semantic_fields)</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">routers/pattern_import.py</span></td>
+    <td><code>/api/patterns</code></td>
+    <td>Import historical patterns from CSV</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">routers/export.py</span></td>
+    <td><code>/api/export</code></td>
+    <td>Export mappings to CSV/SQL</td>
+  </tr>
+  <tr>
+    <td><span class="file-path">routers/feedback.py</span></td>
+    <td><code>/api/feedback</code></td>
+    <td>User feedback on AI suggestions</td>
+  </tr>
+</table>
+
+<h3>Key Endpoints</h3>
+<pre>
+# Start AI discovery for a target table
+POST /api/v4/projects/{project_id}/target-tables/{table_id}/discover
+Body: { "started_by": "user@email.com" }
+
+# Get suggestions for a table
+GET /api/v4/projects/{project_id}/target-tables/{table_id}/suggestions
+
+# Approve a suggestion
+POST /api/v4/suggestions/{suggestion_id}/approve
+Body: { "reviewed_by": "user@email.com" }
+
+# Edit and approve a suggestion
+POST /api/v4/suggestions/{suggestion_id}/edit
+Body: { "reviewed_by": "...", "edited_sql": "SELECT ..." }
+
+# Reject a suggestion
+POST /api/v4/suggestions/{suggestion_id}/reject
+Body: { "reviewed_by": "...", "rejection_reason": "..." }
+</pre>
+
+<!-- ============================================================== -->
+<h2 id="backend-services">⚙️ Backend Services</h2>
+
+<p>Services contain the core business logic. Each service encapsulates operations for a specific domain.</p>
+
+<table>
+  <tr>
+    <th>Service</th>
+    <th>Purpose</th>
+    <th>Key Methods</th>
+  </tr>
+  <tr>
+    <td><span class="badge badge-service">suggestion_service.py</span></td>
+    <td>⭐ <strong>Core AI engine</strong> - generates suggestions, LLM rewrites</td>
+    <td>
+      <code>generate_suggestions_for_table()</code><br>
+      <code>approve_suggestion()</code><br>
+      <code>edit_suggestion()</code><br>
+      <code>reject_suggestion()</code>
+    </td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-service">project_service.py</span></td>
+    <td>Project CRUD, counters, target table initialization</td>
+    <td>
+      <code>create_project()</code><br>
+      <code>get_projects()</code><br>
+      <code>update_project_counters()</code>
+    </td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-service">target_table_service.py</span></td>
+    <td>Target table management, column retrieval, patterns</td>
+    <td>
+      <code>get_target_tables()</code><br>
+      <code>get_target_columns()</code><br>
+      <code>get_pattern_for_column()</code>
+    </td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-service">unmapped_fields_service.py</span></td>
+    <td>Source field management, bulk upload</td>
+    <td>
+      <code>bulk_upload_with_project()</code><br>
+      <code>get_fields_by_project()</code>
+    </td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-service">pattern_service.py</span></td>
+    <td>Historical pattern lookup, signature matching</td>
+    <td>
+      <code>get_all_patterns_for_table()</code><br>
+      <code>get_best_pattern_from_cache()</code>
+    </td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-service">vector_search_service.py</span></td>
+    <td>Vector similarity search for source fields</td>
+    <td>
+      <code>search_source_fields()</code><br>
+      <code>parallel_search()</code>
+    </td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-service">pattern_import_service.py</span></td>
+    <td>Import patterns from CSV, detect special cases</td>
+    <td>
+      <code>upload_patterns()</code><br>
+      <code>process_patterns()</code><br>
+      <code>_detect_special_case()</code>
+    </td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-service">semantic_service.py</span></td>
+    <td>Target field definitions</td>
+    <td>
+      <code>get_all_records()</code><br>
+      <code>get_tables_list()</code>
+    </td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-service">config_service.py</span></td>
+    <td>Application configuration (singleton)</td>
+    <td>
+      <code>get_config()</code><br>
+      <code>save_config()</code>
+    </td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-service">export_service.py</span></td>
+    <td>Export mappings to various formats</td>
+    <td>
+      <code>export_project_mappings()</code>
+    </td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-service">feedback_service.py</span></td>
+    <td>Store user feedback for AI improvement</td>
+    <td>
+      <code>save_feedback()</code>
+    </td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-service">auth_service.py</span></td>
+    <td>User authentication via Databricks headers</td>
+    <td>
+      <code>get_current_user()</code>
+    </td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-service">system_service.py</span></td>
+    <td>Health checks, system status</td>
+    <td>
+      <code>get_system_status()</code>
+    </td>
+  </tr>
+</table>
+
+<h3>Service Pattern</h3>
+<p>All services follow this async/sync pattern to avoid blocking the event loop:</p>
+
+<pre>
+class YourService:
+    def __init__(self):
+        self.config_service = config_service
+        self._workspace_client = None
+    
+    def _sync_operation(self, ...):
+        """Blocking database operation."""
+        connection = self._get_sql_connection(...)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT ...")
+                return cursor.fetchall()
+        finally:
+            connection.close()
+    
+    async def async_operation(self, ...):
+        """Public async interface."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            executor,  # ThreadPoolExecutor
+            functools.partial(self._sync_operation, ...)
+        )
+</pre>
+
+<!-- ============================================================== -->
+<h2 id="data-flow">🔄 Data Flow Examples</h2>
+
+<h3>AI Discovery Flow</h3>
+<pre>
+User clicks "Discover" on a target table
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│ Frontend: ProjectDetailView.vue                         │
+│   → Calls API: POST /target-tables/{id}/discover       │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│ Router: target_tables.py → start_discovery()           │
+│   → Validates request                                   │
+│   → Starts background task                              │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│ Service: suggestion_service.py                          │
+│   → generate_suggestions_for_table()                    │
+│                                                         │
+│   For each target column:                               │
+│   1. Check if SYSTEM_COLUMN (Gainwell ETL cols)        │
+│   2. Find pattern from pattern_service                  │
+│   3. Vector search via vector_search_service            │
+│   4. LLM rewrite SQL with matched sources               │
+│   5. Insert suggestion into mapping_suggestions         │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│ Frontend polls GET /suggestions                         │
+│   → SuggestionReviewPanel.vue displays results         │
+└────────────────────────────────────────────────────────┘
+</pre>
+
+<h3>Approve Suggestion Flow</h3>
+<pre>
+User clicks "Approve" on a suggestion
+         │
+         ▼
+Frontend: POST /suggestions/{id}/approve
+         │
+         ▼
+Router: suggestions.py → approve_suggestion()
+         │
+         ▼
+Service: suggestion_service.py
+   → Creates row in mapped_fields table
+   → Updates suggestion status to APPROVED
+   → Updates unmapped_fields status to MAPPED
+   → Recalculates table counters
+         │
+         ▼
+Frontend: Suggestion card turns green ✓
+</pre>
+
+<!-- ============================================================== -->
+<h2 id="adding-features">➕ Adding New Features</h2>
+
+<h3>Adding a New Backend Endpoint</h3>
+
+<ol>
+  <li><strong>Define Model</strong> (if needed) in <code>backend/models/</code></li>
+  <li><strong>Create Service Method</strong> in appropriate service</li>
+  <li><strong>Add Router Endpoint</strong> in <code>backend/routers/</code></li>
+  <li><strong>Register Router</strong> in <code>backend/app.py</code></li>
+</ol>
+
+<h3>Adding a New Frontend View</h3>
+
+<ol>
+  <li><strong>Create Vue file</strong> in <code>frontend/src/views/</code></li>
+  <li><strong>Add route</strong> in <code>frontend/src/router/index.ts</code></li>
+  <li><strong>Add API methods</strong> in <code>frontend/src/services/api.ts</code></li>
+  <li><strong>Add navigation link</strong> (toolbar, sidebar, or button)</li>
+</ol>
+
+<h3>Adding a New System Column</h3>
+
+<p>Edit <code>backend/services/suggestion_service.py</code>:</p>
+
+<pre>
+GAINWELL_SYSTEM_COLUMNS = {
+    "YOUR_NEW_COLUMN": {
+        "sql": "YOUR_SQL_EXPRESSION",
+        "description": "Description of what this column is",
+        "pattern_type": "SYSTEM_COLUMN"
+    },
+    # ... existing columns
+}
+</pre>
+
+<div class="tip">
+  <strong>💡 Tip:</strong> System columns are detected FIRST during discovery, before pattern lookup. They get 100% confidence and don't need source field matching.
+</div>
+
+<!-- ============================================================== -->
+<h2>📚 Quick Reference</h2>
+
+<h3>File Locations</h3>
+<table>
+  <tr><th>What</th><th>Where</th></tr>
+  <tr><td>Frontend views</td><td><code>frontend/src/views/*.vue</code></td></tr>
+  <tr><td>Frontend components</td><td><code>frontend/src/components/*.vue</code></td></tr>
+  <tr><td>Frontend API client</td><td><code>frontend/src/services/api.ts</code></td></tr>
+  <tr><td>Frontend routes</td><td><code>frontend/src/router/index.ts</code></td></tr>
+  <tr><td>Frontend state</td><td><code>frontend/src/stores/*.ts</code></td></tr>
+  <tr><td>Backend routers</td><td><code>backend/routers/*.py</code></td></tr>
+  <tr><td>Backend services</td><td><code>backend/services/*.py</code></td></tr>
+  <tr><td>Backend models</td><td><code>backend/models/*.py</code></td></tr>
+  <tr><td>Main FastAPI app</td><td><code>backend/app.py</code></td></tr>
+  <tr><td>Configuration</td><td><code>app_config.json</code></td></tr>
+</table>
+
+<h3>Common Commands</h3>
+<pre>
+# Start backend (development)
+uvicorn backend.app:app --reload --port 8000
+
+# Start frontend (development)
+cd frontend && npm run dev
+
+# Build frontend for production
+cd frontend && npm run build
+
+# Deploy to Databricks
+databricks apps deploy source2target
+</pre>
+
+<hr>
+<p style="color: #666; font-size: 0.9rem;">
+  <strong>Version:</strong> 4.0 | 
+  <strong>Last Updated:</strong> January 2026
+</p>
+
+</body>
+</html>
