@@ -295,7 +295,10 @@
                       v-for="(change, cidx) in group.changes" 
                       :key="'c'+idx+'-'+cidx"
                       class="change-item grouped-change"
-                      :class="{ 'is-problem': isProblemChange(change) }"
+                      :class="{ 
+                        'is-problem': isProblemChange(change),
+                        'is-system': isSystemColumnChange(change)
+                      }"
                       @click="highlightInSQL(change)"
                     >
                       <i :class="getChangeIcon(change)"></i>
@@ -303,6 +306,7 @@
                         <span class="change-original">{{ change.originalColumn }}</span>
                         <i class="pi pi-arrow-right"></i>
                         <span class="change-new">{{ change.newColumn }}</span>
+                        <span v-if="isSystemColumnChange(change)" class="system-badge">System</span>
                       </div>
                     </div>
                   </template>
@@ -974,15 +978,27 @@ const highlightedOriginalSQL = computed(() => {
   const warnings = problemFieldsInSQL.value
   const warningSet = new Set(warnings.map(w => w.toUpperCase()))
   
+  // Step 0: Highlight Gainwell system columns FIRST in teal
+  // These are expected in bronze tables and should stand out from regular column changes
+  for (const sysCol of GAINWELL_SYSTEM_COLUMNS) {
+    const regex = new RegExp(`\\b(${escapeRegExp(sysCol)})\\b`, 'gi')
+    html = html.replace(regex, '<mark class="system-column">$1</mark>')
+  }
+  
   // Strategy: Replace alias.column patterns FIRST (most specific), then bare columns
   // This ensures b.SAK_RECIP and a.SAK_RECIP can have different highlighting
   
   // Step 1: Highlight alias.column patterns (e.g., b.SAK_RECIP, a.SAK_RECIP)
+  // Skip if already marked as system-column
   const aliasPatterns = [...changesByAliasColumn.entries()].sort((a, b) => b[0].length - a[0].length)
   for (const [pattern, isSuccess] of aliasPatterns) {
+    // Skip if the column part is a system column
+    const colPart = pattern.includes('.') ? pattern.split('.')[1] : pattern
+    if (GAINWELL_SYSTEM_COLUMNS.has(colPart.toUpperCase())) continue
+    
     const cssClass = isSuccess ? 'original-changed' : 'original-no-match'
-    // Match alias.column pattern (case insensitive for alias and column)
-    const regex = new RegExp(`\\b(${escapeRegExp(pattern)})\\b`, 'gi')
+    // Match alias.column pattern (case insensitive for alias and column), skip if already marked
+    const regex = new RegExp(`(?![^<]*<\\/mark>)\\b(${escapeRegExp(pattern)})\\b`, 'gi')
     html = html.replace(regex, `<mark class="${cssClass}">$1</mark>`)
   }
   
@@ -992,6 +1008,8 @@ const highlightedOriginalSQL = computed(() => {
   for (const [column, isSuccess] of bareColumns) {
     // Skip if in warning set
     if (warningSet.has(column)) continue
+    // Skip if it's a system column (already highlighted in teal)
+    if (GAINWELL_SYSTEM_COLUMNS.has(column.toUpperCase())) continue
     // Only match if not already inside a <mark> tag (avoid double-marking)
     const cssClass = isSuccess ? 'original-changed' : 'original-no-match'
     // Match bare column only if not preceded by a dot and letter (already part of alias.column)
@@ -1008,13 +1026,6 @@ const highlightedOriginalSQL = computed(() => {
       const regex = new RegExp(`\\b(${escapeRegExp(tableName)})\\b`, 'gi')
       html = html.replace(regex, '<mark class="original-changed">$1</mark>')
     }
-  }
-  
-  // Step 4: Highlight Gainwell system columns in a distinct color (teal/cyan)
-  // These are expected in bronze tables and don't need user mapping
-  for (const sysCol of GAINWELL_SYSTEM_COLUMNS) {
-    const regex = new RegExp(`(?![^<]*<\\/mark>)\\b(${escapeRegExp(sysCol)})\\b`, 'gi')
-    html = html.replace(regex, '<mark class="system-column">$1</mark>')
   }
   
   // Highlight SQL keywords
@@ -1572,6 +1583,15 @@ function isProblemChange(change: any): boolean {
          newVal.toLowerCase().includes('user_') ||
          change.type === 'missing' ||
          change.type === 'not_found'
+}
+
+function isSystemColumnChange(change: any): boolean {
+  // Check if this change involves a Gainwell system column
+  const origCol = change.originalColumn || change.original || ''
+  const newCol = change.newColumn || change.new || ''
+  const colName = (origCol.includes('.') ? origCol.split('.').pop() : origCol) || ''
+  return GAINWELL_SYSTEM_COLUMNS.has(colName.toUpperCase()) || 
+         GAINWELL_SYSTEM_COLUMNS.has(newCol.toUpperCase())
 }
 
 function getChangeIcon(change: any): string {
@@ -2715,6 +2735,26 @@ function formatDate(dateStr?: string): string {
   color: var(--yellow-700);
 }
 
+.change-item.is-system {
+  background: #e0f2f1;
+  border-color: #26a69a;
+}
+
+.change-item.is-system i {
+  color: #00695c;
+}
+
+.system-badge {
+  font-size: 0.6rem;
+  background: #26a69a;
+  color: white;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  margin-left: 0.25rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
 .change-item i {
   color: var(--primary-color);
   margin-top: 2px;
@@ -2752,8 +2792,9 @@ function formatDate(dateStr?: string): string {
 /* Table Change Header - groups changes by source table */
 .table-change-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.3rem;
   padding: 0.5rem 0.5rem;
   background: var(--surface-100);
   border-radius: 6px;
@@ -2768,21 +2809,24 @@ function formatDate(dateStr?: string): string {
 
 .table-change-header i.pi-database {
   color: var(--primary-color);
+  flex-shrink: 0;
 }
 
 .table-change-header i.pi-arrow-right {
   font-size: 0.7rem;
   color: var(--text-color-secondary);
+  flex-shrink: 0;
 }
 
-.table-badge-original {
-  font-family: monospace;
-  font-size: 0.7rem;
-}
-
+.table-badge-original,
 .table-badge-new {
   font-family: monospace;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
+  max-width: 100%;
+  word-break: break-all;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.2;
 }
 
 .alias-label {
