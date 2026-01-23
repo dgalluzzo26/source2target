@@ -520,7 +520,13 @@ RULES:
             "AUTO_GENERATED",
             "GENERATED ON INSERT",
             "IDENTITY COLUMN",
-            "AUTO INCREMENT"
+            "AUTO INCREMENT",
+            "AUDIT COLUMN",
+            "AUDIT_COLUMN",
+            "AUDIT-COLUMN",
+            "SYSTEM GENERATED",
+            "SYSTEM_GENERATED",
+            "SYSTEM-GENERATED"
         ]
         
         for pattern in auto_gen_patterns:
