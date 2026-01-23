@@ -184,6 +184,7 @@
     <li><a href="#backend-routers">Backend Routers (API Endpoints)</a></li>
     <li><a href="#backend-services">Backend Services</a></li>
     <li><a href="#data-flow">Data Flow Examples</a></li>
+    <li><a href="#database-schema">V4 Database Schema</a></li>
     <li><a href="#adding-features">Adding New Features</a></li>
   </ul>
 </div>
@@ -733,6 +734,426 @@ GAINWELL_SYSTEM_COLUMNS = {
 <div class="tip">
   <strong>💡 Tip:</strong> System columns are detected FIRST during discovery, before pattern lookup. They get 100% confidence and don't need source field matching.
 </div>
+
+<!-- ============================================================== -->
+<h2 id="database-schema">🗄️ V4 Database Schema</h2>
+
+<p>Smart Mapper V4 uses Delta tables in Databricks for all data storage. Schema files are located in the <code>database/</code> folder.</p>
+
+<h3>Core Tables</h3>
+
+<table>
+  <tr>
+    <th>Table</th>
+    <th>Purpose</th>
+    <th>Key Columns</th>
+  </tr>
+  <tr>
+    <td><code>mapping_projects</code></td>
+    <td>Project tracking and configuration</td>
+    <td>project_id, project_name, project_type, project_status, source_catalogs, target_domains, team_members</td>
+  </tr>
+  <tr>
+    <td><code>target_table_status</code></td>
+    <td>Progress tracking per target table within a project</td>
+    <td>target_table_status_id, project_id, tgt_table_physical_name, mapping_status, total_columns, columns_mapped</td>
+  </tr>
+  <tr>
+    <td><code>mapping_suggestions</code></td>
+    <td>AI-generated suggestions before user approval</td>
+    <td>suggestion_id, project_id, target_table_status_id, semantic_field_id, suggested_sql, confidence_score, suggestion_status</td>
+  </tr>
+  <tr>
+    <td><code>semantic_fields</code></td>
+    <td>Target field definitions (the "gold standard")</td>
+    <td>semantic_field_id, tgt_table_physical_name, tgt_column_physical_name, tgt_comments, domain</td>
+  </tr>
+  <tr>
+    <td><code>unmapped_fields</code></td>
+    <td>Source fields uploaded for mapping (with Vector Search)</td>
+    <td>unmapped_field_id, project_id, src_table_physical_name, src_column_physical_name, src_comments, source_semantic_field</td>
+  </tr>
+  <tr>
+    <td><code>mapped_fields</code></td>
+    <td>Approved mappings and historical patterns</td>
+    <td>mapped_field_id, semantic_field_id, source_expression, project_id, is_approved_pattern, project_type</td>
+  </tr>
+</table>
+
+<h3>mapping_projects</h3>
+<p>Tracks overall mapping projects/sessions. A project represents a complete mapping effort (e.g., "DMES Member Migration").</p>
+
+<pre>
+CREATE TABLE mapping_projects (
+  project_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  
+  -- Project identification
+  project_name STRING NOT NULL,
+  project_description STRING,
+  project_type STRING,                -- For pattern filtering (e.g., DMES, MMIS)
+  
+  -- Source context (pipe-separated for multiple)
+  source_system_name STRING,
+  source_catalogs STRING,             -- e.g., "bronze_dmes|bronze_mmis"
+  source_schemas STRING,
+  
+  -- Target context (pipe-separated for multiple)
+  target_catalogs STRING,
+  target_schemas STRING,
+  target_domains STRING,              -- Domain filter for semantic_fields
+  
+  -- Status: NOT_STARTED, IN_PROGRESS, REVIEW, COMPLETE, ARCHIVED
+  project_status STRING DEFAULT 'NOT_STARTED',
+  
+  -- Progress counters (denormalized for dashboard performance)
+  total_target_tables INT DEFAULT 0,
+  tables_complete INT DEFAULT 0,
+  total_target_columns INT DEFAULT 0,
+  columns_mapped INT DEFAULT 0,
+  columns_pending_review INT DEFAULT 0,
+  
+  -- Team access (pipe-separated emails)
+  team_members STRING,
+  
+  -- Audit fields
+  created_by STRING NOT NULL,
+  created_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+  updated_by STRING,
+  updated_ts TIMESTAMP
+);
+</pre>
+
+<h3>target_table_status</h3>
+<p>Tracks mapping progress for each target table within a project. One row per target table per project.</p>
+
+<pre>
+CREATE TABLE target_table_status (
+  target_table_status_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  project_id BIGINT NOT NULL,           -- FK to mapping_projects
+  
+  -- Target table identification
+  tgt_table_name STRING NOT NULL,
+  tgt_table_physical_name STRING NOT NULL,
+  tgt_table_description STRING,
+  
+  -- Status: NOT_STARTED, DISCOVERING, SUGGESTIONS_READY, IN_PROGRESS, COMPLETE, SKIPPED
+  mapping_status STRING DEFAULT 'NOT_STARTED',
+  
+  -- Progress counters
+  total_columns INT DEFAULT 0,
+  columns_with_pattern INT DEFAULT 0,
+  columns_mapped INT DEFAULT 0,
+  columns_pending_review INT DEFAULT 0,
+  columns_no_match INT DEFAULT 0,
+  columns_skipped INT DEFAULT 0,
+  
+  -- AI processing
+  ai_job_id STRING,
+  ai_started_ts TIMESTAMP,
+  ai_completed_ts TIMESTAMP,
+  ai_error_message STRING,
+  
+  -- Confidence summary
+  avg_confidence DOUBLE,
+  min_confidence DOUBLE
+);
+</pre>
+
+<h3>mapping_suggestions</h3>
+<p>Stores AI suggestions before user approval. Enables async processing and edit tracking.</p>
+
+<pre>
+CREATE TABLE mapping_suggestions (
+  suggestion_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  project_id BIGINT NOT NULL,
+  target_table_status_id BIGINT NOT NULL,
+  semantic_field_id BIGINT NOT NULL,      -- FK to semantic_fields (target column)
+  
+  -- Target field info (denormalized)
+  tgt_table_name STRING NOT NULL,
+  tgt_column_physical_name STRING NOT NULL,
+  tgt_comments STRING,
+  tgt_physical_datatype STRING,
+  
+  -- Pattern used (from historical mapped_fields)
+  pattern_mapped_field_id BIGINT,
+  pattern_type STRING,                     -- SINGLE, CONCAT, JOIN, UNION
+  pattern_sql STRING,                      -- Original SQL before rewrite
+  
+  -- Matched source fields (JSON array)
+  matched_source_fields STRING,            -- [{"unmapped_field_id": 123, "column": "NAME", "score": 0.95}]
+  
+  -- Generated SQL
+  suggested_sql STRING,                    -- AI-generated SQL expression
+  sql_changes STRING,                      -- JSON array of changes made
+  
+  -- Confidence and reasoning
+  confidence_score DOUBLE,                 -- 0.0-1.0
+  ai_reasoning STRING,
+  warnings STRING,                         -- JSON array of warnings
+  
+  -- Status: PROCESSING, PENDING, APPROVED, EDITED, REJECTED, SKIPPED, NO_PATTERN, NO_MATCH, AUTO_GENERATED, HARDCODED, NOT_APPLICABLE, SYSTEM_COLUMN
+  suggestion_status STRING DEFAULT 'PROCESSING',
+  
+  -- User edits
+  edited_sql STRING,
+  edit_notes STRING,
+  rejection_reason STRING
+);
+</pre>
+
+<h3>unmapped_fields</h3>
+<p>Source fields for mapping. Includes Vector Search support with project_id in the semantic field for same-project boosting.</p>
+
+<pre>
+CREATE TABLE unmapped_fields (
+  unmapped_field_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  project_id BIGINT NOT NULL,              -- FK to mapping_projects
+  
+  -- Logical names (for display)
+  src_table_name STRING NOT NULL,
+  src_column_name STRING NOT NULL,
+  
+  -- Physical names (for SQL generation)
+  src_table_physical_name STRING NOT NULL,
+  src_column_physical_name STRING NOT NULL,
+  
+  -- Metadata (src_comments is CRITICAL for AI matching)
+  src_nullable STRING DEFAULT 'YES',
+  src_physical_datatype STRING,
+  src_comments STRING,                     -- Description drives AI matching
+  domain STRING,
+  
+  -- Status: PENDING, MAPPED, ARCHIVED
+  mapping_status STRING DEFAULT 'PENDING',
+  mapped_field_id BIGINT,
+  
+  -- Vector Search: Auto-generated semantic field
+  -- Includes PROJECT_ID for same-project boosting
+  source_semantic_field STRING GENERATED ALWAYS AS (
+    CONCAT(
+      'PROJECT: ', CAST(project_id AS STRING),
+      ' | DESCRIPTION: ', COALESCE(src_comments, src_column_name, ''),
+      ' | TYPE: ', COALESCE(src_physical_datatype, 'STRING'),
+      ' | DOMAIN: ', COALESCE(domain, '')
+    )
+  ),
+  
+  -- Audit
+  uploaded_by STRING,
+  uploaded_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+);
+</pre>
+
+<h3>mapped_fields</h3>
+<p>Complete mappings with SQL expressions. Historical patterns have <code>project_id = NULL</code> and <code>is_approved_pattern = TRUE</code>.</p>
+
+<pre>
+CREATE TABLE mapped_fields (
+  mapped_field_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  semantic_field_id BIGINT NOT NULL,       -- FK to semantic_fields
+  
+  -- Target info (denormalized)
+  tgt_table_name STRING NOT NULL,
+  tgt_table_physical_name STRING NOT NULL,
+  tgt_column_name STRING NOT NULL,
+  tgt_column_physical_name STRING NOT NULL,
+  
+  -- The mapping expression (the key value!)
+  source_expression STRING NOT NULL,       -- Complete SQL expression
+  
+  -- Source metadata (pipe-separated)
+  source_tables STRING,
+  source_tables_physical STRING,
+  source_columns STRING,
+  source_columns_physical STRING,
+  source_descriptions STRING,              -- For AI learning
+  source_datatypes STRING,
+  
+  -- Relationship type
+  source_relationship_type STRING DEFAULT 'SINGLE',  -- SINGLE, JOIN, UNION
+  join_metadata STRING,                    -- JSON for complex patterns
+  
+  -- AI metadata
+  confidence_score DOUBLE,
+  mapping_source STRING DEFAULT 'MANUAL',  -- AI, MANUAL, BULK_UPLOAD
+  ai_generated BOOLEAN DEFAULT FALSE,
+  
+  -- V4: Project and pattern approval
+  project_id BIGINT,                       -- NULL = global pattern
+  project_type STRING,                     -- For pattern filtering
+  is_approved_pattern BOOLEAN DEFAULT FALSE,
+  pattern_approved_by STRING,
+  pattern_approved_ts TIMESTAMP,
+  
+  -- Status
+  mapping_status STRING DEFAULT 'ACTIVE',
+  mapped_by STRING,
+  mapped_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+);
+</pre>
+
+<h3>semantic_fields</h3>
+<p>Target field definitions. This is the "gold standard" that defines what columns need to be mapped to.</p>
+
+<pre>
+CREATE TABLE semantic_fields (
+  semantic_field_id BIGINT GENERATED ALWAYS AS IDENTITY,
+  
+  -- Target identification
+  tgt_table_name STRING NOT NULL,          -- Logical name
+  tgt_table_physical_name STRING NOT NULL, -- Physical database name
+  tgt_column_name STRING NOT NULL,
+  tgt_column_physical_name STRING NOT NULL,
+  
+  -- Metadata
+  tgt_nullable STRING,
+  tgt_physical_datatype STRING,
+  tgt_comments STRING,                     -- Description for AI matching
+  
+  -- Domain classification
+  domain STRING,                           -- e.g., Member, Claims, Provider
+  
+  -- Vector Search semantic field
+  tgt_semantic_field STRING GENERATED ALWAYS AS (
+    CONCAT(
+      'DESCRIPTION: ', COALESCE(tgt_comments, tgt_column_name, ''),
+      ' | TYPE: ', COALESCE(tgt_physical_datatype, 'STRING'),
+      ' | DOMAIN: ', COALESCE(domain, '')
+    )
+  )
+);
+</pre>
+
+<h3>Schema Files</h3>
+<p>Located in <code>database/</code> folder. Run in this order:</p>
+
+<ol>
+  <li><strong>V4_TARGET_FIRST_SCHEMA.sql</strong> - Creates mapping_projects, target_table_status, mapping_suggestions, and views</li>
+  <li><strong>V4_UNMAPPED_FIELDS_WITH_PROJECT.sql</strong> - Creates unmapped_fields with project support and vector search</li>
+  <li><strong>V4_MAPPED_FIELDS_RECREATE.sql</strong> - Adds pattern approval columns to mapped_fields</li>
+  <li><strong>V4_ADD_PROJECT_TYPE.sql</strong> - Adds project_type for pattern filtering</li>
+</ol>
+
+<div class="warning">
+  <strong>⚠️ Important:</strong> Replace <code>${CATALOG_SCHEMA}</code> placeholder with your actual catalog.schema (e.g., <code>oz_dev.silver_mapping</code>) in all SQL files before running.
+</div>
+
+<h3>Table Relationships</h3>
+
+<pre>
+mapping_projects (1) ──────── (N) target_table_status
+       │                              │
+       │                              │
+       └──────── (N) unmapped_fields  │
+                                      │
+                                      │
+target_table_status (1) ────── (N) mapping_suggestions
+                                      │
+                                      │
+semantic_fields (1) ────────── (N) mapping_suggestions
+       │
+       │
+       └──────── (N) mapped_fields
+</pre>
+
+<h3>Vector Search Indexes</h3>
+<p>Two Vector Search indexes power the AI matching:</p>
+
+<table>
+  <tr>
+    <th>Index</th>
+    <th>Source Table</th>
+    <th>Embedding Column</th>
+    <th>Purpose</th>
+  </tr>
+  <tr>
+    <td><code>unmapped_fields_vs_index</code></td>
+    <td>unmapped_fields</td>
+    <td>source_semantic_field</td>
+    <td>Find source fields that match a target column description</td>
+  </tr>
+  <tr>
+    <td><code>semantic_fields_vs_index</code></td>
+    <td>semantic_fields</td>
+    <td>tgt_semantic_field</td>
+    <td>Find target columns matching user queries</td>
+  </tr>
+</table>
+
+<div class="tip">
+  <strong>💡 Tip:</strong> The unmapped_fields index includes PROJECT_ID in the semantic field. When searching, include "PROJECT: {id}" in the query to naturally boost same-project results.
+</div>
+
+<h3>Suggestion Status Values</h3>
+
+<table>
+  <tr>
+    <th>Status</th>
+    <th>Meaning</th>
+    <th>User Action</th>
+  </tr>
+  <tr>
+    <td><code>PROCESSING</code></td>
+    <td>AI is generating suggestion</td>
+    <td>Wait</td>
+  </tr>
+  <tr>
+    <td><code>PENDING</code></td>
+    <td>AI suggestion ready for review</td>
+    <td>Approve, Edit, or Reject</td>
+  </tr>
+  <tr>
+    <td><code>APPROVED</code></td>
+    <td>User approved as-is</td>
+    <td>Done</td>
+  </tr>
+  <tr>
+    <td><code>EDITED</code></td>
+    <td>User edited and approved</td>
+    <td>Done</td>
+  </tr>
+  <tr>
+    <td><code>REJECTED</code></td>
+    <td>User rejected suggestion</td>
+    <td>May re-process</td>
+  </tr>
+  <tr>
+    <td><code>SKIPPED</code></td>
+    <td>User chose to skip</td>
+    <td>May revisit later</td>
+  </tr>
+  <tr>
+    <td><code>NO_PATTERN</code></td>
+    <td>No historical pattern found</td>
+    <td>Manual mapping or skip</td>
+  </tr>
+  <tr>
+    <td><code>NO_MATCH</code></td>
+    <td>Pattern found but no source match</td>
+    <td>Manual mapping or skip</td>
+  </tr>
+  <tr>
+    <td><code>AUTO_GENERATED</code></td>
+    <td>Auto-generated field (e.g., identity)</td>
+    <td>Usually approve</td>
+  </tr>
+  <tr>
+    <td><code>HARDCODED</code></td>
+    <td>Hardcoded constant value</td>
+    <td>Review and approve</td>
+  </tr>
+  <tr>
+    <td><code>NOT_APPLICABLE</code></td>
+    <td>Field not applicable</td>
+    <td>Acknowledge</td>
+  </tr>
+  <tr>
+    <td><code>SYSTEM_COLUMN</code></td>
+    <td>Gainwell ETL system column</td>
+    <td>Auto-approved</td>
+  </tr>
+</table>
 
 <!-- ============================================================== -->
 <h2>📚 Quick Reference</h2>

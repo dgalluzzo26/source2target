@@ -221,8 +221,7 @@
                 <li><a href="#settings">3. System Settings</a></li>
                 <li><a href="#semantic">4. Semantic Field Management</a></li>
                 <li><a href="#pattern-import">5. Pattern Import</a></li>
-                <li><a href="#database">6. Database Schema</a></li>
-                <li><a href="#troubleshooting">7. Troubleshooting</a></li>
+                <li><a href="#troubleshooting">6. Troubleshooting</a></li>
             </ul>
         </div>
 
@@ -503,65 +502,9 @@ john.smith@gainwelltechnologies.com</pre>
             </div>
         </div>
 
-        <!-- SECTION 6: DATABASE SCHEMA -->
-        <div class="section" id="database">
-            <h2>6. Database Schema</h2>
-            
-            <h3>V4 Core Tables</h3>
-            <table>
-                <tr>
-                    <th>Table</th>
-                    <th>Purpose</th>
-                </tr>
-                <tr>
-                    <td><code>mapping_projects</code></td>
-                    <td>Project tracking and configuration</td>
-                </tr>
-                <tr>
-                    <td><code>target_table_status</code></td>
-                    <td>Progress tracking per target table</td>
-                </tr>
-                <tr>
-                    <td><code>mapping_suggestions</code></td>
-                    <td>AI-generated suggestions before approval</td>
-                </tr>
-                <tr>
-                    <td><code>semantic_fields</code></td>
-                    <td>Target field definitions</td>
-                </tr>
-                <tr>
-                    <td><code>unmapped_fields</code></td>
-                    <td>Source fields uploaded for mapping</td>
-                </tr>
-                <tr>
-                    <td><code>mapped_fields</code></td>
-                    <td>Approved mappings and historical patterns</td>
-                </tr>
-            </table>
-
-            <h3>Schema Files</h3>
-            <p>Located in <code>database/</code> folder:</p>
-            <ul>
-                <li><strong>V4_TARGET_FIRST_SCHEMA.sql</strong> - Core schema for projects, tables, suggestions</li>
-                <li><strong>V4_UNMAPPED_FIELDS_WITH_PROJECT.sql</strong> - Source fields with project support</li>
-                <li><strong>V4_MAPPED_FIELDS_RECREATE.sql</strong> - Pattern approval columns</li>
-            </ul>
-
-            <h3>Installation Order</h3>
-            <ol>
-                <li>Run <code>V4_TARGET_FIRST_SCHEMA.sql</code></li>
-                <li>Run <code>V4_UNMAPPED_FIELDS_WITH_PROJECT.sql</code></li>
-                <li>Run <code>V4_MAPPED_FIELDS_RECREATE.sql</code></li>
-            </ol>
-
-            <div class="warning-box">
-                <strong>⚠️ Important:</strong> Replace <code>${CATALOG_SCHEMA}</code> placeholder with your actual catalog.schema in all SQL files.
-            </div>
-        </div>
-
-        <!-- SECTION 7: TROUBLESHOOTING -->
+        <!-- SECTION 6: TROUBLESHOOTING -->
         <div class="section" id="troubleshooting">
-            <h2>7. Troubleshooting</h2>
+            <h2>6. Troubleshooting</h2>
 
             <h3>Database Connection Issues</h3>
             <p><strong>Symptoms:</strong> "Database Connection: Error" on Home page</p>
@@ -569,7 +512,7 @@ john.smith@gainwelltechnologies.com</pre>
                 <li>Verify SQL Warehouse is running</li>
                 <li>Check server hostname and HTTP path are correct</li>
                 <li>Ensure catalog and schema names exist</li>
-                <li>Verify all V4 tables exist</li>
+                <li>Verify all V4 tables exist (see Developer Guide for schema details)</li>
             </ul>
 
             <h3>Vector Search Issues</h3>
@@ -612,6 +555,14 @@ john.smith@gainwelltechnologies.com</pre>
                     <li>Review application logs in Databricks Apps console</li>
                     <li>Contact your organization's Databricks admin</li>
                 </ul>
+            </div>
+
+            <div class="info-box" style="background: linear-gradient(135deg, #f0e6ff, #e8f4fd); border-left-color: #7c3aed;">
+                <strong>📖 Database Schema Reference</strong>
+                <p style="margin-top: 0.5rem;">
+                    For detailed information about V4 database tables, schemas, and SQL files, 
+                    see the <strong>Developer Guide</strong> (available from the Help menu).
+                </p>
             </div>
         </div>
 
