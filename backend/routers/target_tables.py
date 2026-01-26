@@ -226,6 +226,19 @@ async def start_discovery(
             except Exception as e:
                 print(f"[Target Tables Router] Background discovery error: {e}")
                 traceback.print_exc()
+                
+                # Clean up: delete partial suggestions and reset table status
+                # Note: suggestion_service error handler should have done this,
+                # but we do it here as a safety net in case that failed
+                try:
+                    print(f"[Target Tables Router] Attempting cleanup after background error...")
+                    await suggestion_service.delete_suggestions_for_table(
+                        target_table_status_id,
+                        reset_status=True  # Also resets to NOT_STARTED
+                    )
+                    print(f"[Target Tables Router] Cleanup completed")
+                except Exception as cleanup_error:
+                    print(f"[Target Tables Router] Cleanup failed: {cleanup_error}")
         
         background_tasks.add_task(run_discovery)
         

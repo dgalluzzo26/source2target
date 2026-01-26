@@ -3103,23 +3103,49 @@ RULES:
                 
         except Exception as e:
             print(f"[Suggestion Service] Error generating suggestions: {str(e)}")
+            import traceback
+            traceback.print_exc()
             
-            # Update table status with error
+            # Use a fresh connection for cleanup (original might be dead)
             try:
-                with connection.cursor() as cursor:
-                    cursor.execute(f"""
-                        UPDATE {db_config['target_table_status_table']}
-                        SET 
-                            mapping_status = 'NOT_STARTED',
-                            ai_error_message = '{self._escape_sql(str(e)[:500])}'
-                        WHERE target_table_status_id = {target_table_status_id}
-                    """)
-            except:
-                pass
+                cleanup_connection = self._get_sql_connection(
+                    db_config["server_hostname"],
+                    db_config["http_path"]
+                )
+                try:
+                    with cleanup_connection.cursor() as cursor:
+                        # Delete any partial suggestions created during this run
+                        cursor.execute(f"""
+                            DELETE FROM {db_config['mapping_suggestions_table']}
+                            WHERE target_table_status_id = {target_table_status_id}
+                        """)
+                        print(f"[Suggestion Service] Cleaned up partial suggestions after error")
+                        
+                        # Reset table status with error message
+                        cursor.execute(f"""
+                            UPDATE {db_config['target_table_status_table']}
+                            SET 
+                                mapping_status = 'NOT_STARTED',
+                                ai_started_ts = NULL,
+                                ai_completed_ts = NULL,
+                                ai_error_message = '{self._escape_sql(str(e)[:500])}',
+                                columns_with_pattern = 0,
+                                columns_pending_review = 0,
+                                columns_no_match = 0
+                            WHERE target_table_status_id = {target_table_status_id}
+                        """)
+                        print(f"[Suggestion Service] Reset table status to NOT_STARTED after error")
+                finally:
+                    cleanup_connection.close()
+            except Exception as cleanup_error:
+                print(f"[Suggestion Service] Failed to cleanup after error: {cleanup_error}")
             
             raise
         finally:
-            connection.close()
+            try:
+                connection.close()
+            except:
+                pass
     
     async def generate_suggestions_for_table(
         self,
@@ -3734,6 +3760,93 @@ RULES:
                 db_config["mapping_suggestions_table"],
                 target_table_status_id,
                 status_filter
+            )
+        )
+        
+        return result
+    
+    # =========================================================================
+    # DELETE SUGGESTIONS FOR TABLE
+    # =========================================================================
+    
+    def _delete_suggestions_for_table_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        mapping_suggestions_table: str,
+        target_table_status_table: str,
+        target_table_status_id: int,
+        reset_status: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Delete all suggestions for a target table and optionally reset status.
+        Used for cleanup after errors or when re-running discovery.
+        """
+        print(f"[Suggestion Service] Deleting suggestions for table: {target_table_status_id}")
+        
+        connection = self._get_sql_connection(server_hostname, http_path)
+        
+        try:
+            with connection.cursor() as cursor:
+                # Count suggestions before delete
+                cursor.execute(f"""
+                    SELECT COUNT(*) FROM {mapping_suggestions_table}
+                    WHERE target_table_status_id = {target_table_status_id}
+                """)
+                count_before = cursor.fetchone()[0]
+                
+                # Delete suggestions
+                cursor.execute(f"""
+                    DELETE FROM {mapping_suggestions_table}
+                    WHERE target_table_status_id = {target_table_status_id}
+                """)
+                
+                print(f"[Suggestion Service] Deleted {count_before} suggestions")
+                
+                # Reset table status if requested
+                if reset_status:
+                    cursor.execute(f"""
+                        UPDATE {target_table_status_table}
+                        SET 
+                            mapping_status = 'NOT_STARTED',
+                            ai_started_ts = NULL,
+                            ai_completed_ts = NULL,
+                            ai_error_message = 'Reset after stuck discovery',
+                            columns_with_pattern = 0,
+                            columns_pending_review = 0,
+                            columns_no_match = 0
+                        WHERE target_table_status_id = {target_table_status_id}
+                    """)
+                    print(f"[Suggestion Service] Reset table status to NOT_STARTED")
+                
+                return {
+                    "target_table_status_id": target_table_status_id,
+                    "suggestions_deleted": count_before,
+                    "status_reset": reset_status
+                }
+                
+        finally:
+            connection.close()
+    
+    async def delete_suggestions_for_table(
+        self, 
+        target_table_status_id: int,
+        reset_status: bool = True
+    ) -> Dict[str, Any]:
+        """Delete all suggestions for a target table (async wrapper)."""
+        db_config = self._get_db_config()
+        
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor,
+            functools.partial(
+                self._delete_suggestions_for_table_sync,
+                db_config["server_hostname"],
+                db_config["http_path"],
+                db_config["mapping_suggestions_table"],
+                db_config["target_table_status_table"],
+                target_table_status_id,
+                reset_status
             )
         )
         

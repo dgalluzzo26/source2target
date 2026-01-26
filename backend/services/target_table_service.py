@@ -92,6 +92,125 @@ class TargetTableService:
         return value.replace("'", "''")
     
     # =========================================================================
+    # STALE DISCOVERY DETECTION
+    # =========================================================================
+    # If a table has been in DISCOVERING status for too long without new 
+    # suggestions, it's likely stuck. This auto-resets stuck tables.
+    
+    STALE_DISCOVERY_THRESHOLD_MINUTES = 5  # Reset after 5 minutes of no activity
+    
+    def _check_and_reset_stale_discovery_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        target_table_status_table: str,
+        mapping_suggestions_table: str,
+        target_table_status_id: int,
+        table_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Check if a DISCOVERING table is stale and reset if necessary.
+        
+        A table is considered stale if:
+        - Status is DISCOVERING
+        - No suggestions created in the last N minutes, OR
+        - ai_started_ts was more than N minutes ago with no completion
+        
+        Returns the (possibly updated) table data.
+        """
+        if table_data.get("mapping_status") != "DISCOVERING":
+            return table_data
+        
+        print(f"[Target Table Service] Checking for stale discovery: {target_table_status_id}")
+        
+        connection = self._get_sql_connection(server_hostname, http_path)
+        
+        try:
+            with connection.cursor() as cursor:
+                # Check when the last suggestion was created for this table
+                cursor.execute(f"""
+                    SELECT 
+                        MAX(created_ts) as last_suggestion_ts,
+                        COUNT(*) as suggestion_count
+                    FROM {mapping_suggestions_table}
+                    WHERE target_table_status_id = {target_table_status_id}
+                """)
+                row = cursor.fetchone()
+                last_suggestion_ts = row[0] if row else None
+                suggestion_count = row[1] if row else 0
+                
+                # Get the ai_started_ts from table data
+                ai_started_ts = table_data.get("ai_started_ts")
+                
+                # Determine which timestamp to use for staleness check
+                # Use the more recent of: last suggestion or ai_started
+                from datetime import datetime, timezone, timedelta
+                
+                now = datetime.now(timezone.utc)
+                threshold = timedelta(minutes=self.STALE_DISCOVERY_THRESHOLD_MINUTES)
+                
+                # Calculate last activity
+                last_activity = None
+                if last_suggestion_ts:
+                    # Handle both aware and naive datetimes
+                    if hasattr(last_suggestion_ts, 'tzinfo') and last_suggestion_ts.tzinfo:
+                        last_activity = last_suggestion_ts
+                    else:
+                        last_activity = last_suggestion_ts.replace(tzinfo=timezone.utc) if last_suggestion_ts else None
+                elif ai_started_ts:
+                    if hasattr(ai_started_ts, 'tzinfo') and ai_started_ts.tzinfo:
+                        last_activity = ai_started_ts
+                    else:
+                        last_activity = ai_started_ts.replace(tzinfo=timezone.utc) if ai_started_ts else None
+                
+                if last_activity and (now - last_activity) > threshold:
+                    print(f"[Target Table Service] STALE DISCOVERY DETECTED!")
+                    print(f"  - Table: {target_table_status_id}")
+                    print(f"  - Last activity: {last_activity}")
+                    print(f"  - Time since: {now - last_activity}")
+                    print(f"  - Suggestions created: {suggestion_count}")
+                    
+                    # Delete partial suggestions
+                    cursor.execute(f"""
+                        DELETE FROM {mapping_suggestions_table}
+                        WHERE target_table_status_id = {target_table_status_id}
+                    """)
+                    print(f"[Target Table Service] Deleted {suggestion_count} partial suggestions")
+                    
+                    # Reset table status
+                    cursor.execute(f"""
+                        UPDATE {target_table_status_table}
+                        SET 
+                            mapping_status = 'NOT_STARTED',
+                            ai_started_ts = NULL,
+                            ai_completed_ts = NULL,
+                            ai_error_message = 'Discovery timed out after {self.STALE_DISCOVERY_THRESHOLD_MINUTES} minutes of inactivity',
+                            columns_with_pattern = 0,
+                            columns_pending_review = 0,
+                            columns_no_match = 0
+                        WHERE target_table_status_id = {target_table_status_id}
+                    """)
+                    print(f"[Target Table Service] Reset table status to NOT_STARTED")
+                    
+                    # Update the returned data
+                    table_data["mapping_status"] = "NOT_STARTED"
+                    table_data["ai_started_ts"] = None
+                    table_data["ai_completed_ts"] = None
+                    table_data["ai_error_message"] = f"Discovery timed out after {self.STALE_DISCOVERY_THRESHOLD_MINUTES} minutes of inactivity"
+                    table_data["columns_with_pattern"] = 0
+                    table_data["columns_pending_review"] = 0
+                    table_data["columns_no_match"] = 0
+                
+                return table_data
+                
+        except Exception as e:
+            print(f"[Target Table Service] Error checking stale discovery: {str(e)}")
+            # Don't fail the whole request, just return original data
+            return table_data
+        finally:
+            connection.close()
+    
+    # =========================================================================
     # GET TARGET TABLES FOR PROJECT
     # =========================================================================
     
@@ -197,9 +316,16 @@ class TargetTableService:
         server_hostname: str,
         http_path: str,
         target_table_status_table: str,
-        target_table_status_id: int
+        mapping_suggestions_table: str,
+        target_table_status_id: int,
+        check_stale: bool = True
     ) -> Optional[Dict[str, Any]]:
-        """Get a target table by ID (synchronous)."""
+        """
+        Get a target table by ID (synchronous).
+        
+        If check_stale=True and table is in DISCOVERING status, will check
+        for stale discovery and auto-reset if no activity for threshold period.
+        """
         print(f"[Target Table Service] Fetching table: {target_table_status_id}")
         
         connection = self._get_sql_connection(server_hostname, http_path)
@@ -217,7 +343,20 @@ class TargetTableService:
                 row = cursor.fetchone()
                 
                 if row:
-                    return dict(zip(columns, row))
+                    table_data = dict(zip(columns, row))
+                    
+                    # Check for stale discovery and auto-reset if needed
+                    if check_stale and table_data.get("mapping_status") == "DISCOVERING":
+                        table_data = self._check_and_reset_stale_discovery_sync(
+                            server_hostname,
+                            http_path,
+                            target_table_status_table,
+                            mapping_suggestions_table,
+                            target_table_status_id,
+                            table_data
+                        )
+                    
+                    return table_data
                 return None
                 
         except Exception as e:
@@ -226,8 +365,17 @@ class TargetTableService:
         finally:
             connection.close()
     
-    async def get_target_table_by_id(self, target_table_status_id: int) -> Optional[Dict[str, Any]]:
-        """Get a target table by ID (async wrapper)."""
+    async def get_target_table_by_id(
+        self, 
+        target_table_status_id: int,
+        check_stale: bool = True
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get a target table by ID (async wrapper).
+        
+        If check_stale=True (default) and table is DISCOVERING, will auto-reset
+        if discovery has been stuck for too long.
+        """
         db_config = self._get_db_config()
         
         loop = asyncio.get_event_loop()
@@ -238,7 +386,9 @@ class TargetTableService:
                 db_config["server_hostname"],
                 db_config["http_path"],
                 db_config["target_table_status_table"],
-                target_table_status_id
+                db_config["mapping_suggestions_table"],
+                target_table_status_id,
+                check_stale
             )
         )
         
