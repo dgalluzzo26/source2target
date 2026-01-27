@@ -1424,6 +1424,22 @@ LIMIT {num_results};
                             'column_name': orig_col,
                             'role': role,
                             'is_constant': True,  # Flag for special handling
+                            'is_system_column': False,
+                            'datatype': tgt_datatype,
+                            'domain': tgt_domain
+                        })
+                        continue
+                    
+                    # System columns (CURR_REC_IND, etc.) don't need vector search
+                    # They're Gainwell ETL columns that exist in all bronze tables
+                    if is_gainwell_system_column(orig_col):
+                        print(f"[Suggestion Service] _process_pattern:   -> SYSTEM {role}: {orig_col} (Gainwell system column - skip VS)")
+                        columns_to_map.append({
+                            'description': desc if desc else orig_col,
+                            'column_name': orig_col,
+                            'role': role,
+                            'is_constant': False,
+                            'is_system_column': True,
                             'datatype': tgt_datatype,
                             'domain': tgt_domain
                         })
@@ -1438,6 +1454,7 @@ LIMIT {num_results};
                         'column_name': orig_col,
                         'role': role,
                         'is_constant': False,
+                        'is_system_column': False,
                         'datatype': tgt_datatype,
                         'domain': tgt_domain
                     })
@@ -3456,6 +3473,22 @@ RULES:
                                             'column_name': orig_col,
                                             'role': role,
                                             'is_constant': True,
+                                            'is_system_column': False,
+                                            'datatype': regen_datatype,
+                                            'domain': regen_domain
+                                        })
+                                        continue
+                                    
+                                    # System columns (CURR_REC_IND, etc.) don't need vector search
+                                    # They're Gainwell ETL columns that exist in all bronze tables
+                                    if is_gainwell_system_column(orig_col):
+                                        print(f"[Suggestion Service]   -> SYSTEM {role}: {orig_col} (Gainwell system column - skip VS)")
+                                        columns_to_map.append({
+                                            'description': desc if desc else orig_col,
+                                            'column_name': orig_col,
+                                            'role': role,
+                                            'is_constant': False,
+                                            'is_system_column': True,
                                             'datatype': regen_datatype,
                                             'domain': regen_domain
                                         })
@@ -3468,6 +3501,7 @@ RULES:
                                         'column_name': orig_col,
                                         'role': role,
                                         'is_constant': False,
+                                        'is_system_column': False,
                                         'datatype': regen_datatype,
                                         'domain': regen_domain
                                     })
