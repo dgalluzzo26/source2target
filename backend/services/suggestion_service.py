@@ -2057,6 +2057,14 @@ CRITICAL: Each alias maps to ONE source table. All columns for that alias MUST c
 
 IMPORTANT: For each change, include the alias and pattern_table to help the UI display correctly.
 
+CONFIDENCE SCORING (DO NOT use the [Score: X.XX] values - those are vector search similarity, not semantic accuracy):
+- Base confidence on how well the column MEANINGS match, not the score shown:
+  - 0.9-1.0 = Perfect semantic match (e.g., DTE_BIRTH → DOB both mean date of birth)
+  - 0.7-0.9 = Good match with minor naming differences
+  - 0.5-0.7 = Reasonable match, may need review
+  - 0.3-0.5 = Partial match or uncertain
+  - 0.0-0.3 = Poor match or no match found
+
 Return ONLY valid JSON:
 {{
   "rewritten_sql": "<complete rewritten SQL>",
@@ -2144,6 +2152,14 @@ RULES:
 CRITICAL: You CANNOT mix columns from different source tables for the same alias.
 
 IMPORTANT: For each change, include the alias and pattern_table to help the UI display correctly.
+
+CONFIDENCE SCORING (DO NOT use the [Score: X.XX] values - those are vector search similarity, not semantic accuracy):
+- Base confidence on how well the column MEANINGS match, not the score shown:
+  - 0.9-1.0 = Perfect semantic match (e.g., DTE_BIRTH → DOB both mean date of birth)
+  - 0.7-0.9 = Good match with minor naming differences
+  - 0.5-0.7 = Reasonable match, may need review
+  - 0.3-0.5 = Partial match or uncertain
+  - 0.0-0.3 = Poor match or no match found
 
 Return ONLY valid JSON:
 {{
