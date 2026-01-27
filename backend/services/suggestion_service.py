@@ -484,15 +484,17 @@ def extract_bronze_tables_from_sql(pattern_sql: str) -> Dict[str, str]:
 def assign_source_tables_to_pattern_tables(
     bronze_tables: Dict[str, str],  # alias -> pattern_table_name
     vs_candidates_by_column: Dict[str, List[Dict[str, Any]]],  # pattern_col -> list of candidates
-    columns_to_map: List[Dict[str, Any]]  # [{column_name, description, role}, ...]
+    columns_to_map: List[Dict[str, Any]]  # [{column_name, description, role, is_system_column}, ...]
 ) -> Dict[str, str]:
     """
     Deterministically assign user source tables to pattern bronze tables.
     
     Strategy:
-    1. For each pattern bronze table, count how many of its columns have matches in each user source table
-    2. Assign the source table with the MOST matches
-    3. Don't assign the same source table to multiple pattern tables
+    1. Skip system columns entirely - they don't influence table assignment
+    2. Weight by role: output > join_key > filter
+    3. For each pattern bronze table, score how well each user source table matches
+    4. Assign the source table with the highest weighted score
+    5. Don't assign the same source table to multiple pattern tables
     
     Returns:
         Dict mapping pattern_table_name -> user_source_table (e.g., {"t_re_base": "RECIP_BASE"})
@@ -503,43 +505,82 @@ def assign_source_tables_to_pattern_tables(
     print(f"[Table Assign] Starting assignment for {len(bronze_tables)} bronze tables")
     print(f"[Table Assign] Pattern columns with candidates: {list(vs_candidates_by_column.keys())}")
     
+    # Role-based weights: output columns matter most, filter columns matter least
+    ROLE_WEIGHTS = {
+        'output': 10.0,      # Primary - this is what we're actually mapping
+        'join_key': 3.0,     # Secondary - determines table relationships
+        'filter': 0.5,       # Low - often system columns or constants
+        'unknown': 1.0       # Default
+    }
+    
+    # Build a lookup of column info by column name
+    column_info_by_name = {}
+    for col in columns_to_map:
+        col_name = col.get('column_name', '').upper()
+        if col_name:
+            column_info_by_name[col_name] = col
+    
+    # Identify columns to skip (system columns)
+    system_columns = set()
+    for col in columns_to_map:
+        if col.get('is_system_column', False):
+            system_columns.add(col.get('column_name', '').upper())
+    
+    if system_columns:
+        print(f"[Table Assign] Skipping system columns from voting: {system_columns}")
+    
     # Build a map of which user source tables have candidates for each pattern column
     # pattern_col -> set of source tables with candidates
     source_tables_per_column = {}
     all_source_tables = set()
     
     for pattern_col, candidates in vs_candidates_by_column.items():
+        pattern_col_upper = pattern_col.upper()
+        
+        # Skip system columns - they shouldn't influence table assignment
+        if pattern_col_upper in system_columns:
+            print(f"[Table Assign] Skipping system column: {pattern_col_upper}")
+            continue
+        
         source_tables_for_col = set()
         for candidate in candidates:
             src_table = candidate.get('src_table_physical_name', '').upper()
             if src_table:
                 source_tables_for_col.add(src_table)
                 all_source_tables.add(src_table)
-        source_tables_per_column[pattern_col.upper()] = source_tables_for_col
+        source_tables_per_column[pattern_col_upper] = source_tables_for_col
     
     print(f"[Table Assign] All source tables found in candidates: {all_source_tables}")
+    print(f"[Table Assign] Columns participating in assignment: {list(source_tables_per_column.keys())}")
     
     # Now score each (pattern_table, source_table) pair
-    # Score = number of pattern columns that have candidates from that source table
+    # Score = sum of (match_score * role_weight) for each column
     table_scores = {}  # (pattern_table, source_table) -> score
     
     for alias, pattern_table in bronze_tables.items():
         pattern_table_upper = pattern_table.upper()
         
-        # Find all pattern columns that might belong to this alias
-        # This is tricky - we need to figure out which columns go with which alias
-        # For now, we'll consider ALL columns and score based on best matches
-        
         for source_table in all_source_tables:
             score = 0
             for pattern_col, source_tables in source_tables_per_column.items():
                 if source_table in source_tables:
+                    # Get the role weight for this column
+                    col_info = column_info_by_name.get(pattern_col, {})
+                    role = col_info.get('role', 'unknown')
+                    role_weight = ROLE_WEIGHTS.get(role, ROLE_WEIGHTS['unknown'])
+                    
                     # This source table has a candidate for this pattern column
-                    # Add the best score for this match
+                    # Add the best score for this match, weighted by role
                     candidates = vs_candidates_by_column.get(pattern_col, [])
+                    if not candidates:
+                        candidates = vs_candidates_by_column.get(pattern_col.upper(), [])
+                    
                     for c in candidates:
                         if c.get('src_table_physical_name', '').upper() == source_table:
-                            score += c.get('score', 0.01)  # Weight by match quality
+                            match_score = c.get('score', 0.01)
+                            weighted_score = match_score * role_weight
+                            score += weighted_score
+                            print(f"[Table Assign]   {pattern_col} ({role}) -> {source_table}: {match_score:.4f} * {role_weight} = {weighted_score:.4f}")
                             break
             
             if score > 0:
@@ -970,14 +1011,20 @@ class SuggestionService:
         print(f"[VS Parallel] project_id: {project_id}")
         print(f"[VS Parallel] num_columns: {len(columns_to_search)}")
         
-        # Separate constant columns from searchable columns
+        # Separate constant columns and system columns from searchable columns
         searchable_columns = []
         constant_columns_list = []
+        system_columns_list = []
         for i, col in enumerate(columns_to_search):
             is_constant = col.get('is_constant', False)
+            is_system = col.get('is_system_column', False)
+            
             if is_constant:
                 print(f"[VS Parallel] col[{i}]: column_name={col.get('column_name')} - CONSTANT (skip VS, 100% match)")
                 constant_columns_list.append(col)
+            elif is_system:
+                print(f"[VS Parallel] col[{i}]: column_name={col.get('column_name')} - SYSTEM COLUMN (skip VS, auto-handled)")
+                system_columns_list.append(col)
             else:
                 print(f"[VS Parallel] col[{i}]: column_name={col.get('column_name')}, role={col.get('role')}, desc={col.get('description', '')[:80]}...")
                 searchable_columns.append(col)
@@ -992,6 +1039,8 @@ class SuggestionService:
         
         # Track constant columns with synthetic 100% match
         self._constant_columns_in_search = constant_columns_list
+        # Track system columns that were skipped
+        self._system_columns_in_search = system_columns_list
         
         def search_column(col_info: Dict[str, str]) -> List[Dict[str, Any]]:
             """Search for a single column."""
@@ -2785,6 +2834,22 @@ RULES:
                                                 'column_name': orig_col,
                                                 'role': role,
                                                 'is_constant': True,
+                                                'is_system_column': False,
+                                                'datatype': tgt_datatype,
+                                                'domain': tgt_domain
+                                            })
+                                            continue
+                                        
+                                        # System columns (CURR_REC_IND, etc.) don't need vector search
+                                        # They're Gainwell ETL columns that exist in all bronze tables
+                                        if is_gainwell_system_column(orig_col):
+                                            print(f"[Suggestion Service]   -> SYSTEM {role}: {orig_col} (Gainwell system column - skip VS)")
+                                            columns_to_map.append({
+                                                'description': desc if desc else orig_col,
+                                                'column_name': orig_col,
+                                                'role': role,
+                                                'is_constant': False,
+                                                'is_system_column': True,
                                                 'datatype': tgt_datatype,
                                                 'domain': tgt_domain
                                             })
@@ -2799,6 +2864,7 @@ RULES:
                                             'column_name': orig_col,
                                             'role': role,
                                             'is_constant': False,
+                                            'is_system_column': False,
                                             'datatype': tgt_datatype,
                                             'domain': tgt_domain
                                         })
