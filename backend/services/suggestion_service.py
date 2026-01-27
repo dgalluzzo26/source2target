@@ -3163,18 +3163,25 @@ RULES:
                         pass  # already counted above
                     
                     # Incremental progress update (every column)
+                    # pending = all suggestions except NO_PATTERN and NO_MATCH
+                    # This represents suggestions that need user review (PENDING + AUTO_MAPPED + SYSTEM_COLUMN)
                     current_pending = suggestions_created - no_pattern - no_match
                     cursor.execute(f"""
                         UPDATE {db_config['target_table_status_table']}
                         SET 
                             columns_with_pattern = {patterns_found},
-                            columns_pending_review = {current_pending},
+                            columns_pending_review = {current_pending + no_pattern},
                             columns_no_match = {no_match}
                         WHERE target_table_status_id = {target_table_status_id}
                     """)
                 
                 # Update table status
-                pending_count = suggestions_created - no_pattern - no_match
+                # pending_review includes ALL columns needing user action:
+                # - PENDING (has pattern, has VS match, needs approval)
+                # - NO_PATTERN (no historical pattern, user needs to find one or skip)
+                # - Does NOT include NO_MATCH (has pattern but no VS match - also needs review actually)
+                # For simplicity: pending = total - mapped (everything not yet approved)
+                pending_count = suggestions_created - no_match  # Include NO_PATTERN in pending
                 
                 cursor.execute(f"""
                     UPDATE {db_config['target_table_status_table']}

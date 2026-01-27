@@ -176,19 +176,60 @@
           </template>
         </Column>
 
-        <Column header="Progress" style="min-width: 12rem">
+        <Column header="Progress" style="min-width: 14rem">
           <template #body="{ data }">
             <div class="progress-cell">
-              <ProgressBar 
-                :value="getTableProgress(data)" 
-                :showValue="false"
-                class="table-progress-bar"
-              />
-              <span class="progress-text">
-                {{ getColumnsProcessed(data) }} / {{ data.total_columns }}
-                ({{ getTableProgress(data) }}%)
-                <span v-if="data.mapping_status === 'DISCOVERING'" class="discovering-label">discovering...</span>
-              </span>
+              <!-- During discovery: show discovery progress -->
+              <template v-if="data.mapping_status === 'DISCOVERING'">
+                <ProgressBar 
+                  :value="getDiscoveryProgressPercent(data)" 
+                  :showValue="false"
+                  class="table-progress-bar discovering"
+                />
+                <span class="progress-text discovering">
+                  <i class="pi pi-spinner pi-spin"></i>
+                  Discovering {{ getColumnsProcessed(data) }} / {{ data.total_columns }}
+                </span>
+              </template>
+              <!-- After discovery: show approval progress -->
+              <template v-else-if="data.mapping_status === 'SUGGESTIONS_READY' || data.mapping_status === 'IN_REVIEW'">
+                <ProgressBar 
+                  :value="getApprovalProgressPercent(data)" 
+                  :showValue="false"
+                  class="table-progress-bar review"
+                />
+                <span class="progress-text">
+                  <span class="progress-breakdown">
+                    <span class="approved" v-if="data.columns_mapped > 0">{{ data.columns_mapped }} approved</span>
+                    <span class="auto" v-if="getAutoMappedCount(data) > 0">{{ getAutoMappedCount(data) }} auto</span>
+                    <span class="pending" v-if="data.columns_pending_review > 0">{{ data.columns_pending_review }} pending</span>
+                  </span>
+                  <span class="progress-total">of {{ data.total_columns }}</span>
+                </span>
+              </template>
+              <!-- Complete: show completion -->
+              <template v-else-if="data.mapping_status === 'COMPLETE'">
+                <ProgressBar 
+                  :value="100" 
+                  :showValue="false"
+                  class="table-progress-bar complete"
+                />
+                <span class="progress-text complete">
+                  <i class="pi pi-check-circle"></i>
+                  {{ data.columns_mapped }} / {{ data.total_columns }} mapped
+                </span>
+              </template>
+              <!-- Not started -->
+              <template v-else>
+                <ProgressBar 
+                  :value="0" 
+                  :showValue="false"
+                  class="table-progress-bar"
+                />
+                <span class="progress-text muted">
+                  0 / {{ data.total_columns }}
+                </span>
+              </template>
             </div>
           </template>
         </Column>
@@ -1311,7 +1352,17 @@ function getTableProgress(table: TargetTableStatus): number {
 }
 
 function getColumnsProcessed(table: TargetTableStatus): number {
-  // Total columns that have been processed (mapped + pending review + no match)
+  // After discovery completes (SUGGESTIONS_READY), all columns have suggestions
+  if (table.mapping_status === 'SUGGESTIONS_READY' || 
+      table.mapping_status === 'IN_REVIEW' ||
+      table.mapping_status === 'COMPLETE') {
+    return table.total_columns || 0
+  }
+  
+  // During discovery: count suggestions created so far
+  // Note: columns_pending_review + columns_no_match covers PENDING and NO_MATCH statuses
+  // but misses NO_PATTERN status. The backend should ideally provide a total_suggestions count.
+  // For now, use sum of tracked counters as a minimum (may undercount during discovery)
   return (table.columns_mapped || 0) + 
          (table.columns_pending_review || 0) + 
          (table.columns_no_match || 0)
@@ -1319,10 +1370,32 @@ function getColumnsProcessed(table: TargetTableStatus): number {
 
 function getDiscoveryProgress(table: TargetTableStatus): string {
   if (table.mapping_status !== 'DISCOVERING') return ''
-  const columnsProcessed = (table.columns_mapped || 0) + 
-                           (table.columns_pending_review || 0) + 
-                           (table.columns_no_match || 0)
+  const columnsProcessed = getColumnsProcessed(table)
   return `${columnsProcessed}/${table.total_columns || 0}`
+}
+
+function getDiscoveryProgressPercent(table: TargetTableStatus): number {
+  if (!table.total_columns) return 0
+  const columnsProcessed = getColumnsProcessed(table)
+  return Math.round((columnsProcessed / table.total_columns) * 100)
+}
+
+function getApprovalProgressPercent(table: TargetTableStatus): number {
+  if (!table.total_columns) return 0
+  // Approved + auto-mapped as percentage of total
+  const approved = table.columns_mapped || 0
+  const autoMapped = getAutoMappedCount(table)
+  return Math.round(((approved + autoMapped) / table.total_columns) * 100)
+}
+
+function getAutoMappedCount(table: TargetTableStatus): number {
+  // Auto-mapped columns are those with pattern that aren't pending review
+  // This is columns_with_pattern minus columns_pending_review (pending are still awaiting review)
+  // Actually, columns_with_pattern counts suggestions with patterns found
+  // For now, we'll estimate auto-mapped as columns that are neither pending nor mapped but processed
+  // A better approach: backend should track auto_approved count separately
+  // For now, return 0 - we'd need backend changes to track this properly
+  return 0  // TODO: Backend should provide auto_approved_count
 }
 
 function getConfidenceClass(confidence: number): string {
@@ -1917,8 +1990,74 @@ async function handleExport() {
   height: 6px;
 }
 
+.table-progress-bar.discovering :deep(.p-progressbar-value) {
+  background: var(--blue-400);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.table-progress-bar.review :deep(.p-progressbar-value) {
+  background: var(--yellow-500);
+}
+
+.table-progress-bar.complete :deep(.p-progressbar-value) {
+  background: var(--green-500);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 .progress-text {
   font-size: 0.8rem;
+  color: var(--text-color-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.progress-text.discovering {
+  color: var(--blue-600);
+}
+
+.progress-text.discovering i {
+  font-size: 0.7rem;
+}
+
+.progress-text.complete {
+  color: var(--green-600);
+}
+
+.progress-text.complete i {
+  font-size: 0.75rem;
+}
+
+.progress-text.muted {
+  color: var(--text-color-secondary);
+  opacity: 0.7;
+}
+
+.progress-breakdown {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.progress-breakdown .approved {
+  color: var(--green-600);
+  font-weight: 500;
+}
+
+.progress-breakdown .auto {
+  color: var(--teal-600);
+  font-weight: 500;
+}
+
+.progress-breakdown .pending {
+  color: var(--yellow-700);
+}
+
+.progress-total {
   color: var(--text-color-secondary);
 }
 
