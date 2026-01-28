@@ -34,11 +34,14 @@ class ConfigService:
         Falls back to default configuration if file doesn't exist.
         """
         try:
+            print(f"Looking for config file at: {self.config_file.absolute()}")
             if self.config_file.exists():
                 with open(self.config_file, 'r') as f:
                     config_dict = json.load(f)
                     self._config = AppConfig(**config_dict)
+                    admin_users = config_dict.get('security', {}).get('admin_users', [])
                     print(f"Configuration loaded from {self.config_file}")
+                    print(f"Admin users from file: {admin_users}")
                     return self._config
             else:
                 print(f"Config file not found at {self.config_file}, using defaults")

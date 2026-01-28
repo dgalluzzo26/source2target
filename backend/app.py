@@ -228,10 +228,13 @@ async def get_config():
     
     Returns the complete configuration loaded from the local JSON file,
     including database, vector search, AI model, UI, support, and security settings.
+    Always reloads from file to ensure fresh data.
     
     Returns:
         dict: Complete configuration dictionary
     """
+    # Force reload from file to ensure fresh data
+    config_service.clear_cache()
     config = config_service.get_config()
     return config.model_dump()
 
