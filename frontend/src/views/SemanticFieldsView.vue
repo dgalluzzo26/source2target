@@ -43,10 +43,11 @@
             severity="secondary"
             v-tooltip.top="'Refresh'"
           />
-          <Button 
-            label="AI Enhance Descriptions" 
+          <SplitButton 
+            :label="getEnhanceButtonLabel()" 
             icon="pi pi-sparkles" 
-            @click="handleEnhanceDescriptions"
+            @click="handleEnhanceDescriptions('auto')"
+            :model="enhanceMenuItems"
             :loading="enhancingDescriptions"
             class="ai-enhance-btn"
             v-tooltip.top="'Use AI to enhance field descriptions'"
@@ -86,9 +87,34 @@
         {{ error }}
       </Message>
 
+      <!-- Selection Info Bar -->
+      <div v-if="selectedFields.length > 0" class="selection-bar">
+        <div class="selection-info">
+          <i class="pi pi-check-circle"></i>
+          <span>{{ selectedFields.length }} field(s) selected</span>
+        </div>
+        <div class="selection-actions">
+          <Button 
+            label="AI Enhance Selected" 
+            icon="pi pi-sparkles" 
+            @click="handleEnhanceDescriptions('selected')"
+            :loading="enhancingDescriptions"
+            size="small"
+          />
+          <Button 
+            label="Clear Selection" 
+            icon="pi pi-times" 
+            @click="selectedFields = []"
+            severity="secondary"
+            size="small"
+          />
+        </div>
+      </div>
+
       <!-- Semantic Fields Table -->
       <div v-if="!loading && semanticFields.length > 0" class="table-container">
         <DataTable 
+          v-model:selection="selectedFields"
           :value="filteredFields" 
           :paginator="true"
           :rows="20"
@@ -98,7 +124,11 @@
           class="semantic-table"
           stripedRows
           removableSort
+          dataKey="id"
         >
+          <!-- Selection Checkbox -->
+          <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
+
           <!-- Table Name -->
           <Column field="tgt_table_name" header="Target Table" :sortable="true" style="min-width: 12rem">
             <template #body="{ data }">
@@ -553,6 +583,7 @@ import { useToast } from 'primevue/usetoast'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
+import SplitButton from 'primevue/splitbutton'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Dropdown from 'primevue/dropdown'
@@ -583,6 +614,9 @@ const showUploadDialog = ref(false)
 const editingField = ref<any | null>(null)
 const uploadPreview = ref<any[]>([])
 const selectedFile = ref<File | null>(null)
+
+// Selection state
+const selectedFields = ref<any[]>([])
 
 // AI Enhance Descriptions state
 const showEnhanceDescriptionsDialog = ref(false)
@@ -628,6 +662,49 @@ const filteredFields = computed(() => {
     f.tgt_comments?.toLowerCase().includes(query)
   )
 })
+
+const isFiltered = computed(() => {
+  return searchQuery.value && searchQuery.value.trim().length > 0
+})
+
+// AI Enhance menu items for SplitButton
+const enhanceMenuItems = computed(() => {
+  const items = []
+  
+  if (selectedFields.value.length > 0) {
+    items.push({
+      label: `Enhance Selected (${selectedFields.value.length})`,
+      icon: 'pi pi-check-square',
+      command: () => handleEnhanceDescriptions('selected')
+    })
+  }
+  
+  if (isFiltered.value) {
+    items.push({
+      label: `Enhance Filtered (${filteredFields.value.length})`,
+      icon: 'pi pi-filter',
+      command: () => handleEnhanceDescriptions('filtered')
+    })
+  }
+  
+  items.push({
+    label: `Enhance All (${semanticFields.value.length})`,
+    icon: 'pi pi-list',
+    command: () => handleEnhanceDescriptions('all')
+  })
+  
+  return items
+})
+
+function getEnhanceButtonLabel(): string {
+  if (selectedFields.value.length > 0) {
+    return `AI Enhance (${selectedFields.value.length} selected)`
+  }
+  if (isFiltered.value) {
+    return `AI Enhance (${filteredFields.value.length} filtered)`
+  }
+  return 'AI Enhance Descriptions'
+}
 
 onMounted(async () => {
   if (userStore.isAdmin) {
@@ -978,8 +1055,24 @@ function closeUploadDialog() {
 }
 
 // AI Enhance Descriptions - uses batch endpoint for efficiency with large datasets
-async function handleEnhanceDescriptions() {
-  if (semanticFields.value.length === 0) {
+// mode: 'auto' (smart: selected > filtered > all), 'selected', 'filtered', 'all'
+async function handleEnhanceDescriptions(mode: 'auto' | 'selected' | 'filtered' | 'all' = 'auto') {
+  // Determine which fields to enhance based on mode
+  let fieldsToEnhance: any[] = []
+  let modeLabel = ''
+  
+  if (mode === 'selected' || (mode === 'auto' && selectedFields.value.length > 0)) {
+    fieldsToEnhance = selectedFields.value
+    modeLabel = 'selected'
+  } else if (mode === 'filtered' || (mode === 'auto' && isFiltered.value)) {
+    fieldsToEnhance = filteredFields.value
+    modeLabel = 'filtered'
+  } else {
+    fieldsToEnhance = semanticFields.value
+    modeLabel = 'all'
+  }
+  
+  if (fieldsToEnhance.length === 0) {
     toast.add({
       severity: 'warn',
       summary: 'No Fields',
@@ -988,6 +1081,8 @@ async function handleEnhanceDescriptions() {
     })
     return
   }
+  
+  console.log(`[AI Enhance] Mode: ${modeLabel}, Fields: ${fieldsToEnhance.length}`)
 
   // Open dialog and start enhancement
   showEnhanceDescriptionsDialog.value = true
@@ -995,7 +1090,7 @@ async function handleEnhanceDescriptions() {
   enhancementCancelled.value = false
   enhancedFields.value = []
   enhancedFieldsProgress.value = 0
-  enhancedFieldsTotal.value = semanticFields.value.length
+  enhancedFieldsTotal.value = fieldsToEnhance.length
   
   // Create abort controller for cancellation
   enhancementAbortController = new AbortController()
@@ -1005,14 +1100,14 @@ async function handleEnhanceDescriptions() {
   const allResults: any[] = []
 
   try {
-    for (let i = 0; i < semanticFields.value.length; i += BATCH_SIZE) {
+    for (let i = 0; i < fieldsToEnhance.length; i += BATCH_SIZE) {
       // Check if cancelled before starting next batch
       if (enhancementCancelled.value) {
         console.log('[AI Enhance] Cancelled by user')
         break
       }
       
-      const batch = semanticFields.value.slice(i, i + BATCH_SIZE)
+      const batch = fieldsToEnhance.slice(i, i + BATCH_SIZE)
       
       // Prepare batch payload
       const batchPayload = batch.map((field: any) => ({
@@ -1223,6 +1318,35 @@ function getEnhancedFieldStatus(field: any): string {
 
 .info-message {
   margin-bottom: 1.5rem;
+}
+
+/* Selection bar - appears when fields are selected */
+.selection-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(135deg, var(--teal-50) 0%, var(--cyan-50) 100%);
+  border: 1px solid var(--teal-200);
+  border-radius: 8px;
+}
+
+.selection-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--teal-700);
+  font-weight: 500;
+}
+
+.selection-info i {
+  font-size: 1.1rem;
+}
+
+.selection-actions {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .loading-container {
