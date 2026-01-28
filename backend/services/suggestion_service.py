@@ -877,6 +877,110 @@ class SuggestionService:
         return value
     
     # =========================================================================
+    # SEMANTIC FIELD DESCRIPTION LOOKUP
+    # =========================================================================
+    # During discovery, look up fresh descriptions from semantic_fields table
+    # instead of using potentially stale descriptions from join_metadata.
+    # Falls back to join_metadata if not found.
+    
+    def _lookup_semantic_description_sync(
+        self,
+        server_hostname: str,
+        http_path: str,
+        semantic_fields_table: str,
+        tgt_table_physical_name: str,
+        tgt_column_physical_name: str
+    ) -> Optional[str]:
+        """
+        Look up the current description for a target column from semantic_fields.
+        
+        This ensures we use up-to-date descriptions even if they've been updated
+        since the pattern was imported.
+        
+        Returns:
+            The tgt_comments from semantic_fields, or None if not found.
+        """
+        connection = self._get_sql_connection(server_hostname, http_path)
+        
+        try:
+            with connection.cursor() as cursor:
+                query = f"""
+                    SELECT tgt_comments
+                    FROM {semantic_fields_table}
+                    WHERE UPPER(tgt_table_physical_name) = UPPER('{self._escape_sql(tgt_table_physical_name)}')
+                      AND UPPER(tgt_column_physical_name) = UPPER('{self._escape_sql(tgt_column_physical_name)}')
+                    LIMIT 1
+                """
+                cursor.execute(query)
+                row = cursor.fetchone()
+                
+                if row and row[0]:
+                    return row[0]
+                return None
+                
+        except Exception as e:
+            print(f"[Suggestion Service] Error looking up semantic description: {e}")
+            return None
+        finally:
+            connection.close()
+    
+    def _get_fresh_description_for_pattern_column(
+        self,
+        db_config: Dict[str, str],
+        join_metadata: Dict[str, Any],
+        pattern_column: str,
+        fallback_description: str,
+        tgt_table_physical_name: str
+    ) -> str:
+        """
+        Get fresh description for a pattern column, falling back to join_metadata.
+        
+        For 'output' role columns, looks up the outputColumn in semantic_fields.
+        For other roles, uses the fallback description from join_metadata.
+        
+        Args:
+            db_config: Database configuration
+            join_metadata: Parsed join_metadata dict
+            pattern_column: The pattern column name (e.g., 'DTE_BIRTH')
+            fallback_description: Description from join_metadata (fallback)
+            tgt_table_physical_name: Target table physical name
+        
+        Returns:
+            Fresh description from semantic_fields, or fallback_description
+        """
+        # Find this column's info in userColumnsToMap
+        user_cols = join_metadata.get('userColumnsToMap', [])
+        col_info = None
+        for col in user_cols:
+            if col.get('originalColumn', '').upper() == pattern_column.upper():
+                col_info = col
+                break
+        
+        if not col_info:
+            return fallback_description
+        
+        role = col_info.get('role', '')
+        
+        # For output columns, look up the target column's description
+        if role == 'output':
+            output_column = join_metadata.get('outputColumn', '')
+            if output_column:
+                fresh_desc = self._lookup_semantic_description_sync(
+                    db_config["server_hostname"],
+                    db_config["http_path"],
+                    db_config["semantic_fields_table"],
+                    tgt_table_physical_name,
+                    output_column
+                )
+                if fresh_desc:
+                    print(f"[Suggestion Service] Using fresh description from semantic_fields for {pattern_column} -> {output_column}")
+                    return fresh_desc
+                else:
+                    print(f"[Suggestion Service] No semantic_fields description found for {output_column}, using fallback")
+        
+        return fallback_description
+    
+    # =========================================================================
     # VECTOR SEARCH: Find matching source fields
     # =========================================================================
     
@@ -1362,7 +1466,8 @@ LIMIT {num_results};
         tgt_column_physical: str,
         tgt_comments: str,
         tgt_datatype: str = "",
-        tgt_domain: str = ""
+        tgt_domain: str = "",
+        tgt_table_physical_name: str = ""
     ) -> Dict[str, Any]:
         """
         Shared method for processing a pattern with vector search and LLM rewrite.
@@ -1372,6 +1477,7 @@ LIMIT {num_results};
         Args:
             tgt_datatype: Target column physical datatype for better VS matching
             tgt_domain: Target column domain for better VS matching
+            tgt_table_physical_name: Target table physical name for description lookup
         
         Returns:
             Dictionary with matched_sources, vs_candidates_by_column, rewrite_result, etc.
@@ -1411,9 +1517,18 @@ LIMIT {num_results};
                 print(f"[Suggestion Service] _process_pattern: userColumnsToMap has {len(user_cols)} entries")
                 
                 for col in user_cols:
-                    desc = col.get('description', '')
+                    fallback_desc = col.get('description', '')
                     orig_col = col.get('originalColumn', '')
                     role = col.get('role', '')
+                    
+                    # Get fresh description from semantic_fields if available
+                    desc = self._get_fresh_description_for_pattern_column(
+                        db_config,
+                        jm,
+                        orig_col,
+                        fallback_desc,
+                        tgt_table_physical_name
+                    ) if tgt_table_physical_name else fallback_desc
                     
                     # Constant columns (SQL functions) don't need vector search - they get 100% match
                     if orig_col.upper() in constant_columns:
@@ -2855,9 +2970,19 @@ RULES:
                                     tgt_domain = target_col.get('domain', '')
                                     
                                     for col in user_cols:
-                                        desc = col.get('description', '')
+                                        fallback_desc = col.get('description', '')
                                         orig_col = col.get('originalColumn', '')
                                         role = col.get('role', '')
+                                        
+                                        # Get fresh description from semantic_fields if available
+                                        # This ensures we use up-to-date descriptions even if admin updates them
+                                        desc = self._get_fresh_description_for_pattern_column(
+                                            db_config,
+                                            jm,
+                                            orig_col,
+                                            fallback_desc,
+                                            tgt_table_physical_name
+                                        )
                                         
                                         # Constant columns (SQL functions) don't need vector search - they get 100% match
                                         if orig_col.upper() in constant_columns:
@@ -2888,7 +3013,7 @@ RULES:
                                             })
                                             continue
                                         
-                                        print(f"[Suggestion Service]   -> {role}: {orig_col} - {desc}")
+                                        print(f"[Suggestion Service]   -> {role}: {orig_col} - {desc[:80] if desc else 'no desc'}...")
                                         
                                         # Build columns_to_map for parallel vector search
                                         # Include datatype and domain for better matching
@@ -3479,14 +3604,26 @@ RULES:
                         regen_datatype = suggestion.get('tgt_physical_datatype', '')
                         regen_domain = suggestion.get('domain', '')
                         
+                        # Get target table physical name for fresh description lookup
+                        regen_tgt_table_physical = suggestion.get('tgt_table_physical_name', '')
+                        
                         if join_metadata_str:
                             print(f"[Suggestion Service] REGENERATE: join_metadata preview: {str(join_metadata_str)[:300]}...")
                             try:
                                 jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
                                 for col in jm.get('userColumnsToMap', []):
-                                    desc = col.get('description', '')
+                                    fallback_desc = col.get('description', '')
                                     orig_col = col.get('originalColumn', '')
                                     role = col.get('role', '')
+                                    
+                                    # Get fresh description from semantic_fields if available
+                                    desc = self._get_fresh_description_for_pattern_column(
+                                        db_config,
+                                        jm,
+                                        orig_col,
+                                        fallback_desc,
+                                        regen_tgt_table_physical
+                                    ) if regen_tgt_table_physical else fallback_desc
                                     
                                     # Constant columns (SQL functions) don't need vector search - they get 100% match
                                     if orig_col.upper() in constant_columns:
