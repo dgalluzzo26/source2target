@@ -491,10 +491,13 @@ def assign_source_tables_to_pattern_tables(
     
     Strategy:
     1. Skip system columns entirely - they don't influence table assignment
-    2. Weight by role: output > join_key > filter
-    3. For each pattern bronze table, score how well each user source table matches
-    4. Assign the source table with the highest weighted score
-    5. Don't assign the same source table to multiple pattern tables
+    2. Filter out source columns that are system columns (SRC_SYS_CD, CURR_REC_IND, etc.)
+    3. Require minimum score threshold for matches to count
+    4. Weight by role: output > join_key > filter
+    5. For each pattern bronze table, score how well each user source table matches
+    6. Assign the source table with the highest weighted score
+    7. Only assign if there's at least one OUTPUT column match
+    8. Don't assign the same source table to multiple pattern tables
     
     Returns:
         Dict mapping pattern_table_name -> user_source_table (e.g., {"t_re_base": "RECIP_BASE"})
@@ -505,6 +508,10 @@ def assign_source_tables_to_pattern_tables(
     print(f"[Table Assign] Starting assignment for {len(bronze_tables)} bronze tables")
     print(f"[Table Assign] Pattern columns with candidates: {list(vs_candidates_by_column.keys())}")
     
+    # Minimum score threshold - matches below this don't count for table assignment
+    # With HYBRID search, scores can be inflated - require meaningful match
+    MIN_SCORE_THRESHOLD = 0.6
+    
     # Role-based weights: output columns matter most, filter columns matter least
     ROLE_WEIGHTS = {
         'output': 10.0,      # Primary - this is what we're actually mapping
@@ -513,55 +520,96 @@ def assign_source_tables_to_pattern_tables(
         'unknown': 1.0       # Default
     }
     
+    # Source columns that are system columns - exist in every table, shouldn't influence matching
+    SOURCE_SYSTEM_COLUMNS = {
+        'SRC_SYS_CD', 'SOURCE_SYSTEM_CODE', 'SOURCE_SYS_CD',
+        'CURR_REC_IND', 'CURRENT_RECORD_IND', 'CURRENT_REC_IND',
+        'CREATE_DT', 'CREATED_DT', 'CREATE_DATE', 'CREATED_DATE',
+        'UPDATE_DT', 'UPDATED_DT', 'UPDATE_DATE', 'UPDATED_DATE',
+        'CREATE_USER_ID', 'CREATED_BY', 'CREATE_USER',
+        'UPDATE_USER_ID', 'UPDATED_BY', 'UPDATE_USER',
+        'BATCH_ID', 'BATCH_DT', 'BATCH_DATE',
+        'ETL_LOAD_DT', 'ETL_UPDATE_DT', 'ETL_BATCH_ID'
+    }
+    
     # Build a lookup of column info by column name
     column_info_by_name = {}
+    output_columns = set()  # Track which are output columns
     for col in columns_to_map:
         col_name = col.get('column_name', '').upper()
         if col_name:
             column_info_by_name[col_name] = col
+            if col.get('role') == 'output':
+                output_columns.add(col_name)
     
-    # Identify columns to skip (system columns)
-    system_columns = set()
+    # Identify pattern columns to skip (system columns)
+    pattern_system_columns = set()
     for col in columns_to_map:
         if col.get('is_system_column', False):
-            system_columns.add(col.get('column_name', '').upper())
+            pattern_system_columns.add(col.get('column_name', '').upper())
     
-    if system_columns:
-        print(f"[Table Assign] Skipping system columns from voting: {system_columns}")
+    if pattern_system_columns:
+        print(f"[Table Assign] Skipping pattern system columns from voting: {pattern_system_columns}")
     
     # Build a map of which user source tables have candidates for each pattern column
     # pattern_col -> set of source tables with candidates
     source_tables_per_column = {}
     all_source_tables = set()
+    tables_with_output_match = set()  # Source tables that have at least one output column match
     
     for pattern_col, candidates in vs_candidates_by_column.items():
         pattern_col_upper = pattern_col.upper()
         
-        # Skip system columns - they shouldn't influence table assignment
-        if pattern_col_upper in system_columns:
-            print(f"[Table Assign] Skipping system column: {pattern_col_upper}")
+        # Skip pattern system columns - they shouldn't influence table assignment
+        if pattern_col_upper in pattern_system_columns:
+            print(f"[Table Assign] Skipping pattern system column: {pattern_col_upper}")
             continue
         
+        is_output = pattern_col_upper in output_columns
         source_tables_for_col = set()
+        
         for candidate in candidates:
             src_table = candidate.get('src_table_physical_name', '').upper()
+            src_col = candidate.get('src_column_physical_name', '').upper()
+            score = candidate.get('score', 0)
+            
+            # Skip source columns that are system columns
+            if src_col in SOURCE_SYSTEM_COLUMNS:
+                print(f"[Table Assign] Filtering out source system column: {src_table}.{src_col}")
+                continue
+            
+            # Skip low-scoring matches
+            if score < MIN_SCORE_THRESHOLD:
+                print(f"[Table Assign] Filtering out low score: {src_table}.{src_col} = {score:.4f} < {MIN_SCORE_THRESHOLD}")
+                continue
+            
             if src_table:
                 source_tables_for_col.add(src_table)
                 all_source_tables.add(src_table)
+                
+                # Track tables that have output column matches
+                if is_output:
+                    tables_with_output_match.add(src_table)
+        
         source_tables_per_column[pattern_col_upper] = source_tables_for_col
     
     print(f"[Table Assign] All source tables found in candidates: {all_source_tables}")
+    print(f"[Table Assign] Tables with OUTPUT column matches: {tables_with_output_match}")
     print(f"[Table Assign] Columns participating in assignment: {list(source_tables_per_column.keys())}")
     
     # Now score each (pattern_table, source_table) pair
     # Score = sum of (match_score * role_weight) for each column
+    # ONLY consider source tables that have at least one OUTPUT column match
     table_scores = {}  # (pattern_table, source_table) -> score
     
     for alias, pattern_table in bronze_tables.items():
         pattern_table_upper = pattern_table.upper()
         
-        for source_table in all_source_tables:
+        # Only consider source tables that have output column matches
+        for source_table in tables_with_output_match:
             score = 0
+            has_output_match = False
+            
             for pattern_col, source_tables in source_tables_per_column.items():
                 if source_table in source_tables:
                     # Get the role weight for this column
@@ -569,24 +617,38 @@ def assign_source_tables_to_pattern_tables(
                     role = col_info.get('role', 'unknown')
                     role_weight = ROLE_WEIGHTS.get(role, ROLE_WEIGHTS['unknown'])
                     
+                    if role == 'output':
+                        has_output_match = True
+                    
                     # This source table has a candidate for this pattern column
                     # Add the best score for this match, weighted by role
+                    # But only count candidates that pass our filters
                     candidates = vs_candidates_by_column.get(pattern_col, [])
                     if not candidates:
                         candidates = vs_candidates_by_column.get(pattern_col.upper(), [])
                     
                     for c in candidates:
-                        if c.get('src_table_physical_name', '').upper() == source_table:
-                            match_score = c.get('score', 0.01)
+                        src_table_name = c.get('src_table_physical_name', '').upper()
+                        src_col_name = c.get('src_column_physical_name', '').upper()
+                        match_score = c.get('score', 0)
+                        
+                        # Skip source system columns and low scores (same filters as above)
+                        if src_col_name in SOURCE_SYSTEM_COLUMNS:
+                            continue
+                        if match_score < MIN_SCORE_THRESHOLD:
+                            continue
+                        
+                        if src_table_name == source_table:
                             weighted_score = match_score * role_weight
                             score += weighted_score
                             print(f"[Table Assign]   {pattern_col} ({role}) -> {source_table}: {match_score:.4f} * {role_weight} = {weighted_score:.4f}")
                             break
             
-            if score > 0:
+            # Only add score if there's an output column match
+            if score > 0 and has_output_match:
                 table_scores[(pattern_table_upper, source_table)] = score
     
-    print(f"[Table Assign] Table scores: {table_scores}")
+    print(f"[Table Assign] Table scores (filtered to tables with OUTPUT matches): {table_scores}")
     
     # Greedy assignment: Assign best matches first, avoiding duplicates
     assignments = {}  # pattern_table -> source_table
@@ -605,19 +667,23 @@ def assign_source_tables_to_pattern_tables(
         used_source_tables.add(source_table)
         print(f"[Table Assign] Assigned: {pattern_table} -> {source_table} (score: {score:.4f})")
     
-    # Handle unassigned pattern tables (no candidates)
+    # Handle unassigned pattern tables (no output column matches found)
     for alias, pattern_table in bronze_tables.items():
         pattern_table_upper = pattern_table.upper()
         if pattern_table_upper not in assignments:
-            # Find any unused source table
-            remaining = all_source_tables - used_source_tables
+            # This pattern table has NO source table with an OUTPUT column match
+            # Try to find an unused source table that at least has output matches for other patterns
+            remaining = tables_with_output_match - used_source_tables
             if remaining:
                 fallback = sorted(remaining)[0]  # Pick alphabetically first
                 assignments[pattern_table_upper] = fallback
                 used_source_tables.add(fallback)
-                print(f"[Table Assign] Fallback assigned: {pattern_table_upper} -> {fallback}")
+                print(f"[Table Assign] Fallback assigned (no direct output match): {pattern_table_upper} -> {fallback}")
             else:
-                print(f"[Table Assign] WARNING: No source table available for {pattern_table_upper}")
+                # No tables with output matches available - leave unassigned
+                # This will cause warnings in the LLM prompt but is better than wrong assignment
+                print(f"[Table Assign] NO MATCH: {pattern_table_upper} has no source table with output column matches")
+                print(f"[Table Assign] This UNION branch may need manual mapping or different source tables")
     
     return assignments
 
@@ -1027,12 +1093,14 @@ class SuggestionService:
         columns, the top results may be spread across projects. The PROJECT prefix
         in the query boosts same-project results, but we still filter to be certain.
         """
-        # Over-fetch multiplier: With N projects having similar columns,
-        # we need to fetch N * num_results to ensure we get enough from target project.
-        # Using 10x as a safe default for up to ~10 similar projects.
-        OVER_FETCH_MULTIPLIER = 10
-        
         try:
+            # Build filters dict for project_id filtering at the index level
+            # This is more efficient than over-fetching and filtering after retrieval
+            filters_dict = None
+            if project_id is not None:
+                filters_dict = {"project_id": project_id}
+                print(f"[VS Single] Using SDK filter: project_id = {project_id}")
+            
             results = self.workspace_client.vector_search_indexes.query_index(
                 index_name=index_name,
                 columns=[
@@ -1048,24 +1116,16 @@ class SuggestionService:
                     "project_id"
                 ],
                 query_text=query_text,
-                num_results=num_results * OVER_FETCH_MULTIPLIER,  # Fetch 10x to ensure coverage across many projects
-                query_type=query_type
+                num_results=num_results,
+                query_type=query_type,
+                filters_json=json.dumps(filters_dict) if filters_dict else None
             )
             
             matches = []
-            total_raw = 0
-            other_projects = 0
             
             for item in results.result.data_array:
                 if len(item) >= 10:
-                    total_raw += 1
-                    item_project_id = item[9]
                     score = item[-1] if isinstance(item[-1], (int, float)) else 0.0
-                    
-                    # Filter by project_id
-                    if project_id is not None and item_project_id != project_id:
-                        other_projects += 1
-                        continue
                     
                     match = {
                         "unmapped_field_id": item[0],
@@ -1084,9 +1144,7 @@ class SuggestionService:
                     if len(matches) >= num_results:
                         break
             
-            # Log filter efficiency
-            if other_projects > 0:
-                print(f"[VS Single] Raw: {total_raw}, filtered out {other_projects} from other projects, kept {len(matches)} for project {project_id}")
+            print(f"[VS Single] Retrieved {len(matches)} results for project {project_id}")
             
             return matches
             
@@ -1290,11 +1348,8 @@ class SuggestionService:
             "filtered_results": []
         }
         
-        # Over-fetch multiplier for many projects with similar columns
-        OVER_FETCH_MULTIPLIER = 10
-        
         print(f"[VS Debug] Query: {query_with_project[:200]}...")
-        print(f"[VS Debug] Requesting {num_results * OVER_FETCH_MULTIPLIER} results, filtering to project {project_id}")
+        print(f"[VS Debug] Using SDK filter for project_id={project_id}")
         
         # Log equivalent Databricks SQL for debugging
         escaped_query = query_with_project.replace("'", "''")[:500]
@@ -1303,7 +1358,7 @@ class SuggestionService:
 SELECT * FROM VECTOR_SEARCH(
     index => '{index_name}',
     query => '{escaped_query}',
-    num_results => {num_results * 3}
+    num_results => {num_results}
 )
 WHERE project_id = {project_id}
 ORDER BY score DESC
@@ -1316,7 +1371,10 @@ LIMIT {num_results};
             config = self.config_service.get_config()
             query_type = getattr(config.vector_search, 'query_type', 'ANN')
             
-            # Use vector search to find similar source fields
+            # Build filters dict for project_id filtering at the index level
+            filters_dict = {"project_id": project_id}
+            
+            # Use vector search to find similar source fields with SDK-level filtering
             results = self.workspace_client.vector_search_indexes.query_index(
                 index_name=index_name,
                 columns=[
@@ -1332,8 +1390,9 @@ LIMIT {num_results};
                     "project_id"
                 ],
                 query_text=query_with_project,
-                num_results=num_results * OVER_FETCH_MULTIPLIER,  # Fetch 10x to ensure coverage across many projects
-                query_type=query_type
+                num_results=num_results,
+                query_type=query_type,
+                filters_json=json.dumps(filters_dict)
             )
             
             print(f"[VS Debug] Raw results count: {len(results.result.data_array) if results.result.data_array else 0}")
@@ -1344,20 +1403,15 @@ LIMIT {num_results};
             for item in results.result.data_array:
                 # Parse the result based on column order
                 if len(item) >= 10:
-                    item_project_id = item[9]
                     score = item[-1] if isinstance(item[-1], (int, float)) else 0.0
                     
                     raw_match = {
                         "column": f"{item[2]}.{item[4]}",
                         "description": str(item[5])[:50] if item[5] else "",
-                        "project_id": item_project_id,
+                        "project_id": item[9],
                         "score": score
                     }
                     all_raw.append(raw_match)
-                    
-                    # Filter by project_id after getting results
-                    if project_id is not None and item_project_id != project_id:
-                        continue
                     
                     match = {
                         "unmapped_field_id": item[0],
@@ -1372,10 +1426,6 @@ LIMIT {num_results};
                         "score": score
                     }
                     matches.append(match)
-                    
-                    # Stop once we have enough matches
-                    if len(matches) >= num_results:
-                        break
             
             self._last_vector_search["raw_results"] = all_raw
             
@@ -1391,7 +1441,7 @@ LIMIT {num_results};
                 for m in matches
             ]
             
-            print(f"[VS Debug] After project filter: {len(matches)} matches")
+            print(f"[VS Debug] Retrieved {len(matches)} matches for project {project_id} (SDK-filtered)")
             
             return matches
             
@@ -1607,6 +1657,10 @@ LIMIT {num_results};
         print(f"[Suggestion Service] _process_pattern: Columns to parallel search: {len(columns_to_map)}")
         
         # Vector search for matching source fields
+        # IMPORTANT: Clear stale state from previous patterns to prevent data leakage
+        self._last_parallel_search = {}
+        self._last_vector_search = {}
+        
         vs_start = time.time()
         matched_sources = self._vector_search_source_fields_sync(
             vs_config["endpoint_name"],
@@ -2336,12 +2390,16 @@ Return ONLY valid JSON:
         # Initialize debug info
         import time as time_module
         llm_start_time = time_module.time()
+        prompt_type = "simplified" if (table_assignments and bronze_tables) else "legacy"
         self._last_llm_debug_info = {
             "prompt_sent": prompt,
             "raw_response": None,
             "model_endpoint": llm_endpoint,
             "latency_ms": None,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "prompt_type": prompt_type,
+            "table_assignments": table_assignments if table_assignments else {},
+            "bronze_tables": bronze_tables if bronze_tables else {}
         }
 
         try:
@@ -3066,6 +3124,10 @@ RULES:
                             
                             # Vector search for matching source fields
                             # Use parallel search if we have columns_to_map
+                            # IMPORTANT: Clear stale state from previous patterns to prevent data leakage
+                            self._last_parallel_search = {}
+                            self._last_vector_search = {}
+                            
                             vs_start = time.time()
                             matched_sources = self._vector_search_source_fields_sync(
                                 vs_config["endpoint_name"],
@@ -3703,6 +3765,10 @@ RULES:
                             print(f"[Suggestion Service] REGENERATE:   col[{i}]: {col.get('column_name')} - {col.get('description', '')[:50]}")
                     
                         # Vector search - use parallel search for better coverage
+                        # IMPORTANT: Clear stale state from previous patterns to prevent data leakage
+                        self._last_parallel_search = {}
+                        self._last_vector_search = {}
+                        
                         matched_sources = self._vector_search_source_fields_sync(
                             vs_config["endpoint_name"],
                             vs_config["unmapped_fields_index"],

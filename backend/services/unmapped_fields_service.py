@@ -1121,6 +1121,9 @@ class UnmappedFieldsService:
         """
         Update a source field.
         
+        After updating, syncs the vector search index to ensure
+        updated descriptions are immediately searchable.
+        
         Args:
             field_id: ID of the field to update
             updates: Dictionary of field updates
@@ -1129,6 +1132,7 @@ class UnmappedFieldsService:
             Dictionary with status
         """
         db_config = self._get_db_config()
+        vs_config = self._get_vs_config()
         
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
@@ -1142,6 +1146,19 @@ class UnmappedFieldsService:
                 updates
             )
         )
+        
+        # Sync vector search index after update (especially important for description changes)
+        try:
+            await loop.run_in_executor(
+                executor,
+                functools.partial(
+                    self._sync_vector_search_index,
+                    vs_config['unmapped_fields_index']
+                )
+            )
+            print(f"[Unmapped Fields Service] VS sync after field update successful")
+        except Exception as e:
+            print(f"[Unmapped Fields Service] VS sync after field update failed (non-fatal): {e}")
         
         return result
     
