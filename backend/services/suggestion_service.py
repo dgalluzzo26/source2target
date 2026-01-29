@@ -387,13 +387,17 @@ def extract_bronze_tables_from_sql(pattern_sql: str) -> Dict[str, str]:
     """
     Extract bronze (non-silver) tables and their aliases from pattern SQL.
     
+    Handles tables WITH aliases (FROM table b) and WITHOUT aliases (FROM table WHERE).
+    For tables without explicit aliases, generates synthetic aliases (_t1, _t2, etc.)
+    
     Returns:
-        Dict mapping alias -> table_name (e.g., {"b": "t_re_base", "a": "t_re_multi_address"})
+        Dict mapping alias -> table_name (e.g., {"b": "t_re_base", "_t1": "t_re_multi_address"})
     """
     if not pattern_sql:
         return {}
     
     bronze_tables = {}
+    tables_without_alias = []  # Track tables that need synthetic aliases
     
     # Normalize SQL for easier parsing
     sql_normalized = pattern_sql.replace('\n', ' ').replace('\t', ' ')
@@ -402,19 +406,28 @@ def extract_bronze_tables_from_sql(pattern_sql: str) -> Dict[str, str]:
     
     print(f"[Table Extract] Parsing SQL: {sql_upper[:200]}...")
     
-    # Pattern 1: Direct table references - "FROM/JOIN schema.table alias"
-    # More flexible: FROM schema.table alias (anything after alias that's not alphanumeric)
-    # e.g., "FROM oz_dev.bronze_dmes_de.t_re_base b join" or "FROM table b LEFT JOIN"
-    table_pattern = r'(?:FROM|JOIN)\s+([\w\.]+)\s+(\w+)\b'
+    # Keywords that can't be aliases
+    keywords = {'on', 'where', 'left', 'right', 'inner', 'outer', 'join', 'and', 'or', 
+               'as', 'select', 'distinct', 'union', 'group', 'order', 'having', 'limit',
+               'set', 'values', 'into', 'case', 'when', 'then', 'else', 'end', 'null',
+               'true', 'false', 'is', 'not', 'in', 'like', 'between', 'exists', 'all', 'any'}
     
-    for match in re.finditer(table_pattern, sql_upper):
+    # Pattern 1: Direct table references - "FROM/JOIN schema.table alias"
+    # e.g., "FROM oz_dev.bronze_dmes_de.t_re_base b join" or "FROM table b LEFT JOIN"
+    table_with_alias_pattern = r'(?:FROM|JOIN)\s+([\w\.]+)\s+(\w+)\b'
+    
+    for match in re.finditer(table_with_alias_pattern, sql_upper):
         full_table = match.group(1)
         alias = match.group(2).lower()
         
         # Skip keywords that look like aliases
-        keywords = ('on', 'where', 'left', 'right', 'inner', 'outer', 'join', 'and', 'or', 
-                   'as', 'select', 'distinct', 'union', 'group', 'order', 'having', 'limit')
         if alias in keywords:
+            # This table has no real alias - track it for synthetic alias generation
+            if 'SILVER' not in full_table and not full_table.startswith('(') and full_table != 'SELECT':
+                table_name = full_table.split('.')[-1].lower()
+                if table_name not in [t for t in tables_without_alias]:
+                    tables_without_alias.append(table_name)
+                    print(f"[Table Extract] Found table WITHOUT alias: {table_name}")
             continue
         
         # Skip if table looks like a subquery marker
@@ -476,6 +489,33 @@ def extract_bronze_tables_from_sql(pattern_sql: str) -> Dict[str, str]:
                         table_name = full_table.split('.')[-1].lower()
                         bronze_tables[alias] = table_name
                         print(f"[Table Extract] Found subquery (paren-alias): {table_name} AS {alias}")
+    
+    # Pattern 4: Tables without aliases - generate synthetic aliases
+    # This handles UNION patterns like: FROM table1 UNION FROM table2 WHERE ...
+    # where there are no explicit aliases
+    if not bronze_tables and tables_without_alias:
+        print(f"[Table Extract] No aliases found - generating synthetic aliases for {len(tables_without_alias)} tables")
+        for i, table_name in enumerate(tables_without_alias):
+            synthetic_alias = f"_t{i+1}"
+            bronze_tables[synthetic_alias] = table_name
+            print(f"[Table Extract] Generated synthetic alias: {table_name} AS {synthetic_alias}")
+    
+    # Also check for any tables without aliases that we may have missed
+    # by looking for FROM clauses followed directly by WHERE/UNION/end of statement
+    if not bronze_tables:
+        # Pattern: FROM schema.table WHERE or FROM schema.table UNION or FROM schema.table$
+        bare_table_pattern = r'FROM\s+([\w\.]+)(?:\s+(?:WHERE|UNION|GROUP|ORDER|HAVING|LIMIT|$)|\s*$)'
+        table_count = 0
+        for match in re.finditer(bare_table_pattern, sql_upper):
+            full_table = match.group(1)
+            if 'SILVER' not in full_table and full_table != 'SELECT':
+                table_name = full_table.split('.')[-1].lower()
+                # Generate synthetic alias
+                table_count += 1
+                synthetic_alias = f"_t{table_count}"
+                if synthetic_alias not in bronze_tables:
+                    bronze_tables[synthetic_alias] = table_name
+                    print(f"[Table Extract] Generated synthetic alias (bare table): {table_name} AS {synthetic_alias}")
     
     print(f"[Table Extract] Final bronze tables: {bronze_tables}")
     return bronze_tables
@@ -1330,193 +1370,14 @@ class SuggestionService:
                 num_results_per_column=5
             )
         
-        # WARNING: This fallback can produce different results than parallel search!
-        print(f"[VS] WARNING: columns_to_map is EMPTY - falling back to COMBINED search (project_id={project_id})")
-        print(f"[VS] WARNING: This may explain different results between batch and regeneration!")
-        
-        # Fall back to single combined search
-        # Build query with project context (no datatype/domain in fallback - not available)
-        query_with_project = self._build_vs_query(query_text, project_id, "", "")
-        
-        # Store for debugging
-        self._last_vector_search = {
-            "query_text": query_with_project,
-            "original_query": query_text,
-            "project_id": project_id,
-            "num_results": num_results,
-            "raw_results": [],
-            "filtered_results": []
-        }
-        
-        print(f"[VS Debug] Query: {query_with_project[:200]}...")
-        print(f"[VS Debug] Using SDK filter for project_id={project_id}")
-        
-        # Log equivalent Databricks SQL for debugging
-        escaped_query = query_with_project.replace("'", "''")[:500]
-        sql_equivalent = f"""
--- Databricks SQL equivalent for vector search debugging:
-SELECT * FROM VECTOR_SEARCH(
-    index => '{index_name}',
-    query => '{escaped_query}',
-    num_results => {num_results}
-)
-WHERE project_id = {project_id}
-ORDER BY score DESC
-LIMIT {num_results};
-"""
-        self._last_vector_search["sql_equivalent"] = sql_equivalent
-        
-        try:
-            # Get query_type from config
-            config = self.config_service.get_config()
-            query_type = getattr(config.vector_search, 'query_type', 'ANN')
-            
-            # Build filters dict for project_id filtering at the index level
-            filters_dict = {"project_id": project_id}
-            
-            # Use vector search to find similar source fields with SDK-level filtering
-            results = self.workspace_client.vector_search_indexes.query_index(
-                index_name=index_name,
-                columns=[
-                    "unmapped_field_id",
-                    "src_table_name",
-                    "src_table_physical_name", 
-                    "src_column_name",
-                    "src_column_physical_name",
-                    "src_comments",
-                    "src_physical_datatype",
-                    "domain",
-                    "source_semantic_field",
-                    "project_id"
-                ],
-                query_text=query_with_project,
-                num_results=num_results,
-                query_type=query_type,
-                filters_json=json.dumps(filters_dict)
-            )
-            
-            print(f"[VS Debug] Raw results count: {len(results.result.data_array) if results.result.data_array else 0}")
-            
-            matches = []
-            all_raw = []
-            
-            for item in results.result.data_array:
-                # Parse the result based on column order
-                if len(item) >= 10:
-                    score = item[-1] if isinstance(item[-1], (int, float)) else 0.0
-                    
-                    raw_match = {
-                        "column": f"{item[2]}.{item[4]}",
-                        "description": str(item[5])[:50] if item[5] else "",
-                        "project_id": item[9],
-                        "score": score
-                    }
-                    all_raw.append(raw_match)
-                    
-                    match = {
-                        "unmapped_field_id": item[0],
-                        "src_table_name": item[1],
-                        "src_table_physical_name": item[2],
-                        "src_column_name": item[3],
-                        "src_column_physical_name": item[4],
-                        "src_comments": item[5],
-                        "src_physical_datatype": item[6],
-                        "domain": item[7],
-                        "project_id": item[9],
-                        "score": score
-                    }
-                    matches.append(match)
-            
-            self._last_vector_search["raw_results"] = all_raw
-            
-            # Log what columns we found
-            print(f"[VS Debug] All raw results:")
-            for r in all_raw[:20]:
-                print(f"[VS Debug]   {r['column']} (proj={r['project_id']}, score={r['score']:.3f}): {r['description']}")
-            
-            # Take top N results (in case we got more)
-            matches = matches[:num_results]
-            self._last_vector_search["filtered_results"] = [
-                {"column": f"{m['src_table_physical_name']}.{m['src_column_physical_name']}", "score": m['score']}
-                for m in matches
-            ]
-            
-            print(f"[VS Debug] Retrieved {len(matches)} matches for project {project_id} (SDK-filtered)")
-            
-            return matches
-            
-        except Exception as e:
-            print(f"[Suggestion Service] Vector search error: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            # Fall back to SQL-based search if vector search fails
-            return []
+        # NO COMBINED SEARCH FALLBACK - columns_to_map is required
+        # This indicates missing or incomplete join_metadata
+        print(f"[VS] ERROR: columns_to_map is EMPTY - cannot proceed without pattern columns (project_id={project_id})")
+        print(f"[VS] ERROR: Check that join_metadata contains userColumnsToMap")
+        return []  # Return empty - error will surface to user
     
-    def _sql_search_source_fields_sync(
-        self,
-        server_hostname: str,
-        http_path: str,
-        unmapped_fields_table: str,
-        search_description: str,
-        project_id: int,
-        num_results: int = 5
-    ) -> List[Dict[str, Any]]:
-        """
-        SQL-based fallback search for source fields (synchronous).
-        
-        Uses LIKE matching on description when vector search is unavailable.
-        """
-        print(f"[Suggestion Service] SQL fallback search for: {search_description[:50]}...")
-        
-        connection = self._get_sql_connection(server_hostname, http_path)
-        
-        try:
-            with connection.cursor() as cursor:
-                # Extract keywords from description
-                keywords = search_description.lower().split()[:5]
-                like_conditions = " OR ".join([
-                    f"LOWER(src_comments) LIKE '%{self._escape_sql(kw)}%'"
-                    for kw in keywords if len(kw) > 3
-                ])
-                
-                if not like_conditions:
-                    like_conditions = "1=1"
-                
-                query = f"""
-                SELECT 
-                    unmapped_field_id,
-                    src_table_name,
-                    src_table_physical_name,
-                    src_column_name,
-                    src_column_physical_name,
-                    src_comments,
-                    src_physical_datatype,
-                    domain
-                FROM {unmapped_fields_table}
-                WHERE project_id = {project_id}
-                  AND mapping_status IN ('PENDING', 'UNMAPPED')
-                  AND ({like_conditions})
-                LIMIT {num_results}
-                """
-                
-                cursor.execute(query)
-                columns = [desc[0] for desc in cursor.description]
-                rows = cursor.fetchall()
-                
-                matches = []
-                for row in rows:
-                    match = dict(zip(columns, row))
-                    match["score"] = 0.5  # Default score for SQL search
-                    matches.append(match)
-                
-                print(f"[Suggestion Service] SQL search found {len(matches)} fields")
-                return matches
-                
-        except Exception as e:
-            print(f"[Suggestion Service] SQL search error: {str(e)}")
-            return []
-        finally:
-            connection.close()
+    # NOTE: SQL-based fallback search has been REMOVED to simplify troubleshooting.
+    # Vector search is the only source matching method. If VS fails, the error surfaces to the user.
     
     # =========================================================================
     # SHARED: Vector Search + LLM Rewrite (used by batch discovery AND regeneration)
@@ -1696,52 +1557,10 @@ LIMIT {num_results};
         result["matched_sources"] = matched_sources
         result["vs_candidates_by_column"] = vs_candidates_by_column
         
-        # Fallback to SQL search if vector search returns nothing
+        # NO SQL FALLBACK - Vector search is the only source matching method
+        # If VS returns nothing, that's an error condition to be surfaced to the user
         if not matched_sources:
-            sql_start = time.time()
-            matched_sources = self._sql_search_source_fields_sync(
-                db_config["server_hostname"],
-                db_config["http_path"],
-                db_config["unmapped_fields_table"],
-                search_query,
-                project_id,
-                num_results=5
-            )
-            print(f"[Suggestion Service] _process_pattern: SQL fallback: {time.time() - sql_start:.2f}s, found {len(matched_sources) if matched_sources else 0}")
-            result["matched_sources"] = matched_sources
-        
-        # Supplementary: Search for columns by name pattern from join_metadata
-        if join_metadata_str and matched_sources:
-            try:
-                jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
-                pattern_columns = [col.get('originalColumn', '') for col in jm.get('userColumnsToMap', [])]
-                matched_col_names = {m.get('src_column_physical_name', '').upper() for m in matched_sources}
-                
-                # Find pattern columns not yet matched
-                missing_patterns = [pc for pc in pattern_columns if pc and pc.upper() not in matched_col_names]
-                
-                if missing_patterns:
-                    print(f"[Suggestion Service] _process_pattern: Pattern columns not matched: {missing_patterns}")
-                    for pattern_col in missing_patterns[:5]:
-                        extra_matches = self._sql_search_source_fields_sync(
-                            db_config["server_hostname"],
-                            db_config["http_path"],
-                            db_config["unmapped_fields_table"],
-                            pattern_col,
-                            project_id,
-                            num_results=3
-                        )
-                        if extra_matches:
-                            for em in extra_matches:
-                                em_col = em.get('src_column_physical_name', '').upper()
-                                if em_col not in matched_col_names:
-                                    matched_sources.append(em)
-                                    matched_col_names.add(em_col)
-                                    print(f"[Suggestion Service] _process_pattern: Added: {em.get('src_table_physical_name')}.{em_col}")
-            except Exception as e:
-                print(f"[Suggestion Service] _process_pattern: Error in supplementary search: {e}")
-        
-        result["matched_sources"] = matched_sources
+            print(f"[Suggestion Service] _process_pattern: WARNING - Vector search returned no matches")
         
         # LLM rewrite if we have matches
         if matched_sources:
@@ -2272,91 +2091,19 @@ EXAMPLE for a SQL with aliases 'b' (T_RE_BASE) and 'a' (T_RE_MULTI_ADDRESS):
   ]
 }}"""
         else:
-            # LEGACY: Complex prompt when no table assignments provided
-            print(f"[LLM] Using legacy complex prompt (no table assignments)")
+            # NO LEGACY PROMPT - Return error if table assignments couldn't be determined
+            error_msg = f"Could not determine table assignments for {target_column}. Pattern SQL may be missing table aliases or join_metadata is incomplete."
+            print(f"[LLM] ERROR: {error_msg}")
+            print(f"[LLM] bronze_tables={bronze_tables}, table_assignments={table_assignments}")
             
-            # Build matched sources description - GROUPED BY PATTERN COLUMN with scores
-            sources_text = ""
-            
-            if vs_candidates_by_column and len(vs_candidates_by_column) > 0:
-                grouped_info = []
-                for pattern_col, candidates in vs_candidates_by_column.items():
-                    filtered = [c for c in candidates if c.get('score', 0) >= min_match_score]
-                    
-                    if filtered:
-                        col_section = f"\n=== Pattern Column: {pattern_col} ===\n"
-                        col_section += "Best matching source columns (in order of match score):\n"
-                        for i, src in enumerate(filtered[:5], 1):
-                            score = src.get('score', 0)
-                            col_section += (
-                                f"  {i}. {src.get('src_table_physical_name', 'UNKNOWN')}.{src.get('src_column_physical_name', 'UNKNOWN')} "
-                                f"[Score: {score:.4f}]\n"
-                                f"     Description: {src.get('src_comments', 'N/A')}\n"
-                            )
-                        grouped_info.append(col_section)
-                    else:
-                        grouped_info.append(f"\n=== Pattern Column: {pattern_col} ===\nNO GOOD MATCHES FOUND\n")
-                
-                sources_text = "\n".join(grouped_info) if grouped_info else "No matching sources found"
-            else:
-                source_info = []
-                for src in matched_sources:
-                    score = src.get('score', src.get('match_score', 0))
-                    if score >= min_match_score:
-                        source_info.append(
-                            f"- {src.get('src_table_physical_name', 'UNKNOWN')}.{src.get('src_column_physical_name', 'UNKNOWN')} "
-                            f"[Score: {score:.4f}]"
-                        )
-                sources_text = "\n".join(source_info) if source_info else "No matching sources found"
-            
-            prompt = f"""You are performing a STRICT column substitution on a SQL mapping template.
-
-TARGET COLUMN: {target_column}
-
-ORIGINAL SQL TEMPLATE:
-```sql
-{pattern_sql}
-```
-
-ORIGINAL COLUMN DESCRIPTIONS FROM PATTERN:
-{pattern_descriptions}
-
-USER'S MATCHING SOURCE COLUMNS:
-{sources_text}
-
-SILVER TABLES (CONSTANT - DO NOT MODIFY):
-{silver_text}
-
-RULES:
-1. PRESERVE SQL STRUCTURE EXACTLY - same JOINs, WHERE conditions, UNION structure
-2. Replace each pattern bronze table with a user source table
-3. For each alias, ONLY use columns from the SAME source table
-4. If a column has no match, keep original and add warning
-5. Keep silver tables unchanged
-
-CRITICAL: You CANNOT mix columns from different source tables for the same alias.
-
-IMPORTANT: For each change, include the alias and pattern_table to help the UI display correctly.
-
-CONFIDENCE SCORING (DO NOT use the [Score: X.XX] values - those are vector search similarity, not semantic accuracy):
-- Base confidence on how well the column MEANINGS match, not the score shown:
-  - 0.9-1.0 = Perfect semantic match (e.g., DTE_BIRTH → DOB both mean date of birth)
-  - 0.7-0.9 = Good match with minor naming differences
-  - 0.5-0.7 = Reasonable match, may need review
-  - 0.3-0.5 = Partial match or uncertain
-  - 0.0-0.3 = Poor match or no match found
-
-Return ONLY valid JSON:
-{{
-  "rewritten_sql": "<complete rewritten SQL>",
-  "changes": [
-    {{"type": "table_replace", "alias": "<alias>", "pattern_table": "<pattern table name>", "original": "<pattern_table>", "new": "<source_table>"}},
-    {{"type": "column_replace", "alias": "<alias>", "pattern_table": "<pattern table>", "original": "<pattern_column>", "new": "<source_table.source_column>"}}
-  ],
-  "warnings": ["<only for unmatched columns>"],
-  "confidence": 0.0-1.0,
-  "reasoning": "<brief explanation>"
-}}"""
+            return {
+                "rewritten_sql": None,
+                "changes": [],
+                "warnings": [error_msg],
+                "confidence": 0,
+                "reasoning": "Table assignment failed - cannot proceed without determining source tables",
+                "error": error_msg
+            }
 
         # Store prompt for debugging (can be retrieved via API)
         self._last_llm_prompt = {
@@ -2376,8 +2123,8 @@ Return ONLY valid JSON:
             "silver_tables": silver_text,
             "table_assignments": table_assignments,  # NEW: Pre-determined table mappings
             "bronze_tables": bronze_tables,          # NEW: Alias -> pattern table
-            "constant_columns": list(constant_columns) if constant_columns else [],  # SQL functions preserved as-is
-            "prompt_type": "simplified" if (table_assignments and bronze_tables) else "legacy",
+            "constant_columns": list(constant_columns) if constant_columns else [],
+            "prompt_type": "simplified",  # Only simplified prompt is supported now
             "full_prompt": prompt
         }
         
@@ -2390,7 +2137,7 @@ Return ONLY valid JSON:
         # Initialize debug info
         import time as time_module
         llm_start_time = time_module.time()
-        prompt_type = "simplified" if (table_assignments and bronze_tables) else "legacy"
+        prompt_type = "simplified"  # Only simplified prompt is supported now
         self._last_llm_debug_info = {
             "prompt_sent": prompt,
             "raw_response": None,
@@ -3160,52 +2907,9 @@ RULES:
                                     ]
                             suggestion_data["vector_search_candidates"] = json.dumps(vs_candidates_by_column)
                             
-                            # Fallback to SQL search if vector search returns nothing
+                            # NO SQL FALLBACK - Vector search is the only source matching method
                             if not matched_sources:
-                                sql_start = time.time()
-                                matched_sources = self._sql_search_source_fields_sync(
-                                    db_config["server_hostname"],
-                                    db_config["http_path"],
-                                    db_config["unmapped_fields_table"],
-                                    search_query,
-                                    project_id,
-                                    num_results=5
-                                )
-                                print(f"[Suggestion Service]   -> SQL fallback: {time.time() - sql_start:.2f}s, found {len(matched_sources) if matched_sources else 0}")
-                            
-                            # Supplementary: Search for columns by name pattern from join_metadata
-                            # This catches columns that vector search might miss due to semantic distance
-                            if join_metadata_str and matched_sources:
-                                try:
-                                    jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
-                                    pattern_columns = [col.get('originalColumn', '') for col in jm.get('userColumnsToMap', [])]
-                                    matched_col_names = {m.get('src_column_physical_name', '').upper() for m in matched_sources}
-                                    
-                                    # Find pattern columns not yet matched
-                                    missing_patterns = [pc for pc in pattern_columns if pc and pc.upper() not in matched_col_names]
-                                    
-                                    if missing_patterns:
-                                        print(f"[Suggestion Service]   -> Pattern columns not matched: {missing_patterns}")
-                                        # Do targeted SQL search for similar column names
-                                        for pattern_col in missing_patterns[:5]:  # Limit to 5
-                                            extra_matches = self._sql_search_source_fields_sync(
-                                                db_config["server_hostname"],
-                                                db_config["http_path"],
-                                                db_config["unmapped_fields_table"],
-                                                pattern_col,  # Search by column name
-                                                project_id,
-                                                num_results=3
-                                            )
-                                            if extra_matches:
-                                                # Add new matches that aren't already present
-                                                for em in extra_matches:
-                                                    em_col = em.get('src_column_physical_name', '').upper()
-                                                    if em_col not in matched_col_names:
-                                                        matched_sources.append(em)
-                                                        matched_col_names.add(em_col)
-                                                        print(f"[Suggestion Service]   -> Added: {em.get('src_table_physical_name')}.{em_col} for pattern col {pattern_col}")
-                                except Exception as e:
-                                    print(f"[Suggestion Service] Error in supplementary search: {e}")
+                                print(f"[Suggestion Service]   -> WARNING: Vector search returned no matches")
                             
                             if matched_sources:
                                 # Store matched source fields
@@ -3797,48 +3501,9 @@ RULES:
                                 ]
                         new_suggestion_data["vector_search_candidates"] = json.dumps(vs_candidates_by_column)
                         
-                        # Fallback to SQL search
+                        # NO SQL FALLBACK - Vector search is the only source matching method
                         if not matched_sources:
-                            matched_sources = self._sql_search_source_fields_sync(
-                                db_config["server_hostname"],
-                                db_config["http_path"],
-                                db_config["unmapped_fields_table"],
-                                search_query,
-                                project_id,
-                                num_results=15
-                            )
-                        
-                        # Supplementary: Search for columns by name pattern from join_metadata
-                        # This catches columns that vector search might miss (SAME AS BATCH DISCOVERY)
-                        if join_metadata_str and matched_sources:
-                            try:
-                                jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
-                                pattern_columns = [col.get('originalColumn', '') for col in jm.get('userColumnsToMap', [])]
-                                matched_col_names = {m.get('src_column_physical_name', '').upper() for m in matched_sources}
-                                
-                                # Find pattern columns not yet matched
-                                missing_patterns = [pc for pc in pattern_columns if pc and pc.upper() not in matched_col_names]
-                                
-                                if missing_patterns:
-                                    print(f"[Suggestion Service] Regenerate: Pattern columns not matched: {missing_patterns}")
-                                    for pattern_col in missing_patterns[:5]:
-                                        extra_matches = self._sql_search_source_fields_sync(
-                                            db_config["server_hostname"],
-                                            db_config["http_path"],
-                                            db_config["unmapped_fields_table"],
-                                            pattern_col,
-                                            project_id,
-                                            num_results=3
-                                        )
-                                        if extra_matches:
-                                            for em in extra_matches:
-                                                em_col = em.get('src_column_physical_name', '').upper()
-                                                if em_col not in matched_col_names:
-                                                    matched_sources.append(em)
-                                                    matched_col_names.add(em_col)
-                                                    print(f"[Suggestion Service] Regenerate: Added: {em.get('src_table_physical_name')}.{em_col}")
-                            except Exception as e:
-                                print(f"[Suggestion Service] Error in supplementary search: {e}")
+                            print(f"[Suggestion Service] Regenerate: WARNING - Vector search returned no matches")
                         
                         if matched_sources:
                             # Store matched sources
