@@ -1940,7 +1940,7 @@ class SuggestionService:
         matched_sources: List[Dict[str, Any]],
         target_column: str,
         vs_candidates_by_column: Dict[str, List[Dict[str, Any]]] = None,
-        min_match_score: float = 0.004,
+        min_match_score: float = 0.6,  # Raised from 0.004 to match table assignment threshold
         table_assignments: Dict[str, str] = None,
         bronze_tables: Dict[str, str] = None,
         constant_columns: Set[str] = None
@@ -1950,7 +1950,7 @@ class SuggestionService:
         
         Args:
             vs_candidates_by_column: Grouped vector search results by pattern column
-            min_match_score: Minimum vector search score to include (default 0.004)
+            min_match_score: Minimum vector search score to include (default 0.6)
             table_assignments: PRE-DETERMINED map of pattern_table -> source_table
             bronze_tables: Map of alias -> pattern_table from SQL parsing
             constant_columns: Set of column names that are SQL functions (preserve as-is)
