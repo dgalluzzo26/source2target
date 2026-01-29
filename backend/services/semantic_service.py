@@ -291,8 +291,21 @@ class SemanticService:
                 
                 print(f"[Semantic Service] Successfully inserted record with ID: {inserted_id}")
                 
-                # Get the computed semantic_field value
-                get_record_query = f"SELECT * FROM {semantic_fields_table} WHERE semantic_field_id = {inserted_id}"
+                # Get the computed semantic_field value (explicit column order)
+                get_record_query = f"""
+                SELECT 
+                    semantic_field_id,
+                    tgt_table_name,
+                    tgt_table_physical_name,
+                    tgt_column_name,
+                    tgt_column_physical_name,
+                    tgt_nullable,
+                    tgt_physical_datatype,
+                    tgt_comments,
+                    semantic_field
+                FROM {semantic_fields_table} 
+                WHERE semantic_field_id = {inserted_id}
+                """
                 cursor.execute(get_record_query)
                 inserted_record = cursor.fetchone()
                 
@@ -327,13 +340,31 @@ class SemanticService:
         
         try:
             with connection.cursor() as cursor:
-                # First, get the existing record
-                select_query = f"SELECT * FROM {semantic_fields_table} WHERE semantic_field_id = {record_id}"
+                # First, get the existing record with explicit column order
+                select_query = f"""
+                SELECT 
+                    semantic_field_id,
+                    tgt_table_name,
+                    tgt_table_physical_name,
+                    tgt_column_name,
+                    tgt_column_physical_name,
+                    tgt_nullable,
+                    tgt_physical_datatype,
+                    tgt_comments,
+                    semantic_field
+                FROM {semantic_fields_table} 
+                WHERE semantic_field_id = {record_id}
+                """
                 cursor.execute(select_query)
                 existing = cursor.fetchone()
                 
                 if not existing:
                     raise ValueError(f"Record with ID {record_id} not found")
+                
+                # Access by index with explicit column order:
+                # 0=semantic_field_id, 1=tgt_table_name, 2=tgt_table_physical_name,
+                # 3=tgt_column_name, 4=tgt_column_physical_name, 5=tgt_nullable,
+                # 6=tgt_physical_datatype, 7=tgt_comments, 8=semantic_field
                 
                 # Merge updates with existing values
                 updated_data = {
@@ -373,8 +404,21 @@ class SemanticService:
                 cursor.execute(update_query)
                 connection.commit()
                 
-                # Get the updated record with computed semantic_field
-                get_updated_query = f"SELECT * FROM {semantic_fields_table} WHERE semantic_field_id = {record_id}"
+                # Get the updated record with computed semantic_field (explicit column order)
+                get_updated_query = f"""
+                SELECT 
+                    semantic_field_id,
+                    tgt_table_name,
+                    tgt_table_physical_name,
+                    tgt_column_name,
+                    tgt_column_physical_name,
+                    tgt_nullable,
+                    tgt_physical_datatype,
+                    tgt_comments,
+                    semantic_field
+                FROM {semantic_fields_table} 
+                WHERE semantic_field_id = {record_id}
+                """
                 cursor.execute(get_updated_query)
                 updated_record = cursor.fetchone()
                 

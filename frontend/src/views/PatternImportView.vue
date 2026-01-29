@@ -402,22 +402,23 @@ const showDetailDialog = ref(false)
 const detailPattern = ref<any>(null)
 
 // Mappable columns (source_relationship_type, transformations_applied, confidence_score are auto-populated)
+// All fields are required EXCEPT source_datatypes which is optional
 const mappableColumns = computed(() => [
-  { name: 'tgt_table_name', required: false },
+  { name: 'tgt_table_name', required: true },
   { name: 'tgt_table_physical_name', required: true },
-  { name: 'tgt_column_name', required: false },
+  { name: 'tgt_column_name', required: true },
   { name: 'tgt_column_physical_name', required: true },
-  { name: 'tgt_comments', required: false },
+  { name: 'tgt_comments', required: true },
   { name: 'source_expression', required: true },
-  { name: 'source_tables', required: false },
-  { name: 'source_tables_physical', required: false },
-  { name: 'source_columns', required: false },
-  { name: 'source_columns_physical', required: false },
-  { name: 'source_descriptions', required: false },
-  { name: 'source_datatypes', required: false },
-  { name: 'source_domain', required: false },
-  { name: 'target_domain', required: false },
-  { name: 'join_column_description', required: false }  // COLUMN:Description|... for join/filter columns
+  { name: 'source_tables', required: true },
+  { name: 'source_tables_physical', required: true },
+  { name: 'source_columns', required: true },
+  { name: 'source_columns_physical', required: true },
+  { name: 'source_descriptions', required: true },
+  { name: 'source_datatypes', required: false },  // Only optional field
+  { name: 'source_domain', required: true },
+  { name: 'target_domain', required: true },
+  { name: 'join_column_description', required: true }  // COLUMN:Description|... for join/filter columns
 ])
 
 const csvColumnOptions = computed(() => {
@@ -445,7 +446,23 @@ const savablePatterns = computed(() => {
 })
 
 const isMappingValid = computed(() => {
-  const required = ['tgt_table_physical_name', 'tgt_column_physical_name', 'source_expression']
+  // All fields except source_datatypes are required
+  const required = [
+    'tgt_table_name',
+    'tgt_table_physical_name',
+    'tgt_column_name',
+    'tgt_column_physical_name',
+    'tgt_comments',
+    'source_expression',
+    'source_tables',
+    'source_tables_physical',
+    'source_columns',
+    'source_columns_physical',
+    'source_descriptions',
+    'source_domain',
+    'target_domain',
+    'join_column_description'
+  ]
   return required.every(col => columnMapping.value[col])
 })
 
@@ -725,8 +742,8 @@ async function fetchProjectTypes() {
   } catch (error) {
     console.error('Failed to fetch project types:', error)
     // Fallback
-    projectTypes.value = ['DMES', 'MMIS', 'CLAIMS', 'ELIGIBILITY', 'PROVIDER', 'PHARMACY']
-    selectedProjectType.value = 'DMES'
+    projectTypes.value = ['Interchange', 'Qnxt']
+    selectedProjectType.value = 'Interchange'
   }
 }
 
