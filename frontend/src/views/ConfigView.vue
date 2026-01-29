@@ -514,8 +514,8 @@ const config = ref({
     admin_password_hash: ''
   },
   project_types: {
-    available_types: ['DMES', 'MMIS', 'CLAIMS', 'ELIGIBILITY', 'PROVIDER', 'PHARMACY'],
-    default_type: 'DMES'
+    available_types: ['Interchange', 'Qnxt'],
+    default_type: 'Interchange'
   }
 })
 

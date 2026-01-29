@@ -185,10 +185,10 @@ class ProjectTypesConfig(BaseModel):
         default_type: Default type for new projects
     """
     available_types: List[str] = Field(
-        default=["DMES", "MMIS", "CLAIMS", "ELIGIBILITY", "PROVIDER", "PHARMACY"],
+        default=["Interchange", "Qnxt"],
         description="List of valid project types"
     )
-    default_type: str = Field(default="DMES", description="Default project type for new projects")
+    default_type: str = Field(default="Interchange", description="Default project type for new projects")
 
 
 class AppConfig(BaseModel):
