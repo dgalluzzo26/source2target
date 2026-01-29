@@ -111,9 +111,11 @@ class VectorSearchConfig(BaseModel):
     Attributes:
         unmapped_fields_index: Vector search index for source field matching (catalog.schema.index_name)
         endpoint_name: Name of the vector search endpoint
+        query_type: Type of vector search query - ANN (default), HYBRID, or FULL_TEXT
     """
     unmapped_fields_index: str = Field(default="oztest_dev.smartmapper.unmapped_fields_vs", description="Vector search index for source field matching (fully qualified)")
     endpoint_name: str = Field(default="s2t_vsendpoint", description="Vector search endpoint name")
+    query_type: str = Field(default="HYBRID", description="Vector search query type: HYBRID (default) or ANN")
 
 
 class UIConfig(BaseModel):

@@ -1011,12 +1011,17 @@ class SuggestionService:
         index_name: str,
         query_text: str,
         project_id: int,
-        num_results: int = 5
+        num_results: int = 5,
+        query_type: str = "HYBRID"
     ) -> List[Dict[str, Any]]:
         """
         Execute a single vector search query (synchronous).
         
         Returns matches filtered by project_id.
+        
+        Args:
+            query_type: Type of search - HYBRID (combines semantic with keyword, default) 
+                       or ANN (approximate nearest neighbor, semantic only)
         
         Note: We over-fetch significantly because with many projects having similar
         columns, the top results may be spread across projects. The PROJECT prefix
@@ -1043,7 +1048,8 @@ class SuggestionService:
                     "project_id"
                 ],
                 query_text=query_text,
-                num_results=num_results * OVER_FETCH_MULTIPLIER  # Fetch 10x to ensure coverage across many projects
+                num_results=num_results * OVER_FETCH_MULTIPLIER,  # Fetch 10x to ensure coverage across many projects
+                query_type=query_type
             )
             
             matches = []
@@ -1146,6 +1152,11 @@ class SuggestionService:
         # Track system columns that were skipped
         self._system_columns_in_search = system_columns_list
         
+        # Get query_type from config
+        config = self.config_service.get_config()
+        query_type = getattr(config.vector_search, 'query_type', 'ANN')
+        print(f"[VS Parallel] query_type: {query_type}")
+        
         def search_column(col_info: Dict[str, str]) -> List[Dict[str, Any]]:
             """Search for a single column."""
             query = self._build_vs_query(
@@ -1155,7 +1166,7 @@ class SuggestionService:
                 col_info.get('domain', '')
             )
             results = self._vector_search_single_query_sync(
-                index_name, query, project_id, num_results_per_column
+                index_name, query, project_id, num_results_per_column, query_type
             )
             return {
                 "query": query,
@@ -1301,6 +1312,10 @@ LIMIT {num_results};
         self._last_vector_search["sql_equivalent"] = sql_equivalent
         
         try:
+            # Get query_type from config
+            config = self.config_service.get_config()
+            query_type = getattr(config.vector_search, 'query_type', 'ANN')
+            
             # Use vector search to find similar source fields
             results = self.workspace_client.vector_search_indexes.query_index(
                 index_name=index_name,
@@ -1317,7 +1332,8 @@ LIMIT {num_results};
                     "project_id"
                 ],
                 query_text=query_with_project,
-                num_results=num_results * OVER_FETCH_MULTIPLIER  # Fetch 10x to ensure coverage across many projects
+                num_results=num_results * OVER_FETCH_MULTIPLIER,  # Fetch 10x to ensure coverage across many projects
+                query_type=query_type
             )
             
             print(f"[VS Debug] Raw results count: {len(results.result.data_array) if results.result.data_array else 0}")

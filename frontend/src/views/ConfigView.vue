@@ -228,6 +228,21 @@
               </div>
             </div>
 
+            <div class="field">
+              <label for="query_type">Query Type</label>
+              <Dropdown 
+                id="query_type"
+                v-model="config.vector_search.query_type"
+                :options="['HYBRID', 'ANN']"
+                placeholder="Select query type"
+                class="w-full"
+              />
+              <small>
+                <strong>HYBRID</strong> (default): Combines semantic similarity with keyword matching |
+                <strong>ANN</strong>: Approximate Nearest Neighbor (semantic similarity only)
+              </small>
+            </div>
+
           </div>
         </div>
       </TabPanel>
@@ -505,7 +520,8 @@ const config = ref({
   },
   vector_search: {
     unmapped_fields_index: 'oztest_dev.smartmapper.unmapped_fields_vs',
-    endpoint_name: 's2t_vsendpoint'
+    endpoint_name: 's2t_vsendpoint',
+    query_type: 'HYBRID'
   },
   security: {
     admin_users: ['david.galluzzo@gainwelltechnologies.com', 'meenakshishankar.chandrasekharan@gainwelltechnologies.com', 'santhosh.ravindrabharathy@gainwelltechnologies.com', 'subhadra.tummalapally@gainwelltechnologies.com'],
@@ -682,7 +698,8 @@ const resetConfiguration = async () => {
       },
       vector_search: {
         unmapped_fields_index: 'oztest_dev.smartmapper.unmapped_fields_vs',
-        endpoint_name: 's2t_vsendpoint'
+        endpoint_name: 's2t_vsendpoint',
+        query_type: 'HYBRID'
       },
       security: {
         admin_users: ['david.galluzzo@gainwelltechnologies.com', 'meenakshishankar.chandrasekharan@gainwelltechnologies.com', 'santhosh.ravindrabharathy@gainwelltechnologies.com', 'subhadra.tummalapally@gainwelltechnologies.com'],
