@@ -1982,10 +1982,21 @@ class SuggestionService:
             print(f"[LLM] Using SIMPLIFIED prompt with pre-determined table assignments: {table_assignments}")
             
             # Build table assignments text - these are FIXED, not decisions
+            # Track unmapped tables (pattern tables with no source table assignment)
             table_assignments_text = "TABLE ASSIGNMENTS (ALREADY DECIDED - DO NOT CHANGE):\n"
+            unmapped_tables = []
             for alias, pattern_table in bronze_tables.items():
-                source_table = table_assignments.get(pattern_table.upper(), "UNKNOWN")
-                table_assignments_text += f"- Pattern table '{pattern_table}' (alias '{alias}') → User table '{source_table}'\n"
+                source_table = table_assignments.get(pattern_table.upper())
+                if source_table:
+                    table_assignments_text += f"- Pattern table '{pattern_table}' (alias '{alias}') → User table '{source_table}'\n"
+                else:
+                    table_assignments_text += f"- Pattern table '{pattern_table}' (alias '{alias}') → **NO MATCH FOUND** (keep original or add warning)\n"
+                    unmapped_tables.append(pattern_table)
+            
+            # Add explicit warning for unmapped tables
+            if unmapped_tables:
+                table_assignments_text += f"\nWARNING: The following pattern tables have NO source table match: {', '.join(unmapped_tables)}\n"
+                table_assignments_text += "For columns from these tables, keep the original column names and add warnings.\n"
             
             # Build columns text - grouped by the source table they MUST come from
             columns_text = "\nAVAILABLE COLUMNS PER SOURCE TABLE:\n"
@@ -2025,6 +2036,13 @@ class SuggestionService:
                 else:
                     columns_text += "  (No matching columns found in this table)\n"
                 columns_text += "\n"
+            
+            # Add section for unmapped tables - NO columns available
+            if unmapped_tables:
+                for unmapped_table in unmapped_tables:
+                    columns_text += f"=== {unmapped_table.upper()} (UNMAPPED - NO SOURCE TABLE) ===\n"
+                    columns_text += "  ** NO COLUMNS AVAILABLE - This pattern table has no matching source table **\n"
+                    columns_text += "  ** Keep original column names and add warnings for this branch **\n\n"
             
             # Build constant columns text if any
             constant_text = ""
