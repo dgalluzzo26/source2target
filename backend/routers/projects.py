@@ -16,6 +16,7 @@ from pydantic import BaseModel
 import csv
 import io
 import os
+import re
 from backend.services.project_service import ProjectService
 from backend.services.unmapped_fields_service import UnmappedFieldsService
 from backend.services.auth_service import AuthService
@@ -70,8 +71,6 @@ def sanitize_field_text(text: Optional[str]) -> str:
     Returns:
         Sanitized text safe for database storage and JSON serialization
     """
-    import re
-    
     if text is None:
         return ""
     
