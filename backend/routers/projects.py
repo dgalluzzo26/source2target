@@ -51,6 +51,62 @@ def decode_csv_content(content: bytes) -> str:
     # Last resort: decode with errors='replace' to not fail
     return content.decode('utf-8', errors='replace')
 
+
+def sanitize_field_text(text: Optional[str]) -> str:
+    """
+    Sanitize a text field from CSV upload.
+    
+    Handles:
+    - Newlines (replaced with space)
+    - Carriage returns (removed)
+    - Tabs (replaced with space)
+    - Control characters (removed)
+    - Smart quotes (replaced with regular quotes)
+    - Multiple spaces (collapsed to single)
+    
+    Args:
+        text: Input text that may contain problematic characters
+        
+    Returns:
+        Sanitized text safe for database storage and JSON serialization
+    """
+    import re
+    
+    if text is None:
+        return ""
+    
+    # Convert to string if not already
+    text = str(text)
+    
+    # Replace smart quotes with regular quotes
+    smart_quote_map = {
+        '\u2018': "'",  # Left single quote
+        '\u2019': "'",  # Right single quote (apostrophe)
+        '\u201c': '"',  # Left double quote
+        '\u201d': '"',  # Right double quote
+        '\u2033': '"',  # Double prime
+        '\u2032': "'",  # Prime (single)
+        '\u00b4': "'",  # Acute accent
+        '\u0060': "'",  # Grave accent
+    }
+    for smart, regular in smart_quote_map.items():
+        text = text.replace(smart, regular)
+    
+    # Replace newlines and tabs with spaces
+    text = text.replace('\r\n', ' ')  # Windows newlines first
+    text = text.replace('\n', ' ')
+    text = text.replace('\r', ' ')
+    text = text.replace('\t', ' ')
+    
+    # Remove all other control characters (0x00-0x1F and 0x7F)
+    text = re.sub(r'[\x00-\x1f\x7f]', '', text)
+    
+    # Collapse multiple spaces to single space
+    text = re.sub(r' +', ' ', text)
+    
+    # Strip leading/trailing whitespace
+    return text.strip()
+
 # Service instances
 project_service = ProjectService()
 unmapped_fields_service = UnmappedFieldsService()
@@ -473,6 +529,10 @@ async def upload_source_fields(
                 warnings.append(f"Row {row_number}: {row['src_table_name']}.{row['src_column_name']} - "
                                f"No description provided (may reduce AI matching accuracy)")
             
+            # Sanitize src_comments to handle newlines, quotes, and control characters
+            # that can break JSON parsing later (especially in join_metadata)
+            sanitized_comments = sanitize_field_text(row.get("src_comments", ""))
+            
             field = {
                 "src_table_name": row.get("src_table_name", "").strip(),
                 "src_table_physical_name": row.get("src_table_physical_name", row.get("src_table_name", "")).strip(),
@@ -480,7 +540,7 @@ async def upload_source_fields(
                 "src_column_physical_name": row.get("src_column_physical_name", row.get("src_column_name", "")).strip(),
                 "src_physical_datatype": row.get("src_physical_datatype", "STRING").strip(),
                 "src_nullable": row.get("src_nullable", "YES").strip().upper(),
-                "src_comments": row.get("src_comments", "").strip(),
+                "src_comments": sanitized_comments,
                 "domain": row.get("domain", "").strip(),
                 "project_id": project_id
             }
@@ -584,6 +644,10 @@ async def update_source_field(
         
         if not user_can_access_project(project, user_email, is_admin):
             raise HTTPException(status_code=403, detail="You don't have access to this project")
+        
+        # Sanitize src_comments if being updated (handle newlines, quotes, control chars)
+        if "src_comments" in updates and updates["src_comments"]:
+            updates["src_comments"] = sanitize_field_text(updates["src_comments"])
         
         # Update the field
         result = await unmapped_fields_service.update_field(field_id, updates)

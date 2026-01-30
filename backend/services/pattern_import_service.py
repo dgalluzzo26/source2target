@@ -26,6 +26,60 @@ from backend.services.config_service import config_service
 executor = ThreadPoolExecutor(max_workers=4)
 
 
+def sanitize_text_field(text: Optional[str]) -> Optional[str]:
+    """
+    Sanitize text fields from CSV to prevent JSON/SQL issues.
+    
+    Handles:
+    - Newlines (replaced with space)
+    - Carriage returns (removed)
+    - Tabs (replaced with space)  
+    - Control characters (removed)
+    - Smart quotes (replaced with regular quotes)
+    - Multiple spaces (collapsed to single)
+    
+    Args:
+        text: Input text that may contain problematic characters
+        
+    Returns:
+        Sanitized text, or None if input was None
+    """
+    if text is None:
+        return None
+    
+    # Convert to string if not already
+    text = str(text)
+    
+    # Replace smart quotes with regular quotes
+    smart_quote_map = {
+        '\u2018': "'",  # Left single quote
+        '\u2019': "'",  # Right single quote (apostrophe)
+        '\u201c': '"',  # Left double quote
+        '\u201d': '"',  # Right double quote
+        '\u2033': '"',  # Double prime
+        '\u2032': "'",  # Prime (single)
+        '\u00b4': "'",  # Acute accent
+        '\u0060': "'",  # Grave accent
+    }
+    for smart, regular in smart_quote_map.items():
+        text = text.replace(smart, regular)
+    
+    # Replace newlines and tabs with spaces
+    text = text.replace('\r\n', ' ')  # Windows newlines first
+    text = text.replace('\n', ' ')
+    text = text.replace('\r', ' ')
+    text = text.replace('\t', ' ')
+    
+    # Remove all other control characters (0x00-0x1F and 0x7F)
+    text = re.sub(r'[\x00-\x1f\x7f]', '', text)
+    
+    # Collapse multiple spaces to single space
+    text = re.sub(r' +', ' ', text)
+    
+    # Strip leading/trailing whitespace
+    return text.strip()
+
+
 class PatternImportService:
     """Service for importing historical mapping patterns."""
     
@@ -147,10 +201,13 @@ class PatternImportService:
             preview_rows = []
             all_rows = []
             for i, row in enumerate(reader):
-                # Clean up both keys and values - strip whitespace and handle None
-                cleaned_row = {
-                    (k.strip() if k else ''): (v.strip() if v else '') for k, v in row.items()
-                }
+                # Clean up both keys and values - sanitize text fields (remove control chars, newlines, etc.)
+                cleaned_row = {}
+                for k, v in row.items():
+                    clean_key = k.strip() if k else ''
+                    # Sanitize value to remove control characters, newlines, etc.
+                    clean_val = sanitize_text_field(v) if v else ''
+                    cleaned_row[clean_key] = clean_val
                 all_rows.append(cleaned_row)
                 if i < 10:
                     preview_rows.append(cleaned_row)
@@ -1023,11 +1080,15 @@ RULES:
         saved_count = 0
         errors = []
         
-        # Escape function for SQL values
+        # Escape function for SQL values with sanitization
         def esc(val):
             if val is None:
                 return "NULL"
-            return f"'{str(val).replace(chr(39), chr(39)+chr(39))}'"
+            # Sanitize to remove control chars, newlines, etc. before SQL escaping
+            sanitized = sanitize_text_field(str(val))
+            if sanitized is None:
+                return "NULL"
+            return f"'{sanitized.replace(chr(39), chr(39)+chr(39))}'"
         
         try:
             with connection.cursor() as cursor:
