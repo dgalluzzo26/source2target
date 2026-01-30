@@ -40,17 +40,29 @@ def decode_csv_content(content: bytes) -> str:
     - UTF-8 with BOM (Excel on Mac)
     - CP1252/Windows-1252 (Excel on Windows) - includes 0x92 smart quotes
     - Latin-1/ISO-8859-1 (fallback for Western European)
-    """
-    encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1', 'iso-8859-1']
     
+    Always strips BOM character if present.
+    """
+    # Try utf-8-sig first to handle BOM properly
+    encodings = ['utf-8-sig', 'utf-8', 'cp1252', 'latin-1', 'iso-8859-1']
+    
+    decoded = None
     for encoding in encodings:
         try:
-            return content.decode(encoding)
+            decoded = content.decode(encoding)
+            break
         except (UnicodeDecodeError, LookupError):
             continue
     
-    # Last resort: decode with errors='replace' to not fail
-    return content.decode('utf-8', errors='replace')
+    if decoded is None:
+        # Last resort: decode with errors='replace' to not fail
+        decoded = content.decode('utf-8', errors='replace')
+    
+    # Strip BOM character if still present (can happen with some encodings)
+    if decoded.startswith('\ufeff'):
+        decoded = decoded[1:]
+    
+    return decoded
 
 
 def sanitize_field_text(text: Optional[str]) -> str:

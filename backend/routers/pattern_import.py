@@ -69,17 +69,30 @@ class SavePatternsRequest(BaseModel):
 # =============================================================================
 
 def decode_csv_content(content: bytes) -> str:
-    """Try multiple encodings to decode CSV content."""
-    encodings = ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252', 'iso-8859-1']
+    """
+    Try multiple encodings to decode CSV content.
+    Always strips BOM character if present.
+    """
+    # Try utf-8-sig first to handle BOM properly
+    encodings = ['utf-8-sig', 'utf-8', 'cp1252', 'latin-1', 'iso-8859-1']
     
+    decoded = None
     for encoding in encodings:
         try:
-            return content.decode(encoding)
+            decoded = content.decode(encoding)
+            break
         except (UnicodeDecodeError, LookupError):
             continue
     
-    # Last resort: decode with errors='replace'
-    return content.decode('utf-8', errors='replace')
+    if decoded is None:
+        # Last resort: decode with errors='replace'
+        decoded = content.decode('utf-8', errors='replace')
+    
+    # Strip BOM character if still present
+    if decoded.startswith('\ufeff'):
+        decoded = decoded[1:]
+    
+    return decoded
 
 
 @router.post("/upload")
