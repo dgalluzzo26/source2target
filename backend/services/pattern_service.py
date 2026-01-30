@@ -86,7 +86,7 @@ class PatternService:
         if isinstance(join_metadata, str):
             try:
                 # Clean control characters before parsing
-                clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata)
+                clean_json = re.sub(r'[\x00-\x1f\x7f]', '', join_metadata)
                 join_metadata = json.loads(clean_json)
             except:
                 return "parse_error"
@@ -154,7 +154,7 @@ class PatternService:
         if isinstance(join_metadata, str):
             try:
                 # Clean control characters before parsing
-                clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata)
+                clean_json = re.sub(r'[\x00-\x1f\x7f]', '', join_metadata)
                 join_metadata = json.loads(clean_json)
             except:
                 return "Unknown"
@@ -292,7 +292,7 @@ class PatternService:
                     if pattern.get("join_metadata") and isinstance(pattern["join_metadata"], str):
                         try:
                             # Clean control characters before parsing
-                            clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', pattern["join_metadata"])
+                            clean_json = re.sub(r'[\x00-\x1f\x7f]', '', pattern["join_metadata"])
                             pattern["join_metadata_parsed"] = json.loads(clean_json)
                         except:
                             pattern["join_metadata_parsed"] = None
@@ -607,7 +607,7 @@ class PatternService:
                 if pattern.get("join_metadata") and isinstance(pattern["join_metadata"], str):
                     try:
                         # Clean control characters before parsing
-                        clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', pattern["join_metadata"])
+                        clean_json = re.sub(r'[\x00-\x1f\x7f]', '', pattern["join_metadata"])
                         pattern["join_metadata_parsed"] = json.loads(clean_json)
                     except:
                         pattern["join_metadata_parsed"] = None

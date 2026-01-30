@@ -181,7 +181,7 @@ def clean_llm_json(text: str) -> str:
     json_str = '\n'.join(cleaned_lines)
     
     # Remove control characters (except newlines and tabs)
-    json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', json_str)
+    json_str = re.sub(r'[\x00-\x1f\x7f]', '', json_str)
     
     # Normalize line endings
     json_str = json_str.replace('\r\n', '\n').replace('\r', '\n')
@@ -1522,7 +1522,8 @@ class SuggestionService:
             try:
                 # Clean control characters from JSON string before parsing
                 if isinstance(join_metadata_str, str):
-                    clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata_str)
+                    # Remove ALL control characters (0x00-0x1F and 0x7F) - they break JSON parsing
+                    clean_json = re.sub(r'[\x00-\x1f\x7f]', '', join_metadata_str)
                     jm = json.loads(clean_json)
                 else:
                     jm = join_metadata_str
@@ -2062,7 +2063,8 @@ class SuggestionService:
             try:
                 # Clean control characters from JSON string before parsing
                 if isinstance(join_metadata, str):
-                    clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata)
+                    # Remove ALL control characters (0x00-0x1F and 0x7F) - they break JSON parsing
+                    clean_json = re.sub(r'[\x00-\x1f\x7f]', '', join_metadata)
                     metadata = json.loads(clean_json)
                 else:
                     metadata = join_metadata
@@ -2906,7 +2908,7 @@ RULES:
                             try:
                                 # Clean control characters from JSON string before parsing
                                 if isinstance(join_metadata_str, str):
-                                    clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata_str)
+                                    clean_json = re.sub(r'[\x00-\x1f\x7f]', '', join_metadata_str)
                                     jm = json.loads(clean_json)
                                 else:
                                     jm = join_metadata_str
@@ -2976,7 +2978,7 @@ RULES:
                                 try:
                                     # Clean control characters from JSON string before parsing
                                     if isinstance(join_metadata_str, str):
-                                        clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata_str)
+                                        clean_json = re.sub(r'[\x00-\x1f\x7f]', '', join_metadata_str)
                                         jm = json.loads(clean_json)
                                     else:
                                         jm = join_metadata_str
@@ -3527,7 +3529,7 @@ RULES:
                         try:
                             # Clean control characters from JSON string before parsing
                             if isinstance(join_metadata_str, str):
-                                clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata_str)
+                                clean_json = re.sub(r'[\x00-\x1f\x7f]', '', join_metadata_str)
                                 jm = json.loads(clean_json)
                             else:
                                 jm = join_metadata_str
@@ -3599,8 +3601,8 @@ RULES:
                             try:
                                 # Clean control characters from JSON string before parsing
                                 if isinstance(join_metadata_str, str):
-                                    # Remove control characters (except newline, tab, carriage return)
-                                    clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata_str)
+                                    # Remove ALL control characters (0x00-0x1F and 0x7F) - they break JSON parsing
+                                    clean_json = re.sub(r'[\x00-\x1f\x7f]', '', join_metadata_str)
                                     jm = json.loads(clean_json)
                                 else:
                                     jm = join_metadata_str
@@ -4741,7 +4743,7 @@ Modify the SQL according to the user's request and return JSON with the result."
             
             # Fallback: try standard JSON parsing
             # Strip control characters first
-            clean_response = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', clean_response)
+            clean_response = re.sub(r'[\x00-\x1f\x7f]', '', clean_response)
             
             # Find JSON object in response
             json_start = clean_response.find('{')

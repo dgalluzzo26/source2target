@@ -339,7 +339,7 @@ RULES:
                 json_str = response_text[json_start:json_end]
                 
                 # Clean control characters
-                json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', json_str)
+                json_str = re.sub(r'[\x00-\x1f\x7f]', '', json_str)
                 
                 # Parse and post-process to replace LLM descriptions with actual ones
                 metadata = json.loads(json_str)
