@@ -283,12 +283,17 @@
                   <!-- Table replacements first -->
                   <template v-for="(group, idx) in getChangesByTable(editingSuggestion)" :key="'tg'+idx">
                     <!-- Table header with mapping -->
-                    <div class="table-change-header">
+                    <div class="table-change-header" :class="{ 'is-unmapped': group.isUnmapped }">
                       <i class="pi pi-database"></i>
                       <Badge :value="group.patternTable" severity="secondary" class="table-badge-original" />
                       <i class="pi pi-arrow-right"></i>
-                      <Badge :value="group.sourceTable" severity="success" class="table-badge-new" />
+                      <Badge 
+                        :value="group.sourceTable" 
+                        :severity="group.isUnmapped ? 'danger' : 'success'" 
+                        class="table-badge-new" 
+                      />
                       <span class="alias-label">({{ group.alias }})</span>
+                      <Tag v-if="group.isUnmapped" value="Unmapped" severity="warning" size="small" class="unmapped-tag" />
                     </div>
                     <!-- Column changes for this table -->
                     <div 
@@ -937,6 +942,18 @@ const highlightedOriginalSQL = computed(() => {
   // Get changes with their alias context - we need to match alias.column patterns precisely
   const changes = getChanges(editingSuggestion.value)
   
+  // Track which aliases are mapped to UNKNOWN (unmapped tables)
+  const unmappedAliases = new Set<string>()
+  for (const change of changes) {
+    if (change.type === 'table_replace') {
+      const alias = change.alias?.toLowerCase() || ''
+      const targetTable = (change.new || '').toUpperCase()
+      if (targetTable === 'UNKNOWN' && alias) {
+        unmappedAliases.add(alias)
+      }
+    }
+  }
+  
   // Track alias-qualified patterns separately from bare column names
   // Key: "alias.COLUMN" or just "COLUMN", Value: { success: boolean }
   const changesByAliasColumn = new Map<string, boolean>()
@@ -945,12 +962,17 @@ const highlightedOriginalSQL = computed(() => {
   for (const change of changes) {
     if (change.original) {
       const newValue = change.new || ''
-      const isSuccess = change.is_invalid !== true && !newValue.includes('NO_MATCH')
+      let isSuccess = change.is_invalid !== true && !newValue.includes('NO_MATCH')
       
       // Check if the change has an alias (from the change object)
       const alias = change.alias || ''
       const parts = change.original.split('.')
       const bareColumn = parts[parts.length - 1].toUpperCase()
+      
+      // If this column belongs to an unmapped table alias, mark it as NOT success (warning)
+      if (alias && unmappedAliases.has(alias.toLowerCase())) {
+        isSuccess = false
+      }
       
       if (alias) {
         // We have explicit alias info - use it
@@ -960,6 +982,10 @@ const highlightedOriginalSQL = computed(() => {
         // The original itself has alias prefix like "b.SAK_RECIP"
         const aliasFromOriginal = parts[0].toLowerCase()
         const key = `${aliasFromOriginal}.${bareColumn}`
+        // If this alias is unmapped, mark as warning
+        if (unmappedAliases.has(aliasFromOriginal)) {
+          isSuccess = false
+        }
         changesByAliasColumn.set(key, isSuccess)
       }
       
@@ -1023,8 +1049,21 @@ const highlightedOriginalSQL = computed(() => {
       // Extract just the table name from fully qualified path
       const parts = change.original.split('.')
       const tableName = parts[parts.length - 1].toUpperCase()
+      const targetTable = (change.new || '').toUpperCase()
+      // Use warning style for UNKNOWN tables, success for mapped tables
+      const cssClass = targetTable === 'UNKNOWN' ? 'original-no-match' : 'original-changed'
       const regex = new RegExp(`\\b(${escapeRegExp(tableName)})\\b`, 'gi')
-      html = html.replace(regex, '<mark class="original-changed">$1</mark>')
+      html = html.replace(regex, `<mark class="${cssClass}">$1</mark>`)
+    }
+  }
+  
+  // Step 3b: Highlight columns from UNKNOWN tables that weren't in changes
+  // Scan pattern SQL for alias.column patterns where alias is unmapped
+  if (unmappedAliases.size > 0) {
+    for (const unmappedAlias of unmappedAliases) {
+      // Match alias.COLUMN patterns for unmapped aliases (skip if already marked)
+      const regex = new RegExp(`(?![^<]*<\\/mark>)\\b(${escapeRegExp(unmappedAlias)}\\.(\\w+))\\b`, 'gi')
+      html = html.replace(regex, '<mark class="original-no-match">$1</mark>')
     }
   }
   
@@ -1412,10 +1451,13 @@ function getChangesByTable(suggestion: MappingSuggestion): TableChangeGroup[] {
       }
       
       // Create group for each pattern table
+      // Track if this table is mapped to UNKNOWN (unmapped)
+      const isUnmapped = sourceTable === 'UNKNOWN'
       groups[patternTable] = {
         alias: alias,
         patternTable: patternTable,
         sourceTable: sourceTable,
+        isUnmapped: isUnmapped,
         changes: []
       }
       
@@ -2833,6 +2875,20 @@ function formatDate(dateStr?: string): string {
   color: var(--text-color-secondary);
   font-size: 0.7rem;
   font-style: italic;
+}
+
+/* Unmapped table styling - tables that couldn't be matched to source */
+.table-change-header.is-unmapped {
+  border-left: 3px solid #f57c00;
+  background: #fff3e0;
+}
+
+.table-change-header.is-unmapped i.pi-database {
+  color: #f57c00;
+}
+
+.unmapped-tag {
+  margin-left: 0.25rem;
 }
 
 /* Grouped change items have left indent */

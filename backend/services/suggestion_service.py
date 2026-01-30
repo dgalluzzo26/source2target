@@ -720,9 +720,10 @@ def assign_source_tables_to_pattern_tables(
                 used_source_tables.add(fallback)
                 print(f"[Table Assign] Fallback assigned (no direct output match): {pattern_table_upper} -> {fallback}")
             else:
-                # No tables with output matches available - leave unassigned
-                # This will cause warnings in the LLM prompt but is better than wrong assignment
-                print(f"[Table Assign] NO MATCH: {pattern_table_upper} has no source table with output column matches")
+                # No tables with output matches available - mark as UNKNOWN
+                # This tells the frontend to show it as unmapped and the LLM to skip it
+                assignments[pattern_table_upper] = "UNKNOWN"
+                print(f"[Table Assign] NO MATCH: {pattern_table_upper} assigned to UNKNOWN (no source table with output column matches)")
                 print(f"[Table Assign] This UNION branch may need manual mapping or different source tables")
     
     return assignments
@@ -1661,16 +1662,24 @@ class SuggestionService:
             for table, cols in valid_columns_by_table.items():
                 print(f"[Inject Tables] Valid columns for {table}: {list(cols)[:10]}...")
         
+        # Build reverse lookup: pattern_table -> alias
+        pattern_table_to_alias = {}
+        for alias, pattern_table in bronze_tables.items():
+            pattern_table_to_alias[pattern_table.upper()] = alias
+        
         # Inject missing table_replace changes
         injected = []
         for pattern_table, source_table in table_assignments.items():
             if pattern_table.upper() not in existing_table_replaces:
+                alias = pattern_table_to_alias.get(pattern_table.upper(), "")
                 injected.append({
                     "type": "table_replace",
+                    "alias": alias,
+                    "pattern_table": pattern_table,
                     "original": pattern_table,
                     "new": source_table
                 })
-                print(f"[Inject Tables] Injected: {pattern_table} -> {source_table}")
+                print(f"[Inject Tables] Injected: {pattern_table} (alias '{alias}') -> {source_table}")
         
         # Add injected changes at the beginning (table changes first)
         result["changes"] = injected + changes
@@ -1982,15 +1991,15 @@ class SuggestionService:
             print(f"[LLM] Using SIMPLIFIED prompt with pre-determined table assignments: {table_assignments}")
             
             # Build table assignments text - these are FIXED, not decisions
-            # Track unmapped tables (pattern tables with no source table assignment)
+            # Track unmapped tables (pattern tables with no source table assignment or UNKNOWN)
             table_assignments_text = "TABLE ASSIGNMENTS (ALREADY DECIDED - DO NOT CHANGE):\n"
             unmapped_tables = []
             for alias, pattern_table in bronze_tables.items():
                 source_table = table_assignments.get(pattern_table.upper())
-                if source_table:
+                if source_table and source_table.upper() != 'UNKNOWN':
                     table_assignments_text += f"- Pattern table '{pattern_table}' (alias '{alias}') → User table '{source_table}'\n"
                 else:
-                    table_assignments_text += f"- Pattern table '{pattern_table}' (alias '{alias}') → **NO MATCH FOUND** (keep original or add warning)\n"
+                    table_assignments_text += f"- Pattern table '{pattern_table}' (alias '{alias}') → User table 'UNKNOWN'\n"
                     unmapped_tables.append(pattern_table)
             
             # Add explicit warning for unmapped tables
@@ -2018,6 +2027,10 @@ class SuggestionService:
                         })
             
             for source_table in sorted(set(table_assignments.values())):
+                # Skip UNKNOWN tables - they have no columns available
+                if source_table.upper() == 'UNKNOWN':
+                    continue
+                    
                 columns_text += f"=== {source_table} (available columns) ===\n"
                 table_cols = candidates_by_source_table.get(source_table, [])
                 if table_cols:
