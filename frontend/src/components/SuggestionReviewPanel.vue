@@ -1128,6 +1128,36 @@ const highlightedOriginalSQL = computed(() => {
           /<mark class="original-changed">([^<]+)<\/mark>/gi, 
           '<mark class="original-no-match">$1</mark>'
         )
+        
+        // ALSO: Highlight bare column names that were never marked
+        // Get pattern columns from userColumnsToMap in join_metadata
+        let patternColumns: string[] = []
+        try {
+          const jmRaw = editingSuggestion.value?.join_metadata_raw
+          if (jmRaw) {
+            const jm = typeof jmRaw === 'string' ? JSON.parse(jmRaw) : jmRaw
+            patternColumns = (jm?.userColumnsToMap || [])
+              .map((c: any) => c.originalColumn)
+              .filter((c: string) => c)
+          }
+        } catch (e) {
+          console.log('[Highlighting] Could not parse join_metadata for column list')
+        }
+        
+        console.log('[Highlighting] Pattern columns to check in UNKNOWN segment:', patternColumns)
+        
+        // Highlight any pattern columns that appear in this segment and aren't already marked
+        for (const col of patternColumns) {
+          // Skip if already marked (has <mark> around it)
+          const alreadyMarkedPattern = new RegExp(`<mark[^>]*>[^<]*${escapeRegExp(col)}[^<]*</mark>`, 'i')
+          if (!alreadyMarkedPattern.test(afterLastUnion)) {
+            // Highlight this bare column as no-match
+            const colRegex = new RegExp(`\\b(${escapeRegExp(col)})\\b`, 'gi')
+            afterLastUnion = afterLastUnion.replace(colRegex, '<mark class="original-no-match">$1</mark>')
+            console.log('[Highlighting] Highlighted bare column in UNKNOWN segment:', col)
+          }
+        }
+        
         console.log('[Highlighting] Re-highlighted columns in UNKNOWN table segment')
       }
       
