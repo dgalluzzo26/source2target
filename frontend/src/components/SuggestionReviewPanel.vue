@@ -1058,12 +1058,111 @@ const highlightedOriginalSQL = computed(() => {
   }
   
   // Step 3b: Highlight columns from UNKNOWN tables that weren't in changes
-  // Scan pattern SQL for alias.column patterns where alias is unmapped
+  // For UNION patterns WITHOUT explicit aliases, we need to identify which SQL segments
+  // belong to UNKNOWN tables and highlight their columns as warnings
+  
+  // First, handle aliased columns (alias.COLUMN patterns)
   if (unmappedAliases.size > 0) {
     for (const unmappedAlias of unmappedAliases) {
       // Match alias.COLUMN patterns for unmapped aliases (skip if already marked)
       const regex = new RegExp(`(?![^<]*<\\/mark>)\\b(${escapeRegExp(unmappedAlias)}\\.(\\w+))\\b`, 'gi')
       html = html.replace(regex, '<mark class="original-no-match">$1</mark>')
+    }
+  }
+  
+  // Second, handle UNION patterns without aliases
+  // Find UNKNOWN table names and re-highlight columns in their SELECT clauses
+  const unknownTableNames: string[] = []
+  for (const change of changes) {
+    if (change.type === 'table_replace') {
+      const targetTable = (change.new || '').toUpperCase()
+      if (targetTable === 'UNKNOWN') {
+        const parts = (change.original || '').split('.')
+        unknownTableNames.push(parts[parts.length - 1].toUpperCase())
+      }
+    }
+  }
+  
+  if (unknownTableNames.length > 0) {
+    // Parse the original SQL (not html) to find segments containing UNKNOWN tables
+    const originalSQL = editingSuggestion.value?.pattern_sql || ''
+    
+    // Split by UNION to get individual SELECT statements
+    const unionParts = originalSQL.split(/\bUNION\b/i)
+    
+    for (let i = 0; i < unionParts.length; i++) {
+      const part = unionParts[i]
+      
+      // Check if this part contains an UNKNOWN table
+      let containsUnknownTable = false
+      for (const tableName of unknownTableNames) {
+        if (part.toUpperCase().includes(tableName)) {
+          containsUnknownTable = true
+          break
+        }
+      }
+      
+      if (containsUnknownTable) {
+        // Extract column names from this UNION branch
+        // Look for pattern: SELECT ... column ... FROM
+        // Also look for columns in WHERE clause
+        const selectMatch = part.match(/SELECT\s+(.+?)\s+FROM/is)
+        const whereMatch = part.match(/WHERE\s+(.+?)$/is)
+        
+        const columnsInBranch: string[] = []
+        
+        // Extract columns from SELECT clause
+        if (selectMatch) {
+          const selectPart = selectMatch[1]
+          // Find column references like INITCAP(COLUMN) or just COLUMN
+          const colMatches = selectPart.match(/\b([A-Z_][A-Z0-9_]*)\b(?=\s*[\),\s]|\s+AS\b)/gi)
+          if (colMatches) {
+            for (const col of colMatches) {
+              if (!['INITCAP', 'TRIM', 'CONCAT', 'COALESCE', 'AS', 'NULL', 'SELECT'].includes(col.toUpperCase())) {
+                columnsInBranch.push(col.toUpperCase())
+              }
+            }
+          }
+        }
+        
+        // Extract columns from WHERE clause
+        if (whereMatch) {
+          const wherePart = whereMatch[1]
+          const colMatches = wherePart.match(/\b([A-Z_][A-Z0-9_]*)\b(?=\s*[=<>!\(\),]|\s+IN\b|\s+AND\b|\s+OR\b)/gi)
+          if (colMatches) {
+            for (const col of colMatches) {
+              if (!['AND', 'OR', 'IN', 'TRIM', 'WHERE', 'LIKE', 'BETWEEN', 'IS', 'NOT', 'NULL', 'R', 'M'].includes(col.toUpperCase())) {
+                columnsInBranch.push(col.toUpperCase())
+              }
+            }
+          }
+        }
+        
+        // Re-highlight these columns as warnings in the HTML, but only in the matching UNION segment
+        // We need to find the corresponding segment in the HTML
+        for (const col of columnsInBranch) {
+          // Find and replace existing blue highlighting with orange for this column
+          // But only after the UNKNOWN table name in the HTML
+          // This is tricky - we'll use a position-aware approach
+          
+          // Find the position of the UNKNOWN table mark in HTML
+          for (const tableName of unknownTableNames) {
+            const tableMarkRegex = new RegExp(`<mark class="original-no-match">${escapeRegExp(tableName)}</mark>`, 'i')
+            const tableMatch = html.match(tableMarkRegex)
+            if (tableMatch && tableMatch.index !== undefined) {
+              // Only replace column marks AFTER this table position
+              const beforeTable = html.substring(0, tableMatch.index)
+              let afterTable = html.substring(tableMatch.index)
+              
+              // Replace blue (original-changed) with orange (original-no-match) for this column after the table
+              const blueColRegex = new RegExp(`<mark class="original-changed">(${escapeRegExp(col)})</mark>`, 'gi')
+              afterTable = afterTable.replace(blueColRegex, '<mark class="original-no-match">$1</mark>')
+              
+              html = beforeTable + afterTable
+            }
+          }
+        }
+      }
     }
   }
   

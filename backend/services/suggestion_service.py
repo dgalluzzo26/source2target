@@ -2100,26 +2100,49 @@ CONFIDENCE SCORING (DO NOT use the [Score: X.XX] values - those are vector searc
   - 0.3-0.5 = Partial match or uncertain
   - 0.0-0.3 = Poor match or no match found
 
+CRITICAL FOR UNKNOWN TABLES:
+- If a table is assigned to 'UNKNOWN', you MUST:
+  1. Replace the table with 'UNKNOWN' in rewritten_sql
+  2. Keep ALL original column names from that table unchanged
+  3. Add a warning for EACH column from that table (e.g., "No source table match for column ADR_STREET_1 from t_re_multi_address")
+
 Return ONLY valid JSON:
 {{
   "rewritten_sql": "<complete rewritten SQL>",
   "changes": [
-    {{"type": "table_replace", "alias": "<alias like 'b' or 'a'>", "pattern_table": "<pattern table name>", "original": "<full pattern table path>", "new": "<source_table>"}},
+    {{"type": "table_replace", "alias": "<alias like 'b' or 'a'>", "pattern_table": "<pattern table name>", "original": "<full pattern table path>", "new": "<source_table or UNKNOWN>"}},
     {{"type": "column_replace", "alias": "<alias like 'b' or 'a'>", "pattern_table": "<pattern table this column belongs to>", "original": "<pattern_column>", "new": "<source_table.source_column>"}}
   ],
-  "warnings": ["<only for columns with no match>"],
+  "warnings": ["<REQUIRED: Add warning for EVERY column from UNKNOWN tables>"],
   "confidence": 0.0-1.0,
   "reasoning": "<brief explanation>"
 }}
 
-EXAMPLE for a SQL with aliases 'b' (T_RE_BASE) and 'a' (T_RE_MULTI_ADDRESS):
+EXAMPLE 1 - Both tables matched:
 {{
   "changes": [
     {{"type": "table_replace", "alias": "b", "pattern_table": "T_RE_BASE", "original": "oz_dev.bronze.t_re_base", "new": "RECIP_BASE"}},
     {{"type": "table_replace", "alias": "a", "pattern_table": "T_RE_MULTI_ADDRESS", "original": "oz_dev.bronze.t_re_multi_address", "new": "MBR_ADDR"}},
     {{"type": "column_replace", "alias": "b", "pattern_table": "T_RE_BASE", "original": "ADR_STREET_1", "new": "RECIP_BASE.STREET_ADDR_1"}},
     {{"type": "column_replace", "alias": "a", "pattern_table": "T_RE_MULTI_ADDRESS", "original": "CDE_ADDR_USAGE", "new": "MBR_ADDR.ADDR_TYPE_CD"}}
-  ]
+  ],
+  "warnings": []
+}}
+
+EXAMPLE 2 - One table is UNKNOWN (no match):
+{{
+  "rewritten_sql": "SELECT INITCAP(phyaddr1) FROM ENTITY UNION SELECT INITCAP(ADR_STREET_1) FROM UNKNOWN WHERE...",
+  "changes": [
+    {{"type": "table_replace", "alias": "_t1", "pattern_table": "T_RE_BASE", "original": "oz_dev.bronze.t_re_base", "new": "ENTITY"}},
+    {{"type": "table_replace", "alias": "_t2", "pattern_table": "T_RE_MULTI_ADDRESS", "original": "oz_dev.bronze.t_re_multi_address", "new": "UNKNOWN"}},
+    {{"type": "column_replace", "alias": "_t1", "pattern_table": "T_RE_BASE", "original": "ADR_STREET_1", "new": "ENTITY.phyaddr1"}}
+  ],
+  "warnings": [
+    "No source table match for column ADR_STREET_1 from T_RE_MULTI_ADDRESS - original column kept",
+    "No source table match for column CDE_ADDR_USAGE from T_RE_MULTI_ADDRESS - original column kept"
+  ],
+  "confidence": 0.5,
+  "reasoning": "T_RE_BASE matched with ENTITY. T_RE_MULTI_ADDRESS has no matching source table."
 }}"""
         else:
             # NO LEGACY PROMPT - Return error if table assignments couldn't be determined
