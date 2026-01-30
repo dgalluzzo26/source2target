@@ -9,6 +9,7 @@ Handles:
 """
 import hashlib
 import json
+import re
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
 from databricks import sql as databricks_sql
@@ -84,7 +85,9 @@ class PatternService:
         # Handle string input
         if isinstance(join_metadata, str):
             try:
-                join_metadata = json.loads(join_metadata)
+                # Clean control characters before parsing
+                clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata)
+                join_metadata = json.loads(clean_json)
             except:
                 return "parse_error"
         
@@ -150,7 +153,9 @@ class PatternService:
         
         if isinstance(join_metadata, str):
             try:
-                join_metadata = json.loads(join_metadata)
+                # Clean control characters before parsing
+                clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata)
+                join_metadata = json.loads(clean_json)
             except:
                 return "Unknown"
         
@@ -286,7 +291,9 @@ class PatternService:
                     # Parse join_metadata if it's a string
                     if pattern.get("join_metadata") and isinstance(pattern["join_metadata"], str):
                         try:
-                            pattern["join_metadata_parsed"] = json.loads(pattern["join_metadata"])
+                            # Clean control characters before parsing
+                            clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', pattern["join_metadata"])
+                            pattern["join_metadata_parsed"] = json.loads(clean_json)
                         except:
                             pattern["join_metadata_parsed"] = None
                     else:
@@ -599,7 +606,9 @@ class PatternService:
                 # Parse join_metadata
                 if pattern.get("join_metadata") and isinstance(pattern["join_metadata"], str):
                     try:
-                        pattern["join_metadata_parsed"] = json.loads(pattern["join_metadata"])
+                        # Clean control characters before parsing
+                        clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', pattern["join_metadata"])
+                        pattern["join_metadata_parsed"] = json.loads(clean_json)
                     except:
                         pattern["join_metadata_parsed"] = None
                 

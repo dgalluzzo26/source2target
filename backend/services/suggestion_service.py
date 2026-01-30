@@ -2060,7 +2060,12 @@ class SuggestionService:
         metadata = {}
         if join_metadata:
             try:
-                metadata = json.loads(join_metadata)
+                # Clean control characters from JSON string before parsing
+                if isinstance(join_metadata, str):
+                    clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata)
+                    metadata = json.loads(clean_json)
+                else:
+                    metadata = join_metadata
             except:
                 pass
         
@@ -2899,7 +2904,12 @@ RULES:
                         join_metadata_str = pattern.get('join_metadata')
                         if join_metadata_str:
                             try:
-                                jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
+                                # Clean control characters from JSON string before parsing
+                                if isinstance(join_metadata_str, str):
+                                    clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata_str)
+                                    jm = json.loads(clean_json)
+                                else:
+                                    jm = join_metadata_str
                                 pattern_type = jm.get('patternType', '')
                                 mapping_action = jm.get('mappingAction', '')
                                 
@@ -3515,7 +3525,12 @@ RULES:
                     join_metadata_str = pattern.get('join_metadata')
                     if join_metadata_str:
                         try:
-                            jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
+                            # Clean control characters from JSON string before parsing
+                            if isinstance(join_metadata_str, str):
+                                clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata_str)
+                                jm = json.loads(clean_json)
+                            else:
+                                jm = join_metadata_str
                             pattern_type = jm.get('patternType', '')
                             
                             if pattern_type == 'AUTO_GENERATED':
