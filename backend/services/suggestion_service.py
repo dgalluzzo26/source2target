@@ -1520,7 +1520,12 @@ class SuggestionService:
         
         if join_metadata_str:
             try:
-                jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
+                # Clean control characters from JSON string before parsing
+                if isinstance(join_metadata_str, str):
+                    clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata_str)
+                    jm = json.loads(clean_json)
+                else:
+                    jm = join_metadata_str
                 print(f"[Suggestion Service] _process_pattern: Parsed join_metadata keys: {list(jm.keys()) if isinstance(jm, dict) else 'not a dict'}")
                 
                 # Get columns to map from userColumnsToMap for parallel search
@@ -2959,7 +2964,12 @@ RULES:
                             
                             if join_metadata_str:
                                 try:
-                                    jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
+                                    # Clean control characters from JSON string before parsing
+                                    if isinstance(join_metadata_str, str):
+                                        clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata_str)
+                                        jm = json.loads(clean_json)
+                                    else:
+                                        jm = join_metadata_str
                                     print(f"[Suggestion Service] Parsed join_metadata keys: {list(jm.keys()) if isinstance(jm, dict) else 'not a dict'}")
                                     
                                     # Get columns to map from userColumnsToMap for parallel search
@@ -3572,7 +3582,13 @@ RULES:
                         if join_metadata_str:
                             print(f"[Suggestion Service] REGENERATE: join_metadata preview: {str(join_metadata_str)[:300]}...")
                             try:
-                                jm = json.loads(join_metadata_str) if isinstance(join_metadata_str, str) else join_metadata_str
+                                # Clean control characters from JSON string before parsing
+                                if isinstance(join_metadata_str, str):
+                                    # Remove control characters (except newline, tab, carriage return)
+                                    clean_json = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', join_metadata_str)
+                                    jm = json.loads(clean_json)
+                                else:
+                                    jm = join_metadata_str
                                 for col in jm.get('userColumnsToMap', []):
                                     fallback_desc = col.get('description', '')
                                     orig_col = col.get('originalColumn', '')
