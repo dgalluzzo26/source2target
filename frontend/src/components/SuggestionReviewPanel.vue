@@ -1281,33 +1281,70 @@ function getWarnings(suggestion: MappingSuggestion): string[] {
     const changes = getChanges(suggestion)
     if (!changes || changes.length === 0) return warnings
     
-    // Build set of successfully replaced columns (case-insensitive)
-    const replacedColumns = new Set<string>()
+    // Build set of successfully replaced columns WITH their table context
+    // Key: "TABLE:COLUMN" for context-aware filtering
+    const replacedColumnsWithTable = new Set<string>()
+    // Also track just column names for partial matching
+    const replacedColumnNames = new Set<string>()
+    
     for (const change of changes) {
       if (change.type === 'column_replace' || change.new) {
         let original = change.original || ''
+        const patternTable = (change.pattern_table || '').toUpperCase()
         // Extract just column name if TABLE.COLUMN format
         if (original.includes('.')) {
           original = original.split('.').pop() || original
         }
         if (original) {
-          replacedColumns.add(original.toUpperCase())
+          const colUpper = original.toUpperCase()
+          replacedColumnNames.add(colUpper)
+          if (patternTable) {
+            replacedColumnsWithTable.add(`${patternTable}:${colUpper}`)
+          }
         }
       }
     }
     
-    if (replacedColumns.size === 0) return warnings
+    if (replacedColumnNames.size === 0) return warnings
     
     // Filter out warnings that mention successfully replaced columns or system columns
     return warnings.filter(warning => {
       const warningUpper = warning.toUpperCase()
       
-      // Filter out warnings about successfully replaced columns
-      for (const col of replacedColumns) {
-        // Check if column is mentioned with word boundaries
+      // Check if warning mentions UNKNOWN or "no source table match" - these are valid warnings
+      // Don't filter them even if the column was replaced in a different table
+      if (warningUpper.includes('UNKNOWN') || 
+          warningUpper.includes('NO SOURCE TABLE') ||
+          warningUpper.includes('NO MATCH') ||
+          warningUpper.includes('UNMAPPED')) {
+        return true // Keep this warning - it's about an unmapped table
+      }
+      
+      // For other warnings, check if the column+table combination was replaced
+      // Try to extract table context from warning (e.g., "from T_RE_MULTI_ADDRESS")
+      const tableMatch = warning.match(/from\s+([A-Z_][A-Z0-9_]*)/i)
+      if (tableMatch) {
+        const warningTable = tableMatch[1].toUpperCase()
+        
+        // Check each replaced column
+        for (const col of replacedColumnNames) {
+          const regex = new RegExp(`\\b${col}\\b`, 'i')
+          if (regex.test(warningUpper)) {
+            // Column mentioned in warning - but was it replaced in THIS table?
+            if (replacedColumnsWithTable.has(`${warningTable}:${col}`)) {
+              return false // Column was replaced in the same table - false positive
+            }
+            // Column exists but was replaced in a DIFFERENT table - keep the warning
+          }
+        }
+        return true // Keep warning - either no column match or different table context
+      }
+      
+      // No table context in warning - fall back to simple column check
+      for (const col of replacedColumnNames) {
         const regex = new RegExp(`\\b${col}\\b`, 'i')
         if (regex.test(warningUpper)) {
-          return false // This is a false positive, filter it out
+          return false // This is potentially a false positive
         }
       }
       
