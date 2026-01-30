@@ -102,20 +102,28 @@ class VectorSearchConfig(BaseModel):
     
     Defines the Databricks Vector Search configuration for V4 AI mapping.
     
-    V4 uses only the unmapped_fields index for source field matching during discovery.
-    Pattern lookup uses SQL exact match on table/column names.
+    V4 uses the unmapped_fields index for source field matching during discovery.
+    The semantic_fields_index is used for target field suggestions.
     
     NOTE: Vector search index names must be fully qualified (catalog.schema.index_name)
     because they are managed separately from SQL tables.
     
     Attributes:
         unmapped_fields_index: Vector search index for source field matching (catalog.schema.index_name)
+        semantic_fields_index: Vector search index for target field suggestions
+        mapped_fields_index: Vector search index for historical mappings
         endpoint_name: Name of the vector search endpoint
-        query_type: Type of vector search query - ANN (default), HYBRID, or FULL_TEXT
+        query_type: Type of vector search query - HYBRID (default) or ANN
+        target_score_threshold: Minimum score for target field matches
+        pattern_score_threshold: Minimum score for pattern matches
     """
     unmapped_fields_index: str = Field(default="oztest_dev.smartmapper.unmapped_fields_vs", description="Vector search index for source field matching (fully qualified)")
+    semantic_fields_index: str = Field(default="oztest_dev.smartmapper.semantic_fields_vs", description="Vector search index for target field suggestions")
+    mapped_fields_index: str = Field(default="oztest_dev.smartmapper.mapped_fields_vs", description="Vector search index for historical mappings")
     endpoint_name: str = Field(default="s2t_vsendpoint", description="Vector search endpoint name")
     query_type: str = Field(default="HYBRID", description="Vector search query type: HYBRID (default) or ANN")
+    target_score_threshold: float = Field(default=0.015, description="Minimum score for target field matches")
+    pattern_score_threshold: float = Field(default=0.010, description="Minimum score for pattern matches")
 
 
 class UIConfig(BaseModel):

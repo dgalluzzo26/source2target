@@ -2287,13 +2287,33 @@ EXAMPLE 2 - One table is UNKNOWN (no match):
         }
 
         try:
-            response = self.workspace_client.serving_endpoints.query(
-                name=llm_endpoint,
-                messages=[
-                    ChatMessage(role=ChatMessageRole.USER, content=prompt)
-                ],
-                max_tokens=4000  # Increased for complex CTE patterns
-            )
+            # LLM call with retry logic for transient Databricks errors
+            max_retries = 2
+            last_error = None
+            response = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    response = self.workspace_client.serving_endpoints.query(
+                        name=llm_endpoint,
+                        messages=[
+                            ChatMessage(role=ChatMessageRole.USER, content=prompt)
+                        ],
+                        max_tokens=4000  # Increased for complex CTE patterns
+                    )
+                    break  # Success, exit retry loop
+                except Exception as llm_error:
+                    last_error = llm_error
+                    if attempt < max_retries:
+                        print(f"[LLM] Attempt {attempt + 1} failed: {llm_error}, retrying...")
+                        import time
+                        time.sleep(1)  # Brief delay before retry
+                    else:
+                        print(f"[LLM] All {max_retries + 1} attempts failed")
+                        raise last_error
+            
+            if not response:
+                raise Exception("LLM call returned no response after retries")
             
             response_text = response.choices[0].message.content
             
@@ -2532,13 +2552,33 @@ RULES:
 6. Return ONLY the JSON object, no explanation"""
 
         try:
-            response = self.workspace_client.serving_endpoints.query(
-                name=llm_endpoint,
-                messages=[
-                    ChatMessage(role=ChatMessageRole.USER, content=prompt)
-                ],
-                max_tokens=4000
-            )
+            # LLM call with retry logic for transient Databricks errors
+            max_retries = 2
+            last_error = None
+            response = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    response = self.workspace_client.serving_endpoints.query(
+                        name=llm_endpoint,
+                        messages=[
+                            ChatMessage(role=ChatMessageRole.USER, content=prompt)
+                        ],
+                        max_tokens=4000
+                    )
+                    break  # Success, exit retry loop
+                except Exception as llm_error:
+                    last_error = llm_error
+                    if attempt < max_retries:
+                        print(f"[LLM join_metadata] Attempt {attempt + 1} failed: {llm_error}, retrying...")
+                        import time
+                        time.sleep(1)
+                    else:
+                        raise last_error
+            
+            if not response:
+                print(f"[Suggestion Service] LLM call returned no response for join_metadata")
+                return None
             
             response_text = response.choices[0].message.content
             

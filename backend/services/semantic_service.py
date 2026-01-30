@@ -47,10 +47,10 @@ class SemanticService:
         """
         try:
             config = self.config_service.get_config()
-            index_name = config.vector_search.index_name
+            index_name = config.vector_search.semantic_fields_index
             
             print(f"\n{'='*80}")
-            print(f"[Vector Search Sync] Triggering sync for index: {index_name}")
+            print(f"[Vector Search Sync] Triggering sync for semantic_fields index: {index_name}")
             print(f"{'='*80}")
             
             # Run sync in executor since WorkspaceClient methods are synchronous
