@@ -787,8 +787,11 @@ def filter_false_positive_warnings(
 ) -> List[str]:
     """
     Filter out warnings that are false positives:
-    1. Warnings about columns that were actually successfully replaced
+    1. Warnings about columns that were actually successfully replaced IN THE SAME TABLE
     2. Warnings about user source tables/columns (not pattern tables/columns)
+    
+    IMPORTANT: Don't filter warnings about UNKNOWN tables - these are valid warnings
+    about columns that couldn't be matched because their table had no source match.
     
     Args:
         warnings: List of warning strings from LLM
@@ -804,16 +807,23 @@ def filter_false_positive_warnings(
     
     import re
     
-    # Build set of column names that were successfully replaced (case-insensitive)
-    replaced_columns = set()
+    # Build set of (TABLE, COLUMN) pairs that were successfully replaced
+    # This allows us to distinguish between the same column in different tables
+    replaced_table_columns = set()  # Set of "TABLE:COLUMN" strings
+    replaced_columns = set()  # Just column names for backward compat
+    
     for change in changes or []:
         if change.get("type") == "column_replace" or change.get("new"):
             original = change.get("original", "")
+            pattern_table = change.get("pattern_table", "").upper()
             # Extract just the column name (handle TABLE.COLUMN format)
             if "." in original:
                 original = original.split(".")[-1]
             if original:
-                replaced_columns.add(original.upper())
+                col_upper = original.upper()
+                replaced_columns.add(col_upper)
+                if pattern_table:
+                    replaced_table_columns.add(f"{pattern_table}:{col_upper}")
     
     # Build set of valid pattern columns/tables (warnings should only reference these)
     valid_pattern_columns = set()
@@ -842,13 +852,33 @@ def filter_false_positive_warnings(
         warning_upper = warning.upper()
         is_false_positive = False
         
+        # CRITICAL: Never filter warnings about UNKNOWN tables
+        # These are valid warnings about columns that couldn't be matched
+        if 'UNKNOWN' in warning_upper or 'NO SOURCE TABLE' in warning_upper or 'NO MATCH' in warning_upper:
+            print(f"[Warning Filter] Keeping (UNKNOWN table warning): {warning[:80]}...")
+            filtered_warnings.append(warning)
+            continue
+        
         # Check 1: Warning mentions a successfully replaced column
+        # BUT only filter if the column was replaced in the SAME table mentioned in the warning
+        table_match = re.search(r'from\s+([A-Z_][A-Z0-9_]*)', warning_upper)
+        warning_table = table_match.group(1) if table_match else None
+        
         for col in replaced_columns:
             pattern = r'\b' + re.escape(col) + r'\b'
             if re.search(pattern, warning_upper):
-                is_false_positive = True
-                print(f"[Warning Filter] Filtered (replaced column): {warning[:80]}...")
-                break
+                # If warning mentions a table, check if column was replaced in THAT table
+                if warning_table:
+                    if f"{warning_table}:{col}" in replaced_table_columns:
+                        is_false_positive = True
+                        print(f"[Warning Filter] Filtered (replaced in same table {warning_table}): {warning[:80]}...")
+                        break
+                    # Column mentioned but was replaced in a DIFFERENT table - keep the warning
+                else:
+                    # No table context - fall back to old behavior
+                    is_false_positive = True
+                    print(f"[Warning Filter] Filtered (replaced column, no table context): {warning[:80]}...")
+                    break
         
         # Check 2: Warning mentions a user source table (not a pattern table)
         if not is_false_positive:

@@ -1083,86 +1083,56 @@ const highlightedOriginalSQL = computed(() => {
     }
   }
   
+  console.log('[Highlighting] UNKNOWN table names:', unknownTableNames)
+  
   if (unknownTableNames.length > 0) {
-    // Parse the original SQL (not html) to find segments containing UNKNOWN tables
-    const originalSQL = editingSuggestion.value?.pattern_sql || ''
+    // SIMPLER APPROACH: Split HTML by UNION keyword and process each segment
+    // Find the "UNION" text in HTML (it should be highlighted as sql-keyword)
+    const unionMarker = /<span class="sql-keyword">UNION<\/span>/gi
+    const unionMatches = [...html.matchAll(unionMarker)]
     
-    // Split by UNION to get individual SELECT statements
-    const unionParts = originalSQL.split(/\bUNION\b/i)
+    console.log('[Highlighting] Found', unionMatches.length, 'UNION keywords in HTML')
     
-    for (let i = 0; i < unionParts.length; i++) {
-      const part = unionParts[i]
+    if (unionMatches.length > 0) {
+      // For each UNION, check if the segment AFTER it contains an UNKNOWN table
+      let lastIndex = 0
+      let newHtml = ''
       
-      // Check if this part contains an UNKNOWN table
-      let containsUnknownTable = false
+      for (const unionMatch of unionMatches) {
+        const unionIndex = unionMatch.index!
+        
+        // Add content before this UNION unchanged
+        newHtml += html.substring(lastIndex, unionIndex + unionMatch[0].length)
+        lastIndex = unionIndex + unionMatch[0].length
+      }
+      
+      // Process the content after the last UNION (this is where UNKNOWN tables typically are)
+      let afterLastUnion = html.substring(lastIndex)
+      
+      // Check if this segment contains any UNKNOWN table
+      let segmentHasUnknownTable = false
       for (const tableName of unknownTableNames) {
-        if (part.toUpperCase().includes(tableName)) {
-          containsUnknownTable = true
+        // Look for table name with original-no-match class
+        const tablePattern = new RegExp(`<mark class="original-no-match">[^<]*${tableName}[^<]*</mark>`, 'i')
+        if (tablePattern.test(afterLastUnion)) {
+          segmentHasUnknownTable = true
+          console.log('[Highlighting] Found UNKNOWN table', tableName, 'in segment after UNION')
           break
         }
       }
       
-      if (containsUnknownTable) {
-        // Extract column names from this UNION branch
-        // Look for pattern: SELECT ... column ... FROM
-        // Also look for columns in WHERE clause
-        const selectMatch = part.match(/SELECT\s+(.+?)\s+FROM/is)
-        const whereMatch = part.match(/WHERE\s+(.+?)$/is)
-        
-        const columnsInBranch: string[] = []
-        
-        // Extract columns from SELECT clause
-        if (selectMatch) {
-          const selectPart = selectMatch[1]
-          // Find column references like INITCAP(COLUMN) or just COLUMN
-          const colMatches = selectPart.match(/\b([A-Z_][A-Z0-9_]*)\b(?=\s*[\),\s]|\s+AS\b)/gi)
-          if (colMatches) {
-            for (const col of colMatches) {
-              if (!['INITCAP', 'TRIM', 'CONCAT', 'COALESCE', 'AS', 'NULL', 'SELECT'].includes(col.toUpperCase())) {
-                columnsInBranch.push(col.toUpperCase())
-              }
-            }
-          }
-        }
-        
-        // Extract columns from WHERE clause
-        if (whereMatch) {
-          const wherePart = whereMatch[1]
-          const colMatches = wherePart.match(/\b([A-Z_][A-Z0-9_]*)\b(?=\s*[=<>!\(\),]|\s+IN\b|\s+AND\b|\s+OR\b)/gi)
-          if (colMatches) {
-            for (const col of colMatches) {
-              if (!['AND', 'OR', 'IN', 'TRIM', 'WHERE', 'LIKE', 'BETWEEN', 'IS', 'NOT', 'NULL', 'R', 'M'].includes(col.toUpperCase())) {
-                columnsInBranch.push(col.toUpperCase())
-              }
-            }
-          }
-        }
-        
-        // Re-highlight these columns as warnings in the HTML, but only in the matching UNION segment
-        // We need to find the corresponding segment in the HTML
-        for (const col of columnsInBranch) {
-          // Find and replace existing blue highlighting with orange for this column
-          // But only after the UNKNOWN table name in the HTML
-          // This is tricky - we'll use a position-aware approach
-          
-          // Find the position of the UNKNOWN table mark in HTML
-          for (const tableName of unknownTableNames) {
-            const tableMarkRegex = new RegExp(`<mark class="original-no-match">${escapeRegExp(tableName)}</mark>`, 'i')
-            const tableMatch = html.match(tableMarkRegex)
-            if (tableMatch && tableMatch.index !== undefined) {
-              // Only replace column marks AFTER this table position
-              const beforeTable = html.substring(0, tableMatch.index)
-              let afterTable = html.substring(tableMatch.index)
-              
-              // Replace blue (original-changed) with orange (original-no-match) for this column after the table
-              const blueColRegex = new RegExp(`<mark class="original-changed">(${escapeRegExp(col)})</mark>`, 'gi')
-              afterTable = afterTable.replace(blueColRegex, '<mark class="original-no-match">$1</mark>')
-              
-              html = beforeTable + afterTable
-            }
-          }
-        }
+      if (segmentHasUnknownTable) {
+        // Re-highlight ALL "original-changed" marks in this segment to "original-no-match"
+        // This ensures columns from UNKNOWN tables are highlighted as warnings
+        afterLastUnion = afterLastUnion.replace(
+          /<mark class="original-changed">([^<]+)<\/mark>/gi, 
+          '<mark class="original-no-match">$1</mark>'
+        )
+        console.log('[Highlighting] Re-highlighted columns in UNKNOWN table segment')
       }
+      
+      newHtml += afterLastUnion
+      html = newHtml
     }
   }
   
@@ -1272,9 +1242,13 @@ function getMatchedFields(suggestion: MappingSuggestion): MatchedSourceField[] {
 }
 
 function getWarnings(suggestion: MappingSuggestion): string[] {
-  if (!suggestion.warnings) return []
+  if (!suggestion.warnings) {
+    console.log('[getWarnings] No warnings field on suggestion')
+    return []
+  }
   try {
     const warnings = JSON.parse(suggestion.warnings) as string[]
+    console.log('[getWarnings] Raw warnings from suggestion:', warnings)
     if (!warnings || warnings.length === 0) return []
     
     // Get the changes to filter out false positives
@@ -1352,13 +1326,17 @@ function getWarnings(suggestion: MappingSuggestion): string[] {
       for (const sysCol of GAINWELL_SYSTEM_COLUMNS) {
         const regex = new RegExp(`\\b${sysCol}\\b`, 'i')
         if (regex.test(warningUpper)) {
+          console.log('[getWarnings] Filtered system column warning:', warning.substring(0, 80))
           return false // System column - not a real warning
         }
       }
       
       return true
     })
-  } catch {
+    console.log('[getWarnings] Filtered warnings:', filteredWarnings)
+    return filteredWarnings
+  } catch (e) {
+    console.error('[getWarnings] Error parsing warnings:', e)
     return []
   }
 }
