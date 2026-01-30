@@ -1220,8 +1220,58 @@ class SuggestionService:
             return matches
             
         except Exception as e:
+            import traceback
             print(f"[VS] Single query error: {e}")
-            return []
+            print(f"[VS] Single query traceback: {traceback.format_exc()}")
+            # Retry once after a brief delay
+            import time
+            time.sleep(0.5)
+            try:
+                print(f"[VS] Retrying query for project {project_id}...")
+                results = self.workspace_client.vector_search_indexes.query_index(
+                    index_name=index_name,
+                    columns=[
+                        "unmapped_field_id",
+                        "src_table_name",
+                        "src_table_physical_name", 
+                        "src_column_name",
+                        "src_column_physical_name",
+                        "src_comments",
+                        "src_physical_datatype",
+                        "domain",
+                        "source_semantic_field",
+                        "project_id"
+                    ],
+                    query_text=query_text,
+                    num_results=num_results,
+                    query_type=query_type,
+                    filters_json=json.dumps(filters_dict) if filters_dict else None
+                )
+                
+                matches = []
+                for item in results.result.data_array:
+                    if len(item) >= 10:
+                        score = item[-1] if isinstance(item[-1], (int, float)) else 0.0
+                        match = {
+                            "unmapped_field_id": item[0],
+                            "src_table_name": item[1],
+                            "src_table_physical_name": item[2],
+                            "src_column_name": item[3],
+                            "src_column_physical_name": item[4],
+                            "src_comments": item[5],
+                            "src_physical_datatype": item[6],
+                            "domain": item[7],
+                            "project_id": item[9],
+                            "score": score
+                        }
+                        matches.append(match)
+                        if len(matches) >= num_results:
+                            break
+                print(f"[VS] Retry successful: {len(matches)} results")
+                return matches
+            except Exception as retry_error:
+                print(f"[VS] RETRY FAILED: {retry_error}")
+                return []
     
     def _vector_search_parallel_sync(
         self,
@@ -1346,7 +1396,10 @@ class SuggestionService:
                             all_matches.append(match)
                             
                 except Exception as e:
-                    print(f"[VS Parallel] Search error: {e}")
+                    import traceback
+                    col_name = col_info.get('column_name', 'unknown')
+                    print(f"[VS Parallel] Search error for column '{col_name}': {e}")
+                    print(f"[VS Parallel] Traceback: {traceback.format_exc()}")
         
         # Sort by score descending
         all_matches.sort(key=lambda x: x.get('score', 0), reverse=True)
@@ -2373,9 +2426,12 @@ EXAMPLE 2 - One table is UNKNOWN (no match):
             }
                 
         except Exception as e:
+            import traceback
+            error_traceback = traceback.format_exc()
             print(f"[Suggestion Service] LLM error: {str(e)}")
+            print(f"[Suggestion Service] LLM error traceback: {error_traceback}")
             self._last_llm_debug_info["latency_ms"] = int((time_module.time() - llm_start_time) * 1000)
-            self._last_llm_debug_info["raw_response"] = f"ERROR: {str(e)}"
+            self._last_llm_debug_info["raw_response"] = f"ERROR: {str(e)}\n\n{error_traceback}"
             return {
                 "rewritten_sql": pattern_sql,
                 "changes": [],

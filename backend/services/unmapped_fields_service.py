@@ -1132,7 +1132,7 @@ class UnmappedFieldsService:
             Dictionary with status
         """
         db_config = self._get_db_config()
-        vs_config = self._get_vs_config()
+        vs_config = self._get_vector_search_config()
         
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
