@@ -486,8 +486,20 @@ async def upload_source_fields(
         
         # Read CSV with multi-encoding support (handles Windows Excel files with smart quotes)
         contents = await file.read()
+        print(f"[Projects Router] Read {len(contents)} bytes from uploaded file")
+        
         decoded = decode_csv_content(contents)
-        reader = csv.DictReader(io.StringIO(decoded))
+        print(f"[Projects Router] Decoded content length: {len(decoded)} chars")
+        print(f"[Projects Router] First 200 chars: {decoded[:200]}")
+        
+        try:
+            reader = csv.DictReader(io.StringIO(decoded))
+        except Exception as csv_error:
+            print(f"[Projects Router] CSV parsing error: {csv_error}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to parse CSV file: {str(csv_error)}"
+            )
         
         # Validate headers
         required_columns = [
@@ -501,9 +513,12 @@ async def upload_source_fields(
         ]
         
         headers = reader.fieldnames or []
+        print(f"[Projects Router] CSV headers found: {headers}")
+        
         missing_columns = [col for col in required_columns if col not in headers]
         
         if missing_columns:
+            print(f"[Projects Router] Missing columns: {missing_columns}")
             raise HTTPException(
                 status_code=400, 
                 detail=f"Missing required columns: {', '.join(missing_columns)}. "
@@ -548,10 +563,13 @@ async def upload_source_fields(
             tables_found.add(field["src_table_name"])
         
         if not fields_to_upload:
+            print(f"[Projects Router] No valid fields to upload. Row count: {row_number-1}, Warnings: {warnings[:5]}")
             raise HTTPException(
                 status_code=400, 
                 detail="No valid fields found in CSV. Ensure all required columns have values."
             )
+        
+        print(f"[Projects Router] Preparing to upload {len(fields_to_upload)} fields")
         
         # Bulk upload fields
         result = await unmapped_fields_service.bulk_upload_with_project(

@@ -261,7 +261,15 @@ export const useProjectsStore = defineStore('projects', () => {
       })
       
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`)
+        // Try to get detailed error message from response
+        let errorDetail = response.statusText
+        try {
+          const errorData = await response.json()
+          errorDetail = errorData.detail || errorData.message || errorDetail
+        } catch {
+          // If JSON parsing fails, use status text
+        }
+        throw new Error(`Upload failed: ${errorDetail}`)
       }
       
       const data = await response.json()
